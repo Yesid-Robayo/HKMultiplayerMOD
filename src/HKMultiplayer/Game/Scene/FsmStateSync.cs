@@ -221,6 +221,12 @@ internal sealed class FsmStateSync {
         return true;
     }
 
+    /// <summary>
+    /// Se está poniendo un guardable en su estado de "ya activado" por lo que llegó de otro PC (lo que ve quien entra):
+    /// no es un golpe de este PC y no se copia a los demás.
+    /// </summary>
+    internal static bool ApplyingSavedState;
+
     /// <summary>El primer cambio de estado al aplicar uno de otro PC es el pedido; los que encadene, se retienen.</summary>
     private static bool _requested;
 
@@ -746,7 +752,7 @@ internal sealed class FsmStateSync {
     /// objetos que no son componentes rompibles ni guardables: el letrero de Cruces Olvidados, decorados... Se copia su
     /// cadena como la de una palanca. Fuera los enemigos y las piedras de geo (van por su cuenta).
     /// </summary>
-    private static bool IsBreakableTemplate(PlayMakerFSM fsm) {
+    internal static bool IsBreakableTemplate(PlayMakerFSM fsm) {
         if (fsm.FsmVariables.FindFsmBool("Activated") == null || fsm.GetComponent<GeoRock>() != null ||
             EnemySync.IsEnemyObject(fsm.transform)) {
             return false;
@@ -1546,7 +1552,10 @@ internal sealed class FsmStateSync {
         item.LastState = state;
         item.LastStateTime = now;
         var send = false;
-        if (now < item.RemoteChainUntil) {
+        if (ApplyingSavedState) {
+            // Puesto como ya activado por lo que llegó de otro PC: no es un golpe de aquí
+            item.LocalChain = false;
+        } else if (now < item.RemoteChainUntil) {
             // Cadena que llegó de otro PC: no se devuelve
         } else if (from != null && from == item.RestState) {
             item.LocalChain = true;

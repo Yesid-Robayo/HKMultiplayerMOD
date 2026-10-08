@@ -79,6 +79,9 @@ internal sealed class SceneObjectSync {
 
     private const string ActivatedVariable = "Activated";
 
+    /// <summary>Prefijo del id de un rompible con FSM propia (no tiene id de guardado: va por su ruta en la sala).</summary>
+    private const string BreakableIdPrefix = "fsm:";
+
     /// <summary>Lo más que se espera a que acabe la cadena copiada antes de activar el objeto de todos modos.</summary>
     private const float ChainWaitSeconds = 10f;
 
@@ -324,6 +327,33 @@ internal sealed class SceneObjectSync {
             var tracked = new Tracked {
                 Id = id,
                 Persistent = persistent,
+                Fsm = fsm,
+                Activated = activated,
+                LastValue = activated.Value,
+                ActivatedState = FindActivatedState(fsm)
+            };
+            _tracked.Add(tracked);
+            _byId[id] = tracked;
+            if (_pendingActivated.Remove(id)) {
+                Activate(tracked);
+            }
+        }
+
+        // Rompibles con la FSM genérica del juego sin guardable (el letrero de Cruces Olvidados): su "Activated" es
+        // estar roto. No se guardan, pero quien entra después los ve como están en la sala
+        foreach (var fsm in Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+            if (fsm.GetComponent<PersistentBoolItem>() != null || !FsmStateSync.IsBreakableTemplate(fsm)) {
+                continue;
+            }
+
+            var id = BreakableIdPrefix + (ScenePaths.Hash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode()).ToString("x8");
+            if (_byId.ContainsKey(id)) {
+                continue;
+            }
+
+            var activated = fsm.FsmVariables.FindFsmBool(ActivatedVariable);
+            var tracked = new Tracked {
+                Id = id,
                 Fsm = fsm,
                 Activated = activated,
                 LastValue = activated.Value,
@@ -585,7 +615,12 @@ internal sealed class SceneObjectSync {
         item.LastValue = true;
         // Si ya está ahí (p. ej. llevado por su cadena), volver a entrar repetiría sus acciones
         if (item.ActivatedState != null && item.Fsm.ActiveStateName != item.ActivatedState) {
-            item.Fsm.SetState(item.ActivatedState);
+            FsmStateSync.ApplyingSavedState = true;
+            try {
+                item.Fsm.SetState(item.ActivatedState);
+            } finally {
+                FsmStateSync.ApplyingSavedState = false;
+            }
         }
     }
 

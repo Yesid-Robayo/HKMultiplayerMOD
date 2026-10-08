@@ -153,8 +153,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     `BreakablePoleSimple`, `BreakableInfectedVine`, `VinePlatformCut`, `GlobControl`, `GrassCut`) son todos los tipos
     del juego y van por `BreakableSync`.
   - Quien entra en una sala recibe del dueño lo ya activado (puertas, palancas, paredes), los golpes de cada piedra de
-    geo y los rompibles rotos. Al guardar, lo activado en el mundo no vuelve atrás. Los rompibles con FSM propia
-    todavía no se envían a quien entra después.
+    geo y los rompibles rotos (también los de FSM propia: `SceneObjectSync` los sigue con un id por su ruta en la sala,
+    `fsm:...`, y quien entra los pone en su estado de "ya roto", sin animación). Lo que se pone así no cuenta como un
+    golpe de ese PC y no se copia a los demás. Al guardar, lo activado en el mundo no vuelve atrás.
   - Lo que crean los enemigos en combate (proyectiles, crías, invocaciones) se crea en los demás con la misma acción de
     su marioneta (mismo prefab). Si hace daño o tiene vida, es una copia que sigue al original hasta que desaparece; los
     efectos solo visuales del pool corren solos. Lo que crean al prepararse (cadáveres, piezas propias) no se replica.
