@@ -80,6 +80,7 @@ internal sealed class ConnectPanel : MonoBehaviour {
         } else {
             if (session.IsHost) {
                 GUILayout.Label($"Hosteando en el puerto {session.Port}");
+                GUILayout.Label($"Tu IP en la red: {MultiplayerRunner.LocalAddresses()}");
                 GUILayout.BeginHorizontal();
                 GUILayout.Label($"Código: {MultiplayerRunner.FormatCode(session.RoomCode)}");
                 if (GUILayout.Button("Copiar", GUILayout.Width(80))) {

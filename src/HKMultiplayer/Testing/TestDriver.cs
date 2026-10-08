@@ -158,6 +158,32 @@ internal sealed class TestDriver : MonoBehaviour {
                 // Lo mismo con el caballero local: sirve de referencia para comparar con lo que ve el otro
                 StartCoroutine(Track(ParseFloat(args[1]), self: true));
                 break;
+            case "mpmenu":
+                // Abre el menú Multijugador (como su botón del menú principal)
+                HKMultiplayer.UI.MultiplayerMenu.Instance?.TestOpen();
+                break;
+            case "mpclick":
+                // mpclick <texto del botón>
+                if (HKMultiplayer.UI.MultiplayerMenu.Instance?.TestClick(string.Join(" ", args.Skip(1))) != true) {
+                    Log.Warn($"{Tag}no hay botón visible '{string.Join(" ", args.Skip(1))}'");
+                }
+
+                break;
+            case "mptype":
+                // mptype <etiqueta>|<texto>
+                var typed = string.Join(" ", args.Skip(1)).Split('|');
+                if (HKMultiplayer.UI.MultiplayerMenu.Instance?.TestType(typed[0], typed.Length > 1 ? typed[1] : "") != true) {
+                    Log.Warn($"{Tag}no hay campo visible '{typed[0]}'");
+                }
+
+                break;
+            case "uidump":
+                // uidump [profundidad]: jerarquía del menú principal con sus componentes
+                // uidump [profundidad] [ruta bajo el canvas de la interfaz]
+                var ui = UIManager.instance;
+                var root = args.Length > 2 ? (args[2] == "/" ? ui.UICanvas.transform : ui.UICanvas.transform.Find(args[2])) : ui.mainMenuScreen.transform;
+                Dump(root, 0, args.Length > 1 ? int.Parse(args[1]) : 4);
+                break;
             default:
                 Log.Warn($"{Tag}orden desconocida '{args[0]}'");
                 break;
@@ -193,6 +219,23 @@ internal sealed class TestDriver : MonoBehaviour {
         }
 
         return text.ToString();
+    }
+
+    private static void Dump(Transform node, int depth, int maxDepth) {
+        var components = string.Join(",", node.GetComponents<Component>().Select(c => c.GetType().Name));
+        var text = node.GetComponent<UnityEngine.UI.Text>();
+        var rect = node as RectTransform;
+        Log.Info($"{Tag}ui {new string(' ', depth * 2)}{node.name} [{components}]" +
+                 (rect != null ? $" pos={rect.anchoredPosition} size={rect.sizeDelta}" : "") +
+                 (text != null ? $" texto='{text.text}' fuente={text.font?.name} tamaño={text.fontSize}" : "") +
+                 (node.gameObject.activeSelf ? "" : " (inactivo)"));
+        if (depth >= maxDepth) {
+            return;
+        }
+
+        foreach (Transform child in node) {
+            Dump(child, depth + 1, maxDepth);
+        }
     }
 
     private static float ParseFloat(string value) => float.Parse(value, CultureInfo.InvariantCulture);

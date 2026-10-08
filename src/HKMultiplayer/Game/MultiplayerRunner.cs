@@ -30,6 +30,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Último mensaje para el panel (errores al conectar, desconexiones...).</summary>
     public string StatusMessage { get; private set; } = string.Empty;
 
+    /// <summary>Al hostear, el código se anuncia en pantalla en cuanto el jugador entra a jugar.</summary>
+    private bool _announceCode;
+
     /// <summary>Sesión que terminó durante su propia actualización (se cierra al acabar).</summary>
     private GameSession _closing;
 
@@ -50,6 +53,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     private void Update() {
         CoopSaves.Update();
+        MultiplayerMenu.EnsureInstalled();
 
         if (Input.GetKeyDown(_panelKey)) {
             // Se crea al abrirlo la primera vez: al añadirse, Unity ya lo activa (y bloquearía las teclas)
@@ -68,6 +72,12 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         }
 
         var scene = CurrentScene();
+        if (_announceCode && scene.Length > 0 && session.IsHost) {
+            _announceCode = false;
+            Notice.Show($"Partida abierta  ·  Código {FormatCode(session.RoomCode)}  ·  Tu IP: {LocalAddresses()}\n" +
+                        "Pulsa F5 para verlo de nuevo", 15f);
+        }
+
         session.SetLocalScene(scene);
         Players.SetLocalScene(scene);
 
@@ -122,6 +132,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Session = GameSession.Host(transport, code, SanitizeName(name), CurrentScene(), HKMultiplayerMod.Version,
             Log.Info);
         Wire(Session);
+        _announceCode = true;
         SetStatus($"Partida abierta en el puerto {port}. Código: {FormatCode(code)}");
         return true;
     }
@@ -211,8 +222,14 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             _closing = session;
             SetStatus(DescribeDisconnect(reason));
         };
-        session.PlayerJoined += player => Log.Info($"{player.Name} se unió a la partida");
-        session.PlayerLeft += player => Log.Info($"{player.Name} salió de la partida");
+        session.PlayerJoined += player => {
+            Log.Info($"{player.Name} se unió a la partida");
+            Notice.Show($"{player.Name} se unió a la partida");
+        };
+        session.PlayerLeft += player => {
+            Log.Info($"{player.Name} salió de la partida");
+            Notice.Show($"{player.Name} salió de la partida");
+        };
     }
 
     private void SetStatus(string message) {
@@ -228,6 +245,19 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         DisconnectReason.Full => "La partida está llena",
         _ => "El host rechazó la conexión"
     };
+
+    /// <summary>Direcciones IPv4 de este PC en la red local (las que debe usar el compañero para unirse).</summary>
+    public static string LocalAddresses() {
+        try {
+            var addresses = Dns.GetHostAddresses(Dns.GetHostName())
+                .Where(a => a.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(a))
+                .Select(a => a.ToString())
+                .ToList();
+            return addresses.Count > 0 ? string.Join(" / ", addresses) : "127.0.0.1";
+        } catch (SocketException) {
+            return "?";
+        }
+    }
 
     public static string FormatCode(string normalized) =>
         normalized.Length == RoomCode.Length ? normalized.Substring(0, 4) + "-" + normalized.Substring(4) : normalized;
