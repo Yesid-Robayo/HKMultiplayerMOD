@@ -22,6 +22,9 @@ public enum MessageType : byte {
     /// <summary>Cambió quién manda en una sala.</summary>
     SceneOwner = 20,
 
+    /// <summary>Latencia de cada jugador con el host (cada segundo).</summary>
+    Pings = 21,
+
     // ---- Sesión (cliente → servidor) ----
 
     /// <summary>El jugador local entró en otra sala.</summary>

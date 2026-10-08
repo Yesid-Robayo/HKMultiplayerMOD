@@ -36,16 +36,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Sesión que terminó durante su propia actualización (se cierra al acabar).</summary>
     private GameSession _closing;
 
-    private ConnectPanel _panel;
-    private KeyCode _panelKey = KeyCode.F5;
-
     private void Awake() {
         Instance = this;
         CoopSaves.Install();
-        if (Enum.TryParse(HKMultiplayerMod.Settings.PanelKey, true, out KeyCode key)) {
-            _panelKey = key;
-        }
-
         if (TestDriver.IsEnabled()) {
             gameObject.AddComponent<TestDriver>();
         }
@@ -54,15 +47,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     private void Update() {
         CoopSaves.Update();
         MultiplayerMenu.EnsureInstalled();
-
-        if (Input.GetKeyDown(_panelKey)) {
-            // Se crea al abrirlo la primera vez: al añadirse, Unity ya lo activa (y bloquearía las teclas)
-            if (_panel == null) {
-                _panel = gameObject.AddComponent<ConnectPanel>();
-            } else {
-                _panel.enabled = !_panel.enabled;
-            }
-        }
+        SessionMenu.UpdateInstalled(Session != null);
     }
 
     private void LateUpdate() {
@@ -74,8 +59,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         var scene = CurrentScene();
         if (_announceCode && scene.Length > 0 && session.IsHost) {
             _announceCode = false;
-            Notice.Show($"Partida abierta  ·  Código {FormatCode(session.RoomCode)}  ·  Tu IP: {LocalAddresses()}\n" +
-                        "Pulsa F5 para verlo de nuevo", 15f);
+            Notice.Show($"Partida abierta  ·  Código {FormatCode(session.RoomCode)}\n" +
+                        "Lo tienes en Pausa › Multijugador", 12f);
         }
 
         session.SetLocalScene(scene);

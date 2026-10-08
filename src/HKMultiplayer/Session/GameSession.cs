@@ -20,6 +20,9 @@ public sealed class SessionPlayer {
     /// <summary>Conexión (solo en el servidor y para jugadores remotos).</summary>
     internal NetConnection Connection;
 
+    /// <summary>Latencia con el host en milisegundos (0 para el host).</summary>
+    public int Ping { get; internal set; }
+
     /// <summary>Datos libres de las capas de juego (p. ej. su avatar).</summary>
     public object UserData { get; set; }
 
@@ -142,8 +145,45 @@ public sealed class GameSession : INetListener, IDisposable {
     public void Update() {
         if (_server != null) {
             _server.Update();
+            BroadcastPings();
         } else {
             _client.Update();
+            var local = LocalPlayer;
+            if (local != null && _client.Connection != null) {
+                local.Ping = (int) (_client.Connection.Rtt * 1000);
+            }
+        }
+    }
+
+    private const double PingInterval = 1.0;
+    private double _nextPings;
+
+    /// <summary>El host reparte cada segundo la latencia de cada jugador, para que todos la vean.</summary>
+    private void BroadcastPings() {
+        var now = NetPeer.Now;
+        if (now < _nextPings) {
+            return;
+        }
+
+        _nextPings = now + PingInterval;
+        foreach (var player in _players.Values) {
+            player.Ping = player.Connection != null ? (int) (player.Connection.Rtt * 1000) : 0;
+        }
+
+        foreach (var target in _players.Values) {
+            if (target.Connection == null) {
+                continue;
+            }
+
+            var writer = target.Connection.BeginReliable();
+            writer.WriteByte((byte) MessageType.Pings);
+            writer.WriteByte((byte) _players.Count);
+            foreach (var player in _players.Values) {
+                writer.WriteUShort(player.Id);
+                writer.WriteUShort((ushort) Math.Min(player.Ping, ushort.MaxValue));
+            }
+
+            target.Connection.EndMessage();
         }
     }
 
@@ -526,6 +566,18 @@ public sealed class GameSession : INetListener, IDisposable {
                 if (_players.TryGetValue(id, out var player) && !player.IsLocal) {
                     player.Scene = scene;
                     PlayerSceneChanged?.Invoke(player);
+                }
+
+                break;
+            }
+            case MessageType.Pings: {
+                var count = reader.ReadByte();
+                for (var i = 0; i < count; i++) {
+                    var id = reader.ReadUShort();
+                    var ping = reader.ReadUShort();
+                    if (_players.TryGetValue(id, out var player) && !player.IsLocal) {
+                        player.Ping = ping;
+                    }
                 }
 
                 break;

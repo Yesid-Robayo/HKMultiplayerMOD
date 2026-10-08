@@ -16,7 +16,4 @@ public sealed class GlobalSettings {
 
     /// <summary>Puerto del host (para hostear y para unirse).</summary>
     public int Port { get; set; } = DefaultPort;
-
-    /// <summary>Tecla que abre y cierra el panel de conexión (nombre de <see cref="UnityEngine.KeyCode"/>).</summary>
-    public string PanelKey { get; set; } = "F5";
 }

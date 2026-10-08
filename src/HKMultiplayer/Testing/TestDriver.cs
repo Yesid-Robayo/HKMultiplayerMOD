@@ -81,6 +81,10 @@ internal sealed class TestDriver : MonoBehaviour {
                             HKMultiplayer.Game.World.WorldStore.Create(args[1]);
                 runner.HostWorld(world, args[2], int.Parse(args[3]), args.Length > 4 ? args[4] : null);
                 break;
+            case "mkworld":
+                // mkworld <nombre>: crea un mundo coop sin abrirlo
+                HKMultiplayer.Game.World.WorldStore.Create(string.Join(" ", args.Skip(1)));
+                break;
             case "save":
                 // Guarda como en un banco
                 GameManager.instance.SaveGame();
@@ -158,13 +162,21 @@ internal sealed class TestDriver : MonoBehaviour {
                 // Lo mismo con el caballero local: sirve de referencia para comparar con lo que ve el otro
                 StartCoroutine(Track(ParseFloat(args[1]), self: true));
                 break;
+            case "pause":
+                // Abre o cierra el menú de pausa como la tecla Esc
+                UIManager.instance.TogglePauseGame();
+                break;
             case "mpmenu":
                 // Abre el menú Multijugador (como su botón del menú principal)
                 HKMultiplayer.UI.MultiplayerMenu.Instance?.TestOpen();
                 break;
+            case "pausemp":
+                // Abre Multijugador desde el menú de pausa
+                HKMultiplayer.UI.SessionMenu.Instance?.TestOpen();
+                break;
             case "mpclick":
                 // mpclick <texto del botón>
-                if (HKMultiplayer.UI.MultiplayerMenu.Instance?.TestClick(string.Join(" ", args.Skip(1))) != true) {
+                if (VisibleMenu()?.TestClick(string.Join(" ", args.Skip(1))) != true) {
                     Log.Warn($"{Tag}no hay botón visible '{string.Join(" ", args.Skip(1))}'");
                 }
 
@@ -172,7 +184,7 @@ internal sealed class TestDriver : MonoBehaviour {
             case "mptype":
                 // mptype <etiqueta>|<texto>
                 var typed = string.Join(" ", args.Skip(1)).Split('|');
-                if (HKMultiplayer.UI.MultiplayerMenu.Instance?.TestType(typed[0], typed.Length > 1 ? typed[1] : "") != true) {
+                if (VisibleMenu()?.TestType(typed[0], typed.Length > 1 ? typed[1] : "") != true) {
                     Log.Warn($"{Tag}no hay campo visible '{typed[0]}'");
                 }
 
@@ -181,7 +193,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 // uidump [profundidad]: jerarquía del menú principal con sus componentes
                 // uidump [profundidad] [ruta bajo el canvas de la interfaz]
                 var ui = UIManager.instance;
-                var root = args.Length > 2 ? (args[2] == "/" ? ui.UICanvas.transform : ui.UICanvas.transform.Find(args[2])) : ui.mainMenuScreen.transform;
+                var root = args.Length > 2 ? (args[2] == "/" ? ui.UICanvas.transform : args[2] == "@pause" ? ui.pauseMenuScreen.transform : ui.UICanvas.transform.Find(args[2])) : ui.mainMenuScreen.transform;
                 Dump(root, 0, args.Length > 1 ? int.Parse(args[1]) : 4);
                 break;
             default:
@@ -220,6 +232,10 @@ internal sealed class TestDriver : MonoBehaviour {
 
         return text.ToString();
     }
+
+    /// <summary>Menú del mod que se está viendo.</summary>
+    private static HKMultiplayer.UI.GameStyledMenu VisibleMenu() =>
+        FindObjectsByType<HKMultiplayer.UI.GameStyledMenu>(FindObjectsSortMode.None).FirstOrDefault(m => m.isActiveAndEnabled);
 
     private static void Dump(Transform node, int depth, int maxDepth) {
         var components = string.Join(",", node.GetComponents<Component>().Select(c => c.GetType().Name));

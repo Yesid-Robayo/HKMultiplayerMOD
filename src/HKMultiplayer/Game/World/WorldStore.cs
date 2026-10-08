@@ -41,6 +41,9 @@ public sealed class CoopWorldInfo {
 /// guardado deja el anterior como <c>world.json.bak</c>.
 /// </summary>
 public static class WorldStore {
+    /// <summary>Máximo de mundos coop (como las ranuras del juego).</summary>
+    public const int MaxWorlds = 4;
+
     private const string InfoFile = "info.json";
     private const string WorldFile = "world.json";
 
@@ -86,8 +89,22 @@ public static class WorldStore {
         }
     }
 
-    /// <summary>Crea un mundo vacío (se empezará con partida nueva).</summary>
+    /// <summary>Borra un mundo y sus copias de este PC.</summary>
+    public static void Delete(string id) {
+        var dir = Path.Combine(Root, id);
+        if (Directory.Exists(dir)) {
+            Directory.Delete(dir, true);
+            Log.Info($"Mundo coop borrado: {id}");
+        }
+    }
+
+    /// <summary>Crea un mundo vacío (se empezará con partida nueva). Null si ya hay el máximo.</summary>
     public static CoopWorldInfo Create(string name) {
+        if (List().Count >= MaxWorlds) {
+            Log.Warn($"No se crea el mundo: ya hay {MaxWorlds}");
+            return null;
+        }
+
         name = (name ?? string.Empty).Trim();
         if (name.Length == 0) {
             name = "Mundo coop";
