@@ -182,6 +182,19 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "tpobj":
+                // tpobj <objeto> [altura]: el caballero aparece encima del objeto
+                var tpArgs = string.Join(" ", args.Skip(1)).Split('|');
+                var tpTarget = GameObject.Find(tpArgs[0]);
+                if (tpTarget == null) {
+                    Log.Warn($"{Tag}no existe '{tpArgs[0]}'");
+                } else {
+                    var above = tpArgs.Length > 1 ? ParseFloat(tpArgs[1]) : 1.5f;
+                    var p = tpTarget.transform.position;
+                    hero.transform.position = new Vector3(p.x, p.y + above, hero.transform.position.z);
+                }
+
+                break;
             case "breakables":
                 Log.Info($"{Tag}rompibles: {runner.Breakables.Count} en la sala, {runner.Breakables.BrokenCount()} rotos");
                 break;
