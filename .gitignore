@@ -1,0 +1,29 @@
+# Binarios y datos del juego (propiedad de Team Cherry) y de la Modding API compilada: solo en local
+lib/
+vendor/
+test-instances/
+
+# Compilación y paquetes
+out/
+dist/
+**/bin/
+**/obj/
+*.user
+.vs/
+.idea/
+
+# Nunca subir claves, certificados ni ajustes con datos de la cuenta
+*.pem
+*.key
+*.cer
+*.crt
+*.pfx
+*.p12
+*GlobalSettings*.json
+.env
+
+# Registros y temporales
+*.log
+ModLog.txt
+__pycache__/
+*.pyc
