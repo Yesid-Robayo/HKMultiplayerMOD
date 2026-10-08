@@ -92,8 +92,10 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     daño del ataque ("TAKE DAMAGE", con el que despiertan o reaccionan muchos enemigos) también. Cada golpe que
     recibe un enemigo real se avisa a la sala: los demás ven el impacto, el destello y oyen el golpe (quien golpeó ya
     los vio en su PC). La marioneta copia también su giro, si se dibuja, si choca y si es invencible (y desde dónde).
-  - Los sonidos de la lógica del enemigo (gritos, ataques, música de jefe) suenan también en las marionetas: cuando su
-    FSM entra en un estado con sonido, la marioneta hace solo esas acciones.
+  - Lo que se ve y se oye de la lógica del enemigo también pasa en las marionetas: cuando su FSM entra en un estado,
+    la marioneta hace solo sus efectos (sonidos y música de jefe; objetos de la arena que se activan, partículas,
+    ráfagas como los disparos de Mawlek, efectos y avisos a otros objetos de la arena, como las animaciones de la
+    presentación de la Vasija Rota). No los avisos al caballero ni a todos, ni lo que suelta geo.
   - Ascensores y rejas: los mueve quien los usa (su controlador). Las copias de los demás no avanzan solas: solo pasan
     por los estados que llegan, una vez cada uno, aplicados dentro de la ejecución de su FSM. Si no, los estados con
     efectos fuera del objeto (el ascensor voltea la dirección de su palanca al llegar) se harían dos veces.
@@ -109,8 +111,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Piezas que se mueven aparte (hijos con animación o que dañan, como la aguja de Hornet): posición, giro, si se ven y
     animación vienen del PC que mueve el enemigo.
   - La sombra de cada jugador no es un enemigo compartido.
-  - Probados: Mamá Gruz, Falso Caballero y Hornet (atacan al jugador que no es dueño de la sala y siguen el combate al
-    cambiar de PC), escupidores y zombis.
+  - Probados: Mamá Gruz, Falso Caballero, Hornet, Mawlek, Maestro de Almas, Defensor del Estiércol, Nosk y Vasija Rota
+    (despiertan, atacan al jugador que no es dueño de la sala y siguen el combate al cambiar de PC), escupidores y
+    zombis.
 - **Efectos del otro jugador**: eventos (ataque, hechizo, dash, curación...) que el receptor reproduce con los prefabs
   del propio héroe. Son solo visuales: el daño real va por los golpes directos.
 
@@ -147,8 +150,9 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
 
 ## Pendientes
 
-- **M3**: probar el resto de jefes (fases, plataformas, cinemáticas propias); probados Mamá Gruz, Falso Caballero y
-  Hornet. Lo que crea un objeto que no es enemigo (controladores de arena sin vida) aún no se replica.
+- **M3**: probar el resto de jefes (fases, plataformas, cinemáticas propias). Guardián de Cristal y Señores Mantis sin
+  probar (necesitan entrar por su zona de activación). Lo que crea un objeto que no es enemigo (controladores de arena
+  sin vida) aún no se replica.
 - **M4**: efectos del otro jugador (tajos, hechizos, dash, curación). `PlayerEvent` está reservado y sin usar.
 - **M5**: revivir, sombras compartidas, barras de vida y HUD del compañero, cinemáticas compartidas, skins y ajustes
   del host en el panel (la 0.7 los tenía en `HollowKnightCoop/src/HollowKnightCoop/Coop`).

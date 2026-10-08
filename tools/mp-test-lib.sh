@@ -11,9 +11,11 @@ HK_TEST_CODE="PRBA-TEST"
 _inst_dir() { echo "$HK_TEST_ROOT/test-instances/$(echo "$1" | tr 'A-Z' 'a-z')"; }
 _data_dir() { echo "$HK_LOCALLOW/HollowKnight$1"; }
 
-# Lanza la instancia en ventana, en modo de prueba
+# Lanza la instancia en ventana, en modo de prueba. El ModLog anterior se borra antes: si no, wait_log podría
+# encontrar líneas de la ejecución pasada y enviar órdenes antes de que el juego vacíe su archivo de órdenes.
 launch() {
   local dir; dir="$(_inst_dir "$1")"
+  rm -f "$(_data_dir "$1")/ModLog.txt"
   (cd "$dir" && ./hollow_knight.exe -screen-fullscreen 0 -screen-width 960 -screen-height 540 \
      -mptest >/dev/null 2>&1 &)
   echo "lanzada $1"

@@ -190,7 +190,8 @@ internal sealed class TestDriver : MonoBehaviour {
 
                     var components = string.Join(",", found.GetComponents<Component>().Select(c => c.GetType().Name));
                     var fsms = string.Join(",", found.GetComponents<PlayMakerFSM>().Select(f => f.FsmName + ":" + f.ActiveStateName));
-                    Log.Info($"{Tag}obj {found.name} [{components}] fsm=[{fsms}] pos=({found.position.x:0.0},{found.position.y:0.0})");
+                    Log.Info($"{Tag}obj {found.name}{(found.gameObject.activeInHierarchy ? "" : " (inactivo)")} [{components}] fsm=[{fsms}] " +
+                             $"pos=({found.position.x:0.0},{found.position.y:0.0})");
                 }
 
                 break;
@@ -242,6 +243,12 @@ internal sealed class TestDriver : MonoBehaviour {
             case "enemies":
                 foreach (var line in runner.Enemies.Describe()) {
                     Log.Info($"{Tag}enemigo {line}");
+                }
+
+                break;
+            case "bosses":
+                foreach (var line in runner.Enemies.DescribeBosses()) {
+                    Log.Info($"{Tag}{line}");
                 }
 
                 break;

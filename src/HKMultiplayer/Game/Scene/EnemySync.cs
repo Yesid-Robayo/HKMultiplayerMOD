@@ -269,7 +269,8 @@ internal sealed class EnemySync {
         MessageRoutes.Register(EnemyHit, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyHealth, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyHitFx, Route.SameScene, reliable: true);
-        MessageRoutes.Register(EnemySound, Route.SameScene, reliable: false);
+        // Fiable: activar y desactivar objetos de la arena tiene que llegar, y en orden
+        MessageRoutes.Register(EnemySound, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemySpawn, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyDespawn, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyControl, Route.SameScene, reliable: true);
@@ -860,7 +861,7 @@ internal sealed class EnemySync {
             bool[] soundStates = null;
             for (var s = 0; s < states.Length; s++) {
                 foreach (var action in states[s].Actions) {
-                    if (IsSoundAction(action)) {
+                    if (IsEffectAction(action)) {
                         soundStates ??= new bool[states.Length];
                         soundStates[s] = true;
                         break;
@@ -874,16 +875,66 @@ internal sealed class EnemySync {
         }
     }
 
-    /// <summary>Acciones de sonido o música de una FSM (las únicas que una marioneta hace de su lógica).</summary>
-    private static bool IsSoundAction(HutongGames.PlayMaker.FsmStateAction action) {
+    /// <summary>Acciones visuales que la marioneta también hace (además del sonido): no deciden nada de su lógica.</summary>
+    private static readonly HashSet<string> EffectActions = new() {
+        "ActivateGameObject", "PlayParticleEmitter", "StopParticleEmitter", "SetParticleEmission", "SetParticleEmissionRate",
+        "SetParticleEmissionSpeed", "SpawnRandomObjects", "FlingObjectsFromGlobalPool", "SendEventByName", "CreateObject"
+    };
+
+    /// <summary>
+    /// Acciones de un estado que la marioneta hace cuando el enemigo real entra en él: sonido y música, y lo que se ve
+    /// de la arena (objetos que se activan, partículas, ráfagas, efectos, avisos a otros objetos).
+    /// </summary>
+    private static bool IsEffectAction(HutongGames.PlayMaker.FsmStateAction action) {
         var name = action.GetType().Name;
         return name.IndexOf("Audio", StringComparison.Ordinal) >= 0 || name.IndexOf("Sound", StringComparison.Ordinal) >= 0 ||
-               name.IndexOf("Music", StringComparison.Ordinal) >= 0;
+               name.IndexOf("Music", StringComparison.Ordinal) >= 0 || EffectActions.Contains(name);
     }
 
-    /// <summary>Una FSM entró en un estado: si es de un enemigo real de este PC y suena, los demás lo oyen.</summary>
+    /// <summary>
+    /// Si la marioneta hace esta acción. No: lo que suelta geo; lo que crea con vida o daño (llega como copia); los avisos
+    /// a todos, a sí mismo (son su lógica) o al caballero (el rugido lo bloquearía en este PC sin garantía de soltarlo).
+    /// </summary>
+    private static bool ShouldRunEffect(Enemy enemy, HutongGames.PlayMaker.FsmStateAction action) {
+        switch (action) {
+            case HutongGames.PlayMaker.Actions.SpawnRandomObjects random:
+                return random.gameObject.Value != null && !IsGeo(random.gameObject.Value);
+            case HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPool fling:
+                return fling.gameObject.Value != null && !IsGeo(fling.gameObject.Value);
+            case HutongGames.PlayMaker.Actions.CreateObject create:
+                return create.gameObject.Value != null && !IsGameplay(create.gameObject.Value);
+            case HutongGames.PlayMaker.Actions.SendEventByName send:
+                var target = send.eventTarget;
+                GameObject receiver;
+                switch (target.target) {
+                    case HutongGames.PlayMaker.FsmEventTarget.EventTarget.GameObject:
+                    case HutongGames.PlayMaker.FsmEventTarget.EventTarget.GameObjectFSM:
+                        receiver = action.Fsm.GetOwnerDefaultTarget(target.gameObject);
+                        break;
+                    case HutongGames.PlayMaker.FsmEventTarget.EventTarget.FSMComponent:
+                        receiver = target.fsmComponent != null ? target.fsmComponent.gameObject : null;
+                        break;
+                    default:
+                        return false;
+                }
+
+                var hero = HeroController.instance;
+                return receiver != null && receiver != enemy.Root &&
+                       (hero == null || receiver.transform != hero.transform && !receiver.transform.IsChildOf(hero.transform));
+            default:
+                return true;
+        }
+    }
+
+    private static bool IsGeo(GameObject prefab) => prefab.name.StartsWith("Geo", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Una FSM entró en un estado: si es de un enemigo real de este PC y tiene efectos (sonido, arena), los demás los ven
+    /// y oyen. No lo que pasa al prepararse ni al retomarlo (ya lo hizo cada PC, o no toca repetirlo).
+    /// </summary>
     private void OnFsmState(HutongGames.PlayMaker.Fsm fsm, HutongGames.PlayMaker.FsmState state) {
-        if (!_soundFsms.TryGetValue(fsm, out var sound) || sound.Enemy.Puppet || !_session.CanSend) {
+        if (_takingOver || !_soundFsms.TryGetValue(fsm, out var sound) || sound.Enemy.Puppet || !_session.CanSend ||
+            Time.unscaledTime - sound.Enemy.ScannedAt < PreparationSeconds) {
             return;
         }
 
@@ -915,19 +966,23 @@ internal sealed class EnemySync {
             return;
         }
 
-        // Solo las acciones de sonido del estado; la lógica de la marioneta sigue parada
+        // Solo sus efectos (sonido y arena); la lógica de la marioneta sigue parada
         var state = states[stateIndex];
         foreach (var action in state.Actions) {
-            if (!action.Enabled || !IsSoundAction(action)) {
+            if (!action.Enabled || !IsEffectAction(action)) {
                 continue;
             }
 
             try {
-                SoundsPlayed++;
                 action.Init(state);
+                if (!ShouldRunEffect(enemy, action)) {
+                    continue;
+                }
+
+                EffectsPlayed++;
                 action.OnEnter();
             } catch (Exception e) {
-                Log.Warn($"Sonido de {enemy.Root.name} ({state.Name}) no reproducido: {e.Message}");
+                Log.Warn($"Efecto de {enemy.Root.name} ({state.Name}, {action.GetType().Name}) no reproducido: {e.Message}");
             }
         }
     }
@@ -2117,10 +2172,10 @@ internal sealed class EnemySync {
     /// <summary>Golpes y sonidos de otros reproducidos en marionetas (modo de prueba).</summary>
     public int HitFxPlayed { get; private set; }
 
-    public int SoundsPlayed { get; private set; }
+    public int EffectsPlayed { get; private set; }
 
     public IEnumerable<string> Describe() {
-        yield return $"efectos de golpes ajenos={HitFxPlayed} sonidos de marionetas={SoundsPlayed} " +
+        yield return $"efectos de golpes ajenos={HitFxPlayed} efectos de marionetas={EffectsPlayed} " +
                      $"fsm con sonido={_soundFsms.Count}";
         foreach (var enemy in _enemies) {
             if (enemy.Root == null) {
@@ -2140,6 +2195,33 @@ internal sealed class EnemySync {
                          $"{(enemy.Health.isDead ? " MUERTO" : "")}{(enemy.Health.IsInvincible ? " invencible" : "")}" +
                          $"{(enemy.Root.activeInHierarchy ? "" : " (inactivo)")} " +
                          $"pos=({p.x:0.00},{p.y:0.00})";
+        }
+    }
+
+    /// <summary>
+    /// Jefes de la sala (vida de jefe): por cada FSM, su estado y los eventos que lo hacen avanzar, y las transiciones
+    /// globales (modo de prueba: para saber cómo despertarlos).
+    /// </summary>
+    public IEnumerable<string> DescribeBosses() {
+        foreach (var enemy in _enemies) {
+            if (enemy.Root == null || enemy.Health == null || enemy.Health.hp < BossHp || enemy.Fsms == null) {
+                continue;
+            }
+
+            var p = enemy.Transform.position;
+            yield return $"jefe {enemy.Root.name} hp={enemy.Health.hp} pos=({p.x:0.0},{p.y:0.0}) {(enemy.Puppet ? "marioneta" : "real")}";
+            foreach (var fsm in enemy.Fsms) {
+                if (fsm == null) {
+                    continue;
+                }
+
+                var state = fsm.Fsm.ActiveState;
+                var exits = state == null
+                    ? "-"
+                    : string.Join(", ", Array.ConvertAll(state.Transitions, t => $"{t.EventName}->{t.ToState}"));
+                var globals = string.Join(", ", Array.ConvertAll(fsm.FsmGlobalTransitions, t => $"{t.EventName}->{t.ToState}"));
+                yield return $"  {fsm.gameObject.name}/{fsm.FsmName} estado={fsm.ActiveStateName} sale=[{exits}] globales=[{globals}]";
+            }
         }
     }
 
