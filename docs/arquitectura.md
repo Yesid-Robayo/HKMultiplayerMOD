@@ -230,11 +230,14 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
 
 - **M3**: revisadas con `arenas` las salas de los jefes del juego base (sin sueños ni Panteones): solo los Mantis y el
   Coliseo necesitaban controlador compartido; Señor Traidor, Caballero de la Colmena, Nosk y los Caballeros Vigía usan
-  un `Battle Scene` que ya se copia por cadena. Sin probar en vivo: jefes de sueño, Grimm, Uumuu y Coleccionista. En
-  el Coliseo, una acción de sonido del minero aún no suena en la copia. Probados con los dos dañados: Cazador de
-  Cristal (cristales), bichos de cristal (láser), Madre Aspid (crías), Aspid primigenio (disparos), minero (pico) y
-  Gruzzer volátil (explosión), Uumuu (descargas) y Coleccionista (tarros y sus bichos, cuerpo, embestida). Sin probar
-  en vivo: Grimm (necesita la Compañía) y los jefes de sueño (se entra con el aguijón onírico).
+  un `Battle Scene` que ya se copia por cadena. Probados con los dos dañados: Cazador de Cristal (cristales), bichos de
+  cristal (láser), Madre Aspid (crías), Aspid primigenio (disparos), minero (pico), Uumuu (descargas) y Coleccionista
+  (tarros y sus bichos, cuerpo, embestida). Falta por ver en vivo:
+  - Caballero de la Colmena, Flukemarm, Cargador Musgoso y Rey Mosca atacando (solo se vio que mueren en los dos).
+  - Que la explosión del Gruzzer volátil dañe a los dos (la explosión sale en los dos; el daño no se ha visto).
+  - La espera para despertar de Mawlek (en el mundo de prueba ya estaba muerto).
+  - Los jefes finales del Coliseo (Oblobbles, Domadora de Dioses, Zote).
+  Grimm, los jefes de sueño, Hollow Knight y la Radiancia, y el sonido del minero en el Coliseo, pasan a M5.
 - **M4**: efectos del otro jugador (tajos, hechizos, dash, curación). `PlayerEvent` está reservado y sin usar.
 - **M5**: revivir, sombras compartidas, barras de vida y HUD del compañero, cinemáticas compartidas, skins y ajustes
   del host en el panel (la 0.7 los tenía en `HollowKnightCoop/src/HollowKnightCoop/Coop`). Jefes que se dejan para
