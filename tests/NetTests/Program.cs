@@ -13,7 +13,7 @@ namespace HKMultiplayer.Tests;
 /// Pruebas del transporte fuera del juego. Cada prueba levanta un servidor y un cliente sobre la red simulada.
 /// Uso: dotnet run --project tests/NetTests
 /// </summary>
-public static class Program {
+public static partial class Program {
     private static int _failures;
 
     public static int Main() {
@@ -31,6 +31,7 @@ public static class Program {
         Run("Desconexión avisada", DisconnectNotified);
         Run("Memoria creada por paquete en régimen estable", SteadyStateAllocations);
         Run("Memoria del cifrado por paquete", CipherAllocations);
+        RunSessionTests();
 
         Console.WriteLine(_failures == 0 ? "\nTODAS LAS PRUEBAS PASARON" : $"\n{_failures} PRUEBA(S) FALLARON");
         return _failures == 0 ? 0 : 1;
