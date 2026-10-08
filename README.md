@@ -16,7 +16,7 @@ En desarrollo (hito M1: transporte, sesión y jugadores). Ver los hitos en la ar
 |---|---|
 | `src/HKMultiplayer/` | El mod. `Net/` (transporte, sin Unity), `Session/`, `Game/Replication/`, `Game/Features/`. |
 | `tests/` | Pruebas del transporte fuera del juego. |
-| `tools/` | Compilar e instalar (`test-cycle.sh`), pruebas con dos copias del juego (`coop-test-lib.sh`), paquete e instalador para jugadores. |
+| `tools/` | Compilar e instalar (`test-cycle.sh`), pruebas con dos copias del juego (`mp-test-lib.sh`), paquete e instalador para jugadores. |
 | `docs/` | Diseño y notas. |
 | `lib/` | *(solo local, no se sube)* DLL del juego y de la Modding API para compilar. |
 | `vendor/` | *(solo local, no se sube)* Modding API compilada para el paquete. |

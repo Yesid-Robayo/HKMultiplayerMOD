@@ -11,12 +11,16 @@ namespace HKMultiplayer.Tests;
 
 /// <summary>
 /// Pruebas del transporte fuera del juego. Cada prueba levanta un servidor y un cliente sobre la red simulada.
-/// Uso: dotnet run --project tests/NetTests
+/// Uso: dotnet run --project tests/NetTests [-- filtro]
 /// </summary>
 public static partial class Program {
     private static int _failures;
 
-    public static int Main() {
+    /// <summary>Si se indica, solo se ejecutan las pruebas cuyo nombre lo contiene.</summary>
+    private static string _filter;
+
+    public static int Main(string[] args) {
+        _filter = args.Length > 0 ? args[0] : null;
         AppDomain.MonitoringIsEnabled = true;
 
         Run("ChaCha20-Poly1305: vector del RFC 8439", AeadRfcVector);
@@ -32,12 +36,17 @@ public static partial class Program {
         Run("Memoria creada por paquete en régimen estable", SteadyStateAllocations);
         Run("Memoria del cifrado por paquete", CipherAllocations);
         RunSessionTests();
+        RunInterpolationTests();
 
         Console.WriteLine(_failures == 0 ? "\nTODAS LAS PRUEBAS PASARON" : $"\n{_failures} PRUEBA(S) FALLARON");
         return _failures == 0 ? 0 : 1;
     }
 
     private static void Run(string name, Action test) {
+        if (_filter != null && name.IndexOf(_filter, StringComparison.OrdinalIgnoreCase) < 0) {
+            return;
+        }
+
         Console.Write($"- {name}... ");
         var watch = Stopwatch.StartNew();
         try {

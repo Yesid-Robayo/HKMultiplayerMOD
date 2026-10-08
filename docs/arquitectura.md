@@ -89,7 +89,7 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
 - `tests/NetTests`: aplicación de consola que prueba el transporte fuera del juego (conexión, código incorrecto,
   pérdida y desorden simulados, canal fiable, datos grandes, memoria creada por paquete).
 - En el juego: dos copias (`test-instances/b` y `c`) controladas por archivo con el modo de prueba del mod
-  (`tools/coop-test-lib.sh`): conexión, movimiento, memoria por segundo, tirones, suavidad, sincronización.
+  (`tools/mp-test-lib.sh`): conexión, movimiento, memoria por segundo, tirones, suavidad, sincronización.
 
 ## Hitos
 

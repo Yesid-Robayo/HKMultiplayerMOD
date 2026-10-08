@@ -125,6 +125,11 @@ public static partial class Program {
         b.SetLocalScene("Town");
         Assert(world.Pump(() => a.Players.Single(p => p.Id == b.LocalId).Scene == "Town", 3),
             "el cambio de sala no llegó");
+
+        // Salir al menú (sala vacía) también se ve, y deja de contar para el dueño de la sala
+        b.SetLocalScene(string.Empty);
+        Assert(world.Pump(() => a.Players.Single(p => p.Id == b.LocalId).Scene.Length == 0, 3),
+            "la salida al menú no llegó");
     }
 
     private static void SessionSameSceneRouting() {

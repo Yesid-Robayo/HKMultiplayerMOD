@@ -11,6 +11,7 @@
     <ItemGroup>
         <Compile Include="..\..\src\HKMultiplayer\Net\**\*.cs" Link="Net\%(RecursiveDir)%(Filename)%(Extension)" />
         <Compile Include="..\..\src\HKMultiplayer\Session\**\*.cs" Link="Session\%(RecursiveDir)%(Filename)%(Extension)" />
+        <Compile Include="..\..\src\HKMultiplayer\Game\Players\PlayerSnapshot.cs;..\..\src\HKMultiplayer\Game\Players\SnapshotBuffer.cs" Link="Game\%(Filename)%(Extension)" />
         <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
     </ItemGroup>
 </Project>

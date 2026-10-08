@@ -307,7 +307,12 @@ public sealed class GameSession : INetListener, IDisposable {
             UpdateOwner(oldScene, oldMembers);
         }
 
+        // Sala vacía = fuera de una partida (menú, cargando): también se avisa
         player.Scene = scene;
+        BroadcastSession(MessageType.PlayerScene, w => {
+            w.WriteUShort(player.Id);
+            w.WriteString(scene);
+        });
         if (scene.Length > 0) {
             if (!_sceneMembers.TryGetValue(scene, out var members)) {
                 members = new List<ushort>();
@@ -315,10 +320,6 @@ public sealed class GameSession : INetListener, IDisposable {
             }
 
             members.Add(player.Id);
-            BroadcastSession(MessageType.PlayerScene, w => {
-                w.WriteUShort(player.Id);
-                w.WriteString(scene);
-            });
             UpdateOwner(scene, members);
         }
 
@@ -490,7 +491,6 @@ public sealed class GameSession : INetListener, IDisposable {
                 }
 
                 IsActive = true;
-                _log($"Conectado como jugador {LocalId}");
                 Connected?.Invoke();
                 foreach (var player in _players.Values) {
                     if (!player.IsLocal) {
