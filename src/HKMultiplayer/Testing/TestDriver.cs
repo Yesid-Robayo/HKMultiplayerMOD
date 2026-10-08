@@ -121,6 +121,32 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "enemies":
+                foreach (var line in runner.Enemies.Describe()) {
+                    Log.Info($"{Tag}enemigo {line}");
+                }
+
+                break;
+            case "hitenemy":
+                // hitenemy <inicio del nombre> <daño>: golpe de aguijón de este jugador
+                var enemyName = string.Join(" ", args.Skip(1).Take(args.Length - 2));
+                if (!runner.Enemies.TestHit(enemyName, int.Parse(args[args.Length - 1]))) {
+                    Log.Warn($"{Tag}no hay enemigo vivo '{enemyName}'");
+                }
+
+                break;
+            case "tpenemy":
+                // tpenemy <inicio del nombre>: este jugador va junto a ese enemigo
+                if (runner.Enemies.TryGetPosition(string.Join(" ", args.Skip(1)), out var enemyPosition)) {
+                    hero.transform.position = new Vector3(enemyPosition.x - 3f, enemyPosition.y + 1f, hero.transform.position.z);
+                }
+
+                break;
+            case "rest":
+                // Como descansar en un banco (fija la reaparición donde ya estaba)
+                var pd = PlayerData.instance;
+                pd.SetBenchRespawn(pd.respawnMarkerName, pd.respawnScene, pd.respawnType, pd.respawnFacingRight);
+                break;
             case "leavegame":
                 // Sale de la partida como desde la pausa (en el mundo del host: guarda y vuelve al menú)
                 runner.LeaveFromGame();

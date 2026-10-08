@@ -87,6 +87,12 @@ internal sealed class PlayerSync {
         return false;
     }
 
+    /// <summary>Objeto del avatar de un jugador remoto dibujado en la sala.</summary>
+    public bool TryGetAvatarObject(ushort id, out GameObject avatar) {
+        avatar = _remotes.TryGetValue(id, out var remote) && remote.Avatar != null ? remote.Avatar.Root : null;
+        return avatar != null;
+    }
+
     /// <summary>Primer jugador remoto dibujado en la sala (0 si ninguno).</summary>
     public ushort FirstVisibleId() {
         foreach (var pair in _remotes) {

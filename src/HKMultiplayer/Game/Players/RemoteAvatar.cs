@@ -8,6 +8,9 @@ namespace HKMultiplayer.Game.Players;
 /// </summary>
 internal sealed class RemoteAvatar {
     private readonly GameObject _root;
+
+    /// <summary>Objeto raíz del avatar (origen de los golpes de este jugador al aplicarlos en este PC).</summary>
+    public GameObject Root => _root;
     private readonly Transform _spriteTransform;
     private readonly tk2dSprite _sprite;
     private readonly MeshRenderer _renderer;
