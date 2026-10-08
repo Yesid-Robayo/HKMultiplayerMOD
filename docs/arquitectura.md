@@ -122,6 +122,13 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     ya las da su copia en el PC que lo mueve.
   - Las copias no tocan los datos del jugador (contadores como las larvas llegan una vez, del PC de origen). Los tarros
     de larva se rompen en todos y la larva sale también en los demás.
+  - Cofres: abrirlos es del mundo (el otro lo ve abrirse en directo, o ya abierto si entra después), pero lo que
+    sueltan es de cada uno: el objeto queda en el suelo para cada jugador hasta que lo recoge él, y el geo le cae a
+    quien esté en la sala.
+  - Peligros animados (sierras del Palacio Blanco y del Camino del Dolor, paredes de pinchos): se mueven con una
+    animación en bucle que empieza al cargar la sala. El dueño de la sala envía cada segundo en qué punto va cada una
+    (`HazardSync`) y los demás se ajustan si se desvían más de un 3 % de vuelta. En las zonas revisadas no hay
+    plataformas sólidas que se muevan solas (los ascensores ya van con controlador).
   - Quien entra en una sala recibe del dueño lo ya activado (puertas, palancas, paredes), los golpes de cada piedra de
     geo y los rompibles rotos. Al guardar, lo activado en el mundo no vuelve atrás.
   - Lo que crean los enemigos en combate (proyectiles, crías, invocaciones) se crea en los demás con la misma acción de
@@ -171,7 +178,8 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
   `netsim <ms> <variación ms> <pérdida %>` simula una mala conexión en la próxima partida (`LaggyTransport`, solo en
   modo de prueba); probado con 80 ± 20 ms y 5 % de pérdida. `arenas` lista los objetos de la sala que dan órdenes a
   enemigos o los encienden (para ver qué combates necesitan un controlador compartido), `healthlist` todos los objetos
-  con vida y su huella, y `die` mata al caballero; cada muerte de enemigo se registra con quién la provocó.
+  con vida y su huella, y `die` mata al caballero; cada muerte de enemigo se registra con quién la provocó. `moving <s>` lista lo sólido o
+  dañino que se mueve o gira, `hazards` los peligros animados alineados y `wake <nombre>` enciende un enemigo apagado.
 
 ## Hitos
 
@@ -189,7 +197,10 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
 - **M3**: revisadas con `arenas` las salas de los jefes del juego base (sin sueños ni Panteones): solo los Mantis y el
   Coliseo necesitaban controlador compartido; Señor Traidor, Caballero de la Colmena, Nosk y los Caballeros Vigía usan
   un `Battle Scene` que ya se copia por cadena. Sin probar en vivo: jefes de sueño, Grimm, Uumuu y Coleccionista. En
-  el Coliseo, una acción de sonido del minero aún no suena en la copia.
+  el Coliseo, una acción de sonido del minero aún no suena en la copia. Probados con los dos dañados: Cazador de
+  Cristal (cristales), bichos de cristal (láser), Madre Aspid (crías), Aspid primigenio (disparos), minero (pico) y
+  Gruzzer volátil (explosión). El cadáver que explota sale despedido con física propia en cada PC, así que la
+  explosión ocurre en sitios algo distintos (cada uno recibe el daño de la que ve).
 - **M4**: efectos del otro jugador (tajos, hechizos, dash, curación). `PlayerEvent` está reservado y sin usar.
 - **M5**: revivir, sombras compartidas, barras de vida y HUD del compañero, cinemáticas compartidas, skins y ajustes
   del host en el panel (la 0.7 los tenía en `HollowKnightCoop/src/HollowKnightCoop/Coop`).

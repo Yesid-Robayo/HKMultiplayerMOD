@@ -182,6 +182,29 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "moving":
+                // moving <segundos>: objetos sólidos de la sala que se mueven o giran solos (plataformas, sierras...)
+                StartCoroutine(FindMoving(ParseFloat(args[1])));
+                break;
+            case "wake":
+                // wake <inicio del nombre>: enciende el primer enemigo apagado con ese nombre (los de las jaulas del
+                // Coliseo) y lo pone junto al caballero
+                var sleeping = FindObjectsByType<HealthManager>(FindObjectsInactive.Include, FindObjectsSortMode.None)
+                    .FirstOrDefault(h => !h.gameObject.activeInHierarchy && !h.isDead &&
+                                         h.name.StartsWith(string.Join(" ", args.Skip(1)), StringComparison.Ordinal));
+                if (sleeping == null) {
+                    Log.Warn($"{Tag}no hay enemigo apagado '{string.Join(" ", args.Skip(1))}'");
+                } else {
+                    sleeping.transform.position = hero.transform.position + new Vector3(4f, 2f, 0f);
+                    sleeping.gameObject.SetActive(true);
+                    Log.Info($"{Tag}encendido {sleeping.name}");
+                }
+
+                break;
+            case "hazards":
+                // hazards: peligros animados que se alinean con el dueño de la sala
+                Log.Info($"{Tag}{runner.Hazards.Describe()}");
+                break;
             case "healthlist":
                 // healthlist: todos los objetos con vida de la sala, con su padre y su huella (para ver repetidos)
                 foreach (var hm in FindObjectsByType<HealthManager>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
@@ -577,6 +600,45 @@ internal sealed class TestDriver : MonoBehaviour {
         foreach (Transform child in node) {
             Dump(child, depth + 1, maxDepth);
         }
+    }
+
+    private static IEnumerator FindMoving(float seconds) {
+        var hero = HeroController.instance;
+        var start = new Dictionary<Transform, (Vector3 Position, float Angle)>();
+        foreach (var collider in FindObjectsByType<Collider2D>(FindObjectsSortMode.None)) {
+            var t = collider.transform;
+            if (collider.gameObject.scene.buildIndex < 0 || HKMultiplayer.Game.Scene.EnemySync.IsEnemyObject(t) ||
+                hero != null && t.IsChildOf(hero.transform) || start.ContainsKey(t)) {
+                continue;
+            }
+
+            start[t] = (t.position, t.eulerAngles.z);
+        }
+
+        yield return new WaitForSeconds(seconds);
+        var shown = 0;
+        foreach (var pair in start) {
+            var t = pair.Key;
+            if (t == null) {
+                continue;
+            }
+
+            var moved = (t.position - pair.Value.Position).magnitude;
+            var turned = Mathf.Abs(Mathf.DeltaAngle(t.eulerAngles.z, pair.Value.Angle));
+            if (moved < 0.05f && turned < 1f || shown++ >= 40) {
+                continue;
+            }
+
+            var collider = t.GetComponent<Collider2D>();
+            var fsms = string.Join(",", t.GetComponentsInParent<PlayMakerFSM>(true).Select(f => f.gameObject.name + "/" + f.FsmName + ":" + f.ActiveStateName));
+            var parts = string.Join(",", t.GetComponents<Component>().Select(c => c.GetType().Name)
+                .Where(n => n != "Transform" && !n.StartsWith("PlayMaker", StringComparison.Ordinal)));
+            Log.Info($"{Tag}mueve {t.name} padre={(t.parent != null ? t.parent.name : "-")} recorrido={moved:0.0} giro={turned:0} " +
+                     $"sólido={(collider != null && !collider.isTrigger ? "sí" : "no")} daño={(t.GetComponent<DamageHero>() != null ? "sí" : "no")} " +
+                     $"[{parts}] fsm=[{fsms}]");
+        }
+
+        Log.Info($"{Tag}movidos {shown} de {start.Count}");
     }
 
     private static IEnumerable<string> DescribeArenas() {

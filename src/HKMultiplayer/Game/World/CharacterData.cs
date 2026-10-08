@@ -102,10 +102,12 @@ internal static class CharacterData {
 
     /// <summary>
     /// Objetos de sala que recoge cada jugador por su cuenta (por el principio de su nombre en el juego): lo que
-    /// recoge uno no desaparece para el otro. También los avisos de tutorial, que cada uno ve una vez.
+    /// recoge uno no desaparece para el otro. También los avisos de tutorial, que cada uno ve una vez. Los cofres no:
+    /// abrirlos es del mundo (el otro lo ve abrirse, o ya abierto), pero lo que sueltan sí es de cada uno (el objeto
+    /// queda en el suelo para el otro hasta que lo recoja; el geo le cae si estaba en la sala).
     /// </summary>
     private static readonly string[] IndividualItemPrefixes = {
-        "Shiny", "Heart Piece", "Vessel Fragment", "Chest", "Mantis Chest", "Grimm Chest", "Dream Plant", "Egg Sac",
+        "Shiny", "Heart Piece", "Vessel Fragment", "Dream Plant", "Egg Sac",
         "Reward", "Reminder", "Interact Reminder", "Death Respawn Trigger", "Initial Fall Impact", "Force Hard Landing",
         "Secret Sound Region", "Poo "
     };
