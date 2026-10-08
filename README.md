@@ -7,7 +7,7 @@ real y pelean juntos contra los mismos enemigos y jefes.
 Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más). El diseño detallado está en
 [docs/arquitectura.md](docs/arquitectura.md).
 
-**Versión actual: 0.13.0** · Hitos M1, M2 y M3 terminados (ver [Estado](#estado)).
+**Versión actual: 0.14.0** · Hitos M1, M2 y M3 terminados (ver [Estado](#estado)).
 
 ---
 
@@ -40,7 +40,7 @@ Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más)
   rotas, personajes y salas visitadas, mapas de sala.
 - **Objetos de sala**: palancas, interruptores, puertas, paredes y suelos que se rompen, piedras de geo (golpes de los
   dos), rompibles de decoración, pasto y telas que se cortan, enredaderas, tarros de larva (la larva sale en los dos),
-  estalactitas.
+  estalactitas, letreros y decorados que se rompen con su propia lógica.
 - **Ascensores** con controlador: los mueve quien los usa, con su caballero encima, y el otro lo ve moverse igual.
 - **Rejas de batalla y de jefe de un solo sentido**: si se cierran con uno dentro, el otro puede entrar a ayudar pero
   no salir hasta que se abran. Quien entra o vuelve a la sala las encuentra como están.
@@ -147,8 +147,8 @@ juntos a un sueño). La lista completa de pendientes está al final de la arquit
 | `src/HKMultiplayer/Game/Scene/` | Objetos de sala, rompibles, ascensores y rejas, controladores de batalla, enemigos y jefes, peligros animados. |
 | `src/HKMultiplayer/UI/` | Menús y avisos. |
 | `src/HKMultiplayer/Testing/` | Modo de prueba: órdenes por archivo para probar con dos copias del juego. |
-| `tests/` | Pruebas del transporte fuera del juego. |
-| `tools/` | Compilar e instalar (`test-cycle.sh`), pruebas con dos copias (`mp-test-lib.sh`), paquete e instalador. |
+| `tests/` | Pruebas del transporte fuera del juego y rutas de prueba del coop (`tests/routes/`). |
+| `tools/` | Compilar e instalar (`test-cycle.sh`), pruebas con dos copias (`mp-test-lib.sh`), rutas automáticas (`run-routes.sh`), paquete e instalador. |
 | `docs/` | Diseño y notas. |
 | `lib/` | *(solo local, no se sube)* DLL del juego y de la Modding API para compilar. |
 | `vendor/` | *(solo local, no se sube)* Modding API compilada para el paquete. |
@@ -171,3 +171,11 @@ Las DLL del juego son de Team Cherry y no se incluyen en el repositorio.
 archivo: hostear y unirse, ir a una sala, moverse, golpear, capturas de pantalla de las dos a la vez, estado de los
 enemigos y objetos, simular una mala conexión (`netsim`), etc. Las órdenes están documentadas en
 [docs/arquitectura.md](docs/arquitectura.md#pruebas).
+
+### Rutas de prueba automáticas
+
+`bash tools/run-routes.sh` recorre el juego por zonas con un host y un invitado y comprueba en cada sala que los dos
+vean lo mismo: rompibles, piedras de geo, palancas y paredes, enemigos, jefes, lo guardado de la sala, el progreso
+compartido y la sesión (morir, salir y volver a entrar). Con `--pairs 3` reparte las zonas entre 3 pares de juegos para
+terminar antes. Usa sus propias copias (`test-instances/d`...`k`), no `b` ni `c`. Formato de las rutas y cómo escribir
+nuevas: [tests/routes/README.md](tests/routes/README.md).

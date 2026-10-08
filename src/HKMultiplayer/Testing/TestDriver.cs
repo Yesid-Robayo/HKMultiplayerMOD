@@ -340,6 +340,17 @@ internal sealed class TestDriver : MonoBehaviour {
             case "breakables":
                 Log.Info($"{Tag}rompibles: {runner.Breakables.Count} en la sala, {runner.Breakables.BrokenCount()} rotos");
                 break;
+            case "breaklist":
+                // breaklist: cada rompible de la sala con su tipo, id, estado y posición
+                foreach (var line in runner.Breakables.Describe()) {
+                    Log.Info($"{Tag}rompible {line}");
+                }
+
+                break;
+            case "breakname":
+                // breakname <texto>: rompe los rompibles enteros cuyo nombre lo contiene
+                Log.Info($"{Tag}rotos {runner.Breakables.TestBreakNamed(string.Join(" ", args.Skip(1)))}");
+                break;
             case "breaknear":
                 // breaknear <cantidad>: rompe los rompibles enteros más cercanos al jugador
                 Log.Info($"{Tag}rotos {runner.Breakables.TestBreakNearest(int.Parse(args[1]))}");

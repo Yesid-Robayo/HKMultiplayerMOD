@@ -140,8 +140,21 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     animación en bucle que empieza al cargar la sala. El dueño de la sala envía cada segundo en qué punto va cada una
     (`HazardSync`) y los demás se ajustan si se desvían más de un 3 % de vuelta. En las zonas revisadas no hay
     plataformas sólidas que se muevan solas (los ascensores ya van con controlador).
+  - Objetos guardables (paredes, palancas, cofres...): el directo (golpe, animación, sonido) lo lleva solo la copia
+    de su cadena (`FsmStateSync`). El aviso de "activado" de `SceneObjectSync` no mueve la FSM mientras esa cadena va
+    en marcha: se comprueba al acabar y solo se activa si no llegó (como mucho 10 s después). Lo activado por una
+    cadena llegada de otro PC no se vuelve a avisar. La línea base de cada objeto se toma después de
+    `PersistentBoolItem.Start` (el juego pone ahí lo guardado; en los inactivos llega tarde), y lo que llega de otro PC
+    antes de ese `Start` se pone justo después. El reposo de una cadena se toma cuando el objeto lleva 1 s quieto: si
+    no, el fin de su inicio al cargar la sala (`Pause` → `Idle`) parecía un golpe y se copiaba a los demás.
+  - Rompibles con FSM propia (la plantilla genérica del juego: recibe `TAKE DAMAGE`, tiene `Break` y la variable
+    `Activated`, sin componente rompible ni guardable, como el letrero de la bajada a Cruces Olvidados): se copia su
+    cadena como la de una palanca. Los rompibles con componente (`Breakable`, `BreakableObject`, `BreakablePole`,
+    `BreakablePoleSimple`, `BreakableInfectedVine`, `VinePlatformCut`, `GlobControl`, `GrassCut`) son todos los tipos
+    del juego y van por `BreakableSync`.
   - Quien entra en una sala recibe del dueño lo ya activado (puertas, palancas, paredes), los golpes de cada piedra de
-    geo y los rompibles rotos. Al guardar, lo activado en el mundo no vuelve atrás.
+    geo y los rompibles rotos. Al guardar, lo activado en el mundo no vuelve atrás. Los rompibles con FSM propia
+    todavía no se envían a quien entra después.
   - Lo que crean los enemigos en combate (proyectiles, crías, invocaciones) se crea en los demás con la misma acción de
     su marioneta (mismo prefab). Si hace daño o tiene vida, es una copia que sigue al original hasta que desaparece; los
     efectos solo visuales del pool corren solos. Lo que crean al prepararse (cadáveres, piezas propias) no se replica.
@@ -236,6 +249,3 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
   (`GrassBehaviour`) cercano al avatar del otro y darle el mismo empujón que da el héroe local, con la velocidad del
   avatar. No poner la etiqueta `Player` al avatar: muchas cosas del juego reaccionan a ella (puertas entre salas, zonas
   de cámara, NPCs, rangos de alerta de enemigos).
-- Auditoría: los objetos guardables los siguen a la vez `SceneObjectSync` y la copia de cadenas de `FsmStateSync`;
-  funciona, pero conviene que los lleve uno solo. Sin confirmar: posible aviso falso de "roto" justo al entrar en una
-  sala, si se escanea antes del `Start` de los objetos.

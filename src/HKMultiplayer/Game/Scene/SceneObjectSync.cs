@@ -19,6 +19,17 @@ namespace HKMultiplayer.Game.Scene;
 /// pone en el estado al que el propio juego lo lleva al cargar la sala con él ya activado (se busca en su FSM la
 /// comprobación de "Activated"), así queda igual que si se hubiera roto aquí.
 /// </para>
+/// <para>
+/// El directo (el golpe, la animación, el sonido) lo lleva un solo sistema: la copia de la cadena de
+/// <see cref="FsmStateSync"/>. Aquí el aviso de "activado" no mueve la FSM mientras esa cadena va en marcha; solo se
+/// comprueba al acabar y, si no llegó a activarlo, se activa. Lo demás es de aquí: lo que llega a quien entra en la
+/// sala y lo que llega de objetos que aquí aún no se han encontrado o no han cargado lo guardado.
+/// </para>
+/// <para>
+/// La línea base de cada objeto se toma cuando el juego ya puso en él lo guardado
+/// (<see cref="PersistentBoolItem"/>.Start, que en objetos inactivos llega tarde): si no, un objeto ya activado
+/// "se activaba" al cargarse y se avisaba de algo que no había pasado.
+/// </para>
 /// Los objetos que recoge cada uno (<see cref="CharacterData.IsIndividualItem"/>) quedan fuera.
 /// <para>
 /// También en directo: piedras de geo (cada golpe baja su contador "Hits" en todos; quien golpea se lleva su geo y los
@@ -68,13 +79,27 @@ internal sealed class SceneObjectSync {
 
     private const string ActivatedVariable = "Activated";
 
+    /// <summary>Lo más que se espera a que acabe la cadena copiada antes de activar el objeto de todos modos.</summary>
+    private const float ChainWaitSeconds = 10f;
+
     private sealed class Tracked {
         public string Id;
+        public PersistentBoolItem Persistent;
         public PlayMakerFSM Fsm;
         public FsmBool Activated;
         public bool LastValue;
         public string ActivatedState;
+
+        // Llegó activado de otro PC antes de que el juego le pusiera lo guardado: se pone al cargarlo
+        public bool ActivateOnStart;
+
+        // Llegó activado de otro PC con su cadena en marcha: se comprueba al acabar
+        public float VerifySince;
     }
+
+    /// <summary>Si el juego ya puso en el objeto lo guardado (privado en <see cref="PersistentBoolItem"/>).</summary>
+    private static readonly System.Reflection.FieldInfo StartedField =
+        typeof(PersistentBoolItem).GetField("started", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
     private readonly List<Tracked> _tracked = new();
     private readonly Dictionary<string, Tracked> _byId = new();
@@ -174,10 +199,15 @@ internal sealed class SceneObjectSync {
             Scan();
         }
 
+        var now = Time.unscaledTime;
         for (var i = 0; i < _tracked.Count; i++) {
             var item = _tracked[i];
             if (item.Fsm == null) {
                 continue;
+            }
+
+            if (item.VerifySince > 0f) {
+                VerifyAfterChain(item, now);
             }
 
             var value = item.Activated.Value;
@@ -186,7 +216,9 @@ internal sealed class SceneObjectSync {
             }
 
             item.LastValue = value;
-            if (value && _session.CanSend) {
+            // Activado por la cadena que llegó de otro PC: allí ya se avisó (no se devuelve)
+            if (value && _session.CanSend && !(FsmStateSync.CopiesChain(item.Fsm, out _, out var remote) && remote)) {
+                Log.Info($"{item.Id} activado en esta sala: se avisa a los demás");
                 var writer = _session.Begin(ObjectActivated);
                 writer.WriteUShort(_sceneHash);
                 writer.WriteString(item.Id);
@@ -237,6 +269,25 @@ internal sealed class SceneObjectSync {
         }
     }
 
+    /// <summary>
+    /// Llegó activado de otro PC mientras su cadena se copiaba: al acabar, si quedó activado no se toca; si no (la
+    /// cadena se cortó o no llegó), se activa. Si la cadena no acaba nunca, se activa igual pasado un rato.
+    /// </summary>
+    private static void VerifyAfterChain(Tracked item, float now) {
+        if (item.Activated.Value) {
+            item.VerifySince = 0f;
+            return;
+        }
+
+        if (FsmStateSync.CopiesChain(item.Fsm, out var busy, out _) && busy && now - item.VerifySince < ChainWaitSeconds) {
+            return;
+        }
+
+        item.VerifySince = 0f;
+        Log.Info($"{item.Id}: su cadena no llegó a activarlo aquí; se activa");
+        Activate(item);
+    }
+
     private void SendRockHits(Rock rock, bool live) {
         var writer = _session.Begin(GeoRockHits);
         writer.WriteUShort(_sceneHash);
@@ -272,6 +323,7 @@ internal sealed class SceneObjectSync {
 
             var tracked = new Tracked {
                 Id = id,
+                Persistent = persistent,
                 Fsm = fsm,
                 Activated = activated,
                 LastValue = activated.Value,
@@ -390,6 +442,12 @@ internal sealed class SceneObjectSync {
         }
 
         _hooked = true;
+        // El juego pone lo guardado en el objeto: esa es su línea base (no algo que acabe de pasar aquí)
+        On.PersistentBoolItem.Start += (orig, self) => {
+            orig(self);
+            _active?.OnPersistentStart(self);
+        };
+
         On.StalactiteControl.Fall += (orig, self, delay) => {
             var sync = _active;
             if (!_applyingRemoteFall && sync?._session != null && sync._session.CanSend && sync._scene.Length > 0) {
@@ -402,6 +460,28 @@ internal sealed class SceneObjectSync {
             return orig(self, delay);
         };
     }
+
+    private void OnPersistentStart(PersistentBoolItem persistent) {
+        foreach (var item in _tracked) {
+            if (item.Persistent != persistent || item.Fsm == null) {
+                continue;
+            }
+
+            if (item.ActivateOnStart) {
+                // Ya activado en otro PC: queda como si lo guardado lo dijera (su FSM lo comprueba al empezar)
+                item.ActivateOnStart = false;
+                item.Activated.Value = true;
+            } else if (item.Activated.Value && !item.LastValue) {
+                Log.Info($"{item.Id}: ya estaba activado en lo guardado (no se avisa)");
+            }
+
+            item.LastValue = item.Activated.Value;
+            return;
+        }
+    }
+
+    private static bool HasStarted(Tracked item) =>
+        item.Persistent == null || StartedField == null || (bool) StartedField.GetValue(item.Persistent);
 
     private void OnStalactite(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
@@ -477,6 +557,13 @@ internal sealed class SceneObjectSync {
             return;
         }
 
+        // El directo lo lleva la copia de su cadena: si va en marcha, solo se comprueba al acabar
+        if (FsmStateSync.CopiesChain(item.Fsm, out var busy, out _) && busy) {
+            item.VerifySince = Time.unscaledTime;
+            Log.Info($"{from.Name} activó {id}: su cadena va en marcha aquí, se comprueba al acabar");
+            return;
+        }
+
         Activate(item);
         Log.Info($"{from.Name} activó {id} en esta sala");
     }
@@ -488,9 +575,16 @@ internal sealed class SceneObjectSync {
             return;
         }
 
+        if (!HasStarted(item)) {
+            // Al cargarlo, el juego pisaría la variable con lo guardado: se pone justo después
+            item.ActivateOnStart = true;
+            return;
+        }
+
         item.Activated.Value = true;
         item.LastValue = true;
-        if (item.ActivatedState != null) {
+        // Si ya está ahí (p. ej. llevado por su cadena), volver a entrar repetiría sus acciones
+        if (item.ActivatedState != null && item.Fsm.ActiveStateName != item.ActivatedState) {
             item.Fsm.SetState(item.ActivatedState);
         }
     }

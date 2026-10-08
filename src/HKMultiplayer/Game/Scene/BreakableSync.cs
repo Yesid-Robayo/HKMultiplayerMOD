@@ -393,6 +393,20 @@ internal sealed class BreakableSync {
 
     public int Count => _tracked.Count;
 
+    /// <summary>Rompe los rompibles enteros cuyo nombre contiene el texto, como si los golpeara.</summary>
+    public int TestBreakNamed(string name) {
+        var broken = 0;
+        foreach (var item in _tracked) {
+            if (item.Component != null && item.Component.name.IndexOf(name, StringComparison.OrdinalIgnoreCase) >= 0 &&
+                !item.Kind.IsBroken(item.Component)) {
+                item.Kind.Break(item.Component, this);
+                broken++;
+            }
+        }
+
+        return broken;
+    }
+
     /// <summary>Rompe los <paramref name="amount"/> rompibles enteros más cercanos al héroe, como si los golpeara.</summary>
     public int TestBreakNearest(int amount) {
         var hero = HeroController.instance;

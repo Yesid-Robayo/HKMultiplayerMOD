@@ -205,6 +205,22 @@ internal sealed class FsmStateSync {
     public static bool IsSharedController(Fsm fsm) =>
         _active != null && fsm != null && _active._byFsm.TryGetValue(fsm, out var item) && !item.CopyTransitions;
 
+    /// <summary>
+    /// Si el directo de un guardable (su golpe y su animación) lo lleva la copia de su cadena, y si ahora mismo va a
+    /// mitad de una (propia o llegada de otro PC: <paramref name="remote"/>). Mientras, nadie más debe moverle el estado.
+    /// </summary>
+    public static bool CopiesChain(PlayMakerFSM fsm, out bool busy, out bool remote) {
+        busy = false;
+        remote = false;
+        if (_active == null || fsm == null || !_active._byFsm.TryGetValue(fsm.Fsm, out var item) || !item.CopyTransitions) {
+            return false;
+        }
+
+        remote = Time.unscaledTime < item.RemoteChainUntil;
+        busy = remote || item.LocalChain || item.Fsm.ActiveStateName != item.RestState;
+        return true;
+    }
+
     /// <summary>El primer cambio de estado al aplicar uno de otro PC es el pedido; los que encadene, se retienen.</summary>
     private static bool _requested;
 
@@ -405,7 +421,9 @@ internal sealed class FsmStateSync {
                 item.LastState = state;
                 item.LastStateTime = now;
             } else if (item.CopyTransitions && now - item.LastStateTime >= StillSeconds) {
+                // Quieto: ese es su reposo y la cadena (si la había) terminó
                 item.RestState = state;
+                item.LocalChain = false;
             }
 
             if (item.WaitingConvo && (now - item.WaitingSince > ConvoWaitSeconds || AllConvoDone(item))) {
@@ -565,7 +583,9 @@ internal sealed class FsmStateSync {
     }
 
     private void Add(Tracked item) {
-        item.RestState = item.LastState;
+        // Un guardable recién cargado aún se está iniciando (p. ej. "Pause" → "Idle"): su reposo se toma cuando lleva un
+        // rato quieto; si no, el fin de su inicio parecía un golpe y se copiaba a los demás al entrar en la sala
+        item.RestState = item.CopyTransitions ? null : item.LastState;
         _tracked.Add(item);
         _byId[item.Id] = item;
         _byFsm[item.Fsm.Fsm] = item;
@@ -718,7 +738,30 @@ internal sealed class FsmStateSync {
             }
         }
 
-        return persistent != null && fsm.FsmVariables.FindFsmBool("Activated") != null;
+        return persistent != null && fsm.FsmVariables.FindFsmBool("Activated") != null || IsBreakableTemplate(fsm);
+    }
+
+    /// <summary>
+    /// La FSM genérica de rompible del juego (recibe "TAKE DAMAGE", tiene "Break" y la variable "Activated"), usada en
+    /// objetos que no son componentes rompibles ni guardables: el letrero de Cruces Olvidados, decorados... Se copia su
+    /// cadena como la de una palanca. Fuera los enemigos y las piedras de geo (van por su cuenta).
+    /// </summary>
+    private static bool IsBreakableTemplate(PlayMakerFSM fsm) {
+        if (fsm.FsmVariables.FindFsmBool("Activated") == null || fsm.GetComponent<GeoRock>() != null ||
+            EnemySync.IsEnemyObject(fsm.transform)) {
+            return false;
+        }
+
+        var takesDamage = false;
+        var breaks = false;
+        foreach (var state in fsm.FsmStates) {
+            breaks |= state.Name == "Break";
+            foreach (var transition in state.Transitions) {
+                takesDamage |= transition.EventName == "TAKE DAMAGE";
+            }
+        }
+
+        return takesDamage && breaks;
     }
 
     // =====================================================================================================
@@ -1508,6 +1551,7 @@ internal sealed class FsmStateSync {
         } else if (from != null && from == item.RestState) {
             item.LocalChain = true;
             send = true;
+            Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: golpe en este PC ({from} → {state}), se copia la cadena");
         } else if (item.LocalChain) {
             send = true;
         }
