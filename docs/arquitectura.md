@@ -64,9 +64,17 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   local y se envía solo lo que cambió.
 - **Jugadores**: posición, orientación, animación (clip y fotograma), sala, vida. En los demás juegos se dibujan con
   un búfer de interpolación (pequeño retraso adaptativo y extrapolación corta si un paquete se retrasa).
-- **Mundo** (progreso compartido): reglas propias generadas a partir de los campos de `PlayerData` y de los objetos
-  persistentes de cada sala (`PersistentBoolItem`, `PersistentIntItem`, `GeoRock`...). Lo compartido lo decide el host
-  y llega por el canal fiable; lo individual (objetos, amuletos, geo...) queda en cada partida.
+- **Mundos coop** (`Game/World/`): partidas aparte de las 4 ranuras del juego, guardadas en el PC del host
+  (`HKMultiplayer/Mundos/<id>/`, máximo 4). Mientras se juega uno, la carga y el guardado del juego se redirigen al
+  mundo y el juego cree estar en la ranura -1 (que su guardado rechaza), así que nunca escribe en una partida normal.
+  - Al unirse, el host envía el mundo comprimido con el personaje del jugador dentro (o uno nuevo); el jugador lo carga
+    y no guarda nada en su PC: su personaje va al host en los bancos, al salir y cada minuto
+    (`players/<clave>.json`). El host guarda el mundo solo cada 2 minutos.
+  - **Personaje** (`CharacterData`): vida y alma actuales, vida máxima, geo, banco y reaparición, sombra, amuletos
+    equipados, portal de sueño e interfaz. Todo lo demás es del mundo.
+  - **Progreso compartido en directo** (`SharedProgress`): los campos del mundo se comparan cada 0,2 s con una copia
+    (lectores compilados, sin memoria por lectura) y los cambios van al host, que los aplica y reenvía. Los objetos de
+    sala (paredes, palancas, piedras de geo) se envían al guardarse y nunca retroceden.
 - **Enemigos y objetos de sala**:
   - Manda el juego del dueño de la sala: sus enemigos funcionan normal y se envía su estado (transform, animación,
     activo, vida, estado de sus FSM) con detección de cambios sin crear objetos.
@@ -78,6 +86,14 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Casos especiales (jefes con escenarios propios) se añaden por separado a medida que se prueban.
 - **Efectos del otro jugador**: eventos (ataque, hechizo, dash, curación...) que el receptor reproduce con los prefabs
   del propio héroe. Son solo visuales: el daño real va por los golpes directos.
+
+### Interfaz (`UI/`)
+
+- **Menú principal → Multijugador**: copia de los menús del juego (botón de "Iniciar partida", pantalla de "Extras").
+  Nombre y puerto; hostear (mundos coop, borrar con confirmación, nuevo) y unirse (dirección y código).
+- **Pausa → Multijugador** (solo en partida multijugador): mundo, código, IP oculta hasta pedirla, jugadores con su
+  ping y cerrar o salir de la partida.
+- Avisos en pantalla con la letra del juego (código al abrir la partida, quién entra o sale).
 
 ### Funciones del coop (`Game/Features/`)
 

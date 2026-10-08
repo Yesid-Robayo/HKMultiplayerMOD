@@ -17,8 +17,9 @@ internal static class CharacterData {
     /// <summary>Campos de <see cref="PlayerData"/> que son del personaje.</summary>
     private static readonly string[] FieldNames = new[] {
         "playTime",
-        // Vida y alma actuales (los máximos salen de objetos del mundo)
-        "health", "healthBlue", "joniHealthBlue", "damagedBlue", "prevHealth",
+        // Vida y alma actuales. La vida máxima también (amuletos como la Bendición de Joni la cambian); la base de
+        // máscaras conseguidas (maxHealthBase) es del mundo
+        "health", "maxHealth", "healthBlue", "joniHealthBlue", "damagedBlue", "prevHealth",
         "MPCharge", "MPReserve", "focusMP_amount", "soulLimited",
         "geo", "geoPool",
         // Banco y reaparición
@@ -91,7 +92,8 @@ internal static class CharacterData {
             }
         }
 
-        data["health"] = host.maxHealth;
+        data["health"] = host.maxHealthBase;
+        data["maxHealth"] = host.maxHealthBase;
         return data;
     }
 

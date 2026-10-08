@@ -99,6 +99,14 @@ internal sealed class TestDriver : MonoBehaviour {
             case "pdget":
                 Log.Info($"{Tag}pd {args[1]}={typeof(PlayerData).GetField(args[1])?.GetValue(PlayerData.instance)}");
                 break;
+            case "sdset":
+                // sdset <sala> <id>: marca un objeto de sala como activado (como al romper una pared)
+                SceneData.instance.SaveMyState(new PersistentBoolData { sceneName = args[1], id = args[2], activated = true });
+                break;
+            case "sdget":
+                var stored = SceneData.instance.FindMyState(new PersistentBoolData { sceneName = args[1], id = args[2] });
+                Log.Info($"{Tag}sd {args[1]}/{args[2]}={(stored == null ? "ninguno" : stored.activated.ToString())}");
+                break;
             case "leavegame":
                 // Sale de la partida como desde la pausa (en el mundo del host: guarda y vuelve al menú)
                 runner.LeaveFromGame();
