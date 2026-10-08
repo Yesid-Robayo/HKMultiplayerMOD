@@ -134,11 +134,12 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Lo que crean los enemigos en combate (proyectiles, crías, invocaciones) se crea en los demás con la misma acción de
     su marioneta (mismo prefab). Si hace daño o tiene vida, es una copia que sigue al original hasta que desaparece; los
     efectos solo visuales del pool corren solos. Lo que crean al prepararse (cadáveres, piezas propias) no se replica.
-  - Los tarros del Coleccionista sueltan su bicho con su propio código: el original y su copia caen juntos y cada PC
-    rompe el suyo; el bicho se reconoce al encenderse junto a su tarro y se sigue con un identificador sacado del del
-    tarro, igual en todos. La copia sabe qué bicho lleva porque la lógica del jefe apunta en ella lo que crea (como en
-    el original). Una copia que acaba sola no borra el original, salvo un disparo: si su copia choca (con el caballero
-    de ese PC o una pared), el original también se acaba.
+  - Los tarros del Coleccionista sueltan su bicho con su propio código. Solo lo suelta el tarro original: el PC que
+    lo tiene lo sigue como algo creado en combate (se reconoce al encenderse junto a su tarro) y los demás crean una
+    copia que lo sigue; las copias del tarro van vacías y se rompen sin soltar nada. Una copia que acaba sola no borra
+    el original, salvo un disparo: si su copia choca (con el caballero de ese PC o una pared), el original también.
+  - Lo creado en combate se numera con el jugador que lo creó: cada PC cuenta por su cuenta y dos podían dar el mismo
+    número (se pisaban y quedaba una copia huérfana y quieta).
   - Cadáveres: tras morir, el PC donde murió de verdad sigue enviando la posición de su cadáver unos segundos (sale
     despedido con física, y algunos explotan, como el Gruzzer volátil): cae y explota en el mismo sitio en todos.
   - Nombre del jefe al despertar: la marioneta hace también lo que le dice al título de zona qué nombre poner.

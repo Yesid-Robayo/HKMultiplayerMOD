@@ -70,6 +70,9 @@ internal sealed class EnemySync {
     /// <summary>Objetos de la arena que la lógica del enemigo enciende y apaga (al cambiar, y todos a quien entra).</summary>
     public const MessageType EnemyLinked = (MessageType) 69;
 
+    /// <summary>El bicho que soltó un tarro original del Coleccionista: los demás crean una copia que lo sigue.</summary>
+    public const MessageType EnemyJar = (MessageType) 71;
+
     private const int MaxLinked = 64;
 
     /// <summary>Tras encontrar un enemigo, cuándo buscar los objetos que enciende (su lógica ya los tiene apuntados).</summary>
@@ -343,6 +346,7 @@ internal sealed class EnemySync {
     private readonly MessageHandler _onEvent;
     private readonly MessageHandler _onParts;
     private readonly MessageHandler _onLinked;
+    private readonly MessageHandler _onJar;
 
     /// <summary>Alguien entró en la sala: le llegan los objetos encendidos y apagados de los enemigos que mueve este PC.</summary>
     private bool _sendLinkedSnapshot;
@@ -390,6 +394,7 @@ internal sealed class EnemySync {
         MessageRoutes.Register(EnemyEvent, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyParts, Route.SameScene, reliable: false);
         MessageRoutes.Register(EnemyLinked, Route.SameScene, reliable: true);
+        MessageRoutes.Register(EnemyJar, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyKilled, Route.Server, reliable: true);
         MessageRoutes.Register(Rested, Route.Server, reliable: true);
     }
@@ -407,6 +412,7 @@ internal sealed class EnemySync {
         _onEvent = OnEnemyEvent;
         _onParts = OnParts;
         _onLinked = OnLinked;
+        _onJar = OnJar;
         _onPlayerScene = OnPlayerScene;
         _onKilled = OnKilled;
         _onRested = (from, _) => {
@@ -430,6 +436,7 @@ internal sealed class EnemySync {
         session.On(EnemyEvent, _onEvent);
         session.On(EnemyParts, _onParts);
         session.On(EnemyLinked, _onLinked);
+        session.On(EnemyJar, _onJar);
         session.On(EnemyKilled, _onKilled);
         session.On(Rested, _onRested);
         session.PlayerSceneChanged += _onPlayerScene;
@@ -453,6 +460,7 @@ internal sealed class EnemySync {
             _session.On(EnemyEvent, null);
             _session.On(EnemyParts, null);
             _session.On(EnemyLinked, null);
+            _session.On(EnemyJar, null);
             _session.On(EnemyKilled, null);
             _session.On(Rested, null);
             _session.PlayerSceneChanged -= _onPlayerScene;
@@ -1038,18 +1046,18 @@ internal sealed class EnemySync {
 
     /// <summary>
     /// Un enemigo se acaba de encender: si es el bicho que suelta un tarro del Coleccionista al romperse (lo hace el código
-    /// del tarro, no una FSM), está justo donde el tarro y es del tipo que lleva. Cada PC rompe el suyo (el original y su
-    /// copia caen juntos), así que el bicho se sigue como uno de la sala, con un identificador sacado del del tarro, igual
-    /// en todos: uno lo mueve y los demás lo ven, con la misma vida y la misma muerte.
+    /// del tarro, no una FSM), está justo donde el tarro y es del tipo que lleva. Solo lo crea el tarro original: este PC
+    /// lo sigue como algo creado en combate y los demás crean una copia que lo sigue (sus copias del tarro van vacías y
+    /// se rompen sin soltar nada). Así hay siempre el mismo bicho en todos, aunque el jefe cambie de PC a mitad.
     /// </summary>
     private void NoteEnabled(HealthManager health) {
-        if (_session == null || _scene.Length == 0 || _byHealth.ContainsKey(health)) {
+        if (_session == null || _scene.Length == 0 || _byHealth.ContainsKey(health) || _spawningCopy) {
             return;
         }
 
         var position = health.transform.position;
         foreach (var enemy in _enemies) {
-            if (!enemy.Spawned || enemy.Root == null || !enemy.Root.activeInHierarchy ||
+            if (!enemy.Spawned || enemy.Puppet || enemy.Root == null || !enemy.Root.activeInHierarchy ||
                 (enemy.Transform.position - position).sqrMagnitude > JarReach * JarReach) {
                 continue;
             }
@@ -1060,14 +1068,80 @@ internal sealed class EnemySync {
                 continue;
             }
 
-            var id = ((enemy.Id ^ 0x9e3779b9u) * 16777619u) & ~SpawnedIdFlag;
-            if (!_byId.ContainsKey(id)) {
-                AddEnemy(health, id).Created = true;
-                Log.Info($"Tarro roto: su {health.name} se sigue como {id:x8}");
+            var id = NextSpawnedId();
+            Track(health.gameObject, id, pooled: true, puppet: false, _session.LocalId);
+            if (_session.CanSend && OthersInScene()) {
+                var writer = _session.Begin(EnemyJar);
+                writer.WriteUShort(_sceneHash);
+                writer.WriteUInt(id);
+                writer.WriteString(prefab.name);
+                writer.WriteInt(health.hp);
+                writer.WriteFloat(position.x);
+                writer.WriteFloat(position.y);
+                _session.End();
             }
 
             return;
         }
+    }
+
+    /// <summary>Otro PC soltó el bicho de un tarro original: aquí se crea una copia que lo sigue.</summary>
+    private void OnJar(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        var prefabName = reader.ReadString(128);
+        var hp = reader.ReadInt();
+        var position = new Vector3(reader.ReadFloat(), reader.ReadFloat(), 0f);
+        if (sceneHash != _sceneHash || (id & SpawnedIdFlag) == 0 || _byId.ContainsKey(id)) {
+            return;
+        }
+
+        var prefab = FindPrefab(prefabName);
+        if (prefab == null) {
+            return;
+        }
+
+        GameObject copy;
+        _spawningCopy = true;
+        try {
+            copy = prefab.Spawn(position, Quaternion.identity);
+        } finally {
+            _spawningCopy = false;
+        }
+
+        if (copy == null) {
+            return;
+        }
+
+        var health = copy.GetComponent<HealthManager>();
+        if (health != null) {
+            health.hp = hp;
+        }
+
+        Track(copy, id, pooled: true, puppet: true, from.Id);
+    }
+
+    /// <summary>El prefab con ese nombre que tiene apuntado la lógica de algún enemigo (el jefe que llena los tarros).</summary>
+    private GameObject FindPrefab(string name) {
+        foreach (var enemy in _enemies) {
+            if (enemy.Fsms == null) {
+                continue;
+            }
+
+            foreach (var fsm in enemy.Fsms) {
+                if (fsm == null) {
+                    continue;
+                }
+
+                foreach (var variable in fsm.FsmVariables.GameObjectVariables) {
+                    if (variable.Value != null && variable.Value.name == name) {
+                        return variable.Value;
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Distancia del tarro a la que aparece su bicho.</summary>
@@ -1135,9 +1209,7 @@ internal sealed class EnemySync {
     /// <summary>Acciones visuales que la marioneta también hace (además del sonido): no deciden nada de su lógica.</summary>
     private static readonly HashSet<string> EffectActions = new() {
         "ActivateGameObject", "PlayParticleEmitter", "StopParticleEmitter", "SetParticleEmission", "SetParticleEmissionRate",
-        "SetParticleEmissionSpeed", "SpawnRandomObjects", "FlingObjectsFromGlobalPool", "SendEventByName", "CreateObject",
-        // Qué bicho lleva el tarro que lanza el Coleccionista: la copia del tarro lo suelta igual
-        "SetSpawnJarContents"
+        "SetParticleEmissionSpeed", "SpawnRandomObjects", "FlingObjectsFromGlobalPool", "SendEventByName", "CreateObject"
     };
 
     /// <summary>
@@ -1776,6 +1848,13 @@ internal sealed class EnemySync {
     /// marioneta. Si es de juego (hace daño o tiene vida: proyectiles, crías, invocaciones) se sigue como un enemigo más
     /// hasta que desaparece; si es solo visual (polvo, destellos), cada PC lo deja correr solo.
     /// </summary>
+    /// <summary>
+    /// Identificador de algo creado en combate en este PC: lleva el jugador que lo creó, porque cada PC cuenta por su
+    /// cuenta y dos podrían dar el mismo número (se pisaban: quedaba una copia huérfana y quieta).
+    /// </summary>
+    private uint NextSpawnedId() =>
+        SpawnedIdFlag | (uint) (_session.LocalId & 0x7F) << 24 | (++_spawnCounter & 0xFFFFFF);
+
     private void OnSpawned(HutongGames.PlayMaker.FsmStateAction action, GameObject spawned, bool pooled) {
         if (_spawningCopy || _takingOver || spawned == null || _session == null || !_session.CanSend ||
             !_enemyFsms.TryGetValue(action.Fsm, out var creator) || creator.Enemy.Puppet || !OthersInScene()) {
@@ -1798,7 +1877,7 @@ internal sealed class EnemySync {
 
         uint id = 0;
         if (gameplay) {
-            id = SpawnedIdFlag | ++_spawnCounter;
+            id = NextSpawnedId();
             Track(spawned, id, pooled, puppet: false, _session.LocalId);
         }
 
@@ -1928,6 +2007,12 @@ internal sealed class EnemySync {
         if ((scale.x < 0f) != facingRight) {
             scale.x = -scale.x;
             copy.transform.localScale = scale;
+        }
+
+        // La copia de un tarro del Coleccionista va vacía: su bicho lo suelta el original y llega como copia
+        var jar = copy.GetComponent<SpawnJarControl>();
+        if (jar != null) {
+            JarEnemyField?.SetValue(jar, null);
         }
 
         // Solo visual: corre solo. De juego: copia que sigue al original (daña al tocarla; los golpes van al dueño)
