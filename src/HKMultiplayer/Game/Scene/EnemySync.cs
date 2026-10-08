@@ -109,6 +109,13 @@ internal sealed class EnemySync {
     /// <summary>Vida a partir de la cual un enemigo se trata como jefe.</summary>
     private const int BossHp = 150;
 
+    /// <summary>Distancia al jefe a la que tienen que estar todos para que despierte.</summary>
+    private const float WakeRange = 25f;
+
+    /// <summary>Cambio de estado pendiente de una FSM (privado en PlayMaker): se anula al retener el despertar.</summary>
+    private static readonly System.Reflection.FieldInfo SwitchToStateField = typeof(HutongGames.PlayMaker.Fsm).GetField(
+        "switchToState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
     /// <summary>Tras encontrar un enemigo, se le deja iniciar su lógica antes de pararla (si no, la retoma sin iniciar).</summary>
     private const float PuppetDelay = 0.5f;
 
@@ -193,6 +200,16 @@ internal sealed class EnemySync {
         public ushort PreviousController;
         public float LastSwitch;
         public float ScannedAt;
+
+        // Jefe dormido: su lógica principal, el estado en el que espera y si ya despertó. Si quiere despertar sin estar
+        // todos cerca, el cambio se retiene (invulnerable mientras) hasta que lleguen
+        public int WakeFsm = -1;
+        public string DormantState;
+        public bool Awake;
+        public HutongGames.PlayMaker.FsmState HeldWake;
+        public bool WaitingWake;
+        public bool WasInvincible;
+        public float NextWaitNotice;
 
         /// <summary>Cómo iba, recibido del que lo movía antes (al pasar a moverlo este PC).</summary>
         public HandoverFsm[] Handover;
@@ -585,6 +602,7 @@ internal sealed class EnemySync {
 
         UpdateReal(isOwner);
         UpdatePuppets();
+        UpdateWakeGates();
     }
 
     private bool OthersInScene() {
@@ -1776,6 +1794,158 @@ internal sealed class EnemySync {
 
         var first = handover.Length > 0 && enemy.Fsms.Length > 0 && enemy.Fsms[0] != null ? enemy.Fsms[0].ActiveStateName : "-";
         Log.Info($"{enemy.Root.name}: lo mueve este PC, sigue desde {first}");
+    }
+
+    // =====================================================================================================
+    // Jefes que despiertan al ver al caballero: esperan a que estén todos cerca
+    // =====================================================================================================
+
+    /// <summary>
+    /// Apunta en qué estado duerme cada jefe (el de su lógica principal, ya preparada): su primer cambio desde ahí es
+    /// despertar.
+    /// </summary>
+    private void NoteDormant(Enemy enemy) {
+        if (enemy.Awake || enemy.DormantState != null || enemy.Spawned || enemy.Puppet || enemy.Fsms == null ||
+            enemy.Health == null || enemy.Health.isDead || enemy.Health.hp < BossHp ||
+            Time.unscaledTime - enemy.ScannedAt < PreparationSeconds) {
+            return;
+        }
+
+        var best = -1;
+        var last = enemy.FirstSatellite > 0 ? enemy.FirstSatellite : enemy.Fsms.Length;
+        for (var i = 0; i < last; i++) {
+            var fsm = enemy.Fsms[i];
+            if (fsm != null && fsm.enabled && (best < 0 || fsm.FsmStates.Length > enemy.Fsms[best].FsmStates.Length)) {
+                best = i;
+            }
+        }
+
+        if (best >= 0 && enemy.Fsms[best].Fsm.ActiveState != null) {
+            enemy.WakeFsm = best;
+            enemy.DormantState = enemy.Fsms[best].Fsm.ActiveState.Name;
+        }
+    }
+
+    /// <summary>
+    /// La lógica de un jefe quiere dejar su estado dormido. Si algún jugador de la sala no está cerca, no despierta: se
+    /// retiene (y es invulnerable, para que nadie le pegue mientras) hasta que lleguen todos.
+    /// </summary>
+    private bool HoldWake(HutongGames.PlayMaker.Fsm fsm, HutongGames.PlayMaker.FsmState to) {
+        if (_takingOver || _session == null || !_enemyFsms.TryGetValue(fsm, out var owner)) {
+            return false;
+        }
+
+        var enemy = owner.Enemy;
+        if (enemy.Awake || enemy.Puppet || enemy.DormantState == null || owner.Index != enemy.WakeFsm) {
+            return false;
+        }
+
+        if (fsm.ActiveState == null || fsm.ActiveState.Name != enemy.DormantState || !OthersInScene() || EveryoneNear(enemy)) {
+            WakeUp(enemy);
+            return false;
+        }
+
+        enemy.HeldWake = to;
+        if (!enemy.WaitingWake) {
+            enemy.WaitingWake = true;
+            enemy.WasInvincible = enemy.Health.IsInvincible;
+            enemy.Health.IsInvincible = true;
+            Log.Info($"{enemy.Root.name}: espera a que estén todos cerca para despertar");
+        }
+
+        return true;
+    }
+
+    private void WakeUp(Enemy enemy) {
+        enemy.Awake = true;
+        if (enemy.WaitingWake) {
+            enemy.WaitingWake = false;
+            if (enemy.Health != null) {
+                enemy.Health.IsInvincible = enemy.WasInvincible;
+            }
+        }
+    }
+
+    /// <summary>Jefes retenidos: despiertan cuando están todos cerca (o si ya no los mueve este PC, lo decide el otro).</summary>
+    private void UpdateWakeGates() {
+        var now = Time.unscaledTime;
+        foreach (var enemy in _enemies) {
+            NoteDormant(enemy);
+            if (!enemy.WaitingWake) {
+                continue;
+            }
+
+            if (enemy.Puppet || enemy.Root == null || enemy.Health == null || enemy.Health.isDead) {
+                enemy.WaitingWake = false;
+                if (enemy.Health != null) {
+                    enemy.Health.IsInvincible = enemy.WasInvincible;
+                }
+
+                continue;
+            }
+
+            if (OthersInScene() && !EveryoneNear(enemy)) {
+                if (now >= enemy.NextWaitNotice) {
+                    enemy.NextWaitNotice = now + 4f;
+                    HKMultiplayer.UI.Notice.Show($"Esperando a {MissingNear(enemy)} para empezar el combate", 3.5f);
+                }
+
+                continue;
+            }
+
+            var fsm = enemy.Fsms[enemy.WakeFsm].Fsm;
+            var to = enemy.HeldWake;
+            WakeUp(enemy);
+            if (to != null && fsm.ActiveState != null && fsm.ActiveState.Name == enemy.DormantState) {
+                HutongGames.PlayMaker.FsmExecutionStack.PushFsm(fsm);
+                try {
+                    fsm.SetState(to.Name);
+                    fsm.UpdateStateChanges();
+                } finally {
+                    HutongGames.PlayMaker.FsmExecutionStack.PopFsm();
+                }
+            }
+        }
+    }
+
+    private bool EveryoneNear(Enemy enemy) {
+        var position = enemy.Transform.position;
+        var hero = HeroController.instance;
+        if (hero == null || ((Vector2) (hero.transform.position - position)).sqrMagnitude > WakeRange * WakeRange) {
+            return false;
+        }
+
+        foreach (var player in _session.Players) {
+            if (player.IsLocal || player.Scene != _scene) {
+                continue;
+            }
+
+            if (_players == null || !_players.TryGetAvatarObject(player.Id, out var avatar) ||
+                ((Vector2) (avatar.transform.position - position)).sqrMagnitude > WakeRange * WakeRange) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private string MissingNear(Enemy enemy) {
+        var position = enemy.Transform.position;
+        var names = new List<string>();
+        foreach (var player in _session.Players) {
+            if (!player.IsLocal && player.Scene == _scene &&
+                (_players == null || !_players.TryGetAvatarObject(player.Id, out var avatar) ||
+                 ((Vector2) (avatar.transform.position - position)).sqrMagnitude > WakeRange * WakeRange)) {
+                names.Add(player.Name);
+            }
+        }
+
+        var hero = HeroController.instance;
+        if (hero != null && ((Vector2) (hero.transform.position - position)).sqrMagnitude > WakeRange * WakeRange) {
+            names.Add("ti");
+        }
+
+        return names.Count > 0 ? string.Join(", ", names) : "los demás";
     }
 
     /// <summary>Si en la sala hay un jefe vivo (con mucha vida): sus combates esperan a que entren todos.</summary>
@@ -3167,6 +3337,11 @@ internal sealed class EnemySync {
 
         // Estados de la lógica de los enemigos reales: los que suenan, también en las marionetas
         On.HutongGames.PlayMaker.Fsm.SwitchState += (orig, self, toState) => {
+            if (toState != null && _active != null && _active.HoldWake(self, toState)) {
+                SwitchToStateField?.SetValue(self, null);
+                return;
+            }
+
             orig(self, toState);
             var sync = _active;
             if (sync?._session != null && toState != null && sync._soundFsms.Count > 0) {

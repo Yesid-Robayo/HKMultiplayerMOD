@@ -12,7 +12,7 @@ namespace HKMultiplayer;
 /// </summary>
 public sealed class HKMultiplayerMod : Mod, IGlobalSettings<GlobalSettings> {
     /// <summary>Versión del mod: el host solo acepta jugadores con la misma.</summary>
-    public const string Version = "0.12.0";
+    public const string Version = "0.13.0";
 
     public static GlobalSettings Settings { get; private set; } = new();
 

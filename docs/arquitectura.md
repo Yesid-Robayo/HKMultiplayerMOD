@@ -126,8 +126,11 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     desaparece en los dos al empezar. Cada diálogo espera a que todos los de la sala lo terminen de leer (si alguno no
     responde en 30 s, sigue). Los personajes que solo hablan no cuentan y siguen siendo de cada uno.
   - Combates de jefe: si la zona que los empieza (la que cierra la arena o empieza el diálogo) avisa sin estar dentro
-    todos los jugadores de la sala, se espera ("Esperando a ... para empezar el combate") y empieza cuando entran. No
-    cubre a los jefes que se despiertan al ver al caballero (Hornet 1, Mawlek...), solo los de zona.
+    todos los jugadores de la sala, se espera ("Esperando a ... para empezar el combate") y empieza cuando entran.
+  - Jefes que se despiertan al ver al caballero (Hornet 1, Guardián de Cristal...): se apunta en qué estado duerme su
+    lógica principal y su primer cambio desde ahí es despertar. Si algún jugador de la sala está a más de 25 de él,
+    ese cambio se retiene (el mismo aviso) y el jefe es invulnerable mientras: golpearlo no lo despierta ni le quita
+    vida. Despierta en cuanto están todos cerca.
   - Las copias no tocan los datos del jugador (contadores como las larvas llegan una vez, del PC de origen). Los tarros
     de larva se rompen en todos y la larva sale también en los demás.
   - Cofres: abrirlos es del mundo (el otro lo ve abrirse en directo, o ya abierto si entra después), pero lo que
