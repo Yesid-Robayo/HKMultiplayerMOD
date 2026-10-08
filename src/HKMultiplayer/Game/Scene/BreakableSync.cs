@@ -77,7 +77,15 @@ internal sealed class BreakableSync {
             DestroyedMeansBroken = true,
             Break = (c, sync) => {
                 var method = typeof(GrassCut).GetMethod("OnTriggerEnter2D", BindingFlags.NonPublic | BindingFlags.Instance);
-                method?.Invoke(c, new object[] { sync.FakeAttack("Nail Attack", c.transform.position) });
+                var attack = sync.FakeAttack("Nail Attack", c.transform.position);
+                // El juego pone el efecto del corte entre el centro del golpe y el del pasto: el golpe se activa solo
+                // durante la llamada (sin un paso de física en medio, no toca nada más) para que su centro sea real
+                attack.enabled = true;
+                try {
+                    method?.Invoke(c, new object[] { attack });
+                } finally {
+                    attack.enabled = false;
+                }
             }
         });
 

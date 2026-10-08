@@ -280,6 +280,9 @@ internal sealed class TestDriver : MonoBehaviour {
                         Log.Info($"{Tag}  bool {variable.Name}={variable.Value}");
                     }
 
+                    var globals = string.Join(", ", fsm.FsmGlobalTransitions.Select(tr => $"{tr.EventName}->{tr.ToState}"));
+                    Log.Info($"{Tag}  globales: {globals}");
+
                     foreach (var state in fsm.FsmStates) {
                         var actions = string.Join(", ", state.Actions.Select(a => a.GetType().Name));
                         var transitions = string.Join(", ", state.Transitions.Select(tr => $"{tr.EventName}->{tr.ToState}"));
@@ -297,12 +300,9 @@ internal sealed class TestDriver : MonoBehaviour {
                     break;
                 }
 
-                foreach (var fsm in actionObject.GetComponents<PlayMakerFSM>()) {
-                    var state = fsm.FsmStates.FirstOrDefault(s => s.Name == actionArgs[1]);
-                    if (state == null) {
-                        continue;
-                    }
-
+                // Con "*" como estado, todos los estados
+                foreach (var fsm in actionObject.GetComponents<PlayMakerFSM>())
+                foreach (var state in fsm.FsmStates.Where(s => actionArgs[1] == "*" || s.Name == actionArgs[1])) {
                     foreach (var action in state.Actions) {
                         var fields = action.GetType().GetFields(System.Reflection.BindingFlags.Public |
                                                                 System.Reflection.BindingFlags.Instance)

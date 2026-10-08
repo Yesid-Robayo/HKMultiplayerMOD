@@ -68,8 +68,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   (`HKMultiplayer/Mundos/<id>/`, máximo 4). Mientras se juega uno, la carga y el guardado del juego se redirigen al
   mundo y el juego cree estar en la ranura -1 (que su guardado rechaza), así que nunca escribe en una partida normal.
   - Al unirse, el host envía el mundo comprimido con el personaje del jugador dentro (o uno nuevo); el jugador lo carga
-    y no guarda nada en su PC: su personaje va al host en los bancos, al salir y cada minuto
-    (`players/<clave>.json`). El host guarda el mundo solo cada 2 minutos.
+    y no guarda nada en su PC: su personaje va al host en los bancos, al salir y cada 30 segundos
+    (`players/<clave>.json`). Antes de cerrar la partida, salir de su mundo o cerrar el juego, el host pide a cada
+    invitado su personaje y espera a recibirlo (unos segundos como mucho). El host guarda el mundo solo cada 2 minutos.
   - **Personaje** (`CharacterData`): estado (vida, alma, geo, banco, sombra, portal de sueño) e **inventario propio**
     (máscaras y vasijas, aguijón y artes, amuletos, llaves, reliquias, mapas, esencia, compras), más los objetos de
     sala que recoge cada uno (objetos brillantes, fragmentos, cofres, orbes de sueño). Del mundo y compartido:
@@ -86,6 +87,10 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Ascensores y rejas: los mueve quien los usa (su controlador). Las copias de los demás no avanzan solas: solo pasan
     por los estados que llegan, una vez cada uno, aplicados dentro de la ejecución de su FSM. Si no, los estados con
     efectos fuera del objeto (el ascensor voltea la dirección de su palanca al llegar) se harían dos veces.
+  - Rejas de batalla y de jefes: si una se cierra con un jugador dentro, el otro puede entrar a ayudar pero no salir
+    hasta que se abra. Las que ya están cerradas al cargar la sala no se cruzan.
+  - Las copias no tocan los datos del jugador (contadores como las larvas llegan una vez, del PC de origen). Los tarros
+    de larva se rompen en todos y la larva sale también en los demás.
   - Quien entra en una sala recibe del dueño lo ya activado (puertas, palancas, paredes), los golpes de cada piedra de
     geo y los rompibles rotos. Al guardar, lo activado en el mundo no vuelve atrás.
   - Los objetos que crean los enemigos (proyectiles, etc.) se replican como "aparecidos" con su prefab y transform.

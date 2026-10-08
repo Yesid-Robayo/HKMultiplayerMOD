@@ -45,10 +45,18 @@ internal sealed class FsmStateSync {
     /// <summary>Partes del nombre de los objetos con golpe propio (palancas, interruptores).</summary>
     private static readonly string[] SwitchNames = { "Lever", "lever", "Switch", "switch", "Button" };
 
+    private const string GateFsm = "BG Control";
+
+    /// <summary>
+    /// Distancia a la reja (además de su grosor) a la que el caballero ya cruzó del todo: entonces vuelve a ser sólida sin
+    /// empujarlo de vuelta.
+    /// </summary>
+    private const float GateClearance = 0.9f;
+
     /// <summary>Objetos con controlador: principio del nombre del objeto y nombre de su FSM.</summary>
     private static readonly (string Name, string Fsm)[] Targets = {
         ("Ruins Lift", "Lift Control"),
-        ("Battle Gate", "BG Control")
+        ("Battle Gate", GateFsm)
     };
 
     private sealed class Tracked {
@@ -91,6 +99,14 @@ internal sealed class FsmStateSync {
         // Ascensores de la ciudad: sus pisos y el piso actual, para no mandarlo nunca fuera de su recorrido
         public RuinsLift Lift;
         public FsmInt CurrentPosition;
+
+        // Rejas de batalla y de jefes: cerradas por otro, se dejan cruzar hacia dentro pero no hacia fuera
+        public BoxCollider2D Gate;
+        public int InsideSign;
+        public bool Passing;
+
+        // Se vio abierta (ya iniciada): solo entonces su cierre es de una batalla. Las que empiezan cerradas lo siguen
+        public bool GateWasOpen;
     }
 
     private readonly List<Tracked> _tracked = new();
@@ -107,6 +123,7 @@ internal sealed class FsmStateSync {
     private uint _lastPositionTick;
     private PlayerSnapshot _incoming;
     private GameSession _session;
+    private PlayerSync _players;
     private string _scene = string.Empty;
     private ushort _sceneHash;
     private float _rescanAt;
@@ -149,8 +166,9 @@ internal sealed class FsmStateSync {
         _onVars = OnVars;
     }
 
-    public void Attach(GameSession session) {
+    public void Attach(GameSession session, PlayerSync players) {
         _session = session;
+        _players = players;
         session.On(ControllerState, _onState);
         session.On(Transition, _onTransition);
         session.On(Pose, _onPose);
@@ -176,7 +194,15 @@ internal sealed class FsmStateSync {
             _session.On(Vars, null);
         }
 
+        // Las rejas que se dejaban cruzar vuelven a frenar
+        foreach (var item in _tracked) {
+            if (item.Gate != null) {
+                RestoreGate(item);
+            }
+        }
+
         _session = null;
+        _players = null;
         if (_active == this) {
             _active = null;
         }
@@ -318,6 +344,10 @@ internal sealed class FsmStateSync {
             }
 
             UpdateAboard(item);
+            if (item.Gate != null) {
+                UpdateGatePassage(item);
+            }
+
             if (IsController(item)) {
                 anyControlled = true;
                 ReplayHeld(item);
@@ -428,7 +458,8 @@ internal sealed class FsmStateSync {
                 Id = id, Fsm = fsm, LastState = fsm.ActiveStateName, CopyTransitions = !target,
                 LastStateTime = Time.unscaledTime, Platform = target ? FindPlatform(fsm) : null,
                 Lift = target ? fsm.GetComponent<RuinsLift>() : null,
-                CurrentPosition = target ? fsm.FsmVariables.FindFsmInt("Current Position") : null
+                CurrentPosition = target ? fsm.FsmVariables.FindFsmInt("Current Position") : null,
+                Gate = target && fsm.FsmName == GateFsm ? fsm.GetComponent<BoxCollider2D>() : null
             };
             item.RestState = item.LastState;
             _tracked.Add(item);
@@ -547,6 +578,7 @@ internal sealed class FsmStateSync {
     /// </summary>
     private static void ApplyRemoteState(Tracked item, string state) {
         var fsm = item.Fsm.Fsm;
+        PrepareCopy(item, state);
         _applying = item;
         _requested = true;
         FsmExecutionStack.PushFsm(fsm);
@@ -557,6 +589,46 @@ internal sealed class FsmStateSync {
             FsmExecutionStack.PopFsm();
             _applying = null;
             _requested = false;
+            foreach (var action in DisabledActions) {
+                action.Enabled = true;
+            }
+
+            DisabledActions.Clear();
+        }
+    }
+
+    /// <summary>Acciones que cambian los datos del jugador: en una copia no se hacen (llegan del PC de origen).</summary>
+    private static readonly HashSet<string> PlayerDataActions = new() {
+        "IncrementPlayerDataInt", "DecrementPlayerDataInt", "SetPlayerDataBool", "SetPlayerDataInt", "SetPlayerDataFloat",
+        "SetPlayerDataString", "PlayerDataIntAdd"
+    };
+
+    private static readonly List<FsmStateAction> DisabledActions = new();
+
+    /// <summary>
+    /// Antes de copiar un estado de otro PC: sus acciones que cambian los datos del jugador no se hacen aquí (contadores
+    /// como las larvas se sumarían dos veces; ya llegan por el progreso compartido). Y el tarro de larva se rompe aunque
+    /// el caballero local no esté cerca (si no, su comprobación de alcance cortaría la rotura y la larva no saldría).
+    /// </summary>
+    private static void PrepareCopy(Tracked item, string state) {
+        if (item.Fsm.FsmName == "Bottle Control" && state == "Shatter") {
+            var heroRange = item.Fsm.FsmVariables.FindFsmBool("Hero Range");
+            if (heroRange != null) {
+                heroRange.Value = true;
+            }
+        }
+
+        foreach (var fsmState in item.Fsm.FsmStates) {
+            if (fsmState.Name != state) {
+                continue;
+            }
+
+            foreach (var action in fsmState.Actions) {
+                if (action.Enabled && PlayerDataActions.Contains(action.GetType().Name)) {
+                    action.Enabled = false;
+                    DisabledActions.Add(action);
+                }
+            }
         }
     }
 
@@ -690,6 +762,74 @@ internal sealed class FsmStateSync {
         }
 
         return best;
+    }
+
+    /// <summary>
+    /// Reja de batalla o de jefe cerrada por otro jugador (aquí es copia): se queda del lado de dentro el que tenía ese
+    /// jugador al cerrarse. Si el caballero local está fuera, la reja no le frena (puede entrar a ayudar); en cuanto cruza
+    /// del todo, vuelve a ser sólida y ya no puede salir hasta que se abra. Para quien la cerró, normal.
+    /// </summary>
+    private void UpdateGatePassage(Tracked item) {
+        var closed = item.Fsm.ActiveStateName.IndexOf("Close", StringComparison.Ordinal) >= 0;
+        if (!closed) {
+            // Al abrirse, la FSM ya la deja sin colisión
+            item.GateWasOpen |= item.Ready;
+            item.InsideSign = 0;
+            item.Passing = false;
+            return;
+        }
+
+        // Una reja cerrada desde que se cargó la sala (p. ej. la derecha de Mamá Gruz) no es de una batalla: sólida
+        var hero = HeroController.instance;
+        if (!item.GateWasOpen || IsController(item) || hero == null) {
+            RestoreGate(item);
+            return;
+        }
+
+        var gate = item.Gate;
+        var scale = gate.transform.lossyScale;
+        var width = Mathf.Abs(gate.size.x * scale.x);
+        var height = Mathf.Abs(gate.size.y * scale.y);
+        var vertical = height >= width;
+        var center = gate.transform.TransformPoint(gate.offset);
+        if (item.InsideSign == 0) {
+            // Quien la cerró: su controlador o, si aún no se sabe, el dueño de la sala
+            var closerId = item.Controller != 0 ? item.Controller : _session.OwnerOf(_scene);
+            if (!_players.TryGetAvatarPosition(closerId, out var closer)) {
+                return;
+            }
+
+            item.InsideSign = Side(closer, center, vertical);
+            if (item.InsideSign == 0) {
+                return;
+            }
+        }
+
+        var heroPosition = hero.transform.position;
+        var along = vertical ? heroPosition.x - center.x : heroPosition.y - center.y;
+        var halfThickness = (vertical ? width : height) * 0.5f;
+        if (along * item.InsideSign > halfThickness + GateClearance) {
+            // Ya dentro del todo: sólida
+            RestoreGate(item);
+        } else if (along * item.InsideSign < 0f || item.Passing) {
+            // Fuera (o cruzándola): no frena
+            item.Passing = true;
+            gate.enabled = false;
+        }
+    }
+
+    private static void RestoreGate(Tracked item) {
+        if (item.Passing) {
+            item.Passing = false;
+            if (item.Gate != null) {
+                item.Gate.enabled = true;
+            }
+        }
+    }
+
+    private static int Side(Vector3 position, Vector3 center, bool vertical) {
+        var along = vertical ? position.x - center.x : position.y - center.y;
+        return along > 0.05f ? 1 : along < -0.05f ? -1 : 0;
     }
 
     /// <summary>Si el caballero local va encima de la plataforma; cuando cambia, se avisa a los demás.</summary>
@@ -975,6 +1115,12 @@ internal sealed class FsmStateSync {
                       $" otros=[{string.Join(",", item.RemoteRiders)}] vars=[" +
                       string.Join(",", Array.ConvertAll(item.Fsm.FsmVariables.IntVariables, v => $"{v.Name}={v.Value}")) + "]";
                 var bools = string.Join(",", Array.ConvertAll(item.Fsm.FsmVariables.BoolVariables, v => $"{v.Name}={v.Value}"));
+                if (item.Gate != null) {
+                    var b = item.Gate.bounds;
+                    control += $" reja=[dentro={item.InsideSign} pasa={(item.Passing ? "sí" : "no")} " +
+                               $"colisión={(item.Gate.enabled ? "sí" : "no")} x={b.min.x:0.00}..{b.max.x:0.00} y={b.min.y:0.00}..{b.max.y:0.00}]";
+                }
+
                 yield return $"{item.Fsm.gameObject.name}/{item.Fsm.FsmName} id={item.Id:x8} estado={item.Fsm.ActiveStateName} " +
                              $"pos=({p.x:0.00},{p.y:0.00}){control} bools=[{bools}]";
             }

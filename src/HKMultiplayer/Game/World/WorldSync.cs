@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -19,7 +20,8 @@ namespace HKMultiplayer.Game.World;
 /// <list type="bullet">
 /// <item>Al unirse, cada jugador dice su clave de personaje; el host le envía el mundo (su partida, comprimida) con el
 /// personaje de ese jugador dentro, o uno nuevo si es la primera vez, y el jugador lo carga.</item>
-/// <item>Los demás no guardan nada en su PC: en los bancos, al salir y cada minuto envían su personaje al host, que lo
+/// <item>Los demás no guardan nada en su PC: en los bancos, al salir, cada 30 segundos y cuando el host va a cerrar
+/// envían su personaje al host, que lo
 /// guarda en el mundo (<c>players/&lt;clave&gt;.json</c>).</item>
 /// <item>El host guarda el mundo solo cada 2 minutos (y cuando alguien entra o sale) en un momento tranquilo.</item>
 /// </list>
@@ -28,6 +30,9 @@ internal sealed class WorldSync {
     /// <summary>Clave de personaje del jugador (cliente → host).</summary>
     public const MessageType Identify = (MessageType) 40;
 
+    /// <summary>El host va a cerrar o a salir del mundo: cada uno envía ya su personaje (host → todos).</summary>
+    public const MessageType SaveNow = (MessageType) 60;
+
     private const byte LargeWorld = 1;
     private const byte LargeCharacter = 2;
 
@@ -35,10 +40,15 @@ internal sealed class WorldSync {
     private const int MaxCharacterBytes = 256 * 1024;
 
     private const float HostAutosaveSeconds = 120f;
-    private const float GuestAutosaveSeconds = 60f;
+
+    /// <summary>Si el host se cae sin avisar, esto es lo más que pierde un invitado.</summary>
+    private const float GuestAutosaveSeconds = 30f;
 
     private GameSession _session;
     private readonly Dictionary<ushort, string> _keys = new();
+
+    /// <summary>Jugadores cuyo personaje espera el host antes de cerrar.</summary>
+    private readonly HashSet<ushort> _awaitingSave = new();
     private float _nextAutosave;
     private bool _saveSoon;
 
@@ -47,6 +57,7 @@ internal sealed class WorldSync {
 
     static WorldSync() {
         MessageRoutes.Register(Identify, Route.Server, reliable: true);
+        MessageRoutes.Register(SaveNow, Route.Everyone, reliable: true);
     }
 
     public static string NewKey() {
@@ -81,7 +92,9 @@ internal sealed class WorldSync {
     public void Attach(GameSession session) {
         _session = session;
         _keys.Clear();
+        _awaitingSave.Clear();
         session.On(Identify, OnIdentify);
+        session.On(SaveNow, OnSaveNow);
         session.LargeMessage += OnLarge;
         session.Connected += OnConnected;
         session.PlayerLeft += OnPlayerLeft;
@@ -93,6 +106,7 @@ internal sealed class WorldSync {
     public void Detach() {
         if (_session != null) {
             _session.On(Identify, null);
+            _session.On(SaveNow, null);
             _session.LargeMessage -= OnLarge;
             _session.Connected -= OnConnected;
             _session.PlayerLeft -= OnPlayerLeft;
@@ -101,6 +115,51 @@ internal sealed class WorldSync {
         CoopSaves.GuestSaving -= OnGuestSaving;
         _session = null;
         _keys.Clear();
+        _awaitingSave.Clear();
+    }
+
+    /// <summary>Si hay invitados jugando el mundo de este host cuyo personaje habría que recoger antes de cerrar.</summary>
+    public bool HasGuestsToSave => _session != null && _session.IsHost && CoopSaves.IsHostWorld && _keys.Count > 0;
+
+    /// <summary>
+    /// El host pide a todos su personaje y espera a tenerlos (como mucho <paramref name="timeout"/> segundos): así nadie
+    /// pierde lo hecho desde su último guardado cuando el host cierra la partida o sale del mundo.
+    /// </summary>
+    public IEnumerator CollectGuests(float timeout) {
+        if (!HasGuestsToSave) {
+            yield break;
+        }
+
+        _awaitingSave.Clear();
+        foreach (var id in _keys.Keys) {
+            _awaitingSave.Add(id);
+        }
+
+        _session.Begin(SaveNow);
+        _session.End();
+        Log.Info($"Recogiendo el personaje de {_awaitingSave.Count} jugador(es) antes de cerrar");
+        var end = Time.unscaledTime + timeout;
+        while (_session != null && _awaitingSave.Count > 0 && Time.unscaledTime < end) {
+            yield return null;
+        }
+
+        if (_awaitingSave.Count > 0) {
+            Log.Warn($"{_awaitingSave.Count} personaje(s) no llegaron a tiempo; se queda su último guardado");
+        }
+
+        _awaitingSave.Clear();
+    }
+
+    /// <summary>El host va a cerrar: se envía el personaje tal como está ahora (también lo de la sala actual).</summary>
+    private void OnSaveNow(SessionPlayer from, PacketReader reader) {
+        var gm = GameManager.instance;
+        if (_session == null || _session.IsHost || CoopSaves.ActiveWorld == null || CoopSaves.IsHostWorld ||
+            gm == null || gm.playerData == null || HeroController.instance == null) {
+            return;
+        }
+
+        gm.SaveLevelState();
+        OnGuestSaving(gm.playerData);
     }
 
     // =====================================================================================================
@@ -201,6 +260,7 @@ internal sealed class WorldSync {
             var character = JObject.Parse(Decompress(data, MaxCharacterChars));
             // Solo se guardan los campos de personaje conocidos y válidos
             WorldStore.SaveCharacter(world.Id, key, CharacterData.Sanitize(character));
+            _awaitingSave.Remove(from.Id);
             Log.Info($"Personaje de {from.Name} guardado en el mundo");
         } catch (Exception e) when (e is JsonException or InvalidDataException or IOException) {
             Log.Warn($"No se pudo guardar el personaje de {from.Name}: {e.Message}");
@@ -209,6 +269,7 @@ internal sealed class WorldSync {
 
     private void OnPlayerLeft(SessionPlayer player) {
         _keys.Remove(player.Id);
+        _awaitingSave.Remove(player.Id);
         if (_session != null && _session.IsHost) {
             _saveSoon = true;
         }

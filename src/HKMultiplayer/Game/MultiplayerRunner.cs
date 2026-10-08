@@ -61,6 +61,12 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// </summary>
     private bool _sceneReloaded;
 
+    /// <summary>Ya se recogieron los personajes y se guardó: el juego puede cerrarse.</summary>
+    private bool _quitReady;
+
+    /// <summary>Lo más que espera el host los personajes de los invitados antes de cerrar.</summary>
+    private const float CollectTimeout = 4f;
+
     private void Awake() {
         Instance = this;
         // Llamado cuando la sala nueva ya está lista y la anterior descargada
@@ -75,10 +81,25 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         };
         CoopSaves.Install();
         CoopSaves.ExitedWorld += () => {
-            if (_leaveOnMenu) {
+            // El host salió de su mundo (los personajes ya se recogieron al volver al menú): la partida se cierra
+            if (_leaveOnMenu || Session is { IsHost: true }) {
                 _leaveOnMenu = false;
                 Leave();
             }
+        };
+
+        // El host vuelve al menú: antes recoge el personaje de cada invitado
+        On.GameManager.ReturnToMainMenu += (orig, self, saveMode, callback) =>
+            CollectGuestsThen(orig(self, saveMode, callback));
+
+        // Cerrar el juego siendo host con invitados: se recogen sus personajes, se guarda el mundo y entonces se cierra
+        Application.wantsToQuit += () => {
+            if (_quitReady || !World.HasGuestsToSave) {
+                return true;
+            }
+
+            StartCoroutine(CollectGuestsAndQuit());
+            return false;
         };
         if (TestDriver.IsEnabled()) {
             gameObject.AddComponent<TestDriver>();
@@ -247,7 +268,45 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             return;
         }
 
-        Leave();
+        CloseGame();
+    }
+
+    /// <summary>
+    /// Cierra la partida. Si es el host con invitados en su mundo, antes recoge el personaje de cada uno (unos segundos
+    /// como mucho), para que nadie pierda lo hecho desde su último guardado.
+    /// </summary>
+    public void CloseGame() {
+        if (!World.HasGuestsToSave) {
+            Leave();
+            return;
+        }
+
+        StartCoroutine(CloseAfterCollecting(Session));
+    }
+
+    private System.Collections.IEnumerator CloseAfterCollecting(GameSession session) {
+        yield return World.CollectGuests(CollectTimeout);
+        if (Session == session) {
+            Leave();
+        }
+    }
+
+    private System.Collections.IEnumerator CollectGuestsThen(System.Collections.IEnumerator next) {
+        if (World.HasGuestsToSave) {
+            yield return World.CollectGuests(CollectTimeout);
+        }
+
+        yield return next;
+    }
+
+    private System.Collections.IEnumerator CollectGuestsAndQuit() {
+        yield return World.CollectGuests(CollectTimeout);
+        if (CoopSaves.IsHostWorld && HeroController.instance != null) {
+            GameManager.instance.SaveGame();
+        }
+
+        _quitReady = true;
+        Application.Quit();
     }
 
     private void ReturnToMenu(bool save) {
@@ -287,7 +346,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Progress.Attach(session);
         SceneObjects.Attach(session);
         Enemies.Attach(session, Players);
-        MovingObjects.Attach(session);
+        MovingObjects.Attach(session, Players);
         Breakables.Attach(session);
         session.Connected += () => SetStatus($"Conectado como jugador {session.LocalId}");
         session.Disconnected += reason => {

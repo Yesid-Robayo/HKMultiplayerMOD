@@ -310,7 +310,8 @@ internal sealed class SessionMenu : GameStyledMenu {
             return;
         }
 
-        runner.Leave();
+        // Si es el host, antes de cerrar recoge el personaje de cada invitado
+        runner.CloseGame();
         UIManager.instance.StartCoroutine(BackToPauseRoutine());
     }
 
