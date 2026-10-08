@@ -203,7 +203,8 @@ internal sealed class PlayerSync {
             return;
         }
 
-        remote.Buffer.Add(_incoming, Time.unscaledTimeAsDouble);
+        // Tras un parón de este PC los paquetes llegan juntos: no es variación de la red
+        remote.Buffer.Add(_incoming, Time.unscaledTimeAsDouble, Time.unscaledDeltaTime < 0.1f);
     }
 
     /// <summary>Dibuja a los remotos de la sala. Llamar en LateUpdate, después de actualizar la red.</summary>

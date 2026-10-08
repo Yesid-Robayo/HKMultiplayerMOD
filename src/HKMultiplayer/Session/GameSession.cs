@@ -604,6 +604,20 @@ public sealed class GameSession : INetListener, IDisposable {
         LargeMessage?.Invoke(connection.UserData as SessionPlayer, kind, data);
     }
 
+    /// <summary>Envía datos grandes al host (troceados por el canal fiable). Solo en el cliente.</summary>
+    public void SendLargeToHost(byte kind, byte[] data) {
+        if (_client?.Connection is { State: ConnectionState.Connected } connection) {
+            connection.SendLarge(kind, data, data.Length);
+        }
+    }
+
+    /// <summary>Envía datos grandes a un jugador remoto. Solo en el host.</summary>
+    public void SendLargeTo(SessionPlayer target, byte kind, byte[] data) {
+        if (target.Connection is { State: ConnectionState.Connected } connection) {
+            connection.SendLarge(kind, data, data.Length);
+        }
+    }
+
     /// <summary>Transferencia grande recibida (remitente en el servidor; null en el cliente: viene del host).</summary>
     public event Action<SessionPlayer, byte, byte[]> LargeMessage;
 

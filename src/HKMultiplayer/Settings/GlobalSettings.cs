@@ -16,4 +16,10 @@ public sealed class GlobalSettings {
 
     /// <summary>Puerto del host (para hostear y para unirse).</summary>
     public int Port { get; set; } = DefaultPort;
+
+    /// <summary>
+    /// Identifica a tu personaje en los mundos de otros (se crea sola la primera vez). No es una contraseña: solo
+    /// sirve para que el host sepa qué personaje es el tuyo al volver a unirte.
+    /// </summary>
+    public string PlayerKey { get; set; } = string.Empty;
 }

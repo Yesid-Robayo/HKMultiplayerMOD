@@ -182,6 +182,33 @@ public static class WorldStore {
         WriteInfo(info);
     }
 
+    /// <summary>Personaje guardado de un jugador en este mundo (null si es la primera vez).</summary>
+    public static Newtonsoft.Json.Linq.JObject LoadCharacter(string worldId, string playerKey) {
+        var path = CharacterPath(worldId, playerKey);
+        try {
+            return File.Exists(path) ? Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(path)) : null;
+        } catch (Exception e) when (e is IOException or JsonException) {
+            Log.Warn($"No se pudo leer el personaje {playerKey}: {e.Message}");
+            return null;
+        }
+    }
+
+    public static void SaveCharacter(string worldId, string playerKey, Newtonsoft.Json.Linq.JObject character) {
+        var path = CharacterPath(worldId, playerKey);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var temp = path + ".tmp";
+        File.WriteAllText(temp, character.ToString(Formatting.None), new UTF8Encoding(false));
+        if (File.Exists(path)) {
+            File.Delete(path);
+        }
+
+        File.Move(temp, path);
+    }
+
+    /// <summary>La clave ya viene validada (solo hexadecimal): no puede salirse de la carpeta del mundo.</summary>
+    private static string CharacterPath(string worldId, string playerKey) =>
+        Path.Combine(Path.Combine(Path.Combine(Root, worldId), "players"), playerKey + ".json");
+
     private static void WriteInfo(CoopWorldInfo info) {
         File.WriteAllText(Path.Combine(Path.Combine(Root, info.Id), InfoFile),
             JsonConvert.SerializeObject(info, Formatting.Indented), new UTF8Encoding(false));

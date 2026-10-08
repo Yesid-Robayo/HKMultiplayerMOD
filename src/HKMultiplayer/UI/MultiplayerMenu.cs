@@ -278,6 +278,11 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
 
     private void Join() {
         SaveFields();
+        if (!CoopSaves.CanStart) {
+            _joinStatus.text = "Únete desde el menú principal";
+            return;
+        }
+
         if (!TryPort(out var port)) {
             _joinStatus.text = "El puerto no es válido";
             return;
@@ -288,7 +293,10 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
 
     private void Update() {
         if (CurrentPage == JoinPage && _joinStatus != null && MultiplayerRunner.Instance != null) {
-            var status = MultiplayerRunner.Instance.StatusMessage;
+            var runner = MultiplayerRunner.Instance;
+            var status = runner.Session is { IsActive: true } && runner.World.JoinStatus.Length > 0
+                ? runner.World.JoinStatus
+                : runner.StatusMessage;
             if (_joinStatus.text != status) {
                 _joinStatus.text = status;
             }

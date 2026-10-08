@@ -63,14 +63,18 @@ internal sealed class SnapshotBuffer {
         _delay = 3;
     }
 
-    /// <summary>Añade un estado recibido en el instante local <paramref name="time"/> (segundos).</summary>
-    public void Add(in PlayerSnapshot snapshot, double time) {
+    /// <summary>
+    /// Añade un estado recibido en el instante local <paramref name="time"/> (segundos). Con
+    /// <paramref name="timingReliable"/> en false (el frame local fue un parón, p. ej. al cargar una sala) la llegada no
+    /// cuenta como variación de la red: el retraso lo causó este PC, no la conexión.
+    /// </summary>
+    public void Add(in PlayerSnapshot snapshot, double time, bool timingReliable = true) {
         // El remitente volvió a empezar (reinició el juego): se descarta lo anterior
         if (_count > 0 && snapshot.Tick + 600 < _items[_count - 1].Tick) {
             Clear();
         }
 
-        UpdateClock(snapshot.Tick, time);
+        UpdateClock(snapshot.Tick, time, timingReliable);
 
         // Inserción ordenada (los no fiables pueden llegar desordenados); los repetidos se ignoran
         var index = _count;
@@ -100,7 +104,7 @@ internal sealed class SnapshotBuffer {
         _count++;
     }
 
-    private void UpdateClock(uint tick, double time) {
+    private void UpdateClock(uint tick, double time, bool timingReliable) {
         var sample = time * TickRate - tick;
         if (!_hasClock) {
             _hasClock = true;
@@ -113,9 +117,11 @@ internal sealed class SnapshotBuffer {
         if (sample < _offset) {
             // Llegó antes que nunca: esa es la latencia real
             _offset = sample;
-        } else {
+        } else if (timingReliable) {
             // Deriva lenta hacia arriba (relojes que no van igual, la ruta se volvió más lenta)
             _offset += (sample - _offset) * 0.002;
+        } else {
+            return;
         }
 
         // Pico de variación con olvido lento

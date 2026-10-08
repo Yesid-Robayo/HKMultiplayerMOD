@@ -26,12 +26,22 @@ public sealed class HKMultiplayerMod : Mod, IGlobalSettings<GlobalSettings> {
 
     public override void Initialize(Dictionary<string, Dictionary<string, GameObject>> preloadedObjects) {
         Util.Log.Info($"Iniciando HKMultiplayer {Version}");
+        if (!Game.World.WorldSync.IsValidKey(Settings.PlayerKey)) {
+            Settings.PlayerKey = Game.World.WorldSync.NewKey();
+            SaveGlobalSettings();
+        }
+
         var runner = new GameObject("HKMultiplayer");
         Object.DontDestroyOnLoad(runner);
         runner.AddComponent<MultiplayerRunner>();
     }
 
-    public void OnLoadGlobal(GlobalSettings settings) => Settings = settings ?? new GlobalSettings();
+    public void OnLoadGlobal(GlobalSettings settings) {
+        Settings = settings ?? new GlobalSettings();
+        if (!Game.World.WorldSync.IsValidKey(Settings.PlayerKey)) {
+            Settings.PlayerKey = Game.World.WorldSync.NewKey();
+        }
+    }
 
     public GlobalSettings OnSaveGlobal() => Settings;
 

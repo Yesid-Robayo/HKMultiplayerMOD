@@ -286,7 +286,7 @@ internal sealed class SessionMenu : GameStyledMenu {
         _leaveQuestion.text = session.IsHost ? "¿Cerrar la partida?" : "¿Salir de la partida?";
         _leaveDetail.text = session.IsHost
             ? "Los demás jugadores se desconectarán. Tú sigues jugando en tu mundo."
-            : "Te desconectarás del host.";
+            : "Tu personaje se guarda en el mundo del host y vuelves al menú principal.";
     }
 
     private void CopyCode() {
@@ -303,7 +303,14 @@ internal sealed class SessionMenu : GameStyledMenu {
     }
 
     private void Leave() {
-        MultiplayerRunner.Instance.Leave();
+        var runner = MultiplayerRunner.Instance;
+        if (runner.Session is { IsHost: false } && CoopSaves.ActiveWorld != null) {
+            // Mundo del host: se guarda el personaje y se vuelve al menú principal
+            runner.LeaveFromGame();
+            return;
+        }
+
+        runner.Leave();
         UIManager.instance.StartCoroutine(BackToPauseRoutine());
     }
 

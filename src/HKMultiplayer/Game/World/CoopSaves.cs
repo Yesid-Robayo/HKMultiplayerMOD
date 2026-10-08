@@ -22,6 +22,15 @@ internal static class CoopSaves {
     /// <summary>Mundo en el que se está jugando (null = partida normal o menú).</summary>
     public static CoopWorldInfo ActiveWorld { get; private set; }
 
+    /// <summary>Si el mundo activo es de este PC (host). Si no, es el de otro y aquí no se guarda nada.</summary>
+    public static bool IsHostWorld { get; private set; }
+
+    /// <summary>Mientras se juega el mundo de otro: el juego quiere guardar y hay que enviar el personaje al host.</summary>
+    public static event Action<PlayerData> GuestSaving;
+
+    /// <summary>Se volvió al menú principal desde un mundo coop.</summary>
+    public static event Action ExitedWorld;
+
     /// <summary>Se avisa tras cada guardado del mundo (en el host).</summary>
     public static event Action<CoopWorldInfo> Saved;
 
@@ -52,6 +61,7 @@ internal static class CoopSaves {
 
         var gm = GameManager.instance;
         _enteredGame = false;
+        IsHostWorld = true;
         if (world.IsNew) {
             ActiveWorld = world;
             gm.playerData.Reset();
@@ -73,6 +83,22 @@ internal static class CoopSaves {
         Log.Info($"Cargando el mundo coop {world.Name}");
         // El juego hace su recorrido normal de "continuar partida"; la lectura de la ranura se cambia por el mundo
         gm.LoadGameFromUI(1);
+        return true;
+    }
+
+    /// <summary>Juega el mundo de otro (recibido del host) desde el menú principal. Aquí no se guarda nada.</summary>
+    public static bool StartGuest(SaveGameData world) {
+        if (!CanStart) {
+            Log.Warn("El mundo del host llegó fuera del menú principal");
+            return false;
+        }
+
+        _enteredGame = false;
+        IsHostWorld = false;
+        ActiveWorld = new CoopWorldInfo { Id = string.Empty, Name = "Mundo del host" };
+        _pendingLoad = world;
+        Log.Info("Entrando en el mundo del host");
+        GameManager.instance.LoadGameFromUI(1);
         return true;
     }
 
@@ -102,6 +128,8 @@ internal static class CoopSaves {
         ActiveWorld = null;
         _pendingLoad = null;
         _enteredGame = false;
+        IsHostWorld = false;
+        ExitedWorld?.Invoke();
     }
 
     private static void OnLoadGame(On.GameManager.orig_LoadGame orig, GameManager self, int slot, Action<bool> callback) {
@@ -142,6 +170,13 @@ internal static class CoopSaves {
             var playerData = self.playerData;
             playerData.SetFloat("playTime", self.PlayTime);
             ResetGameTimer?.Invoke(self, null);
+            if (!IsHostWorld) {
+                // Mundo de otro: el personaje va al host, aquí no se escribe nada
+                GuestSaving?.Invoke(playerData);
+                callback?.Invoke(true);
+                return;
+            }
+
             playerData.SetString("version", "1.5.12620");
             playerData.CountGameCompletion();
             WorldStore.Save(world, new SaveGameData(playerData, self.sceneData));

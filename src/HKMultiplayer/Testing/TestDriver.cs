@@ -85,6 +85,24 @@ internal sealed class TestDriver : MonoBehaviour {
                 // mkworld <nombre>: crea un mundo coop sin abrirlo
                 HKMultiplayer.Game.World.WorldStore.Create(string.Join(" ", args.Skip(1)));
                 break;
+            case "pdset":
+                // pdset <campo> <true|false|entero|texto>: cambia un dato de la partida como lo haría el juego
+                if (bool.TryParse(args[2], out var boolValue)) {
+                    PlayerData.instance.SetBool(args[1], boolValue);
+                } else if (int.TryParse(args[2], out var intValue)) {
+                    PlayerData.instance.SetInt(args[1], intValue);
+                } else {
+                    PlayerData.instance.SetString(args[1], args[2]);
+                }
+
+                break;
+            case "pdget":
+                Log.Info($"{Tag}pd {args[1]}={typeof(PlayerData).GetField(args[1])?.GetValue(PlayerData.instance)}");
+                break;
+            case "leavegame":
+                // Sale de la partida como desde la pausa (en el mundo del host: guarda y vuelve al menú)
+                runner.LeaveFromGame();
+                break;
             case "save":
                 // Guarda como en un banco
                 GameManager.instance.SaveGame();

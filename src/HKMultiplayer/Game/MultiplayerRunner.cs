@@ -27,6 +27,11 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     public PlayerSync Players { get; } = new();
 
+    public WorldSync World { get; } = new();
+
+    /// <summary>El jugador salió de un mundo ajeno: al llegar al menú se deja la partida.</summary>
+    private bool _leaveOnMenu;
+
     /// <summary>Último mensaje para el panel (errores al conectar, desconexiones...).</summary>
     public string StatusMessage { get; private set; } = string.Empty;
 
@@ -39,6 +44,12 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     private void Awake() {
         Instance = this;
         CoopSaves.Install();
+        CoopSaves.ExitedWorld += () => {
+            if (_leaveOnMenu) {
+                _leaveOnMenu = false;
+                Leave();
+            }
+        };
         if (TestDriver.IsEnabled()) {
             gameObject.AddComponent<TestDriver>();
         }
@@ -48,6 +59,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         CoopSaves.Update();
         MultiplayerMenu.EnsureInstalled();
         SessionMenu.UpdateInstalled(Session != null);
+        World.Update();
     }
 
     private void LateUpdate() {
@@ -80,6 +92,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             if (Session == closing) {
                 Session = null;
                 Players.Detach();
+        World.Detach();
                 closing.Dispose();
             }
         }
@@ -181,7 +194,34 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         return true;
     }
 
-    /// <summary>Sale de la partida (o la cierra si es el host).</summary>
+    /// <summary>
+    /// Sale de la partida. Si se está jugando el mundo del host, primero se envía el personaje (guardando como al salir
+    /// al menú) y se vuelve al menú principal; la conexión se cierra al llegar.
+    /// </summary>
+    public void LeaveFromGame() {
+        var session = Session;
+        if (session != null && !session.IsHost && CoopSaves.ActiveWorld != null && !CoopSaves.IsHostWorld) {
+            _leaveOnMenu = true;
+            ReturnToMenu(save: true);
+            return;
+        }
+
+        Leave();
+    }
+
+    private void ReturnToMenu(bool save) {
+        var ui = UIManager.instance;
+        if (ui != null && ui.uiState == GlobalEnums.UIState.PAUSED) {
+            ui.UIReturnToMainMenu();
+            return;
+        }
+
+        StartCoroutine(GameManager.instance.ReturnToMainMenu(save
+            ? GameManager.ReturnToMainMenuSaveModes.SaveAndContinueOnFail
+            : GameManager.ReturnToMainMenuSaveModes.DontSave));
+    }
+
+        /// <summary>Sale de la partida (o la cierra si es el host).</summary>
     public void Leave() {
         if (Session == null) {
             return;
@@ -190,12 +230,14 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         var session = Session;
         Session = null;
         Players.Detach();
+        World.Detach();
         session.Dispose();
         SetStatus(session.IsHost ? "Partida cerrada" : "Desconectado");
     }
 
     private void Wire(GameSession session) {
         Players.Attach(session);
+        World.Attach(session);
         session.Connected += () => SetStatus($"Conectado como jugador {session.LocalId}");
         session.Disconnected += reason => {
             // Al salir uno mismo (Leave) la sesión ya no es la actual: nada que avisar
@@ -206,6 +248,12 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             // Llega desde dentro de session.Update(): se cierra al terminar el frame de red
             _closing = session;
             SetStatus(DescribeDisconnect(reason));
+
+            // Jugando el mundo del host sin host: de vuelta al menú (aquí no hay nada que guardar)
+            if (CoopSaves.ActiveWorld != null && !CoopSaves.IsHostWorld && HeroController.instance != null) {
+                Notice.Show(DescribeDisconnect(reason), 6f);
+                ReturnToMenu(save: false);
+            }
         };
         session.PlayerJoined += player => {
             Log.Info($"{player.Name} se unió a la partida");
