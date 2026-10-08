@@ -1778,6 +1778,24 @@ internal sealed class EnemySync {
         Log.Info($"{enemy.Root.name}: lo mueve este PC, sigue desde {first}");
     }
 
+    /// <summary>Si en la sala hay un jefe vivo (con mucha vida): sus combates esperan a que entren todos.</summary>
+    public static bool BossInRoom {
+        get {
+            var sync = _active;
+            if (sync == null) {
+                return false;
+            }
+
+            foreach (var enemy in sync._enemies) {
+                if (!enemy.Spawned && enemy.Health != null && !enemy.Health.isDead && enemy.Health.hp >= BossHp) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
     private static ObjectRef Reference(Enemy enemy, GameObject target) {
         if (target == null) {
             return default;

@@ -120,6 +120,14 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     girarlo), y el cartel para desafiar se apaga en los demás PCs (si no, se podría desafiar otra vez a mitad del
     combate y ese caballero se quedaría sin control). Las órdenes de esos controladores a un enemigo no se reenvían:
     ya las da su copia en el PC que lo mueve.
+  - Encuentros con diálogo antes de un combate (Hornet en los Bordes del Reino; se detectan solos: un objeto que no
+    es enemigo, con un diálogo, que después despierta o enciende a un enemigo o cierra la arena): van como los
+    controladores de batalla, así que los dos ven el diálogo, con su caballero quieto mientras, y la Hornet que habla
+    desaparece en los dos al empezar. Cada diálogo espera a que todos los de la sala lo terminen de leer (si alguno no
+    responde en 30 s, sigue). Los personajes que solo hablan no cuentan y siguen siendo de cada uno.
+  - Combates de jefe: si la zona que los empieza (la que cierra la arena o empieza el diálogo) avisa sin estar dentro
+    todos los jugadores de la sala, se espera ("Esperando a ... para empezar el combate") y empieza cuando entran. No
+    cubre a los jefes que se despiertan al ver al caballero (Hornet 1, Mawlek...), solo los de zona.
   - Las copias no tocan los datos del jugador (contadores como las larvas llegan una vez, del PC de origen). Los tarros
     de larva se rompen en todos y la larva sale también en los demás.
   - Cofres: abrirlos es del mundo (el otro lo ve abrirse en directo, o ya abierto si entra después), pero lo que
@@ -212,7 +220,13 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
   en vivo: Grimm (necesita la Compañía) y los jefes de sueño (se entra con el aguijón onírico).
 - **M4**: efectos del otro jugador (tajos, hechizos, dash, curación). `PlayerEvent` está reservado y sin usar.
 - **M5**: revivir, sombras compartidas, barras de vida y HUD del compañero, cinemáticas compartidas, skins y ajustes
-  del host en el panel (la 0.7 los tenía en `HollowKnightCoop/src/HollowKnightCoop/Coop`).
+  del host en el panel (la 0.7 los tenía en `HollowKnightCoop/src/HollowKnightCoop/Coop`). Jefes que se dejan para
+  entonces, porque dependen de cinemáticas o de entrar juntos:
+  - **Grimm y el Rey de las Pesadillas**: antes hay que completar la misión de la Compañía (llamas, farol).
+  - **Jefes de sueño** (Campeón Fallido, Tirano de Almas, Kin Perdido, Zote el Poderoso, guerreros soñadores): se
+    entra con el aguijón onírico y cada jugador entraría por su cuenta; hay que llevar a los dos al sueño.
+  - **Hollow Knight y la Radiancia**: cinemáticas de entrada y final.
+  - Pendiente menor: en el Coliseo, una acción de sonido del minero no suena en el PC que no lo mueve.
 - **M6**: `tools/package.sh` aún usa los nombres del mod anterior (`HollowKnightCoop`).
 - **Pasto y telas al paso del compañero** (solo estético, baja prioridad): hoy se sincroniza el corte, pero no el
   balanceo cuando el otro caballero pasa por encima. Sin red: en cada PC, cada pocos frames, buscar el pasto

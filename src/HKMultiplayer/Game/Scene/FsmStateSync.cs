@@ -33,6 +33,15 @@ internal sealed class FsmStateSync {
     public const MessageType Order = (MessageType) 58;
     public const MessageType Vars = (MessageType) 59;
 
+    /// <summary>Un jugador terminó de leer el diálogo de un encuentro (al que lo controla).</summary>
+    public const MessageType ConvoDone = (MessageType) 72;
+
+    /// <summary>Evento con el que el juego avisa de que se cerró un diálogo.</summary>
+    private const string ConvoFinish = "CONVO_FINISH";
+
+    /// <summary>Lo más que se espera a que los demás terminen de leer (si alguno no responde, se sigue).</summary>
+    private const float ConvoWaitSeconds = 30f;
+
     /// <summary>Máximo de variables de una FSM que se copian (los ascensores tienen unas pocas).</summary>
     private const int MaxVars = 32;
 
@@ -81,7 +90,17 @@ internal sealed class FsmStateSync {
         ("Colosseum Manager", "Manager"),
         ("Colosseum Manager", "Battle Control"),
         ("Colosseum Cage", "Spawn"),
-        ("Colosseum Cage Zote", "Control")
+        ("Colosseum Cage Zote", "Control"),
+        ("Hornet Outskirts Battle Encounter", "Encounter")
+    };
+
+    /// <summary>
+    /// Encuentros con diálogo antes del combate (Hornet en los Bordes del Reino): los empieza quien entra en su zona,
+    /// los dos lo ven (diálogos incluidos, con su caballero quieto mientras) y no siguen hasta que todos los de la sala
+    /// terminan de leer. Si no, el combate empezaba mientras el otro leía y quedaba la Hornet que habla en su PC.
+    /// </summary>
+    private static readonly (string Name, string Fsm)[] Encounters = {
+        ("Hornet Outskirts Battle Encounter", "Encounter")
     };
 
     private sealed class Tracked {
@@ -135,6 +154,18 @@ internal sealed class FsmStateSync {
 
         // Controlador de batalla (o lo que mueve con sus avisos): quien entra tarde se pone en su estado
         public bool Battle;
+
+        // Combate de jefe que su zona quiso empezar sin estar todos dentro: el aviso, para darlo cuando entren
+        public string PendingStart;
+        public Collider2D Zone;
+        public float NextWaitNotice;
+
+        // Encuentro con diálogo: quién terminó de leer el de ahora (el controlador espera a todos)
+        public bool Encounter;
+        public bool LocalConvoDone;
+        public readonly HashSet<ushort> ConvoDone = new();
+        public bool WaitingConvo;
+        public float WaitingSince;
     }
 
     private readonly List<Tracked> _tracked = new();
@@ -148,6 +179,7 @@ internal sealed class FsmStateSync {
     private readonly MessageHandler _onAboard;
     private readonly MessageHandler _onOrderMessage;
     private readonly MessageHandler _onVars;
+    private readonly MessageHandler _onConvoDone;
     private uint _lastPositionTick;
     private PlayerSnapshot _incoming;
     private GameSession _session;
@@ -192,6 +224,7 @@ internal sealed class FsmStateSync {
         MessageRoutes.Register(Aboard, Route.SameScene, reliable: true);
         MessageRoutes.Register(Order, Route.SameScene, reliable: true);
         MessageRoutes.Register(Vars, Route.SameScene, reliable: true);
+        MessageRoutes.Register(ConvoDone, Route.SameScene, reliable: true);
     }
 
     public FsmStateSync() {
@@ -203,6 +236,7 @@ internal sealed class FsmStateSync {
         _onAboard = OnAboard;
         _onOrderMessage = OnOrderMessage;
         _onVars = OnVars;
+        _onConvoDone = OnConvoDone;
     }
 
     public void Attach(GameSession session, PlayerSync players) {
@@ -216,6 +250,7 @@ internal sealed class FsmStateSync {
         session.On(Aboard, _onAboard);
         session.On(Order, _onOrderMessage);
         session.On(Vars, _onVars);
+        session.On(ConvoDone, _onConvoDone);
         _active = this;
         InstallHooks();
         Clear();
@@ -231,6 +266,7 @@ internal sealed class FsmStateSync {
             _session.On(Aboard, null);
             _session.On(Order, null);
             _session.On(Vars, null);
+            _session.On(ConvoDone, null);
         }
 
         // Las rejas que se dejaban cruzar vuelven a frenar
@@ -372,6 +408,12 @@ internal sealed class FsmStateSync {
                 item.RestState = state;
             }
 
+            if (item.WaitingConvo && (now - item.WaitingSince > ConvoWaitSeconds || AllConvoDone(item))) {
+                ReleaseConvo(item);
+            }
+
+            UpdatePendingStart(item, now);
+
             if (item.CopyTransitions) {
                 // La cadena de otro PC se cortó a medias (se fue de la sala): sigue sola desde donde quedó
                 if (item.HeldTo != null && now >= item.RemoteChainUntil) {
@@ -493,13 +535,13 @@ internal sealed class FsmStateSync {
     private void Scan() {
         foreach (var fsm in UnityEngine.Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include,
                      FindObjectsSortMode.None)) {
-            var target = IsTarget(fsm);
+            var target = IsTarget(fsm) || IsEncounter(fsm);
             if (!target && !IsSwitchLike(fsm)) {
                 continue;
             }
 
             var id = ScenePaths.Hash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode();
-            if (_byId.ContainsKey(id)) {
+            if (_byId.ContainsKey(id) || _byFsm.ContainsKey(fsm.Fsm)) {
                 continue;
             }
 
@@ -509,8 +551,13 @@ internal sealed class FsmStateSync {
                 Lift = target ? fsm.GetComponent<RuinsLift>() : null,
                 CurrentPosition = target ? fsm.FsmVariables.FindFsmInt("Current Position") : null,
                 Gate = target && fsm.FsmName == GateFsm ? fsm.GetComponent<BoxCollider2D>() : null,
-                Battle = target && fsm.FsmName != LiftFsm && fsm.FsmName != GateFsm
+                Battle = target && fsm.FsmName != LiftFsm && fsm.FsmName != GateFsm,
+                Encounter = target && IsEncounter(fsm)
             };
+            if (item.Encounter) {
+                Log.Info($"{fsm.gameObject.name}/{fsm.FsmName}: encuentro con diálogo (los dos lo ven y esperan a leerlo)");
+            }
+
             Add(item);
         }
 
@@ -588,6 +635,58 @@ internal sealed class FsmStateSync {
         }
 
         return false;
+    }
+
+    private static bool IsEncounter(PlayMakerFSM fsm) {
+        foreach (var (name, fsmName) in Encounters) {
+            if (fsm.FsmName == fsmName && fsm.gameObject.name.StartsWith(name, StringComparison.Ordinal)) {
+                return true;
+            }
+        }
+
+        return HasBattleDialogue(fsm);
+    }
+
+    /// <summary>Avisos con los que un encuentro da paso al combate.</summary>
+    private static readonly HashSet<string> BattleStartEvents = new() { "BATTLE START", "WAKE", "BG CLOSE" };
+
+    /// <summary>
+    /// Encuentro con diálogo antes de un combate, sea cual sea el jefe: un objeto de la sala que no es enemigo, con un
+    /// diálogo, que después despierta o enciende a un enemigo o cierra la arena. Los diálogos normales (personajes que
+    /// solo hablan) no lo cumplen y siguen siendo de cada jugador.
+    /// </summary>
+    private static bool HasBattleDialogue(PlayMakerFSM fsm) {
+        if (EnemySync.IsEnemyObject(fsm.transform)) {
+            return false;
+        }
+
+        bool dialogue = false, battle = false;
+        foreach (var state in fsm.FsmStates) {
+            foreach (var action in state.Actions) {
+                switch (action) {
+                    case HutongGames.PlayMaker.Actions.CallMethodProper call:
+                        dialogue |= call.methodName?.Value == "StartConversation";
+                        break;
+                    case HutongGames.PlayMaker.Actions.SendEventByName send:
+                        if (BattleStartEvents.Contains(send.sendEvent?.Value ?? string.Empty)) {
+                            battle = true;
+                        } else if (send.eventTarget.target is FsmEventTarget.EventTarget.GameObject
+                                   or FsmEventTarget.EventTarget.GameObjectFSM) {
+                            var receiver = fsm.Fsm.GetOwnerDefaultTarget(send.eventTarget.gameObject);
+                            battle |= receiver != null && EnemySync.IsEnemyObject(receiver.transform);
+                        }
+
+                        break;
+                    case HutongGames.PlayMaker.Actions.ActivateGameObject activate:
+                        var target = fsm.Fsm.GetOwnerDefaultTarget(activate.gameObject);
+                        battle |= activate.activate.Value && target != null &&
+                                  target.GetComponentsInChildren<HealthManager>(true).Length > 0;
+                        break;
+                }
+            }
+        }
+
+        return dialogue && battle;
     }
 
     private static bool IsTarget(PlayMakerFSM fsm) {
@@ -782,7 +881,7 @@ internal sealed class FsmStateSync {
             }
 
             foreach (var action in fsmState.Actions) {
-                if (action.Enabled && (PlayerDataActions.Contains(action.GetType().Name) || TouchesHero(action))) {
+                if (action.Enabled && (PlayerDataActions.Contains(action.GetType().Name) || !item.Encounter && TouchesHero(action))) {
                     action.Enabled = false;
                     DisabledActions.Add(action);
                 }
@@ -814,7 +913,15 @@ internal sealed class FsmStateSync {
     /// que pase a controlarlo (o las ejecuta quien va subido).
     /// </summary>
     private bool OnEvent(Fsm fsm, ref FsmEvent fsmEvent, FsmEventData eventData) {
-        if (fsmEvent == null || _session == null || !_byFsm.TryGetValue(fsm, out var item) || item.CopyTransitions) {
+        if (fsmEvent == null || _session == null || !_byFsm.TryGetValue(fsm, out var item)) {
+            return true;
+        }
+
+        if (!_executing && _applying == null && WaitForEveryone(item, fsm, fsmEvent, eventData)) {
+            return false;
+        }
+
+        if (item.CopyTransitions) {
             return true;
         }
 
@@ -827,8 +934,21 @@ internal sealed class FsmStateSync {
             return _applying == item;
         }
 
-        // Los propios del objeto (llegadas, esperas...): si es una copia, el cambio de estado que pidan se retiene
         var sender = eventData?.SentByFsm ?? Fsm.EventData?.SentByFsm;
+        if (item.Encounter) {
+            if (fsmEvent.Name == ConvoFinish) {
+                return OnConvoFinish(item);
+            }
+
+            // Su caballero entró en la zona del encuentro (el aviso de la zona no lleva remitente): lo empieza este PC
+            if ((sender == null || sender == fsm) && fsmEvent.Name != "FINISHED" && Handles(fsm, fsmEvent.Name) &&
+                !IsController(item)) {
+                TakeControl(item, $"{fsmEvent.Name}: su caballero empieza el encuentro");
+                return true;
+            }
+        }
+
+        // Los propios del objeto (llegadas, esperas...): si es una copia, el cambio de estado que pidan se retiene
         if (sender == null || sender == fsm || fsmEvent.Name == "FINISHED") {
             return true;
         }
@@ -881,6 +1001,184 @@ internal sealed class FsmStateSync {
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Este jugador cerró el diálogo de un encuentro. El que lo controla solo sigue cuando todos los de la sala lo
+    /// cerraron; una copia avisa al controlador y espera a que llegue el siguiente estado.
+    /// </summary>
+    private bool OnConvoFinish(Tracked item) {
+        if (!IsController(item)) {
+            if (_session.CanSend) {
+                var writer = _session.Begin(ConvoDone);
+                writer.WriteUShort(_sceneHash);
+                writer.WriteUInt(item.Id);
+                writer.WriteString(item.Fsm.ActiveStateName);
+                _session.End();
+            }
+
+            return false;
+        }
+
+        item.LocalConvoDone = true;
+        if (AllConvoDone(item)) {
+            ResetConvo(item);
+            return true;
+        }
+
+        item.WaitingConvo = true;
+        item.WaitingSince = Time.unscaledTime;
+        Log.Info($"{item.Fsm.gameObject.name}: se espera a que los demás terminen de leer");
+        return false;
+    }
+
+    private void OnConvoDone(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        var state = reader.ReadString(128);
+        if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var item) || item.Fsm == null || !item.Encounter ||
+            item.Fsm.ActiveStateName != state) {
+            return;
+        }
+
+        item.ConvoDone.Add(from.Id);
+        if (item.WaitingConvo && IsController(item) && AllConvoDone(item)) {
+            ReleaseConvo(item);
+        }
+    }
+
+    /// <summary>Si este jugador y todos los demás de la sala terminaron de leer.</summary>
+    private bool AllConvoDone(Tracked item) {
+        if (!item.LocalConvoDone) {
+            return false;
+        }
+
+        foreach (var player in _session.Players) {
+            if (!player.IsLocal && player.Scene == _scene && !item.ConvoDone.Contains(player.Id)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void ResetConvo(Tracked item) {
+        item.LocalConvoDone = false;
+        item.ConvoDone.Clear();
+        item.WaitingConvo = false;
+    }
+
+    /// <summary>Todos terminaron de leer (o se acabó la espera): el encuentro sigue.</summary>
+    private static void ReleaseConvo(Tracked item) {
+        ResetConvo(item);
+        _executing = true;
+        try {
+            item.Fsm.SendEvent(ConvoFinish);
+        } finally {
+            _executing = false;
+        }
+    }
+
+    /// <summary>
+    /// La zona que empieza el combate de un jefe (la que cierra la arena o empieza el diálogo) avisa de que entró el
+    /// caballero de este PC: si algún otro jugador de la sala no está dentro, no empieza; se espera a que entren todos.
+    /// Solo con un jefe en la sala (las arenas normales empiezan como siempre).
+    /// </summary>
+    private bool WaitForEveryone(Tracked item, Fsm fsm, FsmEvent fsmEvent, FsmEventData eventData) {
+        // Ya esperando: las zonas que avisan mientras el caballero sigue dentro tampoco lo empiezan
+        if (item.PendingStart != null) {
+            return fsmEvent.Name == item.PendingStart;
+        }
+
+        if (fsmEvent.Name == "FINISHED" || fsmEvent.Name == ConvoFinish ||
+            !(item.Encounter || item.CopyTransitions && item.Fsm.FsmVariables.FindFsmBool("Activated") != null)) {
+            return false;
+        }
+
+        // El aviso de una zona no lleva remitente; y solo cuenta si empieza algo desde su reposo
+        var sender = eventData?.SentByFsm ?? Fsm.EventData?.SentByFsm;
+        if (sender != null && sender != fsm || !Handles(fsm, fsmEvent.Name) || !EnemySync.BossInRoom) {
+            return false;
+        }
+
+        item.Zone ??= item.Fsm.GetComponent<Collider2D>();
+        if (item.Zone == null || EveryoneInside(item)) {
+            return false;
+        }
+
+        item.PendingStart = fsmEvent.Name;
+        Log.Info($"{item.Fsm.gameObject.name}: el combate espera a que entren todos");
+        return true;
+    }
+
+    /// <summary>Si los caballeros de todos los jugadores de la sala están dentro de la zona del combate.</summary>
+    private bool EveryoneInside(Tracked item) {
+        var bounds = item.Zone.bounds;
+        bounds.Expand(new Vector3(0.5f, 0.5f, 1000f));
+        var hero = HeroController.instance;
+        if (hero == null || !bounds.Contains(hero.transform.position)) {
+            return false;
+        }
+
+        foreach (var player in _session.Players) {
+            if (player.IsLocal || player.Scene != _scene) {
+                continue;
+            }
+
+            if (!_players.TryGetAvatarObject(player.Id, out var avatar) || !bounds.Contains(avatar.transform.position)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Combate retenido: empieza cuando están todos dentro; si este caballero sale, se olvida (al volver a
+    /// entrar la zona avisa otra vez).</summary>
+    private void UpdatePendingStart(Tracked item, float now) {
+        if (item.PendingStart == null || item.Zone == null) {
+            return;
+        }
+
+        var hero = HeroController.instance;
+        var bounds = item.Zone.bounds;
+        bounds.Expand(new Vector3(1.5f, 1.5f, 1000f));
+        if (hero == null || !bounds.Contains(hero.transform.position)) {
+            item.PendingStart = null;
+            return;
+        }
+
+        if (!EveryoneInside(item)) {
+            if (now >= item.NextWaitNotice) {
+                item.NextWaitNotice = now + 4f;
+                HKMultiplayer.UI.Notice.Show($"Esperando a {MissingNames(item)} para empezar el combate", 3.5f);
+            }
+
+            return;
+        }
+
+        var start = item.PendingStart;
+        item.PendingStart = null;
+        _executing = true;
+        try {
+            item.Fsm.SendEvent(start);
+        } finally {
+            _executing = false;
+        }
+    }
+
+    private string MissingNames(Tracked item) {
+        var bounds = item.Zone.bounds;
+        bounds.Expand(new Vector3(0.5f, 0.5f, 1000f));
+        var names = new List<string>();
+        foreach (var player in _session.Players) {
+            if (!player.IsLocal && player.Scene == _scene &&
+                (!_players.TryGetAvatarObject(player.Id, out var avatar) || !bounds.Contains(avatar.transform.position))) {
+                names.Add(player.Name);
+            }
+        }
+
+        return names.Count > 0 ? string.Join(", ", names) : "los demás";
     }
 
     /// <summary>Hace el cambio de estado retenido si el objeto sigue en el estado desde el que se pidió.</summary>
