@@ -82,20 +82,24 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Cada enemigo lo mueve el PC del jugador más cercano, porque su lógica solo ataca al caballero de su PC. Lo reparte
     el dueño de la sala; cambia solo si el otro está claramente más cerca (4 unidades) y hace un rato del último cambio
     (3 s; 8 s en los jefes, cada cambio corta su ataque). Ese PC lo hace funcionar normal y envía su estado (transform,
-    animación, activo, vida) con detección de cambios sin crear objetos.
+    animación, profundidad, activo, vida, daño al tocarlo) con detección de cambios sin crear objetos.
   - En los demás juegos el enemigo es una "marioneta": su lógica (FSM, física) se pausa (no se reinicia) y se dibuja
     con el estado recibido e interpolación; sus colisiones de daño siguen funcionando para el jugador local.
   - Traspaso: el que lo suelta envía cómo iba (estado y números de cada FSM, velocidad, gravedad y tipo de cuerpo) y el
     nuevo lo sigue desde ahí. También al salir de la sala o morir (aún dentro, al empezar el cambio de sala): un jefe no
     repite su presentación.
-  - Los golpes del jugador local a una marioneta van al PC que la mueve, que los aplica al enemigo real; el aviso de
-    daño del ataque ("TAKE DAMAGE", con el que despiertan o reaccionan muchos enemigos) también. Cada golpe que
+  - Los golpes del jugador local a una marioneta van al PC que la mueve, que los aplica al enemigo real. Cualquier
+    aviso de fuera que llegue a una marioneta (el de daño del ataque, la zona de la arena en la que entró el caballero,
+    la escena de batalla) también va al PC que la mueve: con esos avisos despiertan o reaccionan muchos jefes. Cada golpe que
     recibe un enemigo real se avisa a la sala: los demás ven el impacto, el destello y oyen el golpe (quien golpeó ya
     los vio en su PC). La marioneta copia también su giro, si se dibuja, si choca y si es invencible (y desde dónde).
   - Lo que se ve y se oye de la lógica del enemigo también pasa en las marionetas: cuando su FSM entra en un estado,
     la marioneta hace solo sus efectos (sonidos y música de jefe; objetos de la arena que se activan, partículas,
     ráfagas como los disparos de Mawlek, efectos y avisos a otros objetos de la arena, como las animaciones de la
-    presentación de la Vasija Rota). No los avisos al caballero ni a todos, ni lo que suelta geo.
+    presentación de la Vasija Rota), con los números de su FSM en ese momento (velocidad y ángulo de una ráfaga). No
+    los avisos al caballero ni a todos, ni lo que suelta geo.
+  - Los objetos de la arena que su lógica enciende y apaga se sincronizan además como estado (al cambiar, y todos a
+    quien entra en la sala): no dependen de haber visto el efecto en directo.
   - Ascensores y rejas: los mueve quien los usa (su controlador). Las copias de los demás no avanzan solas: solo pasan
     por los estados que llegan, una vez cada uno, aplicados dentro de la ejecución de su FSM. Si no, los estados con
     efectos fuera del objeto (el ascensor voltea la dirección de su palanca al llegar) se harían dos veces.
@@ -108,8 +112,8 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Lo que crean los enemigos en combate (proyectiles, crías, invocaciones) se crea en los demás con la misma acción de
     su marioneta (mismo prefab). Si hace daño o tiene vida, es una copia que sigue al original hasta que desaparece; los
     efectos solo visuales del pool corren solos. Lo que crean al prepararse (cadáveres, piezas propias) no se replica.
-  - Piezas que se mueven aparte (hijos con animación o que dañan, como la aguja de Hornet): posición, giro, si se ven y
-    animación vienen del PC que mueve el enemigo.
+  - Piezas que se mueven aparte (hijos con animación o que dañan, como la aguja de Hornet): posición, profundidad,
+    giro, si se ven, si su caja de daño está encendida, cuánto dañan y animación vienen del PC que mueve el enemigo.
   - La sombra de cada jugador no es un enemigo compartido.
   - Probados: Mamá Gruz, Falso Caballero, Hornet, Mawlek, Maestro de Almas, Defensor del Estiércol, Nosk y Vasija Rota
     (despiertan, atacan al jugador que no es dueño de la sala y siguen el combate al cambiar de PC), escupidores y
@@ -135,7 +139,9 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
 - `tests/NetTests`: aplicación de consola que prueba el transporte fuera del juego (conexión, código incorrecto,
   pérdida y desorden simulados, canal fiable, datos grandes, memoria creada por paquete).
 - En el juego: dos copias (`test-instances/b` y `c`) controladas por archivo con el modo de prueba del mod
-  (`tools/mp-test-lib.sh`): conexión, movimiento, memoria por segundo, tirones, suavidad, sincronización.
+  (`tools/mp-test-lib.sh`): conexión, movimiento, memoria por segundo, tirones, suavidad, sincronización. Capturas de
+  pantalla de las dos a la vez (`shot`) para comparar lo que se ve; cada daño que recibe el caballero se registra con
+  lo que lo hizo. La memoria creada en combate (≈300 KB/s) es la del juego: es la misma con la partida cerrada.
 
 ## Hitos
 

@@ -12,6 +12,10 @@ internal struct PlayerSnapshot {
 
     public float X;
     public float Y;
+
+    /// <summary>Solo enemigos: profundidad (no viaja en el estado de los jugadores).</summary>
+    public float Z;
+
     public bool FacingRight;
     public bool Visible;
 
@@ -25,6 +29,9 @@ internal struct PlayerSnapshot {
 
     /// <summary>Solo enemigos: si se dibuja, si choca, si es invencible y desde dónde (no viaja con los jugadores).</summary>
     public byte Extra;
+
+    /// <summary>Solo enemigos: daño al tocarlo (lo cambia su lógica; no viaja con los jugadores).</summary>
+    public byte Damage;
 
     private const byte FacingRightFlag = 1;
     private const byte VisibleFlag = 2;

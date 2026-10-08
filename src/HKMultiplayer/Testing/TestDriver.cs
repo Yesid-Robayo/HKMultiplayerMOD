@@ -31,6 +31,16 @@ internal sealed class TestDriver : MonoBehaviour {
         _commandFile = Path.Combine(Application.persistentDataPath, "mp-test.txt");
         InputSimulator.Install();
 
+        // Cada daño que recibe el caballero y qué lo hizo (para comprobar que los ataques dañan a los dos jugadores)
+        On.HeroController.TakeDamage += (orig, self, source, side, amount, hazard) => {
+            var health = PlayerData.instance != null ? PlayerData.instance.health : -1;
+            orig(self, source, side, amount, hazard);
+            var after = PlayerData.instance != null ? PlayerData.instance.health : -1;
+            if (after != health) {
+                Log.Info($"{Tag}daño {health - after} de {(source != null ? source.name : "?")}");
+            }
+        };
+
         // Las órdenes de una ejecución anterior no se repiten
         File.WriteAllText(_commandFile, string.Empty);
         Log.Info($"{Tag}modo de prueba activo; órdenes en {_commandFile}");
@@ -102,6 +112,28 @@ internal sealed class TestDriver : MonoBehaviour {
             case "sdset":
                 // sdset <sala> <id>: marca un objeto de sala como activado (como al romper una pared)
                 SceneData.instance.SaveMyState(new PersistentBoolData { sceneName = args[1], id = args[2], activated = true });
+                break;
+            case "sdclear":
+                // sdclear <sala> <id>: vuelve a dejar sin activar un objeto de sala (p. ej. revivir un jefe para probarlo)
+                var cleared = SceneData.instance.FindMyState(new PersistentBoolData {
+                    sceneName = args[1], id = string.Join(" ", args.Skip(2))
+                });
+                if (cleared != null) {
+                    cleared.activated = false;
+                }
+
+                Log.Info($"{Tag}sd {args[1]}/{string.Join(" ", args.Skip(2))} sin activar: {(cleared != null ? "sí" : "no existía")}");
+                break;
+            case "sdlist":
+                // sdlist <sala>: lo guardado de esa sala (objetos activados, números, piedras)
+                foreach (var item in SceneData.instance.persistentBoolItems.Where(i => i.sceneName == args[1])) {
+                    Log.Info($"{Tag}sd bool {item.id}={item.activated}");
+                }
+
+                foreach (var item in SceneData.instance.persistentIntItems.Where(i => i.sceneName == args[1])) {
+                    Log.Info($"{Tag}sd int {item.id}={item.value}");
+                }
+
                 break;
             case "sdget":
                 var stored = SceneData.instance.FindMyState(new PersistentBoolData { sceneName = args[1], id = args[2] });
@@ -251,6 +283,10 @@ internal sealed class TestDriver : MonoBehaviour {
                     Log.Info($"{Tag}{line}");
                 }
 
+                break;
+            case "hitall":
+                // hitall <daño>: golpea a todos los enemigos vivos de la sala, como el caballero
+                Log.Info($"{Tag}golpeados {runner.Enemies.TestHitAll(int.Parse(args[1]))}");
                 break;
             case "parts":
                 // parts <enemigo>: piezas que se mueven aparte de ese enemigo

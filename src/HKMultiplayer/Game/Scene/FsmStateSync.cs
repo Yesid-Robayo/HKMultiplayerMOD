@@ -134,6 +134,9 @@ internal sealed class FsmStateSync {
     /// <summary>Objeto al que se está poniendo un estado llegado de otro PC (null si ninguno).</summary>
     private static Tracked _applying;
 
+    /// <summary>Si ahora mismo se está poniendo un estado llegado de otro PC (lo que provoque no es de este PC).</summary>
+    public static bool IsApplyingRemote => _applying != null;
+
     /// <summary>El primer cambio de estado al aplicar uno de otro PC es el pedido; los que encadene, se retienen.</summary>
     private static bool _requested;
 
