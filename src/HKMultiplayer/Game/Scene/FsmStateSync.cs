@@ -28,6 +28,10 @@ internal sealed class FsmStateSync {
     public const MessageType Claim = (MessageType) 56;
     public const MessageType Aboard = (MessageType) 57;
     public const MessageType Order = (MessageType) 58;
+    public const MessageType Vars = (MessageType) 59;
+
+    /// <summary>Máximo de variables de una FSM que se copian (los ascensores tienen unas pocas).</summary>
+    private const int MaxVars = 32;
 
     /// <summary>Cada cuánto envía el controlador la posición y variables de un objeto quieto.</summary>
     private const float PoseInterval = 1f;
@@ -68,6 +72,11 @@ internal sealed class FsmStateSync {
         public Collider2D Platform;
         public bool LocalAboard;
         public readonly List<ushort> RemoteRiders = new();
+
+        // Variables de la FSM ya enviadas (piso actual, siguiente...), para enviar solo cuando cambian
+        public readonly int[] SentInts = new int[MaxVars];
+        public readonly bool[] SentBools = new bool[MaxVars];
+        public bool VarsSent;
     }
 
     private readonly List<Tracked> _tracked = new();
@@ -80,6 +89,7 @@ internal sealed class FsmStateSync {
     private readonly MessageHandler _onClaim;
     private readonly MessageHandler _onAboard;
     private readonly MessageHandler _onOrderMessage;
+    private readonly MessageHandler _onVars;
     private uint _lastPositionTick;
     private PlayerSnapshot _incoming;
     private GameSession _session;
@@ -99,6 +109,7 @@ internal sealed class FsmStateSync {
         MessageRoutes.Register(Claim, Route.SameScene, reliable: true);
         MessageRoutes.Register(Aboard, Route.SameScene, reliable: true);
         MessageRoutes.Register(Order, Route.SameScene, reliable: true);
+        MessageRoutes.Register(Vars, Route.SameScene, reliable: true);
     }
 
     public FsmStateSync() {
@@ -109,6 +120,7 @@ internal sealed class FsmStateSync {
         _onClaim = OnClaim;
         _onAboard = OnAboard;
         _onOrderMessage = OnOrderMessage;
+        _onVars = OnVars;
     }
 
     public void Attach(GameSession session) {
@@ -120,6 +132,7 @@ internal sealed class FsmStateSync {
         session.On(Claim, _onClaim);
         session.On(Aboard, _onAboard);
         session.On(Order, _onOrderMessage);
+        session.On(Vars, _onVars);
         _active = this;
         InstallHooks();
         Clear();
@@ -134,6 +147,7 @@ internal sealed class FsmStateSync {
             _session.On(Claim, null);
             _session.On(Aboard, null);
             _session.On(Order, null);
+            _session.On(Vars, null);
         }
 
         _session = null;
@@ -271,6 +285,7 @@ internal sealed class FsmStateSync {
             UpdateAboard(item);
             if (IsController(item)) {
                 anyControlled = true;
+                SendVarsIfChanged(item);
                 if (now - item.LastStateTime >= StillSeconds && now >= item.NextPose && _session.CanSend) {
                     item.NextPose = now + PoseInterval;
                     SendPose(item);
@@ -589,6 +604,81 @@ internal sealed class FsmStateSync {
         _session.End();
     }
 
+    /// <summary>
+    /// El controlador envía las variables de su FSM cuando cambian (después del estado, en orden): así quien tome el
+    /// control parte del piso real y no de uno viejo, que haría saltar el ascensor.
+    /// </summary>
+    private void SendVarsIfChanged(Tracked item) {
+        if (!_session.CanSend) {
+            return;
+        }
+
+        var ints = item.Fsm.FsmVariables.IntVariables;
+        var bools = item.Fsm.FsmVariables.BoolVariables;
+        var changed = !item.VarsSent;
+        for (var i = 0; i < ints.Length && i < MaxVars && !changed; i++) {
+            changed = ints[i].Value != item.SentInts[i];
+        }
+
+        for (var i = 0; i < bools.Length && i < MaxVars && !changed; i++) {
+            changed = bools[i].Value != item.SentBools[i];
+        }
+
+        if (!changed) {
+            return;
+        }
+
+        item.VarsSent = true;
+        var writer = _session.Begin(Vars);
+        writer.WriteUShort(_sceneHash);
+        writer.WriteUInt(item.Id);
+        writer.WriteByte((byte) Math.Min(ints.Length, MaxVars));
+        for (var i = 0; i < ints.Length && i < MaxVars; i++) {
+            item.SentInts[i] = ints[i].Value;
+            writer.WriteInt(ints[i].Value);
+        }
+
+        writer.WriteByte((byte) Math.Min(bools.Length, MaxVars));
+        for (var i = 0; i < bools.Length && i < MaxVars; i++) {
+            item.SentBools[i] = bools[i].Value;
+            writer.WriteBool(bools[i].Value);
+        }
+
+        _session.End();
+    }
+
+    private void OnVars(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        _byId.TryGetValue(id, out var item);
+        if (sceneHash != _sceneHash || item?.Fsm == null || !AcceptFrom(item, from)) {
+            item = null;
+        }
+
+        var ints = item?.Fsm.FsmVariables.IntVariables;
+        var bools = item?.Fsm.FsmVariables.BoolVariables;
+        var intCount = reader.ReadByte();
+        for (var i = 0; i < intCount; i++) {
+            var value = reader.ReadInt();
+            if (ints != null && i < ints.Length) {
+                ints[i].Value = value;
+            }
+        }
+
+        var boolCount = reader.ReadByte();
+        for (var i = 0; i < boolCount; i++) {
+            var value = reader.ReadBool();
+            if (bools != null && i < bools.Length) {
+                bools[i].Value = value;
+            }
+        }
+
+        // Si este PC toma el control más tarde, ya parte de estos valores; al dejar de ser copia se reenvían
+        if (item != null) {
+            item.VarsSent = false;
+        }
+    }
+
     private void OnControllerState(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
@@ -732,7 +822,8 @@ internal sealed class FsmStateSync {
                 var control = item.CopyTransitions
                     ? string.Empty
                     : $" control={(IsController(item) ? "aquí" : item.Controller.ToString())} subido={(item.LocalAboard ? "sí" : "no")}" +
-                      $" otros=[{string.Join(",", item.RemoteRiders)}]";
+                      $" otros=[{string.Join(",", item.RemoteRiders)}] vars=[" +
+                      string.Join(",", Array.ConvertAll(item.Fsm.FsmVariables.IntVariables, v => $"{v.Name}={v.Value}")) + "]";
                 yield return $"{item.Fsm.gameObject.name}/{item.Fsm.FsmName} id={item.Id:x8} estado={item.Fsm.ActiveStateName} " +
                              $"pos=({p.x:0.00},{p.y:0.00}){control}";
             }
