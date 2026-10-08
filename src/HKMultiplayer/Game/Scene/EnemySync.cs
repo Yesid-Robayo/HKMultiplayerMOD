@@ -93,7 +93,6 @@ internal sealed class EnemySync {
     private readonly MessageHandler _onHit;
     private readonly MessageHandler _onHealth;
     private readonly Action<SessionPlayer> _onPlayerScene;
-    private readonly StringBuilder _path = new();
 
     private GameSession _session;
     private PlayerSync _players;
@@ -519,7 +518,7 @@ internal sealed class EnemySync {
                         continue;
                     }
 
-                    var id = PathHash(health.transform);
+                    var id = ScenePaths.Hash(health.transform);
                     if (_byId.ContainsKey(id)) {
                         continue;
                     }
@@ -542,22 +541,6 @@ internal sealed class EnemySync {
                 }
             }
         }
-    }
-
-    /// <summary>Huella de la ruta del objeto en la jerarquía (nombres e índices), igual en todos los PCs.</summary>
-    private uint PathHash(Transform transform) {
-        _path.Length = 0;
-        for (var t = transform; t != null; t = t.parent) {
-            _path.Insert(0, t.GetSiblingIndex()).Insert(0, '#').Insert(0, t.name).Insert(0, '/');
-        }
-
-        _path.Insert(0, transform.gameObject.scene.name);
-        var hash = 2166136261u;
-        for (var i = 0; i < _path.Length; i++) {
-            hash = (hash ^ _path[i]) * 16777619u;
-        }
-
-        return hash;
     }
 
     /// <summary>Convierte un enemigo en marioneta (o lo devuelve a la normalidad).</summary>

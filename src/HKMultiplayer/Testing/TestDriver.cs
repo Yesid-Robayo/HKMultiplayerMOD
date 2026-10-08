@@ -114,6 +114,25 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "extras":
+                foreach (var line in runner.SceneObjects.DescribeExtras()) {
+                    Log.Info($"{Tag}extra {line}");
+                }
+
+                break;
+            case "hitrock":
+                // hitrock <inicio del id>: golpea una piedra de geo
+                if (!runner.SceneObjects.TestHitRock(string.Join(" ", args.Skip(1)))) {
+                    Log.Warn($"{Tag}no hay piedra sin romper '{string.Join(" ", args.Skip(1))}'");
+                }
+
+                break;
+            case "dropstalactite":
+                if (!runner.SceneObjects.TestDropStalactite()) {
+                    Log.Warn($"{Tag}no hay estalactitas sin caer en la sala");
+                }
+
+                break;
             case "activate":
                 // activate <inicio del id>: activa un objeto de la sala como si lo hubiera hecho este jugador
                 if (!runner.SceneObjects.TestActivate(string.Join(" ", args.Skip(1)))) {
@@ -146,6 +165,32 @@ internal sealed class TestDriver : MonoBehaviour {
                 // Como descansar en un banco (fija la reaparición donde ya estaba)
                 var pd = PlayerData.instance;
                 pd.SetBenchRespawn(pd.respawnMarkerName, pd.respawnScene, pd.respawnType, pd.respawnFacingRight);
+                break;
+            case "fsmdump":
+                // fsmdump <nombre del objeto>: estados, acciones y transiciones de sus FSM
+                var dumpTarget = GameObject.Find(string.Join(" ", args.Skip(1)));
+                if (dumpTarget == null) {
+                    Log.Warn($"{Tag}no existe '{string.Join(" ", args.Skip(1))}'");
+                    break;
+                }
+
+                foreach (var fsm in dumpTarget.GetComponents<PlayMakerFSM>()) {
+                    Log.Info($"{Tag}fsm '{fsm.FsmName}' inicio={fsm.Fsm.StartState} actual={fsm.ActiveStateName}");
+                    foreach (var variable in fsm.FsmVariables.IntVariables) {
+                        Log.Info($"{Tag}  int {variable.Name}={variable.Value}");
+                    }
+
+                    foreach (var variable in fsm.FsmVariables.BoolVariables) {
+                        Log.Info($"{Tag}  bool {variable.Name}={variable.Value}");
+                    }
+
+                    foreach (var state in fsm.FsmStates) {
+                        var actions = string.Join(", ", state.Actions.Select(a => a.GetType().Name));
+                        var transitions = string.Join(", ", state.Transitions.Select(tr => $"{tr.EventName}->{tr.ToState}"));
+                        Log.Info($"{Tag}  [{state.Name}] {actions} | {transitions}");
+                    }
+                }
+
                 break;
             case "leavegame":
                 // Sale de la partida como desde la pausa (en el mundo del host: guarda y vuelve al menú)

@@ -20,9 +20,45 @@ namespace HKMultiplayer.Game.Scene;
 /// comprobación de "Activated"), así queda igual que si se hubiera roto aquí.
 /// </para>
 /// Los objetos que recoge cada uno (<see cref="CharacterData.IsIndividualItem"/>) quedan fuera.
+/// <para>
+/// También en directo: piedras de geo (cada golpe baja su contador "Hits" en todos; quien golpea se lleva su geo y los
+/// demás ven la piedra romperse) y estalactitas (el juego solo las suelta por el héroe local; cuando una cae en un PC,
+/// cae también en los demás de la sala).
+/// </para>
 /// </summary>
 internal sealed class SceneObjectSync {
     public const MessageType ObjectActivated = (MessageType) 42;
+    public const MessageType GeoRockHits = (MessageType) 48;
+    public const MessageType StalactiteFall = (MessageType) 49;
+
+    private const string HitsVariable = "Hits";
+    private const string BrokenState = "Broken";
+
+    private sealed class Rock {
+        public string Id;
+        public PlayMakerFSM Fsm;
+        public FsmInt Hits;
+        public int LastValue;
+    }
+
+    private readonly List<Rock> _rocks = new();
+    private readonly Dictionary<string, Rock> _rocksById = new();
+    private readonly Dictionary<uint, StalactiteControl> _stalactites = new();
+    private readonly MessageHandler _onRockHits;
+    private readonly MessageHandler _onStalactite;
+
+    private static SceneObjectSync _active;
+    private static bool _hooked;
+    private static bool _applyingRemoteFall;
+
+    private static readonly System.Reflection.MethodInfo FallMethod =
+        typeof(StalactiteControl).GetMethod("Fall", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+    private static readonly System.Reflection.FieldInfo FallenField =
+        typeof(StalactiteControl).GetField("fallen", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+    private static readonly System.Reflection.FieldInfo FallDelayField =
+        typeof(StalactiteControl).GetField("fallDelay", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
 
     private const string ActivatedVariable = "Activated";
 
@@ -44,10 +80,14 @@ internal sealed class SceneObjectSync {
 
     static SceneObjectSync() {
         MessageRoutes.Register(ObjectActivated, Route.SameScene, reliable: true);
+        MessageRoutes.Register(GeoRockHits, Route.SameScene, reliable: true);
+        MessageRoutes.Register(StalactiteFall, Route.SameScene, reliable: true);
     }
 
     public SceneObjectSync() {
         _onActivated = OnActivated;
+        _onRockHits = OnRockHits;
+        _onStalactite = OnStalactite;
     }
 
     public int TrackedCount => _tracked.Count;
@@ -55,18 +95,31 @@ internal sealed class SceneObjectSync {
     public void Attach(GameSession session) {
         _session = session;
         session.On(ObjectActivated, _onActivated);
+        session.On(GeoRockHits, _onRockHits);
+        session.On(StalactiteFall, _onStalactite);
+        _active = this;
+        InstallHooks();
         Clear();
     }
 
     public void Detach() {
         _session?.On(ObjectActivated, null);
+        _session?.On(GeoRockHits, null);
+        _session?.On(StalactiteFall, null);
         _session = null;
+        if (_active == this) {
+            _active = null;
+        }
+
         Clear();
     }
 
     private void Clear() {
         _tracked.Clear();
         _byId.Clear();
+        _rocks.Clear();
+        _rocksById.Clear();
+        _stalactites.Clear();
         _scene = string.Empty;
         _sceneHash = 0;
     }
@@ -119,11 +172,33 @@ internal sealed class SceneObjectSync {
                 _session.End();
             }
         }
+
+        for (var i = 0; i < _rocks.Count; i++) {
+            var rock = _rocks[i];
+            if (rock.Fsm == null) {
+                continue;
+            }
+
+            var hits = rock.Hits.Value;
+            if (hits == rock.LastValue) {
+                continue;
+            }
+
+            var lower = hits < rock.LastValue;
+            rock.LastValue = hits;
+            if (lower && _session.CanSend) {
+                var writer = _session.Begin(GeoRockHits);
+                writer.WriteUShort(_sceneHash);
+                writer.WriteString(rock.Id);
+                writer.WriteInt(hits);
+                _session.End();
+            }
+        }
     }
 
     /// <summary>Busca los objetos guardables de la sala (solo crea memoria al entrar en una sala).</summary>
     private void Scan() {
-        foreach (var persistent in Object.FindObjectsByType<PersistentBoolItem>(FindObjectsSortMode.None)) {
+        foreach (var persistent in Object.FindObjectsByType<PersistentBoolItem>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
             var id = persistent.persistentBoolData?.id;
             if (string.IsNullOrEmpty(id)) {
                 id = persistent.name;
@@ -148,6 +223,88 @@ internal sealed class SceneObjectSync {
             };
             _tracked.Add(tracked);
             _byId[id] = tracked;
+        }
+
+        foreach (var geoRock in Object.FindObjectsByType<GeoRock>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+            var id = geoRock.geoRockData?.id;
+            if (string.IsNullOrEmpty(id)) {
+                id = geoRock.name;
+            }
+
+            var fsm = geoRock.GetComponent<PlayMakerFSM>();
+            var hits = fsm != null ? fsm.FsmVariables.FindFsmInt(HitsVariable) : null;
+            if (hits == null || _rocksById.ContainsKey(id)) {
+                continue;
+            }
+
+            var rock = new Rock { Id = id, Fsm = fsm, Hits = hits, LastValue = hits.Value };
+            _rocks.Add(rock);
+            _rocksById[id] = rock;
+        }
+
+        foreach (var stalactite in Object.FindObjectsByType<StalactiteControl>(FindObjectsInactive.Include,
+                     FindObjectsSortMode.None)) {
+            _stalactites[ScenePaths.Hash(stalactite.transform)] = stalactite;
+        }
+    }
+
+    private void OnRockHits(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadString(256);
+        var hits = reader.ReadInt();
+        if (sceneHash != _sceneHash || !_rocksById.TryGetValue(id, out var rock) || rock.Fsm == null ||
+            hits >= rock.Hits.Value) {
+            return;
+        }
+
+        rock.Hits.Value = Mathf.Max(0, hits);
+        rock.LastValue = rock.Hits.Value;
+        if (rock.Hits.Value <= 0 && rock.Fsm.ActiveStateName != BrokenState) {
+            // Rota por otro: se ve rota, sin soltar geo aquí (se lo lleva quien la rompió)
+            rock.Fsm.SetState(BrokenState);
+        }
+    }
+
+    private static void InstallHooks() {
+        if (_hooked) {
+            return;
+        }
+
+        _hooked = true;
+        On.StalactiteControl.Fall += (orig, self, delay) => {
+            var sync = _active;
+            if (!_applyingRemoteFall && sync?._session != null && sync._session.CanSend && sync._scene.Length > 0) {
+                var writer = sync._session.Begin(StalactiteFall);
+                writer.WriteUShort(sync._sceneHash);
+                writer.WriteUInt(ScenePaths.Hash(self.transform));
+                sync._session.End();
+            }
+
+            return orig(self, delay);
+        };
+    }
+
+    private void OnStalactite(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        if (sceneHash != _sceneHash || !_stalactites.TryGetValue(id, out var stalactite) || stalactite == null ||
+            !stalactite.gameObject.activeInHierarchy || FallMethod == null ||
+            FallenField != null && (bool) FallenField.GetValue(stalactite)) {
+            return;
+        }
+
+        // Que el héroe local no la vuelva a soltar al pasar debajo
+        var trigger = stalactite.GetComponentInChildren<TriggerEnterEvent>();
+        if (trigger != null) {
+            trigger.gameObject.SetActive(false);
+        }
+
+        var delay = FallDelayField != null ? (float) FallDelayField.GetValue(stalactite) : 0.25f;
+        _applyingRemoteFall = true;
+        try {
+            stalactite.StartCoroutine((System.Collections.IEnumerator) FallMethod.Invoke(stalactite, new object[] { delay }));
+        } finally {
+            _applyingRemoteFall = false;
         }
     }
 
@@ -215,6 +372,44 @@ internal sealed class SceneObjectSync {
         foreach (var item in _tracked) {
             yield return $"{item.Id}={(item.Activated.Value ? "sí" : "no")}→{item.ActivatedState ?? "?"} ({item.Fsm.ActiveStateName})";
         }
+    }
+
+    /// <summary>Piedras de geo y estalactitas de la sala.</summary>
+    public IEnumerable<string> DescribeExtras() {
+        foreach (var rock in _rocks) {
+            yield return $"piedra {rock.Id} golpes={rock.Hits.Value} ({rock.Fsm.ActiveStateName})";
+        }
+
+        foreach (var pair in _stalactites) {
+            var fallen = FallenField != null && pair.Value != null && (bool) FallenField.GetValue(pair.Value);
+            yield return $"estalactita {pair.Key:x8} {(fallen ? "caída" : "colgando")}";
+        }
+    }
+
+    /// <summary>Un golpe a una piedra de geo (baja su contador como la FSM al golpearla).</summary>
+    public bool TestHitRock(string idPrefix) {
+        foreach (var rock in _rocks) {
+            if (rock.Id.StartsWith(idPrefix) && rock.Hits.Value > 0) {
+                // Lo mismo que hace su FSM en cada golpe: baja el contador
+                rock.Hits.Value--;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Suelta la primera estalactita sin caer, como si el jugador pasara debajo.</summary>
+    public bool TestDropStalactite() {
+        foreach (var stalactite in _stalactites.Values) {
+            if (stalactite != null && stalactite.gameObject.activeInHierarchy && FallMethod != null &&
+                !(FallenField != null && (bool) FallenField.GetValue(stalactite))) {
+                stalactite.StartCoroutine((System.Collections.IEnumerator) FallMethod.Invoke(stalactite, new object[] { 0.25f }));
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Activa un objeto como si lo hubiera hecho este jugador (se avisa a la sala).</summary>
