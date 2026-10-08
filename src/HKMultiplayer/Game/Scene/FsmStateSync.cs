@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using HKMultiplayer.Game.Players;
 using HKMultiplayer.Net;
 using HKMultiplayer.Session;
+using HKMultiplayer.Util;
 using HutongGames.PlayMaker;
 using UnityEngine;
 
@@ -14,7 +15,9 @@ namespace HKMultiplayer.Game.Scene;
 /// <item>Ascensores y rejas de arena: cada uno tiene un controlador, el último jugador que lo usó (al principio, el
 /// dueño de la sala). Su objeto es el único que se mueve por sí mismo, con su caballero encima; envía su posición 30
 /// veces por segundo y cada cambio de estado en el momento en que ocurre, y las copias de los demás los siguen
-/// (interpoladas). Quien lo usa pasa a ser el controlador y avisa a los demás.</item>
+/// (interpoladas). Las copias no avanzan solas: pasan solo por los estados que llegan, una vez cada uno (si no,
+/// estados con efectos fuera del objeto, como el que voltea la palanca al llegar, se harían dos veces). Quien lo usa
+/// pasa a ser el controlador y avisa a los demás.</item>
 /// <item>Palancas, interruptores y objetos guardables (paredes, puertas): su golpe lo detecta su propia FSM, así que se
 /// copia el golpe y toda su cadena hasta volver al reposo. Las órdenes que la copia de una palanca manda a un ascensor
 /// no lo mueven: ya lo mueve quien golpeó de verdad.</item>
@@ -77,6 +80,17 @@ internal sealed class FsmStateSync {
         public readonly int[] SentInts = new int[MaxVars];
         public readonly bool[] SentBools = new bool[MaxVars];
         public bool VarsSent;
+
+        // La copia sigue al controlador solo cuando ya terminó de iniciarse (si no, se saltaría su preparación)
+        public bool Ready;
+
+        // Cambio de estado propio retenido por ser copia; si este PC toma el control en ese estado, se hace entonces
+        public string HeldFrom;
+        public string HeldTo;
+
+        // Ascensores de la ciudad: sus pisos y el piso actual, para no mandarlo nunca fuera de su recorrido
+        public RuinsLift Lift;
+        public FsmInt CurrentPosition;
     }
 
     private readonly List<Tracked> _tracked = new();
@@ -99,7 +113,19 @@ internal sealed class FsmStateSync {
 
     private static FsmStateSync _active;
     private static bool _hooked;
-    private static bool _applyingRemote;
+
+    /// <summary>Objeto al que se está poniendo un estado llegado de otro PC (null si ninguno).</summary>
+    private static Tracked _applying;
+
+    /// <summary>El primer cambio de estado al aplicar uno de otro PC es el pedido; los que encadene, se retienen.</summary>
+    private static bool _requested;
+
+    /// <summary>Se ejecuta una orden o un cambio retenido en este PC, que ya es el controlador: pasa sin más.</summary>
+    private static bool _executing;
+
+    /// <summary>Cambio de estado pendiente de una FSM (privado en PlayMaker): se anula al retener un cambio.</summary>
+    private static readonly System.Reflection.FieldInfo SwitchToStateField =
+        typeof(Fsm).GetField("switchToState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
     static FsmStateSync() {
         MessageRoutes.Register(Positions, Route.SameScene, reliable: false);
@@ -279,12 +305,22 @@ internal sealed class FsmStateSync {
             }
 
             if (item.CopyTransitions) {
+                // La cadena de otro PC se cortó a medias (se fue de la sala): sigue sola desde donde quedó
+                if (item.HeldTo != null && now >= item.RemoteChainUntil) {
+                    ReplayHeld(item);
+                }
+
                 continue;
+            }
+
+            if (!item.Ready && now - item.LastStateTime >= StillSeconds) {
+                item.Ready = true;
             }
 
             UpdateAboard(item);
             if (IsController(item)) {
                 anyControlled = true;
+                ReplayHeld(item);
                 SendVarsIfChanged(item);
                 if (now - item.LastStateTime >= StillSeconds && now >= item.NextPose && _session.CanSend) {
                     item.NextPose = now + PoseInterval;
@@ -390,7 +426,9 @@ internal sealed class FsmStateSync {
 
             var item = new Tracked {
                 Id = id, Fsm = fsm, LastState = fsm.ActiveStateName, CopyTransitions = !target,
-                LastStateTime = Time.unscaledTime, Platform = target ? FindPlatform(fsm) : null
+                LastStateTime = Time.unscaledTime, Platform = target ? FindPlatform(fsm) : null,
+                Lift = target ? fsm.GetComponent<RuinsLift>() : null,
+                CurrentPosition = target ? fsm.FsmVariables.FindFsmInt("Current Position") : null
             };
             item.RestState = item.LastState;
             _tracked.Add(item);
@@ -414,6 +452,13 @@ internal sealed class FsmStateSync {
     /// los objetos guardables que no son de cada jugador.
     /// </summary>
     private static bool IsSwitchLike(PlayMakerFSM fsm) {
+        // Lo que recoge cada jugador por su cuenta nunca se copia, se llame como se llame
+        var persistent = fsm.GetComponent<PersistentBoolItem>();
+        var id = persistent != null ? persistent.persistentBoolData?.id : null;
+        if (persistent != null && World.CharacterData.IsIndividualItem(string.IsNullOrEmpty(id) ? persistent.name : id)) {
+            return false;
+        }
+
         var name = fsm.gameObject.name;
         foreach (var part in SwitchNames) {
             if (name.Contains(part)) {
@@ -421,13 +466,7 @@ internal sealed class FsmStateSync {
             }
         }
 
-        var persistent = fsm.GetComponent<PersistentBoolItem>();
-        if (persistent == null || fsm.FsmVariables.FindFsmBool("Activated") == null) {
-            return false;
-        }
-
-        var id = persistent.persistentBoolData?.id;
-        return !World.CharacterData.IsIndividualItem(string.IsNullOrEmpty(id) ? persistent.name : id);
+        return persistent != null && fsm.FsmVariables.FindFsmBool("Activated") != null;
     }
 
     // =====================================================================================================
@@ -443,20 +482,30 @@ internal sealed class FsmStateSync {
         // Cada cambio de estado, en el momento en que ocurre (también los de menos de un frame)
         On.HutongGames.PlayMaker.Fsm.SwitchState += (orig, self, toState) => {
             var sync = _active;
-            if (sync != null && !_applyingRemote && toState != null && sync._byFsm.TryGetValue(self, out var item)) {
-                if (item.CopyTransitions) {
-                    sync.OnLocalSwitch(item, self.ActiveStateName, toState.Name);
-                } else {
-                    sync.OnControlledSwitch(item, toState.Name);
+            if (sync != null && toState != null && sync._byFsm.TryGetValue(self, out var item)) {
+                if (sync.HoldSwitch(item, toState)) {
+                    // Se anula el cambio pendiente: la FSM sigue en su estado hasta que llegue el siguiente
+                    SwitchToStateField.SetValue(self, null);
+                    return;
+                }
+
+                // Lo retenido era del estado que se deja
+                item.HeldTo = null;
+                if (_applying == null) {
+                    if (item.CopyTransitions) {
+                        sync.OnLocalSwitch(item, self.ActiveStateName, toState.Name);
+                    } else {
+                        sync.OnControlledSwitch(item, toState.Name);
+                    }
                 }
             }
 
             orig(self, toState);
         };
 
-        // Las órdenes de otras FSM (palancas, llamadores) llegan al objeto por aquí, con quién las envió
+        // Todos los eventos que recibe el objeto (los suyos y las órdenes de palancas y llamadores) pasan por aquí
         On.HutongGames.PlayMaker.Fsm.ProcessEvent += (orig, self, fsmEvent, eventData) => {
-            if (_active != null && !_active.OnOrder(self, fsmEvent, eventData)) {
+            if (_active != null && !_active.OnEvent(self, ref fsmEvent, eventData)) {
                 return;
             }
 
@@ -465,16 +514,72 @@ internal sealed class FsmStateSync {
     }
 
     /// <summary>
-    /// Orden de otra FSM a un ascensor o reja. Si viene de la copia de un golpe de otro PC, no se aplica (ya lo mueve
-    /// quien golpeó). Si es de este jugador, pasa a controlarlo. Devuelve false si no debe aplicarse.
+    /// Si un cambio de estado se retiene en vez de hacerse (se guarda por si este PC toma el control en ese estado):
+    /// <list type="bullet">
+    /// <item>Objeto al que se pone un estado de otro PC: lo que encadene por sí mismo, porque el siguiente estado
+    /// también llega de allí (si no, cada paso se haría dos veces; p. ej. el ascensor voltearía la palanca dos veces al
+    /// llegar).</item>
+    /// <item>Copia de un ascensor o reja: no avanza sola, solo pasa por los estados del controlador.</item>
+    /// </list>
     /// </summary>
-    private bool OnOrder(Fsm fsm, FsmEvent fsmEvent, FsmEventData eventData) {
-        if (_applyingRemote || fsmEvent == null || _session == null || !_byFsm.TryGetValue(fsm, out var item) ||
-            item.CopyTransitions) {
+    private bool HoldSwitch(Tracked item, FsmState toState) {
+        if (_executing) {
+            return false;
+        }
+
+        if (_applying == item) {
+            if (_requested) {
+                _requested = false;
+                return false;
+            }
+        } else if (item.CopyTransitions || !item.Ready || IsController(item)) {
+            return false;
+        }
+
+        item.HeldFrom = item.Fsm.ActiveStateName;
+        item.HeldTo = toState.Name;
+        return true;
+    }
+
+    /// <summary>
+    /// Pone un estado llegado de otro PC como lo haría la propia FSM: dentro de su ejecución, así una transición que
+    /// pidan sus acciones corta las acciones siguientes (igual que en el PC de origen) y se retiene.
+    /// </summary>
+    private static void ApplyRemoteState(Tracked item, string state) {
+        var fsm = item.Fsm.Fsm;
+        _applying = item;
+        _requested = true;
+        FsmExecutionStack.PushFsm(fsm);
+        try {
+            fsm.SetState(state);
+            fsm.UpdateStateChanges();
+        } finally {
+            FsmExecutionStack.PopFsm();
+            _applying = null;
+            _requested = false;
+        }
+    }
+
+    /// <summary>
+    /// Evento que va a procesar la FSM de un objeto seguido. Devuelve false si no debe aplicarse: las órdenes que
+    /// manda a un ascensor o reja otro objeto copiado de otro PC (ya lo mueve quien lo hizo). Las de este jugador hacen
+    /// que pase a controlarlo (o las ejecuta quien va subido).
+    /// </summary>
+    private bool OnEvent(Fsm fsm, ref FsmEvent fsmEvent, FsmEventData eventData) {
+        if (fsmEvent == null || _session == null || !_byFsm.TryGetValue(fsm, out var item) || item.CopyTransitions) {
             return true;
         }
 
-        // Las internas del propio objeto (llegadas, hacia dónde ir...) siguen su curso
+        if (_executing) {
+            fsmEvent = CheckLiftDirection(item, fsmEvent, null);
+            return true;
+        }
+
+        if (_applying != null) {
+            return _applying == item;
+        }
+
+        // Los propios del objeto (llegadas, esperas...): si es una copia, el cambio de estado que pidan se retiene
         var sender = eventData?.SentByFsm ?? Fsm.EventData?.SentByFsm;
         if (sender == null || sender == fsm || fsmEvent.Name == "FINISHED") {
             return true;
@@ -484,6 +589,8 @@ internal sealed class FsmStateSync {
             Time.unscaledTime < source.RemoteChainUntil) {
             return false;
         }
+
+        fsmEvent = CheckLiftDirection(item, fsmEvent, sender);
 
         // El caballero de este jugador no va subido pero el de otro sí: lo mueve el PC de quien va encima (aquí el
         // ascensor iría vacío y saltaría directamente al piso, dejándolo atrás)
@@ -501,6 +608,58 @@ internal sealed class FsmStateSync {
         return true;
     }
 
+    /// <summary>Hace el cambio de estado retenido si el objeto sigue en el estado desde el que se pidió.</summary>
+    private static void ReplayHeld(Tracked item) {
+        var to = item.HeldTo;
+        if (to == null) {
+            return;
+        }
+
+        item.HeldTo = null;
+        if (item.Fsm.ActiveStateName != item.HeldFrom) {
+            return;
+        }
+
+        var fsm = item.Fsm.Fsm;
+        _executing = true;
+        FsmExecutionStack.PushFsm(fsm);
+        try {
+            fsm.SetState(to);
+            fsm.UpdateStateChanges();
+        } finally {
+            FsmExecutionStack.PopFsm();
+            _executing = false;
+        }
+    }
+
+    /// <summary>
+    /// Bajar suma un piso y subir lo resta. Fuera del recorrido el juego lo convierte en el piso 1 y el ascensor
+    /// aparece allí de golpe, así que en un extremo la orden se da la vuelta y la palanca queda apuntando hacia donde va.
+    /// </summary>
+    private static FsmEvent CheckLiftDirection(Tracked item, FsmEvent fsmEvent, Fsm sender) {
+        if (item.Lift == null || item.CurrentPosition == null || item.Lift.stopPositions == null) {
+            return fsmEvent;
+        }
+
+        var down = fsmEvent.Name == "CONTROL DOWN";
+        if (!down && fsmEvent.Name != "CONTROL UP") {
+            return fsmEvent;
+        }
+
+        var current = item.CurrentPosition.Value;
+        if (down ? current < item.Lift.stopPositions.Length : current > 1) {
+            return fsmEvent;
+        }
+
+        Log.Warn($"{item.Fsm.gameObject.name}: {fsmEvent.Name} en el piso {current}, se da la vuelta");
+        var leverGoingDown = sender?.Variables.FindFsmBool("Going Down");
+        if (leverGoingDown != null) {
+            leverGoingDown.Value = !down;
+        }
+
+        return FsmEvent.GetFsmEvent(down ? "CONTROL UP" : "CONTROL DOWN");
+    }
+
     private void OnOrderMessage(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
@@ -513,11 +672,11 @@ internal sealed class FsmStateSync {
 
         // La ejecuta este PC, con su caballero encima, y pasa a controlarlo
         TakeControl(item);
-        _applyingRemote = true;
+        _executing = true;
         try {
             item.Fsm.SendEvent(name);
         } finally {
-            _applyingRemote = false;
+            _executing = false;
         }
     }
 
@@ -684,19 +843,14 @@ internal sealed class FsmStateSync {
         var id = reader.ReadUInt();
         var state = reader.ReadString(128);
         if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var item) || item.Fsm == null ||
-            !AcceptFrom(item, from) || item.Fsm.ActiveStateName == state) {
+            !AcceptFrom(item, from) || !item.Ready || item.Fsm.ActiveStateName == state) {
             return;
         }
 
         // Se pone el mismo estado en la copia (luces, cadenas, sonido); su posición la pone el flujo del controlador
         item.LastState = state;
         item.LastStateTime = Time.unscaledTime;
-        _applyingRemote = true;
-        try {
-            item.Fsm.SetState(state);
-        } finally {
-            _applyingRemote = false;
-        }
+        ApplyRemoteState(item, state);
     }
 
     /// <summary>
@@ -749,15 +903,10 @@ internal sealed class FsmStateSync {
             return;
         }
 
-        // Lo copiado (y lo que encadene en el acto) no se vuelve a enviar
+        // Lo copiado no se vuelve a enviar ni encadena solo: el siguiente paso también llega de allí
         item.LastState = state;
         item.LastStateTime = Time.unscaledTime;
-        _applyingRemote = true;
-        try {
-            item.Fsm.SetState(state);
-        } finally {
-            _applyingRemote = false;
-        }
+        ApplyRemoteState(item, state);
     }
 
     /// <summary>Variables del objeto quieto en el controlador (piso actual...), para que el siguiente que lo use parta igual.</summary>
@@ -821,11 +970,13 @@ internal sealed class FsmStateSync {
                 var p = item.Fsm.transform.position;
                 var control = item.CopyTransitions
                     ? string.Empty
-                    : $" control={(IsController(item) ? "aquí" : item.Controller.ToString())} subido={(item.LocalAboard ? "sí" : "no")}" +
+                    : $" control={(IsController(item) ? "aquí" : item.Controller.ToString())} lista={(item.Ready ? "sí" : "no")}" +
+                      $" retenido={item.HeldTo ?? "-"} subido={(item.LocalAboard ? "sí" : "no")}" +
                       $" otros=[{string.Join(",", item.RemoteRiders)}] vars=[" +
                       string.Join(",", Array.ConvertAll(item.Fsm.FsmVariables.IntVariables, v => $"{v.Name}={v.Value}")) + "]";
+                var bools = string.Join(",", Array.ConvertAll(item.Fsm.FsmVariables.BoolVariables, v => $"{v.Name}={v.Value}"));
                 yield return $"{item.Fsm.gameObject.name}/{item.Fsm.FsmName} id={item.Id:x8} estado={item.Fsm.ActiveStateName} " +
-                             $"pos=({p.x:0.00},{p.y:0.00}){control}";
+                             $"pos=({p.x:0.00},{p.y:0.00}){control} bools=[{bools}]";
             }
         }
     }
@@ -835,7 +986,13 @@ internal sealed class FsmStateSync {
         foreach (var item in _tracked) {
             if (item.Fsm != null && item.Fsm.gameObject.name.StartsWith(namePrefix, StringComparison.Ordinal)) {
                 TakeControl(item);
-                item.Fsm.SendEvent(eventName);
+                _executing = true;
+                try {
+                    item.Fsm.SendEvent(eventName);
+                } finally {
+                    _executing = false;
+                }
+
                 return true;
             }
         }

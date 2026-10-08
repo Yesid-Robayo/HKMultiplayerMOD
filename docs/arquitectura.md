@@ -83,6 +83,11 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - En los demás juegos los enemigos son "marionetas": su lógica (FSM, física) se detiene y se dibujan con el estado
     recibido e interpolación; sus colisiones de daño siguen funcionando para el jugador local.
   - Los golpes del jugador local a una marioneta se envían al dueño, que los aplica al enemigo real.
+  - Ascensores y rejas: los mueve quien los usa (su controlador). Las copias de los demás no avanzan solas: solo pasan
+    por los estados que llegan, una vez cada uno, aplicados dentro de la ejecución de su FSM. Si no, los estados con
+    efectos fuera del objeto (el ascensor voltea la dirección de su palanca al llegar) se harían dos veces.
+  - Quien entra en una sala recibe del dueño lo ya activado (puertas, palancas, paredes), los golpes de cada piedra de
+    geo y los rompibles rotos. Al guardar, lo activado en el mundo no vuelve atrás.
   - Los objetos que crean los enemigos (proyectiles, etc.) se replican como "aparecidos" con su prefab y transform.
   - Traspaso al cambiar el dueño: el nuevo dueño despierta sus enemigos en el estado de FSM recibido.
   - Casos especiales (jefes con escenarios propios) se añaden por separado a medida que se prueban.

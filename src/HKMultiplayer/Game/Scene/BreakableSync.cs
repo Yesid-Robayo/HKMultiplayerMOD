@@ -59,9 +59,11 @@ internal sealed class BreakableSync {
     static BreakableSync() {
         MessageRoutes.Register(Broken, Route.SameScene, reliable: true);
         AddFieldKind("Breakable", "isBroken", (c, _) => ((Breakable) c).BreakSelf());
-        AddFieldKind("BreakableObject", "activated", TriggerBreak);
+        AddFieldKind("BreakableObject", "activated", BreakObject);
         AddFieldKind("BreakablePoleSimple", "activated", TriggerBreak);
         AddFieldKind("BreakableInfectedVine", "activated", TriggerBreak);
+        // Plataformas de enredadera que se cortan (Sendero Verde, Jardines)
+        AddFieldKind("VinePlatformCut", "activated", (c, _) => ((VinePlatformCut) c).Cut());
         AddFieldKind("GlobControl", "broken", (c, _) => {
             var method = c.GetType().GetMethod("Break", BindingFlags.NonPublic | BindingFlags.Instance);
             if (method != null) {
@@ -112,6 +114,41 @@ internal sealed class BreakableSync {
 
         var collider = sync.FakeAttack("Hero Spell", component.transform.position);
         method.Invoke(component, new object[] { collider });
+    }
+
+    /// <summary>
+    /// Rompe un <see cref="BreakableObject"/> con el hechizo simulado. Con un hechizo el juego no elige dirección y, si
+    /// el objeto tiene trozos que lanzar, fallaría antes de ocultarse; así que sus trozos se lanzan aparte, hacia arriba
+    /// y con la fuerza de un golpe de aguijón.
+    /// </summary>
+    private static void BreakObject(MonoBehaviour component, BreakableSync sync) {
+        var breakable = (BreakableObject) component;
+        var debris = breakable.flingDebris;
+        breakable.flingDebris = Array.Empty<GameObject>();
+        try {
+            TriggerBreak(component, sync);
+        } finally {
+            breakable.flingDebris = debris;
+        }
+
+        var direction = breakable.up;
+        if (debris == null || direction == null) {
+            return;
+        }
+
+        foreach (var piece in debris) {
+            if (piece == null) {
+                continue;
+            }
+
+            piece.SetActive(true);
+            var speed = UnityEngine.Random.Range(direction.minFlingSpeed, direction.maxFlingSpeed) * breakable.attackMagnitude;
+            var angle = UnityEngine.Random.Range(direction.minFlingAngle, direction.maxFlingAngle) * Mathf.Deg2Rad;
+            var body = piece.GetComponent<Rigidbody2D>();
+            if (body != null) {
+                body.AddForce(new Vector2(speed * Mathf.Cos(angle), speed * Mathf.Sin(angle)), ForceMode2D.Impulse);
+            }
+        }
     }
 
     public BreakableSync() {

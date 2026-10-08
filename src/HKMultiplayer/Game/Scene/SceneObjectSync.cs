@@ -73,10 +73,16 @@ internal sealed class SceneObjectSync {
     private readonly List<Tracked> _tracked = new();
     private readonly Dictionary<string, Tracked> _byId = new();
     private readonly MessageHandler _onActivated;
+    private readonly System.Action<SessionPlayer> _onPlayerScene;
+
+    // Lo que llegó de objetos que aquí aún no se han encontrado (se aplica al encontrarlos)
+    private readonly HashSet<string> _pendingActivated = new();
+    private readonly Dictionary<string, int> _pendingRocks = new();
     private GameSession _session;
     private string _scene = string.Empty;
     private ushort _sceneHash;
     private float _rescanAt;
+    private bool _sendSnapshot;
 
     static SceneObjectSync() {
         MessageRoutes.Register(ObjectActivated, Route.SameScene, reliable: true);
@@ -88,6 +94,7 @@ internal sealed class SceneObjectSync {
         _onActivated = OnActivated;
         _onRockHits = OnRockHits;
         _onStalactite = OnStalactite;
+        _onPlayerScene = OnPlayerScene;
     }
 
     public int TrackedCount => _tracked.Count;
@@ -97,15 +104,20 @@ internal sealed class SceneObjectSync {
         session.On(ObjectActivated, _onActivated);
         session.On(GeoRockHits, _onRockHits);
         session.On(StalactiteFall, _onStalactite);
+        session.PlayerSceneChanged += _onPlayerScene;
         _active = this;
         InstallHooks();
         Clear();
     }
 
     public void Detach() {
-        _session?.On(ObjectActivated, null);
-        _session?.On(GeoRockHits, null);
-        _session?.On(StalactiteFall, null);
+        if (_session != null) {
+            _session.On(ObjectActivated, null);
+            _session.On(GeoRockHits, null);
+            _session.On(StalactiteFall, null);
+            _session.PlayerSceneChanged -= _onPlayerScene;
+        }
+
         _session = null;
         if (_active == this) {
             _active = null;
@@ -120,6 +132,9 @@ internal sealed class SceneObjectSync {
         _rocks.Clear();
         _rocksById.Clear();
         _stalactites.Clear();
+        _pendingActivated.Clear();
+        _pendingRocks.Clear();
+        _sendSnapshot = false;
         _scene = string.Empty;
         _sceneHash = 0;
     }
@@ -187,12 +202,46 @@ internal sealed class SceneObjectSync {
             var lower = hits < rock.LastValue;
             rock.LastValue = hits;
             if (lower && _session.CanSend) {
-                var writer = _session.Begin(GeoRockHits);
-                writer.WriteUShort(_sceneHash);
-                writer.WriteString(rock.Id);
-                writer.WriteInt(hits);
-                _session.End();
+                SendRockHits(rock);
             }
+        }
+
+        if (_sendSnapshot && _session.CanSend) {
+            // Alguien entró en la sala: le llega lo que ya está activado y los golpes de cada piedra (su juego cargó la
+            // sala con lo guardado, que puede ser anterior)
+            _sendSnapshot = false;
+            var activatedCount = 0;
+            foreach (var item in _tracked) {
+                if (item.Fsm != null && item.Activated.Value) {
+                    var writer = _session.Begin(ObjectActivated);
+                    writer.WriteUShort(_sceneHash);
+                    writer.WriteString(item.Id);
+                    _session.End();
+                    activatedCount++;
+                }
+            }
+
+            foreach (var rock in _rocks) {
+                if (rock.Fsm != null) {
+                    SendRockHits(rock);
+                }
+            }
+
+            Log.Info($"Estado de {_scene} enviado a quien entra: {activatedCount} objetos activados, {_rocks.Count} piedras");
+        }
+    }
+
+    private void SendRockHits(Rock rock) {
+        var writer = _session.Begin(GeoRockHits);
+        writer.WriteUShort(_sceneHash);
+        writer.WriteString(rock.Id);
+        writer.WriteInt(rock.Hits.Value);
+        _session.End();
+    }
+
+    private void OnPlayerScene(SessionPlayer player) {
+        if (!player.IsLocal && player.Scene == _scene && _scene.Length > 0 && _session.IsLocalSceneOwner) {
+            _sendSnapshot = true;
         }
     }
 
@@ -223,6 +272,9 @@ internal sealed class SceneObjectSync {
             };
             _tracked.Add(tracked);
             _byId[id] = tracked;
+            if (_pendingActivated.Remove(id)) {
+                Activate(tracked);
+            }
         }
 
         foreach (var geoRock in Object.FindObjectsByType<GeoRock>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
@@ -240,6 +292,10 @@ internal sealed class SceneObjectSync {
             var rock = new Rock { Id = id, Fsm = fsm, Hits = hits, LastValue = hits.Value };
             _rocks.Add(rock);
             _rocksById[id] = rock;
+            if (_pendingRocks.TryGetValue(id, out var pendingHits)) {
+                _pendingRocks.Remove(id);
+                ApplyRockHits(rock, pendingHits);
+            }
         }
 
         foreach (var stalactite in Object.FindObjectsByType<StalactiteControl>(FindObjectsInactive.Include,
@@ -252,8 +308,19 @@ internal sealed class SceneObjectSync {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadString(256);
         var hits = reader.ReadInt();
-        if (sceneHash != _sceneHash || !_rocksById.TryGetValue(id, out var rock) || rock.Fsm == null ||
-            hits >= rock.Hits.Value) {
+        if (sceneHash != _sceneHash) {
+            return;
+        }
+
+        if (_rocksById.TryGetValue(id, out var rock)) {
+            ApplyRockHits(rock, hits);
+        } else if (!_pendingRocks.TryGetValue(id, out var pending) || hits < pending) {
+            _pendingRocks[id] = hits;
+        }
+    }
+
+    private static void ApplyRockHits(Rock rock, int hits) {
+        if (rock.Fsm == null || hits >= rock.Hits.Value) {
             return;
         }
 
@@ -341,7 +408,20 @@ internal sealed class SceneObjectSync {
     private void OnActivated(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadString(256);
-        if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var item) || item.Fsm == null) {
+        if (sceneHash != _sceneHash) {
+            return;
+        }
+
+        if (!_byId.TryGetValue(id, out var item)) {
+            // Aún no encontrado aquí (aparece un poco después de cargar la sala): se activa al encontrarlo
+            if (!CharacterData.IsIndividualItem(id) && _pendingActivated.Count < 512) {
+                _pendingActivated.Add(id);
+            }
+
+            return;
+        }
+
+        if (item.Fsm == null || item.Activated.Value) {
             return;
         }
 
@@ -367,17 +447,26 @@ internal sealed class SceneObjectSync {
     // Modo de prueba
     // =====================================================================================================
 
+    /// <summary>Estado de la FSM y si su objeto sigue en la sala (destruido o inactivo).</summary>
+    private static string Where(PlayMakerFSM fsm) {
+        if (fsm == null) {
+            return "destruido";
+        }
+
+        return fsm.gameObject.activeInHierarchy ? fsm.ActiveStateName : $"inactivo, {fsm.gameObject.scene.name}";
+    }
+
     /// <summary>Lista de objetos vigilados de la sala (id, activado, estado de activado).</summary>
     public IEnumerable<string> Describe() {
         foreach (var item in _tracked) {
-            yield return $"{item.Id}={(item.Activated.Value ? "sí" : "no")}→{item.ActivatedState ?? "?"} ({item.Fsm.ActiveStateName})";
+            yield return $"{item.Id}={(item.Activated.Value ? "sí" : "no")}→{item.ActivatedState ?? "?"} ({Where(item.Fsm)})";
         }
     }
 
     /// <summary>Piedras de geo y estalactitas de la sala.</summary>
     public IEnumerable<string> DescribeExtras() {
         foreach (var rock in _rocks) {
-            yield return $"piedra {rock.Id} golpes={rock.Hits.Value} ({rock.Fsm.ActiveStateName})";
+            yield return $"piedra {rock.Id} golpes={rock.Hits.Value} ({Where(rock.Fsm)})";
         }
 
         foreach (var pair in _stalactites) {

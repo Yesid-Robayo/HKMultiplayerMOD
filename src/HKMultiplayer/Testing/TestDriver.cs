@@ -159,6 +159,23 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "hitnearest":
+                // hitnearest <objeto>[|evento]: el objeto con ese nombre más cercano al caballero recibe el evento (por
+                // defecto NAIL HIT), como si lo golpeara de verdad
+                var hitArgs = string.Join(" ", args.Skip(1)).Split('|');
+                var hitEvent = hitArgs.Length > 1 ? hitArgs[1] : "NAIL HIT";
+                var nearest = FindObjectsByType<PlayMakerFSM>(FindObjectsSortMode.None)
+                    .Where(f => f.gameObject.name == hitArgs[0])
+                    .OrderBy(f => (f.transform.position - hero.transform.position).sqrMagnitude)
+                    .FirstOrDefault();
+                if (nearest == null) {
+                    Log.Warn($"{Tag}no existe '{hitArgs[0]}'");
+                } else {
+                    Log.Info($"{Tag}{hitEvent} a {nearest.gameObject.name}/{nearest.FsmName} en {nearest.ActiveStateName}");
+                    nearest.SendEvent(hitEvent);
+                }
+
+                break;
             case "findobj":
                 // findobj <texto>: objetos de la sala cuyo nombre lo contiene, con sus componentes
                 var needle = string.Join(" ", args.Skip(1));
@@ -267,6 +284,30 @@ internal sealed class TestDriver : MonoBehaviour {
                         var actions = string.Join(", ", state.Actions.Select(a => a.GetType().Name));
                         var transitions = string.Join(", ", state.Transitions.Select(tr => $"{tr.EventName}->{tr.ToState}"));
                         Log.Info($"{Tag}  [{state.Name}] {actions} | {transitions}");
+                    }
+                }
+
+                break;
+            case "fsmactions":
+                // fsmactions <objeto>|<estado>: parámetros de cada acción de ese estado (qué variable o FSM tocan)
+                var actionArgs = string.Join(" ", args.Skip(1)).Split('|');
+                var actionObject = GameObject.Find(actionArgs[0]);
+                if (actionObject == null) {
+                    Log.Warn($"{Tag}no existe '{actionArgs[0]}'");
+                    break;
+                }
+
+                foreach (var fsm in actionObject.GetComponents<PlayMakerFSM>()) {
+                    var state = fsm.FsmStates.FirstOrDefault(s => s.Name == actionArgs[1]);
+                    if (state == null) {
+                        continue;
+                    }
+
+                    foreach (var action in state.Actions) {
+                        var fields = action.GetType().GetFields(System.Reflection.BindingFlags.Public |
+                                                                System.Reflection.BindingFlags.Instance)
+                            .Select(f => $"{f.Name}={DescribeValue(f.GetValue(action))}");
+                        Log.Info($"{Tag}  {fsm.FsmName}/{state.Name} {action.GetType().Name}: {string.Join(" ", fields)}");
                     }
                 }
 
@@ -445,6 +486,30 @@ internal sealed class TestDriver : MonoBehaviour {
     }
 
     private static float ParseFloat(string value) => float.Parse(value, CultureInfo.InvariantCulture);
+
+    /// <summary>Valor legible de un parámetro de acción: las variables con nombre se muestran por su nombre.</summary>
+    private static string DescribeValue(object value) {
+        switch (value) {
+            case null:
+                return "null";
+            case HutongGames.PlayMaker.NamedVariable { UseVariable: true } named:
+                return $"{{{named.Name}}}";
+            case HutongGames.PlayMaker.NamedVariable named:
+                return named.ToString();
+            case HutongGames.PlayMaker.FsmEvent fsmEvent:
+                return $"'{fsmEvent.Name}'";
+            case HutongGames.PlayMaker.FsmOwnerDefault owner:
+                return owner.OwnerOption == HutongGames.PlayMaker.OwnerDefaultOption.UseOwner
+                    ? "owner"
+                    : DescribeValue(owner.GameObject);
+            case HutongGames.PlayMaker.FsmEventTarget target:
+                return $"{target.target}:{DescribeValue(target.gameObject)}:{DescribeValue(target.fsmName)}";
+            case Array array:
+                return "[" + string.Join(",", array.Cast<object>().Select(DescribeValue)) + "]";
+            default:
+                return value.ToString();
+        }
+    }
 
     // =====================================================================================================
     // Mediciones

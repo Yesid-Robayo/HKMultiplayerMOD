@@ -51,8 +51,28 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Sesión que terminó durante su propia actualización (se cierra al acabar).</summary>
     private GameSession _closing;
 
+    /// <summary>Sala de la última carga terminada.</summary>
+    private string _lastLoadedScene = string.Empty;
+
+    /// <summary>
+    /// Se volvió a cargar la misma sala (morir y reaparecer en ella, por ejemplo): sus objetos son otros aunque el nombre
+    /// sea el mismo. Durante un frame se juega "fuera de sala": así cada sincronización vuelve a buscar los objetos y el
+    /// servidor ve salir y entrar al jugador, de modo que el dueño de la sala le envía lo que ya pasó en ella.
+    /// </summary>
+    private bool _sceneReloaded;
+
     private void Awake() {
         Instance = this;
+        // Llamado cuando la sala nueva ya está lista y la anterior descargada
+        On.GameManager.OnNextLevelReady += (orig, self) => {
+            orig(self);
+            var scene = self.sceneName ?? string.Empty;
+            if (scene.Length > 0 && scene == _lastLoadedScene) {
+                _sceneReloaded = true;
+            }
+
+            _lastLoadedScene = scene;
+        };
         CoopSaves.Install();
         CoopSaves.ExitedWorld += () => {
             if (_leaveOnMenu) {
@@ -79,7 +99,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             return;
         }
 
-        var scene = CurrentScene();
+        var scene = _sceneReloaded ? string.Empty : CurrentScene();
+        _sceneReloaded = false;
         if (_announceCode && scene.Length > 0 && session.IsHost) {
             _announceCode = false;
             Notice.Show($"Partida abierta  ·  Código {FormatCode(session.RoomCode)}\n" +

@@ -50,7 +50,9 @@ internal sealed class SharedProgress {
     private static readonly HashSet<string> Excluded = new() {
         "version", "profileID", "awardAllAchievements", "playTime", "completionPercent", "completionPercentage",
         "showGeoUI", "showHealthUI", "lastJournalItem", "infiniteAirJump", "invinciTest", "environmentTypeDefault",
-        "isFirstGame", "playerStory"
+        "isFirstGame", "playerStory",
+        // Del momento de cada jugador: viajando en ciervo o tranvía, ante el aviso del mapa
+        "travelling", "atMapPrompt"
     };
 
     private static readonly FieldInfo[] BoolFields;
@@ -260,6 +262,7 @@ internal sealed class SharedProgress {
 
         _hookInstalled = true;
         On.SceneData.SaveMyState_PersistentBoolData += (orig, self, data) => {
+            _hooked?.KeepActivated(data);
             orig(self, data);
             _hooked?.OnSceneBool(data);
         };
@@ -268,9 +271,29 @@ internal sealed class SharedProgress {
             _hooked?.OnSceneInt(data);
         };
         On.SceneData.SaveMyState_GeoRockData += (orig, self, data) => {
+            _hooked?.KeepRockHits(data);
             orig(self, data);
             _hooked?.OnGeoRock(data);
         };
+    }
+
+    /// <summary>
+    /// El objeto se guarda tal como está en esta sala, que puede ser anterior a lo que hizo otro jugador (entró antes de
+    /// que llegara): lo ya activado en el mundo no vuelve atrás.
+    /// </summary>
+    private void KeepActivated(PersistentBoolData data) {
+        if (!_applying && _active && data != null && !data.activated && !data.semiPersistent &&
+            !CharacterData.IsIndividualItem(data.id) && _knownActivated.Contains(Key(data.sceneName, data.id))) {
+            data.activated = true;
+        }
+    }
+
+    /// <summary>Igual con las piedras de geo: no recuperan golpes que ya recibieron en otro PC.</summary>
+    private void KeepRockHits(GeoRockData data) {
+        if (!_applying && _active && data != null && _knownRocks.TryGetValue(Key(data.sceneName, data.id), out var known) &&
+            data.hitsLeft > known) {
+            data.hitsLeft = known;
+        }
     }
 
     private static bool _hookInstalled;

@@ -71,6 +71,8 @@ internal static class CharacterData {
             "equippedCharms", "fragileHealth_unbreakable", "fragileGreed_unbreakable", "fragileStrength_unbreakable",
             "royalCharmState", "gotShadeCharm", "gaveFragileHeart", "gaveFragileGreed", "gaveFragileStrength",
             "pooedFragileHeart", "pooedFragileGreed", "pooedFragileStrength",
+            // Flor delicada y llave del Menderbug: van con quien las lleva
+            "hasMenderKey", "xunFlowerBroken", "xunFlowerGiven", "xunFlowerBrokeTimes", "elderbugGaveFlower",
             // Recompensas de larvas y coliseo
             "grubRewards", "finalGrubRewardCollected", "seenColosseumTitle", "colosseumBronzeOpened",
             "colosseumBronzeCompleted", "colosseumSilverOpened", "colosseumSilverCompleted", "colosseumGoldOpened",
@@ -87,10 +89,14 @@ internal static class CharacterData {
         .Concat(Numbered("equippedCharm_", 1, 40))
         .Concat(Numbered("gotCharm_", 1, 40))
         .Concat(Numbered("newCharm_", 1, 40))
+        // Coste de cada amuleto (el Corazón del Vacío deja el del Alma Real a 0) y amuletos frágiles rotos al morir
+        .Concat(Numbered("charmCost_", 1, 40))
+        .Concat(Numbered("brokenCharm_", 23, 25))
         .Concat(Numbered("dreamReward", 1, 9))
         .Concat(Numbered("trinket", 1, 4)).Concat(Numbered("foundTrinket", 1, 4))
         .Concat(Numbered("noTrinket", 1, 4)).Concat(Numbered("soldTrinket", 1, 4))
-        .Concat(Numbered("slyShellFrag", 1, 4)).Concat(Numbered("slyVesselFrag", 1, 2))
+        .Concat(Numbered("slyShellFrag", 1, 4)).Concat(Numbered("slyVesselFrag", 1, 4))
+        .Concat(Numbered("slyNotch", 1, 2))
         .Concat(Numbered("salubraNotch", 1, 4))
         .ToArray();
 
