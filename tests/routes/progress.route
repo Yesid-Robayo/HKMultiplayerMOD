@@ -1,0 +1,86 @@
+title Progreso compartido: lo del mundo llega al otro, lo del personaje no
+# Solo campos que no cambian otras zonas (las rutas corren en cualquier orden sobre el mismo mundo):
+# nada de jefes derrotados ni de la infección de los Cruces.
+
+room Town left1
+
+# ---- Del mundo, desde el invitado ----
+# Habilidades de movimiento y hechizos
+shared guest hasDash true
+shared guest hasWalljump true
+shared guest hasDoubleJump true
+shared guest hasSuperDash true
+shared guest hasAcidArmour true
+shared guest hasShadowDash true
+shared guest hasKingsBrand true
+shared guest hasDreamNail true
+shared guest hasDreamGate true
+shared guest fireballLevel 1
+shared guest quakeLevel 1
+shared guest screamLevel 1
+# Estaciones de ciervo y puertas
+shared guest openedCrossroads true
+shared guest openedGreenpath true
+shared guest openedRuins1 true
+shared guest openedDeepnest true
+shared guest openedRestingGrounds true
+shared guest openedRoyalGardens true
+shared guest openedHiddenStation true
+shared guest openedCityGate true
+shared guest openedMageDoor_v2 true
+shared guest openedWaterwaysManhole true
+shared guest tollBenchCity true
+shared guest cityLift1 true
+shared guest mineLiftOpened true
+shared guest bathHouseOpened true
+# Personajes rescatados
+shared guest brettaRescued true
+shared guest slyRescued true
+shared guest zoteRescuedBuzzer true
+
+# ---- Del mundo, desde el host ----
+shared host openedTownBuilding true
+shared host jijiDoorUnlocked true
+shared host openedSlyShop true
+shared host visitedGreenpath true
+shared host visitedRuins true
+shared host dreamNailUpgraded true
+shared host killedBuzzer true
+shared host killsBuzzer 7
+shared host grubsCollected 5
+# Un número que sube dos veces seguidas: llega el último valor
+shared host fireballLevel 2
+
+# ---- Del personaje, desde el invitado ----
+private guest geo 1234
+private guest hasLantern true
+private guest nailDamage 13
+private guest maxHealthBase 7
+private guest charmSlots 5
+private guest gotCharm_1 true
+private guest simpleKeys 2
+private guest hasMap true
+private guest mapCrossroads true
+private guest hasTramPass true
+private guest dreamOrbs 300
+private guest hasCityKey true
+private guest MPReserveMax 33
+
+# ---- Del personaje, desde el host ----
+private host geo 4321
+private host nailDamage 17
+private host charmSlots 6
+private host gotCharm_2 true
+private host hasWhiteKey true
+
+# Al final los dos tienen el mismo mundo
+same-pd hasDash
+same-pd openedCityGate
+same-pd killsBuzzer
+same-pd fireballLevel
+
+# Cambiar de sala no deshace nada
+room Crossroads_01 left1
+same-pd hasSuperDash
+same-pd openedRoyalGardens
+same-pd grubsCollected

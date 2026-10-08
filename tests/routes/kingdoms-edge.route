@@ -1,0 +1,23 @@
+title Borde del Reino y Colmena
+room Deepnest_East_01 right1
+partner-moves
+breakables-sync
+rock-sync
+objects-sync
+enemies-sync
+scene-data-sync
+
+room Hive_01 left1
+breakables-sync
+objects-sync host
+enemies-sync
+scene-data-sync
+
+# Jefes
+room Deepnest_East_Hornet left1
+boss hornetOutskirtsDefeated
+scene-data-sync
+
+room Hive_05 left1
+boss killedHiveKnight host
+scene-data-sync

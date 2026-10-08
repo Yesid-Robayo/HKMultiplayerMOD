@@ -1,0 +1,25 @@
+title Cuenca Antigua y Abismo
+room Abyss_04 top1
+partner-moves
+breakables-sync
+rock-sync
+objects-sync
+enemies-sync
+scene-data-sync
+
+room Abyss_18 left1
+breakables-sync
+objects-sync host
+enemies-sync host
+scene-data-sync
+
+room Abyss_01 left1
+breakables-sync
+objects-sync
+enemies-sync
+scene-data-sync
+
+# Recipiente Roto
+room Abyss_19 left1
+boss killedInfectedKnight
+scene-data-sync

@@ -1,0 +1,25 @@
+title Pico de Cristal
+room Mines_01 left1
+partner-moves
+breakables-sync
+rock-sync
+objects-sync
+enemies-sync
+scene-data-sync
+
+room Mines_02 left1
+breakables-sync
+rock-sync
+objects-sync host
+enemies-sync host
+scene-data-sync
+
+# Jefes
+room Mines_18 left1
+boss defeatedMegaBeamMiner
+breakables-sync
+scene-data-sync
+
+room Mines_32 bot1
+boss defeatedMegaBeamMiner2 host
+scene-data-sync

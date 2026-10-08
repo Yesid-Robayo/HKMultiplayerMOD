@@ -1,0 +1,29 @@
+title Páramos Fúngicos
+room Fungus2_01 left1
+partner-moves
+breakables-sync
+objects-sync
+enemies-sync
+scene-data-sync
+
+room Fungus2_02 right1
+breakables-sync
+objects-sync host
+scene-data-sync
+
+room Fungus2_14 top1
+breakables-sync
+rock-sync
+enemies-sync
+scene-data-sync
+
+room Fungus2_18 right1
+breakables-sync
+objects-sync
+enemies-sync host
+scene-data-sync
+
+# Señores Mantis
+room Fungus2_15 left1
+boss defeatedMantisLords
+scene-data-sync

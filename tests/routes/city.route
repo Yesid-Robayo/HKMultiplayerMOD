@@ -1,0 +1,50 @@
+title Ciudad de Lágrimas
+room Ruins1_01 left1
+partner-moves
+breakables-sync
+objects-sync
+enemies-sync
+scene-data-sync
+
+room Ruins1_05 right1
+breakables-sync
+objects-sync host
+enemies-sync
+scene-data-sync
+
+# Ascensor de la ciudad (lo usa tools/demo-sync.sh)
+room Ruins1_23 left1
+breakables-sync 6
+objects-sync
+enemies-sync host
+scene-data-sync
+
+room Ruins1_27 left1
+breakables-sync
+enemies-sync
+scene-data-sync
+
+room Ruins2_10 right1
+breakables-sync
+objects-sync
+scene-data-sync
+
+room Ruins2_10b left1
+breakables-sync
+objects-sync host
+enemies-sync
+scene-data-sync
+
+# Jefes
+room Ruins1_24 right1
+boss mageLordDefeated
+breakables-sync
+scene-data-sync
+
+room Ruins2_03 top1
+boss killedBlackKnight host
+scene-data-sync
+
+room Ruins2_11 right1
+boss collectorDefeated
+scene-data-sync

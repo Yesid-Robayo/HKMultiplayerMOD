@@ -1,0 +1,33 @@
+title Sesión: verse, moverse, morir y volver a entrar
+# Lo básico de la partida: se ven en la misma sala, el avatar se mueve, morir no rompe la sesión y el invitado
+# conserva su personaje al salir y volver a entrar.
+
+room Town left1
+partner-moves
+
+# El geo es del personaje: lo que tenga el invitado debe seguir ahí al volver a entrar
+private guest geo 2468
+rejoin
+expect-log host Invitado se unió a la partida
+expect-log host Personaje de Invitado guardado en el mundo
+expect-log host Mundo enviado a Invitado .*personaje guardado
+expect-log guest Mundo del host recibido
+expect-pd guest geo 2468
+
+room Town left1
+partner-moves
+
+# Morir: los dos siguen en la partida y vuelven a juntarse
+die guest
+room Crossroads_01 left1
+partner-moves
+die host
+room Crossroads_01 left1
+partner-moves
+
+# Cambiar de sala muchas veces seguidas
+room Tutorial_01 right1
+room Town right1
+room Crossroads_01 top1
+room Town left1
+partner-moves

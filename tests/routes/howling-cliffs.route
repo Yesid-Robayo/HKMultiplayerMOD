@@ -1,0 +1,14 @@
+title Riscos Aulladores
+room Cliffs_01 right1
+partner-moves
+breakables-sync
+rock-sync
+objects-sync
+enemies-sync
+scene-data-sync
+
+room Cliffs_02 left1
+breakables-sync
+objects-sync host
+enemies-sync host
+scene-data-sync

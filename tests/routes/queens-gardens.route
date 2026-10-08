@@ -1,0 +1,18 @@
+title Jardines de la Reina
+room Fungus3_34 right1
+partner-moves
+breakables-sync
+objects-sync
+enemies-sync
+scene-data-sync
+
+room Fungus3_40 right1
+breakables-sync
+objects-sync host
+enemies-sync host
+scene-data-sync
+
+# Señor Traidor
+room Fungus3_23 right1
+boss killedTraitorLord
+scene-data-sync

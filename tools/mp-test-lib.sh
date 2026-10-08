@@ -8,7 +8,9 @@ HK_TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HK_LOCALLOW="/c/Users/$USERNAME/AppData/LocalLow/Team Cherry"
 HK_TEST_CODE="PRBA-TEST"
 
-_inst_dir() { echo "$HK_TEST_ROOT/test-instances/$(echo "$1" | tr 'A-Z' 'a-z')"; }
+# Carpeta de las copias (se puede cambiar, p. ej. desde un worktree: HK_INSTANCES_DIR=.../test-instances)
+HK_INSTANCES_DIR="${HK_INSTANCES_DIR:-$HK_TEST_ROOT/test-instances}"
+_inst_dir() { echo "$HK_INSTANCES_DIR/$(echo "$1" | tr 'A-Z' 'a-z')"; }
 _data_dir() { echo "$HK_LOCALLOW/HollowKnight$1"; }
 
 # Lanza la instancia en ventana, en modo de prueba. El ModLog anterior se borra antes: si no, wait_log podría
@@ -56,7 +58,13 @@ setup_session() {
   send B "status"; send C "status"; sleep 2
 }
 
-# Cierra todas las instancias de prueba (nunca toca el juego original)
+# Cierra las copias de prueba indicadas (por defecto B y C; nunca el juego original ni las copias de otro agente).
+# Uso: stop_all [letras...]   p. ej. stop_all F G
 stop_all() {
-  powershell.exe -NoProfile -Command "Get-Process hollow_knight -ErrorAction SilentlyContinue | Where-Object { \$_.Path -like '*HKMultiplayerMOD\test-instances\*' } | Stop-Process -Force" 2>/dev/null
+  local letters="${*:-B C}" letter exe
+  for letter in $letters; do
+    letter="$(echo "$letter" | tr 'A-Z' 'a-z')"
+    exe='*\test-instances\'"$letter"'\hollow_knight.exe'
+    powershell.exe -NoProfile -Command "Get-Process hollow_knight -ErrorAction SilentlyContinue | Where-Object { \$_.Path -like '$exe' } | Stop-Process -Force" 2>/dev/null
+  done
 }

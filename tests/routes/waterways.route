@@ -1,0 +1,22 @@
+title Canales Reales
+room Waterways_01 top1
+partner-moves
+breakables-sync
+objects-sync
+enemies-sync
+scene-data-sync
+
+room Waterways_02 top1
+breakables-sync
+objects-sync host
+enemies-sync host
+scene-data-sync
+
+# Jefes
+room Waterways_05 right1
+boss defeatedDungDefender
+scene-data-sync
+
+room Waterways_12 right1
+boss flukeMotherDefeated host
+scene-data-sync

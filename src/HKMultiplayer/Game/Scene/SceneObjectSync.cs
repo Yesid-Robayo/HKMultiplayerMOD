@@ -282,7 +282,8 @@ internal sealed class SceneObjectSync {
             return;
         }
 
-        if (FsmStateSync.CopiesChain(item.Fsm, out var busy, out _) && busy && now - item.VerifySince < ChainWaitSeconds) {
+        if (!InActivatedState(item) && FsmStateSync.CopiesChain(item.Fsm, out var busy, out _) && busy &&
+            now - item.VerifySince < ChainWaitSeconds) {
             return;
         }
 
@@ -510,6 +511,10 @@ internal sealed class SceneObjectSync {
         }
     }
 
+    /// <summary>Si la FSM ya está en el estado de "activado" (p. ej. llevada ahí por la cadena copiada).</summary>
+    private static bool InActivatedState(Tracked item) =>
+        item.ActivatedState != null && item.Fsm.ActiveStateName == item.ActivatedState;
+
     private static bool HasStarted(Tracked item) =>
         item.Persistent == null || StartedField == null || (bool) StartedField.GetValue(item.Persistent);
 
@@ -587,8 +592,9 @@ internal sealed class SceneObjectSync {
             return;
         }
 
-        // El directo lo lleva la copia de su cadena: si va en marcha, solo se comprueba al acabar
-        if (FsmStateSync.CopiesChain(item.Fsm, out var busy, out _) && busy) {
+        // El directo lo lleva la copia de su cadena: si va en marcha, solo se comprueba al acabar (si ya lo dejó en su
+        // estado de activado, solo falta la variable)
+        if (!InActivatedState(item) && FsmStateSync.CopiesChain(item.Fsm, out var busy, out _) && busy) {
             item.VerifySince = Time.unscaledTime;
             Log.Info($"{from.Name} activó {id}: su cadena va en marcha aquí, se comprueba al acabar");
             return;

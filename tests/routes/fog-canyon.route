@@ -1,0 +1,12 @@
+title Cañón de la Niebla
+room Fungus3_01 top1
+partner-moves
+breakables-sync
+objects-sync
+enemies-sync
+scene-data-sync
+
+# Uumuu
+room Fungus3_archive_02 top1
+boss defeatedMegaJelly
+scene-data-sync

@@ -1,0 +1,25 @@
+title Nido Profundo
+room Deepnest_01 left1
+partner-moves
+breakables-sync
+objects-sync
+enemies-sync
+scene-data-sync
+
+room Deepnest_02 left1
+breakables-sync
+rock-sync
+enemies-sync host
+scene-data-sync
+
+# Guarida de la Bestia
+room Deepnest_Spider_Town left1
+breakables-sync
+objects-sync host
+enemies-sync
+scene-data-sync
+
+# Nosk
+room Deepnest_32 left1
+boss killedMimicSpider
+scene-data-sync
