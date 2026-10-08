@@ -390,8 +390,12 @@ internal sealed class SceneObjectSync {
     public bool TestHitRock(string idPrefix) {
         foreach (var rock in _rocks) {
             if (rock.Id.StartsWith(idPrefix) && rock.Hits.Value > 0) {
-                // Lo mismo que hace su FSM en cada golpe: baja el contador
+                // Lo mismo que hace su FSM en cada golpe: baja el contador; con el último, se rompe como en el juego
                 rock.Hits.Value--;
+                if (rock.Hits.Value <= 0) {
+                    rock.Fsm.SetState("Pause Frame");
+                }
+
                 return true;
             }
         }
@@ -399,17 +403,30 @@ internal sealed class SceneObjectSync {
         return false;
     }
 
-    /// <summary>Suelta la primera estalactita sin caer, como si el jugador pasara debajo.</summary>
+    /// <summary>Suelta la estalactita sin caer más cercana al jugador, como si pasara debajo.</summary>
     public bool TestDropStalactite() {
+        var hero = HeroController.instance;
+        StalactiteControl nearest = null;
+        var best = float.MaxValue;
         foreach (var stalactite in _stalactites.Values) {
-            if (stalactite != null && stalactite.gameObject.activeInHierarchy && FallMethod != null &&
-                !(FallenField != null && (bool) FallenField.GetValue(stalactite))) {
-                stalactite.StartCoroutine((System.Collections.IEnumerator) FallMethod.Invoke(stalactite, new object[] { 0.25f }));
-                return true;
+            if (stalactite == null || !stalactite.gameObject.activeInHierarchy || FallMethod == null ||
+                FallenField != null && (bool) FallenField.GetValue(stalactite)) {
+                continue;
+            }
+
+            var distance = hero != null ? Vector2.Distance(stalactite.transform.position, hero.transform.position) : 0f;
+            if (distance < best) {
+                best = distance;
+                nearest = stalactite;
             }
         }
 
-        return false;
+        if (nearest == null) {
+            return false;
+        }
+
+        nearest.StartCoroutine((System.Collections.IEnumerator) FallMethod.Invoke(nearest, new object[] { 0.25f }));
+        return true;
     }
 
     /// <summary>Activa un objeto como si lo hubiera hecho este jugador (se avisa a la sala).</summary>

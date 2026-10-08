@@ -195,6 +195,10 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "say":
+                // say <segundos> <texto>: cartel grande arriba (para la demostración); | separa líneas
+                HKMultiplayer.UI.Banner.Show(string.Join(" ", args.Skip(2)).Replace('|', '\n'), ParseFloat(args[1]));
+                break;
             case "breakables":
                 Log.Info($"{Tag}rompibles: {runner.Breakables.Count} en la sala, {runner.Breakables.BrokenCount()} rotos");
                 break;

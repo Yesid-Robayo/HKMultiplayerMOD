@@ -26,6 +26,8 @@ internal sealed class FsmStateSync {
     public const MessageType Pose = (MessageType) 54;
     public const MessageType Positions = (MessageType) 55;
     public const MessageType Claim = (MessageType) 56;
+    public const MessageType Aboard = (MessageType) 57;
+    public const MessageType Order = (MessageType) 58;
 
     /// <summary>Cada cuánto envía el controlador la posición y variables de un objeto quieto.</summary>
     private const float PoseInterval = 1f;
@@ -61,6 +63,11 @@ internal sealed class FsmStateSync {
         public float LastSentX = float.NaN;
         public float LastSentY = float.NaN;
         public uint LastSentTick;
+
+        // Quién va subido (ascensores): la orden de moverlo la ejecuta alguien que vaya encima
+        public Collider2D Platform;
+        public bool LocalAboard;
+        public readonly List<ushort> RemoteRiders = new();
     }
 
     private readonly List<Tracked> _tracked = new();
@@ -71,6 +78,8 @@ internal sealed class FsmStateSync {
     private readonly MessageHandler _onPose;
     private readonly MessageHandler _onPositions;
     private readonly MessageHandler _onClaim;
+    private readonly MessageHandler _onAboard;
+    private readonly MessageHandler _onOrderMessage;
     private uint _lastPositionTick;
     private PlayerSnapshot _incoming;
     private GameSession _session;
@@ -88,6 +97,8 @@ internal sealed class FsmStateSync {
         MessageRoutes.Register(Transition, Route.SameScene, reliable: true);
         MessageRoutes.Register(Pose, Route.SameScene, reliable: true);
         MessageRoutes.Register(Claim, Route.SameScene, reliable: true);
+        MessageRoutes.Register(Aboard, Route.SameScene, reliable: true);
+        MessageRoutes.Register(Order, Route.SameScene, reliable: true);
     }
 
     public FsmStateSync() {
@@ -96,6 +107,8 @@ internal sealed class FsmStateSync {
         _onPose = OnPose;
         _onPositions = OnPositions;
         _onClaim = OnClaim;
+        _onAboard = OnAboard;
+        _onOrderMessage = OnOrderMessage;
     }
 
     public void Attach(GameSession session) {
@@ -105,6 +118,8 @@ internal sealed class FsmStateSync {
         session.On(Pose, _onPose);
         session.On(Positions, _onPositions);
         session.On(Claim, _onClaim);
+        session.On(Aboard, _onAboard);
+        session.On(Order, _onOrderMessage);
         _active = this;
         InstallHooks();
         Clear();
@@ -117,6 +132,8 @@ internal sealed class FsmStateSync {
             _session.On(Pose, null);
             _session.On(Positions, null);
             _session.On(Claim, null);
+            _session.On(Aboard, null);
+            _session.On(Order, null);
         }
 
         _session = null;
@@ -251,6 +268,7 @@ internal sealed class FsmStateSync {
                 continue;
             }
 
+            UpdateAboard(item);
             if (IsController(item)) {
                 anyControlled = true;
                 if (now - item.LastStateTime >= StillSeconds && now >= item.NextPose && _session.CanSend) {
@@ -357,7 +375,7 @@ internal sealed class FsmStateSync {
 
             var item = new Tracked {
                 Id = id, Fsm = fsm, LastState = fsm.ActiveStateName, CopyTransitions = !target,
-                LastStateTime = Time.unscaledTime
+                LastStateTime = Time.unscaledTime, Platform = target ? FindPlatform(fsm) : null
             };
             item.RestState = item.LastState;
             _tracked.Add(item);
@@ -452,8 +470,108 @@ internal sealed class FsmStateSync {
             return false;
         }
 
+        // El caballero de este jugador no va subido pero el de otro sí: lo mueve el PC de quien va encima (aquí el
+        // ascensor iría vacío y saltaría directamente al piso, dejándolo atrás)
+        if (!item.LocalAboard && item.RemoteRiders.Count > 0 && _session.CanSend) {
+            var writer = _session.Begin(Order);
+            writer.WriteUShort(_sceneHash);
+            writer.WriteUInt(item.Id);
+            writer.WriteUShort(item.RemoteRiders[0]);
+            writer.WriteString(fsmEvent.Name);
+            _session.End();
+            return false;
+        }
+
         TakeControl(item);
         return true;
+    }
+
+    private void OnOrderMessage(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        var target = reader.ReadUShort();
+        var name = reader.ReadString(128);
+        if (target != _session.LocalId || sceneHash != _sceneHash || !_byId.TryGetValue(id, out var item) ||
+            item.Fsm == null) {
+            return;
+        }
+
+        // La ejecuta este PC, con su caballero encima, y pasa a controlarlo
+        TakeControl(item);
+        _applyingRemote = true;
+        try {
+            item.Fsm.SendEvent(name);
+        } finally {
+            _applyingRemote = false;
+        }
+    }
+
+    /// <summary>Colisionador sólido más ancho del ascensor (su plataforma).</summary>
+    private static Collider2D FindPlatform(PlayMakerFSM fsm) {
+        Collider2D best = null;
+        foreach (var collider in fsm.GetComponentsInChildren<Collider2D>(true)) {
+            if (!collider.isTrigger && (best == null || collider.bounds.size.x > best.bounds.size.x)) {
+                best = collider;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>Si el caballero local va encima de la plataforma; cuando cambia, se avisa a los demás.</summary>
+    private void UpdateAboard(Tracked item) {
+        var hero = HeroController.instance;
+        var aboard = false;
+        if (hero != null && item.Platform != null) {
+            var bounds = item.Platform.bounds;
+            var position = hero.transform.position;
+            aboard = position.x >= bounds.min.x - 0.3f && position.x <= bounds.max.x + 0.3f &&
+                     position.y >= bounds.max.y - 1f && position.y <= bounds.max.y + 3.5f;
+        }
+
+        // Los que se fueron de la sala ya no van subidos
+        for (var i = item.RemoteRiders.Count - 1; i >= 0; i--) {
+            if (!InScene(item.RemoteRiders[i])) {
+                item.RemoteRiders.RemoveAt(i);
+            }
+        }
+
+        if (aboard == item.LocalAboard) {
+            return;
+        }
+
+        item.LocalAboard = aboard;
+        if (_session.CanSend) {
+            var writer = _session.Begin(Aboard);
+            writer.WriteUShort(_sceneHash);
+            writer.WriteUInt(item.Id);
+            writer.WriteBool(aboard);
+            _session.End();
+        }
+    }
+
+    private bool InScene(ushort playerId) {
+        foreach (var player in _session.Players) {
+            if (player.Id == playerId) {
+                return player.Scene == _scene;
+            }
+        }
+
+        return false;
+    }
+
+    private void OnAboard(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        var aboard = reader.ReadBool();
+        if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var item)) {
+            return;
+        }
+
+        item.RemoteRiders.Remove(from.Id);
+        if (aboard) {
+            item.RemoteRiders.Add(from.Id);
+        }
     }
 
     /// <summary>Cada estado del objeto que controla este PC, en el momento en que ocurre, a los demás.</summary>
@@ -611,7 +729,10 @@ internal sealed class FsmStateSync {
         foreach (var item in _tracked) {
             if (item.Fsm != null) {
                 var p = item.Fsm.transform.position;
-                var control = item.CopyTransitions ? string.Empty : $" control={(IsController(item) ? "aquí" : item.Controller.ToString())}";
+                var control = item.CopyTransitions
+                    ? string.Empty
+                    : $" control={(IsController(item) ? "aquí" : item.Controller.ToString())} subido={(item.LocalAboard ? "sí" : "no")}" +
+                      $" otros=[{string.Join(",", item.RemoteRiders)}]";
                 yield return $"{item.Fsm.gameObject.name}/{item.Fsm.FsmName} id={item.Id:x8} estado={item.Fsm.ActiveStateName} " +
                              $"pos=({p.x:0.00},{p.y:0.00}){control}";
             }
