@@ -104,13 +104,19 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     quien entra en la sala): no dependen de haber visto el efecto en directo.
   - Ascensores y rejas: los mueve quien los usa (su controlador). Las copias de los demás no avanzan solas: solo pasan
     por los estados que llegan, una vez cada uno, aplicados dentro de la ejecución de su FSM. Si no, los estados con
-    efectos fuera del objeto (el ascensor voltea la dirección de su palanca al llegar) se harían dos veces.
+    efectos fuera del objeto (el ascensor voltea la dirección de su palanca al llegar) se harían dos veces. Solo
+    "usarlo" da el control: un aviso que le cambia el estado (no los avisos a todos que no le hacen nada, como el título
+    de la zona). Si el controlador se va de la sala (p. ej. muere), quien se queda pasa a serlo; quien entra o vuelve
+    espera a oír al controlador antes de tomarlo, y si su objeto está en otro estado se pone al día (una reja cerrada
+    allí se cierra aquí con su animación y su colisión).
   - Rejas de batalla y de jefes: si una se cierra con un jugador dentro, el otro puede entrar a ayudar pero no salir
     hasta que se abra. Las que ya están cerradas al cargar la sala no se cruzan.
   - Controladores de batalla que no son enemigos (Señores Mantis: los tronos, `Mantis Battle`, `Battle Main` y
-    `Battle Sub`, que coordina a la pareja): igual que ascensores y rejas, los lleva un PC y los demás siguen sus
-    estados. Quien acepta el desafío pasa a controlarlos, y el combate (jaula, suelo con pinchos, qué señores salen,
-    final) avanza igual en todos. En las copias no se hacen las llamadas al caballero (devolverle el control,
+    `Battle Sub`, que coordina a la pareja; Coliseo de los Tontos: su gestor, sus oleadas y sus jaulas, algunas con
+    esperas al azar): igual que ascensores y rejas, los lleva un PC y los demás siguen sus estados. Quien acepta el
+    desafío pasa a controlarlos, y el combate (jaula, suelo con pinchos, qué señores salen, oleadas, final) avanza
+    igual en todos. Lo que mueven con avisos a todos (jaula, suelos, puertas) va igual que ellos, y quien entra a mitad
+    del combate se pone al día con su estado. En las copias no se hacen las llamadas al caballero (devolverle el control,
     girarlo), y el cartel para desafiar se apaga en los demás PCs (si no, se podría desafiar otra vez a mitad del
     combate y ese caballero se quedaría sin control). Las órdenes de esos controladores a un enemigo no se reenvían:
     ya las da su copia en el PC que lo mueve.
@@ -121,6 +127,10 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Lo que crean los enemigos en combate (proyectiles, crías, invocaciones) se crea en los demás con la misma acción de
     su marioneta (mismo prefab). Si hace daño o tiene vida, es una copia que sigue al original hasta que desaparece; los
     efectos solo visuales del pool corren solos. Lo que crean al prepararse (cadáveres, piezas propias) no se replica.
+  - Enemigos creados por objetos de la sala que no son enemigos (las jaulas del Coliseo crean el suyo al prepararse):
+    cada PC los crea igual. Si se crean después de repasar la sala, se siguen desde ese momento con un identificador
+    sacado de quién los creó; los clonados en la raíz de la sala (mismo nombre y mismo puesto entre hermanos) se
+    distinguen por su sitio al cargarla. No quedan muertos para siempre (el Coliseo se repite).
   - Piezas que se mueven aparte (hijos con animación o que dañan, como la aguja de Hornet): posición, profundidad,
     giro, escala, si están activas y si se dibujan, si su caja de daño está encendida, cuánto dañan y animación vienen
     del PC que mueve el enemigo. También las de fuera del enemigo que apuntan las variables de sus FSM (el rayo del
@@ -159,7 +169,9 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
   pantalla de las dos a la vez (`shot`) para comparar lo que se ve; cada daño que recibe el caballero se registra con
   lo que lo hizo. La memoria creada en combate (≈300 KB/s) es la del juego: es la misma con la partida cerrada.
   `netsim <ms> <variación ms> <pérdida %>` simula una mala conexión en la próxima partida (`LaggyTransport`, solo en
-  modo de prueba); probado con 80 ± 20 ms y 5 % de pérdida.
+  modo de prueba); probado con 80 ± 20 ms y 5 % de pérdida. `arenas` lista los objetos de la sala que dan órdenes a
+  enemigos o los encienden (para ver qué combates necesitan un controlador compartido), `healthlist` todos los objetos
+  con vida y su huella, y `die` mata al caballero; cada muerte de enemigo se registra con quién la provocó.
 
 ## Hitos
 
@@ -174,10 +186,10 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
 
 ## Pendientes
 
-- **M3**: probar el resto de jefes (fases, plataformas, cinemáticas propias). Otros combates llevados por
-  controladores de la sala sin vida (como los Mantis) hay que añadirlos a `FsmStateSync.Targets` uno a uno. Lo que
-  crea un objeto que no es enemigo aún no se replica. Quien entra a mitad de un combate de Mantis no recibe en qué
-  estado va.
+- **M3**: revisadas con `arenas` las salas de los jefes del juego base (sin sueños ni Panteones): solo los Mantis y el
+  Coliseo necesitaban controlador compartido; Señor Traidor, Caballero de la Colmena, Nosk y los Caballeros Vigía usan
+  un `Battle Scene` que ya se copia por cadena. Sin probar en vivo: jefes de sueño, Grimm, Uumuu y Coleccionista. En
+  el Coliseo, una acción de sonido del minero aún no suena en la copia.
 - **M4**: efectos del otro jugador (tajos, hechizos, dash, curación). `PlayerEvent` está reservado y sin usar.
 - **M5**: revivir, sombras compartidas, barras de vida y HUD del compañero, cinemáticas compartidas, skins y ajustes
   del host en el panel (la 0.7 los tenía en `HollowKnightCoop/src/HollowKnightCoop/Coop`).

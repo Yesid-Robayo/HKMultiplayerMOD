@@ -77,6 +77,9 @@ internal sealed class EnemySync {
 
     private const int MaxParts = 24;
 
+    /// <summary>A partir de aquí, los estados de los enemigos siguientes van en otro mensaje.</summary>
+    private const int StatesMessageLimit = 900;
+
     /// <summary>Piezas de fuera del enemigo (su rayo, su impacto...) que como mucho se siguen.</summary>
     private const int MaxExternalParts = 32;
 
@@ -174,6 +177,9 @@ internal sealed class EnemySync {
         public bool Spawned;
 
         public bool Pooled;
+
+        /// <summary>Creado durante la partida por un objeto de la sala (las jaulas del Coliseo): no queda muerto para siempre.</summary>
+        public bool Created;
 
         /// <summary>Quién lo mueve (0: el dueño de la sala) y quién lo movía antes del último cambio.</summary>
         public ushort Controller;
@@ -621,7 +627,7 @@ internal sealed class EnemySync {
             if (dead) {
                 enemy.ReportedDead = true;
                 _healthOut.Add((enemy.Id, HealthKind.Died, 0));
-                if (!enemy.Spawned) {
+                if (!enemy.Spawned && !enemy.Created) {
                     _killedOut.Add(enemy.Id);
                 }
             } else if (enemy.Health.hp != enemy.LastHp || snapshot) {
@@ -677,7 +683,8 @@ internal sealed class EnemySync {
 
             enemy.LastSent = state;
             enemy.LastSentTick = tick;
-            if (writer == null || count == MaxEntriesPerMessage) {
+            // Cada enemigo ocupa 24 bytes: en salas con muchos (las jaulas del Coliseo) van en varios mensajes
+            if (writer == null || count == MaxEntriesPerMessage || writer.Position > StatesMessageLimit) {
                 if (writer != null) {
                     FinishStates(writer, countPosition, count);
                 }
@@ -949,34 +956,95 @@ internal sealed class EnemySync {
                         continue;
                     }
 
-                    var id = ScenePaths.Hash(health.transform);
+                    // Los clonados en la raíz de la sala (los de las jaulas del Coliseo) se llaman igual y Unity les da a
+                    // todos el mismo puesto entre hermanos: se distinguen por dónde están al cargarla, igual en todos
+                    var id = health.transform.parent == null && health.name.EndsWith("(Clone)", StringComparison.Ordinal)
+                        ? PlacedId(health.transform)
+                        : ScenePaths.Hash(health.transform);
                     if (_byId.ContainsKey(id)) {
-                        continue;
+                        id = PlacedId(health.transform) ^ 0x5bd1e995u;
+                        if (_byId.ContainsKey(id)) {
+                            continue;
+                        }
                     }
 
-                    var enemy = new Enemy {
-                        Id = id,
-                        Health = health,
-                        Root = health.gameObject,
-                        Transform = health.transform,
-                        Animator = health.GetComponent<tk2dSpriteAnimator>(),
-                        Body = health.GetComponent<Rigidbody2D>(),
-                        Renderer = health.GetComponent<Renderer>(),
-                        Collider = health.GetComponent<Collider2D>(),
-                        Damage = health.GetComponent<DamageHero>(),
-                        LastHp = health.hp
-                    };
-                    enemy.ScannedAt = Time.unscaledTime;
-                    _enemies.Add(enemy);
-                    _byId[id] = enemy;
-                    _byHealth[health] = enemy;
-                    RegisterFsms(enemy);
-                    if (_pendingHealth.TryGetValue(id, out var pending)) {
-                        ApplyHealth(enemy, pending.Kind, pending.Hp);
-                    }
+                    AddEnemy(health, id);
                 }
             }
         }
+    }
+
+    /// <summary>Huella de un objeto por su sala, su nombre y su posición (redondeada a una décima).</summary>
+    private static uint PlacedId(Transform transform) {
+        var hash = 2166136261u;
+        foreach (var c in transform.gameObject.scene.name) {
+            hash = (hash ^ c) * 16777619u;
+        }
+
+        foreach (var c in transform.name) {
+            hash = (hash ^ c) * 16777619u;
+        }
+
+        var position = transform.position;
+        hash = (hash ^ (uint) Mathf.RoundToInt(position.x * 10f)) * 16777619u;
+        hash = (hash ^ (uint) Mathf.RoundToInt(position.y * 10f)) * 16777619u;
+        return hash & ~SpawnedIdFlag;
+    }
+
+    private Enemy AddEnemy(HealthManager health, uint id) {
+        var enemy = new Enemy {
+            Id = id,
+            Health = health,
+            Root = health.gameObject,
+            Transform = health.transform,
+            Animator = health.GetComponent<tk2dSpriteAnimator>(),
+            Body = health.GetComponent<Rigidbody2D>(),
+            Renderer = health.GetComponent<Renderer>(),
+            Collider = health.GetComponent<Collider2D>(),
+            Damage = health.GetComponent<DamageHero>(),
+            LastHp = health.hp
+        };
+        enemy.ScannedAt = Time.unscaledTime;
+        _enemies.Add(enemy);
+        _byId[id] = enemy;
+        _byHealth[health] = enemy;
+        RegisterFsms(enemy);
+        if (_pendingHealth.TryGetValue(id, out var pending)) {
+            ApplyHealth(enemy, pending.Kind, pending.Hp);
+        }
+
+        return enemy;
+    }
+
+    /// <summary>
+    /// Enemigo creado durante la partida por un objeto de la sala que no es enemigo (cada jaula del Coliseo crea el suyo
+    /// cuando se activa su oleada, después de repasar la sala). Cada PC lo crea igual, así que se sigue como uno de la
+    /// sala; su identificador sale de quién lo creó (su sitio en la sala, la FSM, el estado y la acción), que es el mismo
+    /// en todos los PCs aunque el orden de los objetos de la sala no lo sea. No se apunta como muerto para siempre.
+    /// </summary>
+    private void OnSceneCreated(HutongGames.PlayMaker.FsmStateAction action, GameObject created) {
+        if (_session == null || _scene.Length == 0 || created == null || _spawningCopy || _enemyFsms.ContainsKey(action.Fsm)) {
+            return;
+        }
+
+        var health = created.GetComponent<HealthManager>();
+        var owner = action.Fsm.GameObject;
+        if (health == null || _byHealth.ContainsKey(health) || owner == null || owner.scene.buildIndex < 0 ||
+            IsEnemyObject(owner.transform)) {
+            return;
+        }
+
+        var stateIndex = Array.IndexOf(action.Fsm.States, action.State);
+        var actionIndex = action.State != null ? Array.IndexOf(action.State.Actions, action) : -1;
+        var id = ScenePaths.Hash(owner.transform);
+        id = (id ^ (uint) action.Fsm.Name.GetHashCode()) * 16777619u;
+        id = (id ^ (uint) (stateIndex << 8 | actionIndex & 0xFF)) * 16777619u;
+        id &= ~SpawnedIdFlag;
+        if (_byId.ContainsKey(id)) {
+            return;
+        }
+
+        AddEnemy(health, id).Created = true;
     }
 
     /// <summary>Apunta las FSM del enemigo: de quién son y qué estados suenan (solo al entrar o al crearse).</summary>
@@ -1108,6 +1176,21 @@ internal sealed class EnemySync {
             writer.WriteFloat(vector.z);
         }
 
+        // Y a qué objetos apuntan (él mismo, el caballero...): una marioneta que se activó ya parada (las de las jaulas
+        // del Coliseo) nunca preparó su lógica y los tiene vacíos, y sus sonidos fallarían
+        var objects = variables.GameObjectVariables;
+        var objectCount = Math.Min(objects.Length, MaxEffectVectors);
+        writer.WriteByte((byte) objectCount);
+        for (var i = 0; i < objectCount; i++) {
+            var reference = Reference(sound.Enemy, objects[i].Value);
+            // Los de la sala no: buscarlos recorre la sala, y esto pasa en cada efecto
+            var kind = reference.Kind == ObjectKind.Scene ? ObjectKind.None : reference.Kind;
+            writer.WriteByte((byte) kind);
+            if (kind == ObjectKind.Own) {
+                writer.WriteUInt(reference.Path);
+            }
+        }
+
         _session.End();
     }
 
@@ -1144,6 +1227,19 @@ internal sealed class EnemySync {
             var value = new Vector3(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
             if (variables != null && i < variables.Vector3Variables.Length) {
                 variables.Vector3Variables[i].Value = value;
+            }
+        }
+
+        var objectCount = reader.ReadByte();
+        for (var i = 0; i < objectCount; i++) {
+            var reference = new ObjectRef { Kind = (ObjectKind) reader.ReadByte() };
+            if (reference.Kind == ObjectKind.Own) {
+                reference.Path = reader.ReadUInt();
+            }
+
+            if (variables != null && i < variables.GameObjectVariables.Length && reference.Kind != ObjectKind.None &&
+                variables.GameObjectVariables[i].Value == null) {
+                variables.GameObjectVariables[i].Value = Resolve(enemy, reference);
             }
         }
 
@@ -1904,7 +2000,7 @@ internal sealed class EnemySync {
             for (var v = 0; v < variables.Length && v < 0xFFFF; v++) {
                 var target = variables[v].Value;
                 if (target == null || !SameRoom(target.scene, enemy.Root.scene) || target.transform.IsChildOf(enemy.Transform) ||
-                    target.GetComponentInParent<HealthManager>() != null ||
+                    IsEnemyObject(target.transform) ||
                     hero != null && target.transform.IsChildOf(hero.transform)) {
                     continue;
                 }
@@ -1980,9 +2076,11 @@ internal sealed class EnemySync {
         foreach (var fsm in PlayMakerFSM.FsmList) {
             var owner = fsm != null ? fsm.gameObject : null;
             if (owner == null || !SameRoom(owner.scene, enemy.Root.scene) || _enemyFsms.ContainsKey(fsm.Fsm) ||
-                owner.transform.IsChildOf(enemy.Transform) || owner.GetComponentInParent<HealthManager>() != null ||
+                owner.transform.IsChildOf(enemy.Transform) || IsEnemyObject(owner.transform) ||
                 hero != null && owner.transform.IsChildOf(hero.transform) ||
-                owner.GetComponentInChildren<DamageHero>(true) == null || !Listens(fsm, events)) {
+                owner.GetComponentInChildren<DamageHero>(true) == null || !Listens(fsm, events) ||
+                // No los controladores de combate (el del Coliseo contiene enemigos; ya los lleva un PC para todos)
+                owner.GetComponentsInChildren<HealthManager>(true).Length > 0 || FsmStateSync.IsSharedController(fsm.Fsm)) {
                 continue;
             }
 
@@ -2072,6 +2170,20 @@ internal sealed class EnemySync {
 
         return enemyScene.name.StartsWith(scene.name + "_", StringComparison.Ordinal) ||
                scene.name.StartsWith(enemyScene.name + "_", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Si el objeto es un enemigo o cuelga de uno. También desactivado: GetComponentInParent no mira los objetos
+    /// inactivos (los Señores Mantis están apagados hasta que empieza su combate).
+    /// </summary>
+    internal static bool IsEnemyObject(Transform transform) {
+        for (var t = transform; t != null; t = t.parent) {
+            if (t.GetComponent<HealthManager>() != null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Si la FSM cambia de estado con alguno de esos avisos.</summary>
@@ -2832,6 +2944,7 @@ internal sealed class EnemySync {
         On.HutongGames.PlayMaker.Actions.CreateObject.OnEnter += (orig, self) => {
             orig(self);
             _active?.OnSpawned(self, self.storeObject?.Value, pooled: false);
+            _active?.OnSceneCreated(self, self.storeObject?.Value);
         };
 
         // Los avisos de fuera a la lógica de una marioneta (parada aquí) van al PC que la mueve

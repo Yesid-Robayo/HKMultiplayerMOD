@@ -137,6 +137,9 @@ public sealed class NetConnection : ReliableReceiver.ISink {
         return _messageWriter;
     }
 
+    /// <summary>Descarta el mensaje empezado sin enviarlo (quien lo escribía falló a medias).</summary>
+    public void CancelMessage() => _writing = 0;
+
     /// <summary>Termina el mensaje empezado con <see cref="BeginReliable"/> o <see cref="BeginUnreliable"/>.</summary>
     public void EndMessage() {
         var kind = _writing;

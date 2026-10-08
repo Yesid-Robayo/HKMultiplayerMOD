@@ -39,6 +39,9 @@ internal sealed class FsmStateSync {
     /// <summary>Cada cuánto envía el controlador la posición y variables de un objeto quieto.</summary>
     private const float PoseInterval = 1f;
 
+    /// <summary>Al entrar en la sala, lo que se espera a oír al controlador de un objeto antes de tomar su control.</summary>
+    private const float ClaimGrace = 2.5f;
+
     /// <summary>Tiempo en un estado para considerar el objeto quieto (o de reposo, para las palancas).</summary>
     private const float StillSeconds = 1f;
 
@@ -63,8 +66,9 @@ internal sealed class FsmStateSync {
     /// <summary>
     /// Objetos con controlador: principio del nombre del objeto y nombre de su FSM. Además de ascensores y rejas, los
     /// controladores de batalla que no son enemigos (los tronos y la batalla de los Señores Mantis: quién acepta el
-    /// desafío, cuándo baja la jaula, qué señores salen y la IA que coordina a la pareja). Así el combate empieza y
-    /// avanza igual en todos, y la IA de la pareja la lleva un solo PC.
+    /// desafío, cuándo baja la jaula, qué señores salen y la IA que coordina a la pareja; el Coliseo de los Tontos: su
+    /// entrada, sus oleadas y las jaulas que sueltan enemigos, algunas con esperas al azar). Así el combate empieza y
+    /// avanza igual en todos, y lo que decide al azar lo decide un solo PC.
     /// </summary>
     private static readonly (string Name, string Fsm)[] Targets = {
         ("Ruins Lift", LiftFsm),
@@ -73,7 +77,11 @@ internal sealed class FsmStateSync {
         ("Mantis Lord Throne", "Mantis Throne Sub"),
         ("Mantis Battle", "Battle Control"),
         ("Battle Main", "Start"),
-        ("Battle Sub", "Start")
+        ("Battle Sub", "Start"),
+        ("Colosseum Manager", "Manager"),
+        ("Colosseum Manager", "Battle Control"),
+        ("Colosseum Cage", "Spawn"),
+        ("Colosseum Cage Zote", "Control")
     };
 
     private sealed class Tracked {
@@ -124,6 +132,9 @@ internal sealed class FsmStateSync {
 
         // Se vio abierta (ya iniciada): solo entonces su cierre es de una batalla. Las que empiezan cerradas lo siguen
         public bool GateWasOpen;
+
+        // Controlador de batalla (o lo que mueve con sus avisos): quien entra tarde se pone en su estado
+        public bool Battle;
     }
 
     private readonly List<Tracked> _tracked = new();
@@ -144,6 +155,7 @@ internal sealed class FsmStateSync {
     private string _scene = string.Empty;
     private ushort _sceneHash;
     private float _rescanAt;
+    private float _scannedAt;
 
     private static FsmStateSync _active;
     private static bool _hooked;
@@ -273,11 +285,12 @@ internal sealed class FsmStateSync {
     }
 
     /// <summary>Este jugador usa el objeto: pasa a controlarlo (su caballero va encima) y se avisa a los demás.</summary>
-    private void TakeControl(Tracked item) {
+    private void TakeControl(Tracked item, string reason) {
         if (item.Controller == _session.LocalId) {
             return;
         }
 
+        Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: lo controla este PC (antes {item.Controller}; {reason})");
         item.Controller = _session.LocalId;
         item.Positions.Clear();
         if (_session.CanSend) {
@@ -292,6 +305,7 @@ internal sealed class FsmStateSync {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
         if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var item)) {
+            Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: lo controla {from.Id}");
             item.Controller = from.Id;
             item.Positions.Clear();
         }
@@ -328,6 +342,7 @@ internal sealed class FsmStateSync {
             }
 
             Scan();
+            _scannedAt = Time.unscaledTime;
             _rescanAt = Time.unscaledTime + 1.5f;
             return;
         }
@@ -376,6 +391,13 @@ internal sealed class FsmStateSync {
             }
 
             if (IsController(item)) {
+                // Lo mueve este PC porque el controlador se fue (o nadie lo había usado): pasa a serlo de verdad. Así,
+                // si vuelve (p. ej. tras morir), no manda con lo que cargó su sala; antes se espera un poco por si ya
+                // hay quien lo controle aquí (al entrar, su pose llega en un segundo)
+                if (item.Controller != _session.LocalId && now - _scannedAt >= ClaimGrace) {
+                    TakeControl(item, "no está quien lo controlaba");
+                }
+
                 anyControlled = true;
                 ReplayHeld(item);
                 SendVarsIfChanged(item);
@@ -486,13 +508,86 @@ internal sealed class FsmStateSync {
                 LastStateTime = Time.unscaledTime, Platform = target && fsm.FsmName is LiftFsm or GateFsm ? FindPlatform(fsm) : null,
                 Lift = target ? fsm.GetComponent<RuinsLift>() : null,
                 CurrentPosition = target ? fsm.FsmVariables.FindFsmInt("Current Position") : null,
-                Gate = target && fsm.FsmName == GateFsm ? fsm.GetComponent<BoxCollider2D>() : null
+                Gate = target && fsm.FsmName == GateFsm ? fsm.GetComponent<BoxCollider2D>() : null,
+                Battle = target && fsm.FsmName != LiftFsm && fsm.FsmName != GateFsm
             };
-            item.RestState = item.LastState;
-            _tracked.Add(item);
-            _byId[id] = item;
-            _byFsm[fsm.Fsm] = item;
+            Add(item);
         }
+
+        AddBattleListeners();
+    }
+
+    private void Add(Tracked item) {
+        item.RestState = item.LastState;
+        _tracked.Add(item);
+        _byId[item.Id] = item;
+        _byFsm[item.Fsm.Fsm] = item;
+    }
+
+    /// <summary>
+    /// Lo que mueven los controladores de batalla con avisos a toda la sala (la jaula, el suelo que se retira dejando
+    /// pinchos y las puertas de los Señores Mantis) va igual que ellos: lo lleva un PC y los demás siguen sus estados.
+    /// Así quien entra a mitad del combate también lo ve como está. Sin enemigos ni el caballero.
+    /// </summary>
+    private void AddBattleListeners() {
+        HashSet<string> events = null;
+        foreach (var item in _tracked) {
+            if (!item.Battle || item.Fsm == null) {
+                continue;
+            }
+
+            foreach (var state in item.Fsm.FsmStates) {
+                foreach (var action in state.Actions) {
+                    if (action is HutongGames.PlayMaker.Actions.SendEventByName send &&
+                        send.eventTarget.target == FsmEventTarget.EventTarget.BroadcastAll &&
+                        !string.IsNullOrEmpty(send.sendEvent?.Value)) {
+                        (events ??= new HashSet<string>()).Add(send.sendEvent.Value);
+                    }
+                }
+            }
+        }
+
+        if (events == null) {
+            return;
+        }
+
+        var hero = HeroController.instance;
+        foreach (var fsm in UnityEngine.Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include,
+                     FindObjectsSortMode.None)) {
+            if (_byFsm.ContainsKey(fsm.Fsm) || fsm.gameObject.scene.buildIndex < 0 ||
+                EnemySync.IsEnemyObject(fsm.transform) ||
+                hero != null && fsm.transform.IsChildOf(hero.transform) || !Listens(fsm, events)) {
+                continue;
+            }
+
+            var id = ScenePaths.Hash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode();
+            if (_byId.ContainsKey(id)) {
+                continue;
+            }
+
+            Add(new Tracked {
+                Id = id, Fsm = fsm, LastState = fsm.ActiveStateName, LastStateTime = Time.unscaledTime, Battle = true
+            });
+        }
+    }
+
+    /// <summary>Si la FSM cambia de estado con alguno de esos avisos.</summary>
+    private static bool Listens(PlayMakerFSM fsm, HashSet<string> events) {
+        foreach (var transition in fsm.FsmGlobalTransitions) {
+            if (events.Contains(transition.EventName)) {
+                return true;
+            }
+        }
+
+        foreach (var state in fsm.FsmStates) {
+            foreach (var transition in state.Transitions) {
+                if (events.Contains(transition.EventName)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static bool IsTarget(PlayMakerFSM fsm) {
@@ -738,6 +833,11 @@ internal sealed class FsmStateSync {
             return true;
         }
 
+        // Los avisos a todos que no le hacen nada (el título de la zona, la curación del caballero...) no son usarlo
+        if (!Handles(fsm, fsmEvent.Name)) {
+            return true;
+        }
+
         if (_byFsm.TryGetValue(sender, out var source) && source.CopyTransitions &&
             Time.unscaledTime < source.RemoteChainUntil) {
             return false;
@@ -757,8 +857,30 @@ internal sealed class FsmStateSync {
             return false;
         }
 
-        TakeControl(item);
+        TakeControl(item, $"{fsmEvent.Name} de {sender.GameObjectName}/{sender.Name}");
         return true;
+    }
+
+    /// <summary>Si el evento cambia el estado de la FSM desde donde está (transición del estado o global).</summary>
+    private static bool Handles(Fsm fsm, string eventName) {
+        foreach (var transition in fsm.GlobalTransitions) {
+            if (transition.EventName == eventName) {
+                return true;
+            }
+        }
+
+        var state = fsm.ActiveState;
+        if (state == null) {
+            return false;
+        }
+
+        foreach (var transition in state.Transitions) {
+            if (transition.EventName == eventName) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Hace el cambio de estado retenido si el objeto sigue en el estado desde el que se pidió.</summary>
@@ -824,7 +946,7 @@ internal sealed class FsmStateSync {
         }
 
         // La ejecuta este PC, con su caballero encima, y pasa a controlarlo
-        TakeControl(item);
+        TakeControl(item, "orden de quien no va subido");
         _executing = true;
         try {
             item.Fsm.SendEvent(name);
@@ -1130,6 +1252,32 @@ internal sealed class FsmStateSync {
         ApplyRemoteState(item, state);
     }
 
+    /// <summary>
+    /// Estado al que salta una copia que se perdió los pasos del controlador. Un controlador de batalla, al mismo. Una
+    /// reja, a su cierre o a su apertura (el estado que pone su colisión y su animación: "Close 2" o "Double Close"
+    /// solos no la harían sólida). Los ascensores no: su piso llega con su posición.
+    /// </summary>
+    private static string CatchUpState(Tracked item, string remote) {
+        if (item.Battle) {
+            return HasState(item, remote) ? remote : null;
+        }
+
+        if (item.Gate == null) {
+            return null;
+        }
+
+        var remoteClosed = remote.IndexOf("Close", StringComparison.Ordinal) >= 0;
+        var localClosed = item.Fsm.ActiveStateName.IndexOf("Close", StringComparison.Ordinal) >= 0;
+        if (remoteClosed == localClosed) {
+            return null;
+        }
+
+        var target = remoteClosed ? "Close 1" : "Open";
+        return HasState(item, target) ? target : null;
+    }
+
+    private static bool HasState(Tracked item, string name) => Array.Exists(item.Fsm.FsmStates, s => s.Name == name);
+
     /// <summary>Variables del objeto quieto en el controlador (piso actual...), para que el siguiente que lo use parta igual.</summary>
     private void SendPose(Tracked item) {
         var ints = item.Fsm.FsmVariables.IntVariables;
@@ -1161,7 +1309,19 @@ internal sealed class FsmStateSync {
         }
 
         // Solo si aquí también está quieto en el mismo estado (si se está moviendo, ya llegará)
-        var still = item.Fsm.ActiveStateName == state && Time.unscaledTime - item.LastStateTime >= StillSeconds;
+        var localStill = Time.unscaledTime - item.LastStateTime >= StillSeconds;
+        var still = item.Fsm.ActiveStateName == state && localStill;
+
+        // Quieto allí en otro estado: este PC entró (o volvió) a mitad del combate y se perdió sus pasos
+        var catchUp = item.Ready && localStill && !IsController(item) && state.Length > 0 && item.Fsm.ActiveStateName != state
+            ? CatchUpState(item, state)
+            : null;
+        if (catchUp != null) {
+            Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: se pone al día en {catchUp} (allí {state})");
+            item.LastState = catchUp;
+            item.LastStateTime = Time.unscaledTime;
+            ApplyRemoteState(item, catchUp);
+        }
         var ints = item.Fsm.FsmVariables.IntVariables;
         var bools = item.Fsm.FsmVariables.BoolVariables;
         var intCount = reader.ReadByte();
@@ -1210,9 +1370,14 @@ internal sealed class FsmStateSync {
 
     /// <summary>Envía una orden a un objeto como si viniera de su palanca o botón en este PC.</summary>
     public bool TestSendEvent(string namePrefix, string eventName) {
+        // "objeto/FSM" para elegir una FSM concreta de un objeto con varias
+        var slash = namePrefix.IndexOf('/');
+        var fsmName = slash >= 0 ? namePrefix.Substring(slash + 1) : null;
+        namePrefix = slash >= 0 ? namePrefix.Substring(0, slash) : namePrefix;
         foreach (var item in _tracked) {
-            if (item.Fsm != null && item.Fsm.gameObject.name.StartsWith(namePrefix, StringComparison.Ordinal)) {
-                TakeControl(item);
+            if (item.Fsm != null && item.Fsm.gameObject.name.StartsWith(namePrefix, StringComparison.Ordinal) &&
+                (fsmName == null || item.Fsm.FsmName == fsmName)) {
+                TakeControl(item, "prueba");
                 _executing = true;
                 try {
                     item.Fsm.SendEvent(eventName);

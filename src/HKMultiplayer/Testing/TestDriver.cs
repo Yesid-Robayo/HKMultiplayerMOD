@@ -41,6 +41,17 @@ internal sealed class TestDriver : MonoBehaviour {
             }
         };
 
+        // Cada enemigo que muere en este PC y desde dónde se llamó (para encontrar muertes que no deberían pasar)
+        On.HealthManager.Die += (orig, self, direction, attackType, ignoreEvasion) => {
+            if (!self.isDead) {
+                var caller = string.Join(" < ", new System.Diagnostics.StackTrace().GetFrames()?.Skip(2).Take(6)
+                    .Select(f => f.GetMethod()?.Name) ?? Array.Empty<string>());
+                Log.Info($"{Tag}muere {self.name} hp={self.hp} por {caller}");
+            }
+
+            orig(self, direction, attackType, ignoreEvasion);
+        };
+
         // Las órdenes de una ejecución anterior no se repiten
         File.WriteAllText(_commandFile, string.Empty);
         Log.Info($"{Tag}modo de prueba activo; órdenes en {_commandFile}");
@@ -168,6 +179,25 @@ internal sealed class TestDriver : MonoBehaviour {
             case "movers":
                 foreach (var line in runner.MovingObjects.Describe()) {
                     Log.Info($"{Tag}movil {line}");
+                }
+
+                break;
+            case "healthlist":
+                // healthlist: todos los objetos con vida de la sala, con su padre y su huella (para ver repetidos)
+                foreach (var hm in FindObjectsByType<HealthManager>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+                    var t = hm.transform;
+                    Log.Info($"{Tag}vida {hm.name} padre={(t.parent != null ? t.parent.name : "-")} " +
+                             $"activo={hm.gameObject.activeInHierarchy} hermano={t.GetSiblingIndex()} " +
+                             $"huella={HKMultiplayer.Game.Scene.ScenePaths.Hash(t):x8}");
+                }
+
+                break;
+            case "arenas":
+                // arenas: objetos que no son enemigos pero les dan órdenes o los encienden (controladores de combate).
+                // Marcas: O=órdenes a enemigos, A=enciende enemigos, R=decide al azar, H=reacciona al caballero local
+                // (zona o botón), T=a todos. Los que ya siguen a un controlador salen con *
+                foreach (var line in DescribeArenas()) {
+                    Log.Info($"{Tag}arena {line}");
                 }
 
                 break;
@@ -416,6 +446,11 @@ internal sealed class TestDriver : MonoBehaviour {
                     AlwaysUnloadUnusedAssets = false
                 });
                 break;
+            case "die":
+                // die: el caballero recibe un golpe mortal, como en el juego (muerte, sombra y vuelta al banco)
+                PlayerData.instance.SetInt("health", 1);
+                hero.TakeDamage(hero.gameObject, GlobalEnums.CollisionSide.top, 99, 1);
+                break;
             case "tp":
                 hero.transform.position = new Vector3(ParseFloat(args[1]), ParseFloat(args[2]), hero.transform.position.z);
                 break;
@@ -541,6 +576,65 @@ internal sealed class TestDriver : MonoBehaviour {
 
         foreach (Transform child in node) {
             Dump(child, depth + 1, maxDepth);
+        }
+    }
+
+    private static IEnumerable<string> DescribeArenas() {
+        var hero = HeroController.instance;
+        foreach (var fsm in FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+            if (fsm.gameObject.scene.buildIndex < 0 || HKMultiplayer.Game.Scene.EnemySync.IsEnemyObject(fsm.transform) ||
+                hero != null && fsm.transform.IsChildOf(hero.transform)) {
+                continue;
+            }
+
+            bool orders = false, activates = false, random = false, heroTrigger = false, broadcast = false;
+            foreach (var state in fsm.FsmStates) {
+                foreach (var action in state.Actions) {
+                    var name = action.GetType().Name;
+                    random |= name.Contains("Random");
+                    heroTrigger |= name.StartsWith("Trigger2d", StringComparison.Ordinal) || name.StartsWith("ListenFor", StringComparison.Ordinal) ||
+                                   name == "CheckAlertRange" || name == "CheckAlertRangeByName";
+                    try {
+                        CheckArenaAction(action, ref orders, ref activates, ref broadcast);
+                    } catch (Exception) {
+                        // Acción con campos vacíos: no dice nada
+                    }
+                }
+            }
+
+            if (!orders && !activates) {
+                continue;
+            }
+
+            var flags = (orders ? "O" : "") + (activates ? "A" : "") + (random ? "R" : "") + (heroTrigger ? "H" : "") +
+                        (broadcast ? "T" : "");
+            var shared = HKMultiplayer.Game.Scene.FsmStateSync.IsSharedController(fsm.Fsm) ? "*" : "";
+            yield return $"{shared}{fsm.gameObject.name}/{fsm.FsmName} [{flags}] estado={fsm.ActiveStateName}";
+        }
+    }
+
+    private static void CheckArenaAction(HutongGames.PlayMaker.FsmStateAction action, ref bool orders, ref bool activates,
+        ref bool broadcast) {
+        switch (action) {
+            case HutongGames.PlayMaker.Actions.SendEventByName send:
+                var target = send.eventTarget;
+                if (target.target == HutongGames.PlayMaker.FsmEventTarget.EventTarget.BroadcastAll) {
+                    broadcast = true;
+                } else if (target.target is HutongGames.PlayMaker.FsmEventTarget.EventTarget.GameObject
+                           or HutongGames.PlayMaker.FsmEventTarget.EventTarget.GameObjectFSM) {
+                    var receiver = action.Fsm.GetOwnerDefaultTarget(target.gameObject);
+                    orders |= receiver != null && HKMultiplayer.Game.Scene.EnemySync.IsEnemyObject(receiver.transform);
+                }
+
+                break;
+            case HutongGames.PlayMaker.Actions.ActivateGameObject activate:
+                var activated = action.Fsm.GetOwnerDefaultTarget(activate.gameObject);
+                activates |= activated != null && activated.GetComponentsInChildren<HealthManager>(true).Length > 0;
+                break;
+            case HutongGames.PlayMaker.Actions.ActivateAllChildren children:
+                var parent = children.gameObject.Value;
+                activates |= parent != null && parent.GetComponentsInChildren<HealthManager>(true).Length > 0;
+                break;
         }
     }
 

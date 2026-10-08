@@ -209,8 +209,12 @@ public sealed class GameSession : INetListener, IDisposable {
     /// <see cref="End"/>. Se envía fiable o no y a quien diga su ruta.
     /// </summary>
     public PacketWriter Begin(MessageType type) {
+        // Quien escribía el anterior falló a medias (su error ya se registró): se descarta ese mensaje en lugar de
+        // dejar la partida sin poder enviar nada más
         if (_writingLocal) {
-            throw new InvalidOperationException("Ya hay un mensaje de juego a medio escribir");
+            _writingLocal = false;
+            _client?.Connection.CancelMessage();
+            AbandonedMessages++;
         }
 
         _writingLocal = true;
@@ -226,6 +230,9 @@ public sealed class GameSession : INetListener, IDisposable {
         writer.WriteByte(_localType);
         return writer;
     }
+
+    /// <summary>Mensajes empezados que se descartaron a medias (su escritor falló).</summary>
+    public int AbandonedMessages { get; private set; }
 
     public void End() {
         if (!_writingLocal) {
