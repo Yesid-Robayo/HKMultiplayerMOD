@@ -11,17 +11,18 @@ using UnitySceneManager = UnityEngine.SceneManagement.SceneManager;
 namespace HKMultiplayer.Game.Scene;
 
 /// <summary>
-/// Enemigos compartidos. Manda el dueño de la sala (el primero que entró): sus enemigos funcionan normal y envía su
-/// estado (posición, orientación, animación) 30 veces por segundo y cada cambio de vida o muerte. En los demás PCs son
-/// marionetas: su lógica (FSM, movimiento, física) se detiene y se dibujan con lo recibido, interpolado; siguen haciendo
-/// daño al tocarlos.
+/// Enemigos compartidos. Cada enemigo lo mueve el PC del jugador más cercano (lo reparte el dueño de la sala, el primero
+/// que entró), porque su lógica solo ataca al caballero de su PC. Ese PC lo hace funcionar normal y envía su estado
+/// (posición, orientación, animación, piezas) 30 veces por segundo y cada cambio de vida o muerte. En los demás PCs es una
+/// marioneta: su lógica (FSM, movimiento, física) se pausa y se dibuja con lo recibido, interpolado; sigue haciendo daño
+/// al tocarla.
 /// <list type="bullet">
-/// <item>Los golpes a una marioneta van al dueño, que los aplica al enemigo real. El que golpea ve los efectos y gana
-/// su alma como siempre.</item>
+/// <item>Los golpes a una marioneta van al PC que la mueve, que los aplica al enemigo real. El que golpea ve los efectos
+/// y gana su alma como siempre; los demás ven el golpe.</item>
+/// <item>Al cambiar quién lo mueve, el anterior envía cómo iba y el nuevo lo sigue desde ahí.</item>
+/// <item>Lo que crean en combate (proyectiles, crías) aparece también en los demás PCs.</item>
 /// <item>Al entrar alguien en la sala, el dueño envía qué enemigos están muertos y su vida: los muertos no
 /// reaparecen y los heridos siguen heridos.</item>
-/// <item>Si el dueño sale, el siguiente pasa a mover los enemigos desde donde estaban y con la vida que tenían: no se
-/// curan.</item>
 /// </list>
 /// Los enemigos se identifican por su ruta en la jerarquía de la sala (igual en todos los PCs).
 /// </summary>
@@ -35,6 +36,56 @@ internal sealed class EnemySync {
 
     /// <summary>La lógica de un enemigo real entró en un estado con sonido (dueño → sala): las marionetas lo suenan.</summary>
     public const MessageType EnemySound = (MessageType) 62;
+
+    /// <summary>La lógica de un enemigo real creó algo (proyectil, cría, efecto) (dueño → sala).</summary>
+    public const MessageType EnemySpawn = (MessageType) 63;
+
+    /// <summary>Algo creado por un enemigo desapareció en el PC del dueño (dueño → sala).</summary>
+    public const MessageType EnemyDespawn = (MessageType) 64;
+
+    /// <summary>Quién mueve cada enemigo (dueño de la sala → sala): el jugador más cercano.</summary>
+    public const MessageType EnemyControl = (MessageType) 65;
+
+    /// <summary>Cómo iba un enemigo (estado y números de una FSM) para quien pasa a moverlo.</summary>
+    public const MessageType EnemyHandover = (MessageType) 66;
+
+    /// <summary>
+    /// El ataque de un jugador avisó a la marioneta de que recibe daño ("TAKE DAMAGE", aparte del golpe): se avisa al PC
+    /// que la mueve (con ese aviso despiertan o reaccionan muchos enemigos, como Mamá Gruz dormida).
+    /// </summary>
+    public const MessageType EnemyEvent = (MessageType) 67;
+
+    private const string TakeDamageEvent = "TAKE DAMAGE";
+
+    /// <summary>Piezas que se mueven aparte (hijos con animación o que dañan) (dueño → sala, no fiable).</summary>
+    public const MessageType EnemyParts = (MessageType) 68;
+
+    private const int MaxParts = 24;
+
+    /// <summary>A partir de aquí, las piezas siguientes van en otro mensaje (cada pieza ocupa 15 bytes).</summary>
+    private const int PartsMessageLimit = 900;
+
+    /// <summary>El otro jugador tiene que estar al menos esto más cerca para que el enemigo pase a su PC.</summary>
+    private const float SwitchMargin = 4f;
+
+    /// <summary>Tiempo mínimo entre cambios de quién mueve un enemigo (más en los jefes: cada cambio corta su ataque).</summary>
+    private const float SwitchInterval = 3f;
+
+    private const float BossSwitchInterval = 8f;
+
+    /// <summary>Vida a partir de la cual un enemigo se trata como jefe.</summary>
+    private const int BossHp = 150;
+
+    /// <summary>Tras encontrar un enemigo, se le deja iniciar su lógica antes de pararla (si no, la retoma sin iniciar).</summary>
+    private const float PuppetDelay = 0.5f;
+
+    private const int MaxHandoverVars = 48;
+
+    /// <summary>Si no llega cómo iba, el nuevo lo mueve igualmente pasado este tiempo (desde el principio de su lógica).</summary>
+    private const float HandoverTimeout = 1.5f;
+
+    /// <summary>Los objetos creados durante el combate llevan ids con este bit (los de la sala, su ruta).</summary>
+    private const uint SpawnedIdFlag = 0x80000000u;
 
     /// <summary>Enemigos muertos en una sala (dueño → host, que los recuerda hasta que alguien descansa).</summary>
     public const MessageType EnemyKilled = (MessageType) 46;
@@ -76,8 +127,31 @@ internal sealed class EnemySync {
 
         /// <summary>FSM del enemigo y sus hijos, en el mismo orden en todos los PCs (para los sonidos).</summary>
         public PlayMakerFSM[] Fsms;
+
+        /// <summary>Piezas que se mueven aparte (null si no tiene).</summary>
+        public Part[] Parts;
         public bool Puppet;
+
+        /// <summary>Creado durante el combate (no es de la sala); si vino del pool, vuelve a él al desaparecer.</summary>
+        public bool Spawned;
+
+        public bool Pooled;
+
+        /// <summary>Quién lo mueve (0: el dueño de la sala) y quién lo movía antes del último cambio.</summary>
+        public ushort Controller;
+
+        public ushort PreviousController;
+        public float LastSwitch;
+        public float ScannedAt;
+
+        /// <summary>Cómo iba, recibido del que lo movía antes (al pasar a moverlo este PC).</summary>
+        public HandoverFsm[] Handover;
+
+        public bool HandoverReady;
         public readonly List<Behaviour> Disabled = new();
+
+        /// <summary>FSM paradas en la marioneta y si antes reiniciaban al reactivarse (se pausan, no se reinician).</summary>
+        public readonly List<(PlayMakerFSM Fsm, bool Restart)> PausedFsms = new();
         public RigidbodyType2D BodyType;
         public readonly SnapshotBuffer Buffer = new();
 
@@ -90,6 +164,31 @@ internal sealed class EnemySync {
         public ushort LastClipIndex;
     }
 
+    /// <summary>Pieza de un enemigo y lo último enviado de ella.</summary>
+    private sealed class Part {
+        public Transform Transform;
+        public tk2dSpriteAnimator Animator;
+        public tk2dSpriteAnimationClip LastClipRef;
+        public ushort ClipIndex;
+        public byte Flags;
+        public float X;
+        public float Y;
+        public ushort Rotation;
+        public ushort Clip;
+        public byte Frame;
+    }
+
+    private sealed class HandoverFsm {
+        public ushort State;
+        public int[] Ints;
+        public float[] Floats;
+        public bool[] Bools;
+        public bool HasBody;
+        public Vector2 Velocity;
+        public float Gravity;
+        public RigidbodyType2D BodyType;
+    }
+
     /// <summary>FSM de enemigos que tienen estados con sonido: su enemigo, su posición y qué estados suenan.</summary>
     private sealed class SoundFsm {
         public Enemy Enemy;
@@ -98,6 +197,20 @@ internal sealed class EnemySync {
     }
 
     private readonly Dictionary<HutongGames.PlayMaker.Fsm, SoundFsm> _soundFsms = new();
+
+    /// <summary>Todas las FSM de los enemigos: a qué enemigo pertenecen y en qué posición (para lo que crean).</summary>
+    private readonly Dictionary<HutongGames.PlayMaker.Fsm, (Enemy Enemy, byte Index)> _enemyFsms = new();
+
+    private uint _spawnCounter;
+
+    /// <summary>Se está creando aquí la copia de algo que creó un enemigo en otro PC (no se vuelve a avisar).</summary>
+    private static bool _spawningCopy;
+
+    /// <summary>Este PC está retomando un enemigo: lo que cree al ponerse en su estado no se replica.</summary>
+    private static bool _takingOver;
+
+    /// <summary>Tiempo tras encontrar un enemigo en que lo que crea es de su preparación (no se replica).</summary>
+    private const float PreparationSeconds = 1.5f;
 
     private readonly List<Enemy> _enemies = new();
     private readonly Dictionary<uint, Enemy> _byId = new();
@@ -120,6 +233,15 @@ internal sealed class EnemySync {
     private readonly MessageHandler _onHealth;
     private readonly MessageHandler _onHitFx;
     private readonly MessageHandler _onSound;
+    private readonly MessageHandler _onSpawn;
+    private readonly MessageHandler _onDespawn;
+    private readonly MessageHandler _onControl;
+    private readonly MessageHandler _onHandover;
+    private readonly MessageHandler _onEvent;
+    private readonly MessageHandler _onParts;
+    private uint _lastPartsKeepAlive;
+    private readonly List<(uint Id, ushort Controller)> _controlOut = new();
+    private float _nextAssign;
     private readonly Action<SessionPlayer> _onPlayerScene;
 
     private GameSession _session;
@@ -143,10 +265,17 @@ internal sealed class EnemySync {
 
     static EnemySync() {
         MessageRoutes.Register(EnemyStates, Route.SameScene, reliable: false);
-        MessageRoutes.Register(EnemyHit, Route.SceneOwner, reliable: true);
+        // A la sala: lo aplica el PC que mueve ese enemigo (los demás lo tienen como marioneta)
+        MessageRoutes.Register(EnemyHit, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyHealth, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyHitFx, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemySound, Route.SameScene, reliable: false);
+        MessageRoutes.Register(EnemySpawn, Route.SameScene, reliable: true);
+        MessageRoutes.Register(EnemyDespawn, Route.SameScene, reliable: true);
+        MessageRoutes.Register(EnemyControl, Route.SameScene, reliable: true);
+        MessageRoutes.Register(EnemyHandover, Route.SameScene, reliable: true);
+        MessageRoutes.Register(EnemyEvent, Route.SameScene, reliable: true);
+        MessageRoutes.Register(EnemyParts, Route.SameScene, reliable: false);
         MessageRoutes.Register(EnemyKilled, Route.Server, reliable: true);
         MessageRoutes.Register(Rested, Route.Server, reliable: true);
     }
@@ -157,6 +286,12 @@ internal sealed class EnemySync {
         _onHealth = OnHealth;
         _onHitFx = OnHitFx;
         _onSound = OnSound;
+        _onSpawn = OnSpawn;
+        _onDespawn = OnDespawn;
+        _onControl = OnControl;
+        _onHandover = OnHandover;
+        _onEvent = OnEnemyEvent;
+        _onParts = OnParts;
         _onPlayerScene = OnPlayerScene;
         _onKilled = OnKilled;
         _onRested = (from, _) => {
@@ -173,6 +308,12 @@ internal sealed class EnemySync {
         session.On(EnemyHealth, _onHealth);
         session.On(EnemyHitFx, _onHitFx);
         session.On(EnemySound, _onSound);
+        session.On(EnemySpawn, _onSpawn);
+        session.On(EnemyDespawn, _onDespawn);
+        session.On(EnemyControl, _onControl);
+        session.On(EnemyHandover, _onHandover);
+        session.On(EnemyEvent, _onEvent);
+        session.On(EnemyParts, _onParts);
         session.On(EnemyKilled, _onKilled);
         session.On(Rested, _onRested);
         session.PlayerSceneChanged += _onPlayerScene;
@@ -189,6 +330,12 @@ internal sealed class EnemySync {
             _session.On(EnemyHealth, null);
             _session.On(EnemyHitFx, null);
             _session.On(EnemySound, null);
+            _session.On(EnemySpawn, null);
+            _session.On(EnemyDespawn, null);
+            _session.On(EnemyControl, null);
+            _session.On(EnemyHandover, null);
+            _session.On(EnemyEvent, null);
+            _session.On(EnemyParts, null);
             _session.On(EnemyKilled, null);
             _session.On(Rested, null);
             _session.PlayerSceneChanged -= _onPlayerScene;
@@ -208,10 +355,12 @@ internal sealed class EnemySync {
     }
 
     private void Clear() {
+        RemoveSpawnedCopies();
         _enemies.Clear();
         _byId.Clear();
         _byHealth.Clear();
         _soundFsms.Clear();
+        _enemyFsms.Clear();
         _pendingHealth.Clear();
         _scene = string.Empty;
         _sceneHash = 0;
@@ -228,10 +377,12 @@ internal sealed class EnemySync {
 
         if (scene != _scene) {
             var hash = PlayerSnapshot.HashScene(scene);
+            RemoveSpawnedCopies();
             _enemies.Clear();
             _byId.Clear();
             _byHealth.Clear();
             _soundFsms.Clear();
+            _enemyFsms.Clear();
             if (hash != _sceneHash) {
                 _pendingHealth.Clear();
             }
@@ -264,20 +415,44 @@ internal sealed class EnemySync {
 
         var owner = _session.OwnerOf(scene);
         var isOwner = owner == _session.LocalId;
+        var now = Time.unscaledTime;
         if (owner != 0) {
-            for (var i = 0; i < _enemies.Count; i++) {
+            if (isOwner && now >= _nextAssign && _session.CanSend) {
+                _nextAssign = now + 0.5f;
+                AssignControllers();
+            }
+
+            for (var i = _enemies.Count - 1; i >= 0; i--) {
+                var enemy = _enemies[i];
+                if (enemy.Spawned) {
+                    // Copia de algo creado por quien ya no está en la sala: aquí ya nadie la mueve
+                    if (enemy.Puppet && !InScene(enemy.Controller)) {
+                        RemoveSpawned(enemy);
+                    }
+
+                    continue;
+                }
+
                 // Los muertos se quedan como están (su muerte sigue su curso)
-                if (_enemies[i].Puppet == isOwner && _enemies[i].Health != null && !_enemies[i].Health.isDead) {
-                    SetPuppet(_enemies[i], !isOwner);
+                if (enemy.Health == null || enemy.Health.isDead) {
+                    continue;
+                }
+
+                var local = ControllerOf(enemy, owner) == _session.LocalId;
+                if (local && enemy.Puppet) {
+                    // Pasa a moverlo este PC: desde como lo dejó el anterior (si sigue aquí, espera a saberlo)
+                    if (enemy.HandoverReady || enemy.PreviousController == _session.LocalId ||
+                        !InScene(enemy.PreviousController) || now - enemy.LastSwitch > HandoverTimeout) {
+                        TakeOver(enemy);
+                    }
+                } else if (!local && !enemy.Puppet && now - enemy.ScannedAt >= PuppetDelay) {
+                    SetPuppet(enemy, true);
                 }
             }
         }
 
-        if (isOwner) {
-            UpdateOwner();
-        } else {
-            UpdatePuppets();
-        }
+        UpdateReal(isOwner);
+        UpdatePuppets();
     }
 
     private bool OthersInScene() {
@@ -290,22 +465,46 @@ internal sealed class EnemySync {
         return false;
     }
 
-    private void UpdateOwner() {
+    /// <summary>Los enemigos que mueve este PC: su vida, muerte y estado a los demás (el dueño de la sala, también la foto).</summary>
+    private void UpdateReal(bool roomOwner) {
         if (!_session.CanSend) {
             return;
         }
 
         var others = OthersInScene();
+        var snapshot = _sendSnapshot && roomOwner;
 
         // Vida y muertes (fiable). Las muertes se apuntan en el host aunque no haya nadie más en la sala
         _healthOut.Clear();
         _killedOut.Clear();
-        for (var i = 0; i < _enemies.Count; i++) {
+        for (var i = _enemies.Count - 1; i >= 0; i--) {
             var enemy = _enemies[i];
+            // Lo creado en combate que ya no está (vuelto al pool o destruido): desaparece también en los demás
+            if (enemy.Spawned && (enemy.Root == null || !enemy.Root.activeInHierarchy)) {
+                SendDespawn(enemy.Id);
+                Forget(enemy);
+                continue;
+            }
+
+            if (enemy.Spawned && enemy.Health == null) {
+                continue;
+            }
+
+            // Los que mueve otro PC: solo entran en la foto para quien llega
+            if (enemy.Puppet) {
+                if (snapshot && enemy.Health != null) {
+                    _healthOut.Add(enemy.ReportedDead || enemy.Health.isDead
+                        ? (enemy.Id, HealthKind.AlreadyDead, 0)
+                        : (enemy.Id, HealthKind.Update, enemy.Health.hp));
+                }
+
+                continue;
+            }
+
             // Los muertos se recuerdan aunque su objeto ya no exista (el juego lo destruye al morir); dentro de la
             // sala, un enemigo destruido es un enemigo muerto
             if (enemy.ReportedDead) {
-                if (_sendSnapshot) {
+                if (snapshot) {
                     _healthOut.Add((enemy.Id, HealthKind.AlreadyDead, 0));
                 }
 
@@ -316,14 +515,19 @@ internal sealed class EnemySync {
             if (dead) {
                 enemy.ReportedDead = true;
                 _healthOut.Add((enemy.Id, HealthKind.Died, 0));
-                _killedOut.Add(enemy.Id);
-            } else if (enemy.Health.hp != enemy.LastHp || _sendSnapshot) {
+                if (!enemy.Spawned) {
+                    _killedOut.Add(enemy.Id);
+                }
+            } else if (enemy.Health.hp != enemy.LastHp || snapshot) {
                 enemy.LastHp = enemy.Health.hp;
                 _healthOut.Add((enemy.Id, HealthKind.Update, enemy.LastHp));
             }
         }
 
-        _sendSnapshot = false;
+        if (roomOwner) {
+            _sendSnapshot = false;
+        }
+
         ReportKilled();
         if (!others) {
             return;
@@ -331,19 +535,20 @@ internal sealed class EnemySync {
 
         SendHealth();
 
-        // Estado continuo (no fiable), 30 veces por segundo
+        // Estado continuo (no fiable), 30 veces por segundo; las piezas, a la vez
         var tick = (uint) (Time.unscaledTimeAsDouble * NetConstants.TickRate);
         if (tick / StateTickDivider == _lastTick / StateTickDivider) {
             return;
         }
 
         _lastTick = tick;
+        SendParts(tick);
         PacketWriter writer = null;
         var countPosition = 0;
         var count = 0;
         for (var i = 0; i < _enemies.Count; i++) {
             var enemy = _enemies[i];
-            if (enemy.Root == null || enemy.ReportedDead) {
+            if (enemy.Root == null || enemy.ReportedDead || enemy.Puppet) {
                 continue;
             }
 
@@ -401,7 +606,7 @@ internal sealed class EnemySync {
         var position = transform.position;
         var scale = transform.localScale;
         var health = enemy.Health;
-        var extra = (health.InvincibleFromDirection & 0x0F) << 4;
+        var extra = health != null ? (health.InvincibleFromDirection & 0x0F) << 4 : 0;
         if (enemy.Renderer == null || enemy.Renderer.enabled) {
             extra |= ShownFlag;
         }
@@ -410,7 +615,7 @@ internal sealed class EnemySync {
             extra |= SolidFlag;
         }
 
-        if (health.IsInvincible) {
+        if (health != null && health.IsInvincible) {
             extra |= InvincibleFlag;
         }
 
@@ -544,7 +749,8 @@ internal sealed class EnemySync {
         var time = Time.unscaledTimeAsDouble;
         for (var i = 0; i < _enemies.Count; i++) {
             var enemy = _enemies[i];
-            if (!enemy.Puppet || enemy.Root == null || enemy.Health.isDead || !enemy.Buffer.Sample(time, out var state)) {
+            if (!enemy.Puppet || enemy.Root == null || enemy.Health != null && enemy.Health.isDead ||
+                !enemy.Buffer.Sample(time, out var state)) {
                 continue;
             }
 
@@ -579,8 +785,10 @@ internal sealed class EnemySync {
                 enemy.Collider.enabled = solid;
             }
 
-            enemy.Health.IsInvincible = (state.Extra & InvincibleFlag) != 0;
-            enemy.Health.InvincibleFromDirection = state.Extra >> 4;
+            if (enemy.Health != null) {
+                enemy.Health.IsInvincible = (state.Extra & InvincibleFlag) != 0;
+                enemy.Health.InvincibleFromDirection = state.Extra >> 4;
+            }
 
             var animator = enemy.Animator;
             if (animator != null && state.SpriteId != ushort.MaxValue && animator.Library != null &&
@@ -607,7 +815,9 @@ internal sealed class EnemySync {
 
             foreach (var root in unityScene.GetRootGameObjects()) {
                 foreach (var health in root.GetComponentsInChildren<HealthManager>(true)) {
-                    if (_byHealth.ContainsKey(health)) {
+                    // La sombra es de cada jugador (su geo perdido): no es un enemigo compartido
+                    if (_byHealth.ContainsKey(health) ||
+                        health.gameObject.name.StartsWith("Hollow Shade", StringComparison.Ordinal)) {
                         continue;
                     }
 
@@ -627,10 +837,11 @@ internal sealed class EnemySync {
                         Collider = health.GetComponent<Collider2D>(),
                         LastHp = health.hp
                     };
+                    enemy.ScannedAt = Time.unscaledTime;
                     _enemies.Add(enemy);
                     _byId[id] = enemy;
                     _byHealth[health] = enemy;
-                    RegisterSounds(enemy);
+                    RegisterFsms(enemy);
                     if (_pendingHealth.TryGetValue(id, out var pending)) {
                         ApplyHealth(enemy, pending.Kind, pending.Hp);
                     }
@@ -639,10 +850,12 @@ internal sealed class EnemySync {
         }
     }
 
-    /// <summary>Apunta las FSM del enemigo con estados que suenan (solo al entrar en una sala).</summary>
-    private void RegisterSounds(Enemy enemy) {
+    /// <summary>Apunta las FSM del enemigo: de quién son y qué estados suenan (solo al entrar o al crearse).</summary>
+    private void RegisterFsms(Enemy enemy) {
+        CollectParts(enemy);
         enemy.Fsms = enemy.Root.GetComponentsInChildren<PlayMakerFSM>(true);
         for (var i = 0; i < enemy.Fsms.Length && i < byte.MaxValue; i++) {
+            _enemyFsms[enemy.Fsms[i].Fsm] = (enemy, (byte) i);
             var states = enemy.Fsms[i].FsmStates;
             bool[] soundStates = null;
             for (var s = 0; s < states.Length; s++) {
@@ -719,6 +932,760 @@ internal sealed class EnemySync {
         }
     }
 
+    // =====================================================================================================
+    // Quién mueve cada enemigo: el jugador más cercano
+    // =====================================================================================================
+
+    /// <summary>Quién mueve el enemigo: su controlador si sigue en la sala; si no, el dueño de la sala.</summary>
+    private ushort ControllerOf(Enemy enemy, ushort roomOwner) =>
+        enemy.Controller != 0 && InScene(enemy.Controller) ? enemy.Controller : roomOwner;
+
+    private bool InScene(ushort playerId) {
+        if (playerId == 0) {
+            return false;
+        }
+
+        foreach (var player in _session.Players) {
+            if (player.Id == playerId) {
+                return player.Scene == _scene;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryGetPlayerPosition(ushort playerId, out Vector3 position) {
+        if (playerId == _session.LocalId) {
+            var hero = HeroController.instance;
+            position = hero != null ? hero.transform.position : default;
+            return hero != null;
+        }
+
+        return _players.TryGetAvatarPosition(playerId, out position);
+    }
+
+    /// <summary>
+    /// El dueño de la sala reparte los enemigos: cada uno lo mueve el PC del jugador más cercano, porque su lógica solo
+    /// ataca al caballero de ese PC. Se cambia solo si el otro está claramente más cerca y hace un rato del último cambio.
+    /// </summary>
+    private void AssignControllers() {
+        var now = Time.unscaledTime;
+        var roomOwner = _session.LocalId;
+        _controlOut.Clear();
+        foreach (var enemy in _enemies) {
+            if (enemy.Spawned || enemy.Root == null || !enemy.Root.activeInHierarchy || enemy.Health == null ||
+                enemy.Health.isDead) {
+                continue;
+            }
+
+            var interval = enemy.Health.hp >= BossHp ? BossSwitchInterval : SwitchInterval;
+            if (now - enemy.LastSwitch < interval) {
+                continue;
+            }
+
+            var position = enemy.Transform.position;
+            var current = ControllerOf(enemy, roomOwner);
+            var currentDistance = TryGetPlayerPosition(current, out var currentPosition)
+                ? Vector2.Distance(position, currentPosition)
+                : float.MaxValue;
+            var nearest = current;
+            var nearestDistance = currentDistance;
+            foreach (var player in _session.Players) {
+                if (player.Scene != _scene || player.Id == current || !TryGetPlayerPosition(player.Id, out var playerPosition)) {
+                    continue;
+                }
+
+                var distance = Vector2.Distance(position, playerPosition);
+                if (distance < nearestDistance) {
+                    nearest = player.Id;
+                    nearestDistance = distance;
+                }
+            }
+
+            if (nearest != current && currentDistance - nearestDistance > SwitchMargin) {
+                _controlOut.Add((enemy.Id, nearest));
+                ApplyControl(enemy, nearest);
+            }
+        }
+
+        for (var start = 0; start < _controlOut.Count; start += MaxEntriesPerMessage) {
+            var count = Math.Min(MaxEntriesPerMessage, _controlOut.Count - start);
+            var writer = _session.Begin(EnemyControl);
+            writer.WriteUShort(_sceneHash);
+            writer.WriteByte((byte) count);
+            for (var i = start; i < start + count; i++) {
+                writer.WriteUInt(_controlOut[i].Id);
+                writer.WriteUShort(_controlOut[i].Controller);
+            }
+
+            _session.End();
+        }
+    }
+
+    private void OnControl(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var count = reader.ReadByte();
+        for (var i = 0; i < count; i++) {
+            var id = reader.ReadUInt();
+            var controller = reader.ReadUShort();
+            // Solo lo decide el dueño de la sala
+            if (sceneHash == _sceneHash && from.Id == _session.OwnerOf(_scene) && _byId.TryGetValue(id, out var enemy) &&
+                !enemy.Spawned) {
+                ApplyControl(enemy, controller);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Cambia quién mueve el enemigo. Si lo movía este PC, envía al nuevo cómo iba (estado y números de cada FSM) y pasa
+    /// a ser marioneta; el nuevo lo sigue desde ahí en cuanto lo recibe.
+    /// </summary>
+    private void ApplyControl(Enemy enemy, ushort controller) {
+        var previous = ControllerOf(enemy, _session.OwnerOf(_scene));
+        if (previous == controller) {
+            return;
+        }
+
+        enemy.Controller = controller;
+        enemy.PreviousController = previous;
+        enemy.LastSwitch = Time.unscaledTime;
+        // Cómo iba puede haber llegado ya (del anterior, antes que el aviso del dueño): se guarda si es para este PC
+        if (controller != _session.LocalId) {
+            enemy.Handover = null;
+            enemy.HandoverReady = false;
+        }
+        if (previous == _session.LocalId && !enemy.Puppet && enemy.Health != null && !enemy.Health.isDead) {
+            SendHandover(enemy);
+            SetPuppet(enemy, true);
+        }
+    }
+
+    /// <summary>
+    /// Este jugador sale de la sala (cambia de sala, muere y reaparece en otra): aún dentro, deja dicho cómo iba cada
+    /// enemigo que movía. Quien lo pase a mover lo sigue desde ahí en vez de empezar su lógica de nuevo (un jefe no
+    /// repite su presentación).
+    /// </summary>
+    private void ReleaseAll() {
+        if (_session == null || !_session.CanSend || _scene.Length == 0 || !OthersInScene()) {
+            return;
+        }
+
+        foreach (var enemy in _enemies) {
+            if (!enemy.Puppet && !enemy.Spawned && enemy.Root != null && enemy.Health != null && !enemy.Health.isDead) {
+                SendHandover(enemy);
+            }
+        }
+    }
+
+    /// <summary>Cómo va el enemigo (estado y números de cada FSM) para el PC que pasa a moverlo; un mensaje por FSM.</summary>
+    private void SendHandover(Enemy enemy) {
+        if (!_session.CanSend || enemy.Fsms == null) {
+            return;
+        }
+
+        var fsmCount = Math.Min(enemy.Fsms.Length, byte.MaxValue);
+        for (var i = 0; i < fsmCount; i++) {
+            var fsm = enemy.Fsms[i];
+            var writer = _session.Begin(EnemyHandover);
+            writer.WriteUShort(_sceneHash);
+            writer.WriteUInt(enemy.Id);
+            writer.WriteByte((byte) i);
+            writer.WriteByte((byte) fsmCount);
+            var stateIndex = fsm != null && fsm.Fsm.ActiveState != null ? Array.IndexOf(fsm.Fsm.States, fsm.Fsm.ActiveState) : -1;
+            writer.WriteUShort(stateIndex < 0 ? ushort.MaxValue : (ushort) stateIndex);
+            var variables = fsm != null ? fsm.FsmVariables : null;
+            var ints = variables?.IntVariables;
+            var intCount = ints == null ? 0 : Math.Min(ints.Length, MaxHandoverVars);
+            writer.WriteByte((byte) intCount);
+            for (var v = 0; v < intCount; v++) {
+                writer.WriteInt(ints[v].Value);
+            }
+
+            var floats = variables?.FloatVariables;
+            var floatCount = floats == null ? 0 : Math.Min(floats.Length, MaxHandoverVars);
+            writer.WriteByte((byte) floatCount);
+            for (var v = 0; v < floatCount; v++) {
+                writer.WriteFloat(floats[v].Value);
+            }
+
+            var bools = variables?.BoolVariables;
+            var boolCount = bools == null ? 0 : Math.Min(bools.Length, MaxHandoverVars);
+            writer.WriteByte((byte) boolCount);
+            for (var v = 0; v < boolCount; v++) {
+                writer.WriteBool(bools[v].Value);
+            }
+
+            // La física con la que iba (a mitad de un salto, su gravedad la pone el estado que ya pasó)
+            var body = enemy.Body;
+            writer.WriteBool(body != null);
+            if (body != null) {
+                writer.WriteFloat(body.velocity.x);
+                writer.WriteFloat(body.velocity.y);
+                writer.WriteFloat(body.gravityScale);
+                // Tipo de cuerpo con el que iba (dormido, un jefe suele ser cinemático; despierto, no)
+                writer.WriteByte((byte) (body.bodyType == RigidbodyType2D.Kinematic && enemy.Puppet
+                    ? enemy.BodyType
+                    : body.bodyType));
+            }
+
+            _session.End();
+        }
+    }
+
+    private void OnHandover(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        var index = reader.ReadByte();
+        var count = reader.ReadByte();
+        var state = reader.ReadUShort();
+        var ints = new int[reader.ReadByte()];
+        for (var v = 0; v < ints.Length; v++) {
+            ints[v] = reader.ReadInt();
+        }
+
+        var floats = new float[reader.ReadByte()];
+        for (var v = 0; v < floats.Length; v++) {
+            floats[v] = reader.ReadFloat();
+        }
+
+        var bools = new bool[reader.ReadByte()];
+        for (var v = 0; v < bools.Length; v++) {
+            bools[v] = reader.ReadBool();
+        }
+
+        var hasBody = reader.ReadBool();
+        var velocity = Vector2.zero;
+        var gravity = 0f;
+        var bodyType = RigidbodyType2D.Dynamic;
+        if (hasBody) {
+            velocity = new Vector2(reader.ReadFloat(), reader.ReadFloat());
+            gravity = reader.ReadFloat();
+            bodyType = (RigidbodyType2D) reader.ReadByte();
+        }
+
+        if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var enemy) || !enemy.Puppet || index >= count) {
+            return;
+        }
+
+        enemy.Handover ??= new HandoverFsm[count];
+        if (enemy.Handover.Length != count) {
+            enemy.Handover = new HandoverFsm[count];
+        }
+
+        enemy.Handover[index] = new HandoverFsm {
+            State = state, Ints = ints, Floats = floats, Bools = bools, HasBody = hasBody, Velocity = velocity, Gravity = gravity,
+            BodyType = bodyType
+        };
+        if (index == count - 1) {
+            enemy.HandoverReady = true;
+        }
+    }
+
+    /// <summary>
+    /// Este PC pasa a mover el enemigo: su lógica vuelve a funcionar (empieza de nuevo, con este caballero como objetivo)
+    /// y se pone donde la dejó el anterior: el mismo estado y los mismos números en cada FSM.
+    /// </summary>
+    private void TakeOver(Enemy enemy) {
+        _takingOver = true;
+        try {
+            TakeOverUnguarded(enemy);
+        } finally {
+            _takingOver = false;
+        }
+    }
+
+    private void TakeOverUnguarded(Enemy enemy) {
+        SetPuppet(enemy, false);
+        var handover = enemy.Handover;
+        enemy.Handover = null;
+        enemy.HandoverReady = false;
+        if (enemy.Body != null) {
+            enemy.Body.velocity = Vector2.zero;
+        }
+
+        if (handover == null || enemy.Fsms == null) {
+            return;
+        }
+
+        for (var i = 0; i < handover.Length && i < enemy.Fsms.Length; i++) {
+            var data = handover[i];
+            var fsm = enemy.Fsms[i];
+            if (data == null || fsm == null) {
+                continue;
+            }
+
+            var variables = fsm.FsmVariables;
+            for (var v = 0; v < data.Ints.Length && v < variables.IntVariables.Length; v++) {
+                variables.IntVariables[v].Value = data.Ints[v];
+            }
+
+            for (var v = 0; v < data.Floats.Length && v < variables.FloatVariables.Length; v++) {
+                variables.FloatVariables[v].Value = data.Floats[v];
+            }
+
+            for (var v = 0; v < data.Bools.Length && v < variables.BoolVariables.Length; v++) {
+                variables.BoolVariables[v].Value = data.Bools[v];
+            }
+
+            var states = fsm.Fsm.States;
+            if (data.State < states.Length && fsm.Fsm.ActiveState != states[data.State]) {
+                try {
+                    fsm.Fsm.SetState(states[data.State].Name);
+                } catch (Exception e) {
+                    Log.Warn($"No se pudo seguir {enemy.Root.name} desde {states[data.State].Name}: {e.Message}");
+                }
+            }
+        }
+
+        var last = handover[handover.Length - 1];
+        if (enemy.Body != null && last != null && last.HasBody) {
+            enemy.Body.bodyType = last.BodyType;
+            enemy.Body.gravityScale = last.Gravity;
+            enemy.Body.velocity = last.Velocity;
+        }
+
+        var first = handover.Length > 0 && enemy.Fsms.Length > 0 && enemy.Fsms[0] != null ? enemy.Fsms[0].ActiveStateName : "-";
+        Log.Info($"{enemy.Root.name}: lo mueve este PC, sigue desde {first}");
+    }
+
+    // =====================================================================================================
+    // Lo que crean los enemigos en combate
+    // =====================================================================================================
+
+    /// <summary>
+    /// La lógica de un enemigo real de este PC creó algo. Los demás de la sala crean lo mismo con la misma acción de su
+    /// marioneta. Si es de juego (hace daño o tiene vida: proyectiles, crías, invocaciones) se sigue como un enemigo más
+    /// hasta que desaparece; si es solo visual (polvo, destellos), cada PC lo deja correr solo.
+    /// </summary>
+    private void OnSpawned(HutongGames.PlayMaker.FsmStateAction action, GameObject spawned, bool pooled) {
+        if (_spawningCopy || _takingOver || spawned == null || _session == null || !_session.CanSend ||
+            !_enemyFsms.TryGetValue(action.Fsm, out var creator) || creator.Enemy.Puppet || !OthersInScene()) {
+            return;
+        }
+
+        // Lo que crea al prepararse (cadáveres, piezas propias) ya lo crea cada PC por su cuenta; y lo solo visual hecho
+        // con CreateObject suele quedarse como pieza escondida del enemigo, no es un efecto que se acabe solo
+        var gameplay = IsGameplay(spawned);
+        if (Time.unscaledTime - creator.Enemy.ScannedAt < PreparationSeconds || !pooled && !gameplay) {
+            return;
+        }
+
+        var fsm = action.Fsm;
+        var stateIndex = Array.IndexOf(fsm.States, action.State);
+        var actionIndex = action.State != null ? Array.IndexOf(action.State.Actions, action) : -1;
+        if (stateIndex < 0 || actionIndex < 0 || actionIndex > byte.MaxValue) {
+            return;
+        }
+
+        uint id = 0;
+        if (gameplay) {
+            id = SpawnedIdFlag | ++_spawnCounter;
+            Track(spawned, id, pooled, puppet: false, _session.LocalId);
+        }
+
+        var transform = spawned.transform;
+        var position = transform.position;
+        var writer = _session.Begin(EnemySpawn);
+        writer.WriteUShort(_sceneHash);
+        writer.WriteUInt(creator.Enemy.Id);
+        writer.WriteByte(creator.Index);
+        writer.WriteUShort((ushort) stateIndex);
+        writer.WriteByte((byte) actionIndex);
+        writer.WriteUInt(id);
+        writer.WriteFloat(position.x);
+        writer.WriteFloat(position.y);
+        writer.WriteFloat(transform.eulerAngles.z);
+        writer.WriteBool(transform.localScale.x < 0f);
+        _session.End();
+    }
+
+    /// <summary>Si lo creado cuenta para el juego: hace daño al tocarlo o se le puede golpear.</summary>
+    private static bool IsGameplay(GameObject spawned) =>
+        spawned.GetComponent<HealthManager>() != null || spawned.GetComponentInChildren<DamageHero>(true) != null;
+
+    private Enemy Track(GameObject root, uint id, bool pooled, bool puppet, ushort controller) {
+        var health = root.GetComponent<HealthManager>();
+        var enemy = new Enemy {
+            Id = id,
+            Health = health,
+            Root = root,
+            Transform = root.transform,
+            Animator = root.GetComponent<tk2dSpriteAnimator>(),
+            Body = root.GetComponent<Rigidbody2D>(),
+            Renderer = root.GetComponent<Renderer>(),
+            Collider = root.GetComponent<Collider2D>(),
+            LastHp = health != null ? health.hp : 0,
+            Spawned = true,
+            Pooled = pooled,
+            Controller = controller,
+            ScannedAt = Time.unscaledTime
+        };
+        _enemies.Add(enemy);
+        _byId[id] = enemy;
+        if (health != null) {
+            _byHealth[health] = enemy;
+        }
+
+        RegisterFsms(enemy);
+        if (puppet) {
+            SetPuppet(enemy, true);
+        }
+
+        return enemy;
+    }
+
+    private void OnSpawn(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var creatorId = reader.ReadUInt();
+        var fsmIndex = reader.ReadByte();
+        var stateIndex = reader.ReadUShort();
+        var actionIndex = reader.ReadByte();
+        var id = reader.ReadUInt();
+        var position = new Vector3(reader.ReadFloat(), reader.ReadFloat(), 0f);
+        var rotation = reader.ReadFloat();
+        var facingRight = reader.ReadBool();
+        if (sceneHash != _sceneHash || !_byId.TryGetValue(creatorId, out var creator) || !creator.Puppet ||
+            creator.Fsms == null || fsmIndex >= creator.Fsms.Length || creator.Fsms[fsmIndex] == null ||
+            id != 0 && (id & SpawnedIdFlag) == 0) {
+            return;
+        }
+
+        var states = creator.Fsms[fsmIndex].FsmStates;
+        if (stateIndex >= states.Length || actionIndex >= states[stateIndex].Actions.Length) {
+            return;
+        }
+
+        // El mismo prefab que usa esa acción en la marioneta (es el mismo objeto del juego en todos los PCs)
+        GameObject prefab;
+        bool pooled;
+        switch (states[stateIndex].Actions[actionIndex]) {
+            case HutongGames.PlayMaker.Actions.SpawnObjectFromGlobalPool spawn:
+                prefab = spawn.gameObject.Value;
+                pooled = true;
+                break;
+            case HutongGames.PlayMaker.Actions.CreateObject create:
+                prefab = create.gameObject.Value;
+                pooled = false;
+                break;
+            default:
+                return;
+        }
+
+        if (prefab == null) {
+            return;
+        }
+
+        if (id != 0 && _byId.TryGetValue(id, out var previous)) {
+            RemoveSpawned(previous);
+        }
+
+        // Se crea a la altura de la marioneta (la z del original puede no ser la de este PC)
+        position.z = creator.Transform.position.z;
+        GameObject copy;
+        _spawningCopy = true;
+        try {
+            copy = pooled
+                ? prefab.Spawn(position, Quaternion.Euler(0f, 0f, rotation))
+                : UnityEngine.Object.Instantiate(prefab, position, Quaternion.Euler(0f, 0f, rotation));
+        } finally {
+            _spawningCopy = false;
+        }
+
+        if (copy == null) {
+            return;
+        }
+
+        var scale = copy.transform.localScale;
+        if ((scale.x < 0f) != facingRight) {
+            scale.x = -scale.x;
+            copy.transform.localScale = scale;
+        }
+
+        // Solo visual: corre solo. De juego: copia que sigue al original (daña al tocarla; los golpes van al dueño)
+        if (id != 0) {
+            Track(copy, id, pooled, puppet: true, from.Id);
+        }
+    }
+
+    private void SendDespawn(uint id) {
+        if (!_session.CanSend || !OthersInScene()) {
+            return;
+        }
+
+        var writer = _session.Begin(EnemyDespawn);
+        writer.WriteUShort(_sceneHash);
+        writer.WriteUInt(id);
+        _session.End();
+    }
+
+    private void OnDespawn(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var enemy) && enemy.Spawned && enemy.Puppet) {
+            RemoveSpawned(enemy);
+        }
+    }
+
+    /// <summary>Quita la copia de algo creado en otro PC: vuelve a funcionar normal y al pool (o se destruye).</summary>
+    private void RemoveSpawned(Enemy enemy) {
+        Forget(enemy);
+        if (enemy.Root == null) {
+            return;
+        }
+
+        SetPuppet(enemy, false);
+        if (enemy.Pooled) {
+            enemy.Root.Recycle();
+        } else {
+            UnityEngine.Object.Destroy(enemy.Root);
+        }
+    }
+
+    /// <summary>Deja de seguir un objeto creado en combate.</summary>
+    private void Forget(Enemy enemy) {
+        _enemies.Remove(enemy);
+        _byId.Remove(enemy.Id);
+        if (enemy.Health != null) {
+            _byHealth.Remove(enemy.Health);
+        }
+
+        if (enemy.Fsms != null) {
+            foreach (var fsm in enemy.Fsms) {
+                if (fsm != null) {
+                    _enemyFsms.Remove(fsm.Fsm);
+                    _soundFsms.Remove(fsm.Fsm);
+                }
+            }
+        }
+    }
+
+    /// <summary>Al salir de la sala, las copias de lo creado en otro PC se quitan (las del pool no deben quedar paradas).</summary>
+    private void RemoveSpawnedCopies() {
+        for (var i = _enemies.Count - 1; i >= 0; i--) {
+            var enemy = _enemies[i];
+            if (enemy.Spawned && enemy.Puppet) {
+                RemoveSpawned(enemy);
+            }
+        }
+    }
+
+    private void SendEnemyEvent(Enemy enemy, byte fsmIndex) {
+        if (!_session.CanSend) {
+            return;
+        }
+
+        var writer = _session.Begin(EnemyEvent);
+        writer.WriteUShort(_sceneHash);
+        writer.WriteUInt(enemy.Id);
+        writer.WriteByte(fsmIndex);
+        _session.End();
+    }
+
+    private void OnEnemyEvent(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        var fsmIndex = reader.ReadByte();
+        if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var enemy) && !enemy.Puppet && enemy.Fsms != null &&
+            fsmIndex < enemy.Fsms.Length && enemy.Fsms[fsmIndex] != null) {
+            enemy.Fsms[fsmIndex].SendEvent(TakeDamageEvent);
+        }
+    }
+
+    // =====================================================================================================
+    // Piezas que se mueven aparte (aguja de Hornet, mazas, brazos...)
+    // =====================================================================================================
+
+    /// <summary>
+    /// Hijos del enemigo con animación propia o que hacen daño (y sin vida propia: esos son otro enemigo). Su lógica es la
+    /// del enemigo, parada en las marionetas, así que su posición, giro, si se ven y su animación vienen del que lo mueve.
+    /// </summary>
+    private static void CollectParts(Enemy enemy) {
+        List<Part> parts = null;
+        foreach (var child in enemy.Root.GetComponentsInChildren<Transform>(true)) {
+            if (child == enemy.Transform || child.GetComponent<HealthManager>() != null) {
+                continue;
+            }
+
+            var animator = child.GetComponent<tk2dSpriteAnimator>();
+            if (animator == null && child.GetComponent<DamageHero>() == null) {
+                continue;
+            }
+
+            parts ??= new List<Part>();
+            parts.Add(new Part { Transform = child, Animator = animator });
+            if (parts.Count == MaxParts) {
+                break;
+            }
+        }
+
+        enemy.Parts = parts?.ToArray();
+    }
+
+    /// <summary>Estado de las piezas de los enemigos que mueve este PC (solo las que cambiaron, o todas de vez en cuando).</summary>
+    private void SendParts(uint tick) {
+        PacketWriter writer = null;
+        var enemyCountPosition = 0;
+        var enemyCount = 0;
+        var keepAlive = tick - _lastPartsKeepAlive >= KeepAliveTicks;
+        if (keepAlive) {
+            _lastPartsKeepAlive = tick;
+        }
+
+        foreach (var enemy in _enemies) {
+            if (enemy.Parts == null || enemy.Puppet || enemy.Root == null || enemy.ReportedDead || !enemy.Root.activeInHierarchy) {
+                continue;
+            }
+
+            var partCountPosition = -1;
+            var partCount = 0;
+            for (var i = 0; i < enemy.Parts.Length; i++) {
+                var part = enemy.Parts[i];
+                if (part.Transform == null) {
+                    continue;
+                }
+
+                var transform = part.Transform;
+                var local = transform.localPosition;
+                var flags = (byte) ((transform.gameObject.activeSelf ? 1 : 0) | (transform.localScale.x < 0f ? 2 : 0));
+                var rotation = (ushort) Mathf.RoundToInt(Mathf.Repeat(transform.localEulerAngles.z, 360f) * 100f);
+                ushort clip = ushort.MaxValue;
+                byte frame = 0;
+                var animator = part.Animator;
+                if (animator != null && animator.CurrentClip != null) {
+                    if (animator.CurrentClip != part.LastClipRef) {
+                        part.LastClipRef = animator.CurrentClip;
+                        var index = Array.IndexOf(animator.Library.clips, animator.CurrentClip);
+                        part.ClipIndex = index < 0 ? ushort.MaxValue : (ushort) index;
+                    }
+
+                    clip = part.ClipIndex;
+                    frame = (byte) Mathf.Clamp(animator.CurrentFrame, 0, 255);
+                }
+
+                if (!keepAlive && flags == part.Flags && local.x == part.X && local.y == part.Y && rotation == part.Rotation &&
+                    clip == part.Clip && frame == part.Frame) {
+                    continue;
+                }
+
+                part.Flags = flags;
+                part.X = local.x;
+                part.Y = local.y;
+                part.Rotation = rotation;
+                part.Clip = clip;
+                part.Frame = frame;
+                if (writer == null || writer.Position > PartsMessageLimit) {
+                    if (writer != null) {
+                        FinishParts(writer, enemyCountPosition, enemyCount, partCountPosition, partCount);
+                        partCountPosition = -1;
+                        partCount = 0;
+                    }
+
+                    writer = _session.Begin(EnemyParts);
+                    writer.WriteUShort(_sceneHash);
+                    enemyCountPosition = writer.Position;
+                    writer.WriteByte(0);
+                    enemyCount = 0;
+                }
+
+                if (partCountPosition < 0) {
+                    writer.WriteUInt(enemy.Id);
+                    partCountPosition = writer.Position;
+                    writer.WriteByte(0);
+                    enemyCount++;
+                }
+
+                writer.WriteByte((byte) i);
+                writer.WriteByte(flags);
+                writer.WriteFloat(local.x);
+                writer.WriteFloat(local.y);
+                writer.WriteUShort(rotation);
+                writer.WriteUShort(clip);
+                writer.WriteByte(frame);
+                partCount++;
+            }
+
+            if (partCountPosition >= 0) {
+                PatchByte(writer, partCountPosition, partCount);
+            }
+        }
+
+        if (writer != null) {
+            FinishParts(writer, enemyCountPosition, enemyCount, -1, 0);
+        }
+    }
+
+    private void FinishParts(PacketWriter writer, int enemyCountPosition, int enemyCount, int partCountPosition, int partCount) {
+        if (partCountPosition >= 0) {
+            PatchByte(writer, partCountPosition, partCount);
+        }
+
+        PatchByte(writer, enemyCountPosition, enemyCount);
+        _session.End();
+    }
+
+    private static void PatchByte(PacketWriter writer, int position, int value) {
+        var end = writer.Position;
+        writer.Seek(position);
+        writer.WriteByte((byte) value);
+        writer.Seek(end);
+    }
+
+    private void OnParts(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var enemyCount = reader.ReadByte();
+        for (var e = 0; e < enemyCount; e++) {
+            var id = reader.ReadUInt();
+            var partCount = reader.ReadByte();
+            _byId.TryGetValue(id, out var enemy);
+            var apply = sceneHash == _sceneHash && enemy != null && enemy.Puppet && enemy.Parts != null &&
+                        enemy.Health != null && !enemy.Health.isDead;
+            for (var p = 0; p < partCount; p++) {
+                var index = reader.ReadByte();
+                var flags = reader.ReadByte();
+                var x = reader.ReadFloat();
+                var y = reader.ReadFloat();
+                var rotation = reader.ReadUShort();
+                var clip = reader.ReadUShort();
+                var frame = reader.ReadByte();
+                if (!apply || index >= enemy.Parts.Length || enemy.Parts[index].Transform == null) {
+                    continue;
+                }
+
+                ApplyPart(enemy.Parts[index], flags, x, y, rotation, clip, frame);
+            }
+        }
+    }
+
+    private static void ApplyPart(Part part, byte flags, float x, float y, ushort rotation, ushort clip, byte frame) {
+        var transform = part.Transform;
+        var active = (flags & 1) != 0;
+        if (transform.gameObject.activeSelf != active) {
+            transform.gameObject.SetActive(active);
+        }
+
+        var local = transform.localPosition;
+        transform.localPosition = new Vector3(x, y, local.z);
+        var angle = rotation / 100f;
+        if (Mathf.Abs(Mathf.DeltaAngle(transform.localEulerAngles.z, angle)) > 0.5f) {
+            transform.localRotation = Quaternion.Euler(0f, 0f, angle);
+        }
+
+        var scale = transform.localScale;
+        var flipped = (flags & 2) != 0;
+        if ((scale.x < 0f) != flipped) {
+            scale.x = -scale.x;
+            transform.localScale = scale;
+        }
+
+        var animator = part.Animator;
+        if (animator != null && clip != ushort.MaxValue && animator.Library != null && clip < animator.Library.clips.Length) {
+            var animation = animator.Library.clips[clip];
+            if (animation != null && (animator.CurrentClip != animation || Math.Abs(animator.CurrentFrame - frame) > 1)) {
+                animator.PlayFromFrame(animation, Mathf.Min(frame, Math.Max(0, animation.frames.Length - 1)));
+            }
+        }
+    }
+
     /// <summary>Convierte un enemigo en marioneta (o lo devuelve a la normalidad).</summary>
     private static void SetPuppet(Enemy enemy, bool puppet) {
         if (enemy.Puppet == puppet || enemy.Root == null) {
@@ -728,8 +1695,10 @@ internal sealed class EnemySync {
         enemy.Puppet = puppet;
         if (puppet) {
             enemy.Disabled.Clear();
+            enemy.PausedFsms.Clear();
             foreach (var behaviour in enemy.Root.GetComponents<Behaviour>()) {
                 if (behaviour.enabled && behaviour is MonoBehaviour && !Keep(behaviour)) {
+                    Pause(enemy, behaviour as PlayMakerFSM);
                     behaviour.enabled = false;
                     enemy.Disabled.Add(behaviour);
                 }
@@ -737,6 +1706,7 @@ internal sealed class EnemySync {
 
             foreach (var fsm in enemy.Root.GetComponentsInChildren<PlayMakerFSM>(true)) {
                 if (fsm.enabled && fsm.gameObject != enemy.Root) {
+                    Pause(enemy, fsm);
                     fsm.enabled = false;
                     enemy.Disabled.Add(fsm);
                 }
@@ -757,13 +1727,35 @@ internal sealed class EnemySync {
             }
 
             enemy.Disabled.Clear();
+            foreach (var (fsm, restart) in enemy.PausedFsms) {
+                if (fsm != null) {
+                    fsm.Fsm.RestartOnEnable = restart;
+                }
+            }
+
+            enemy.PausedFsms.Clear();
             if (enemy.Body != null) {
                 enemy.Body.bodyType = enemy.BodyType;
             }
 
-            enemy.LastHp = enemy.Health.hp;
-            enemy.ReportedDead = enemy.Health.isDead;
+            if (enemy.Health != null) {
+                enemy.LastHp = enemy.Health.hp;
+                enemy.ReportedDead = enemy.Health.isDead;
+            }
         }
+    }
+
+    /// <summary>
+    /// La lógica de la marioneta se pausa, no se reinicia: al volver a moverla este PC sigue desde donde estaba (sin repetir
+    /// su preparación, que crea objetos como el cadáver de Hornet y los duplicaría).
+    /// </summary>
+    private static void Pause(Enemy enemy, PlayMakerFSM fsm) {
+        if (fsm == null) {
+            return;
+        }
+
+        enemy.PausedFsms.Add((fsm, fsm.Fsm.RestartOnEnable));
+        fsm.Fsm.RestartOnEnable = false;
     }
 
     private static bool Keep(Behaviour behaviour) {
@@ -818,6 +1810,10 @@ internal sealed class EnemySync {
             }
 
             if (_byId.TryGetValue(id, out var enemy)) {
+                if (kind == HealthKind.Update && !enemy.Puppet) {
+                    continue;
+                }
+
                 ApplyHealth(enemy, kind, hp);
             } else {
                 // Aún no se ha encontrado en la sala (llegó antes de terminar de cargarla)
@@ -1039,6 +2035,32 @@ internal sealed class EnemySync {
             }
         };
 
+        // Lo que crea la lógica de los enemigos reales (proyectiles, crías, efectos)
+        On.HutongGames.PlayMaker.Actions.SpawnObjectFromGlobalPool.OnEnter += (orig, self) => {
+            orig(self);
+            _active?.OnSpawned(self, self.storeObject?.Value, pooled: true);
+        };
+        On.HutongGames.PlayMaker.Actions.CreateObject.OnEnter += (orig, self) => {
+            orig(self);
+            _active?.OnSpawned(self, self.storeObject?.Value, pooled: false);
+        };
+
+        // El aviso de daño que manda el ataque a la lógica de una marioneta (parada aquí) va al PC que la mueve
+        On.HutongGames.PlayMaker.Fsm.ProcessEvent += (orig, self, fsmEvent, eventData) => {
+            orig(self, fsmEvent, eventData);
+            var sync = _active;
+            if (sync?._session != null && fsmEvent != null && fsmEvent.Name == TakeDamageEvent &&
+                sync._enemyFsms.TryGetValue(self, out var target) && target.Enemy.Puppet) {
+                sync.SendEnemyEvent(target.Enemy, target.Index);
+            }
+        };
+
+        // Al empezar a cambiar de sala (aún dentro de la anterior): los enemigos que movía este PC, a los demás
+        On.GameManager.BeginSceneTransition += (orig, self, info) => {
+            _active?.ReleaseAll();
+            orig(self, info);
+        };
+
         // Daño recibido por un enemigo real: los demás de la sala lo ven
         On.HealthManager.TakeDamage += (orig, self, hit) => {
             orig(self, hit);
@@ -1107,10 +2129,39 @@ internal sealed class EnemySync {
             }
 
             var p = enemy.Transform.position;
-            yield return $"{enemy.Root.name} id={enemy.Id:x8} {(enemy.Puppet ? "marioneta" : "real")} hp={enemy.Health.hp}" +
+            if (enemy.Health == null) {
+                yield return $"{enemy.Root.name} id={enemy.Id:x8} {(enemy.Puppet ? "copia" : "creado")} pos=({p.x:0.00},{p.y:0.00})";
+                continue;
+            }
+
+            yield return $"{enemy.Root.name} id={enemy.Id:x8} {(enemy.Puppet ? "marioneta" : "real")}{(enemy.Spawned ? " creado" : "")}" +
+                         $" mueve={ControllerOf(enemy, _session.OwnerOf(_scene))}" +
+                         $" hp={enemy.Health.hp}" +
                          $"{(enemy.Health.isDead ? " MUERTO" : "")}{(enemy.Health.IsInvincible ? " invencible" : "")}" +
                          $"{(enemy.Root.activeInHierarchy ? "" : " (inactivo)")} " +
                          $"pos=({p.x:0.00},{p.y:0.00})";
+        }
+    }
+
+    /// <summary>Piezas del primer enemigo con ese nombre: si se ven, posición local y animación (modo de prueba).</summary>
+    public IEnumerable<string> DescribeParts(string name) {
+        foreach (var enemy in _enemies) {
+            if (enemy.Root == null || enemy.Parts == null || !enemy.Root.name.StartsWith(name, StringComparison.OrdinalIgnoreCase)) {
+                continue;
+            }
+
+            foreach (var part in enemy.Parts) {
+                if (part.Transform == null) {
+                    continue;
+                }
+
+                var local = part.Transform.localPosition;
+                var clip = part.Animator != null && part.Animator.CurrentClip != null ? part.Animator.CurrentClip.name : "-";
+                yield return $"{enemy.Root.name}/{part.Transform.name} {(part.Transform.gameObject.activeSelf ? "visible" : "oculta")} " +
+                             $"pos=({local.x:0.00},{local.y:0.00}) anim={clip}";
+            }
+
+            yield break;
         }
     }
 
@@ -1118,7 +2169,7 @@ internal sealed class EnemySync {
     public bool TestHit(string namePrefix, int damage) {
         var hero = HeroController.instance;
         foreach (var enemy in _enemies) {
-            if (enemy.Root != null && enemy.Root.activeInHierarchy && !enemy.Health.isDead &&
+            if (enemy.Root != null && enemy.Root.activeInHierarchy && enemy.Health != null && !enemy.Health.isDead &&
                 string.Equals(enemy.Root.name, namePrefix, StringComparison.OrdinalIgnoreCase)) {
                 enemy.Health.Hit(new HitInstance {
                     Source = hero.gameObject, AttackType = AttackTypes.Nail, DamageDealt = damage, Multiplier = 1f,

@@ -79,11 +79,17 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     (lectores compilados, sin memoria por lectura) y los cambios van al host, que los aplica y reenvía. Los objetos de
     sala (paredes, palancas, piedras de geo) se envían al guardarse y nunca retroceden.
 - **Enemigos y objetos de sala**:
-  - Manda el juego del dueño de la sala: sus enemigos funcionan normal y se envía su estado (transform, animación,
-    activo, vida, estado de sus FSM) con detección de cambios sin crear objetos.
-  - En los demás juegos los enemigos son "marionetas": su lógica (FSM, física) se detiene y se dibujan con el estado
-    recibido e interpolación; sus colisiones de daño siguen funcionando para el jugador local.
-  - Los golpes del jugador local a una marioneta se envían al dueño, que los aplica al enemigo real. Cada golpe que
+  - Cada enemigo lo mueve el PC del jugador más cercano, porque su lógica solo ataca al caballero de su PC. Lo reparte
+    el dueño de la sala; cambia solo si el otro está claramente más cerca (4 unidades) y hace un rato del último cambio
+    (3 s; 8 s en los jefes, cada cambio corta su ataque). Ese PC lo hace funcionar normal y envía su estado (transform,
+    animación, activo, vida) con detección de cambios sin crear objetos.
+  - En los demás juegos el enemigo es una "marioneta": su lógica (FSM, física) se pausa (no se reinicia) y se dibuja
+    con el estado recibido e interpolación; sus colisiones de daño siguen funcionando para el jugador local.
+  - Traspaso: el que lo suelta envía cómo iba (estado y números de cada FSM, velocidad, gravedad y tipo de cuerpo) y el
+    nuevo lo sigue desde ahí. También al salir de la sala o morir (aún dentro, al empezar el cambio de sala): un jefe no
+    repite su presentación.
+  - Los golpes del jugador local a una marioneta van al PC que la mueve, que los aplica al enemigo real; el aviso de
+    daño del ataque ("TAKE DAMAGE", con el que despiertan o reaccionan muchos enemigos) también. Cada golpe que
     recibe un enemigo real se avisa a la sala: los demás ven el impacto, el destello y oyen el golpe (quien golpeó ya
     los vio en su PC). La marioneta copia también su giro, si se dibuja, si choca y si es invencible (y desde dónde).
   - Los sonidos de la lógica del enemigo (gritos, ataques, música de jefe) suenan también en las marionetas: cuando su
@@ -97,9 +103,14 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     de larva se rompen en todos y la larva sale también en los demás.
   - Quien entra en una sala recibe del dueño lo ya activado (puertas, palancas, paredes), los golpes de cada piedra de
     geo y los rompibles rotos. Al guardar, lo activado en el mundo no vuelve atrás.
-  - Los objetos que crean los enemigos (proyectiles, etc.) se replican como "aparecidos" con su prefab y transform.
-  - Traspaso al cambiar el dueño: el nuevo dueño despierta sus enemigos en el estado de FSM recibido.
-  - Casos especiales (jefes con escenarios propios) se añaden por separado a medida que se prueban.
+  - Lo que crean los enemigos en combate (proyectiles, crías, invocaciones) se crea en los demás con la misma acción de
+    su marioneta (mismo prefab). Si hace daño o tiene vida, es una copia que sigue al original hasta que desaparece; los
+    efectos solo visuales del pool corren solos. Lo que crean al prepararse (cadáveres, piezas propias) no se replica.
+  - Piezas que se mueven aparte (hijos con animación o que dañan, como la aguja de Hornet): posición, giro, si se ven y
+    animación vienen del PC que mueve el enemigo.
+  - La sombra de cada jugador no es un enemigo compartido.
+  - Probados: Mamá Gruz, Falso Caballero y Hornet (atacan al jugador que no es dueño de la sala y siguen el combate al
+    cambiar de PC), escupidores y zombis.
 - **Efectos del otro jugador**: eventos (ataque, hechizo, dash, curación...) que el receptor reproduce con los prefabs
   del propio héroe. Son solo visuales: el daño real va por los golpes directos.
 
@@ -136,11 +147,8 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
 
 ## Pendientes
 
-- **M3**: probar y ajustar los jefes con escenario propio (fases, plataformas, cinemáticas); solo está probada Mamá
-  Gruz. Y lo que hoy solo pasa en el PC del dueño de la sala:
-  - los enemigos atacan solo a su caballero (su lógica no ve al otro jugador);
-  - proyectiles y objetos que crean en combate (escupitajos, crías, invocaciones) solo existen en su PC;
-  - las piezas aparte de algunos jefes (hijos con su propia animación) no se mueven en las marionetas.
+- **M3**: probar el resto de jefes (fases, plataformas, cinemáticas propias); probados Mamá Gruz, Falso Caballero y
+  Hornet. Lo que crea un objeto que no es enemigo (controladores de arena sin vida) aún no se replica.
 - **M4**: efectos del otro jugador (tajos, hechizos, dash, curación). `PlayerEvent` está reservado y sin usar.
 - **M5**: revivir, sombras compartidas, barras de vida y HUD del compañero, cinemáticas compartidas, skins y ajustes
   del host en el panel (la 0.7 los tenía en `HollowKnightCoop/src/HollowKnightCoop/Coop`).

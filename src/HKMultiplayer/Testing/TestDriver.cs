@@ -171,8 +171,11 @@ internal sealed class TestDriver : MonoBehaviour {
                 if (nearest == null) {
                     Log.Warn($"{Tag}no existe '{hitArgs[0]}'");
                 } else {
-                    Log.Info($"{Tag}{hitEvent} a {nearest.gameObject.name}/{nearest.FsmName} en {nearest.ActiveStateName}");
-                    nearest.SendEvent(hitEvent);
+                    // A todas las FSM del objeto (los jefes tienen varias; cada una atiende sus eventos)
+                    foreach (var hitFsm in nearest.GetComponents<PlayMakerFSM>()) {
+                        Log.Info($"{Tag}{hitEvent} a {hitFsm.gameObject.name}/{hitFsm.FsmName} en {hitFsm.ActiveStateName}");
+                        hitFsm.SendEvent(hitEvent);
+                    }
                 }
 
                 break;
@@ -239,6 +242,13 @@ internal sealed class TestDriver : MonoBehaviour {
             case "enemies":
                 foreach (var line in runner.Enemies.Describe()) {
                     Log.Info($"{Tag}enemigo {line}");
+                }
+
+                break;
+            case "parts":
+                // parts <enemigo>: piezas que se mueven aparte de ese enemigo
+                foreach (var line in runner.Enemies.DescribeParts(string.Join(" ", args.Skip(1)))) {
+                    Log.Info($"{Tag}pieza {line}");
                 }
 
                 break;
