@@ -77,7 +77,16 @@ internal sealed class EnemySync {
 
     private const int MaxParts = 24;
 
-    /// <summary>A partir de aquí, las piezas siguientes van en otro mensaje (cada pieza ocupa 20 bytes).</summary>
+    /// <summary>Piezas de fuera del enemigo (su rayo, su impacto...) que como mucho se siguen.</summary>
+    private const int MaxExternalParts = 32;
+
+    /// <summary>Trampas de la sala que como mucho van con un enemigo.</summary>
+    private const int MaxSatellites = 8;
+
+    /// <summary>En el mensaje de piezas, en lugar del número de pieza: va una de fuera, identificada por su clave.</summary>
+    private const byte ExternalPartIndex = byte.MaxValue;
+
+    /// <summary>A partir de aquí, las piezas siguientes van en otro mensaje (cada pieza ocupa 28 bytes, 32 las de fuera).</summary>
     private const int PartsMessageLimit = 900;
 
     /// <summary>El otro jugador tiene que estar al menos esto más cerca para que el enemigo pase a su PC.</summary>
@@ -154,6 +163,9 @@ internal sealed class EnemySync {
 
         public bool LinkedResolved;
 
+        /// <summary>Este PC acaba de retomarlo: se envían todas sus piezas y objetos (el anterior los tenía como él los dejó).</summary>
+        public bool SendFull;
+
         /// <summary>Lo que llegó antes de tenerlos localizados (quien acaba de entrar): se aplica al localizarlos.</summary>
         public Dictionary<uint, bool> PendingLinked;
         public bool Puppet;
@@ -175,6 +187,9 @@ internal sealed class EnemySync {
 
         public bool HandoverReady;
         public readonly List<Behaviour> Disabled = new();
+
+        /// <summary>Desde qué FSM de la lista son de las trampas de la sala que dispara (0: ninguna).</summary>
+        public int FirstSatellite;
 
         /// <summary>FSM paradas en la marioneta y si antes reiniciaban al reactivarse (se pausan, no se reinician).</summary>
         public readonly List<(PlayMakerFSM Fsm, bool Restart)> PausedFsms = new();
@@ -198,11 +213,17 @@ internal sealed class EnemySync {
     }
 
     private sealed class Part {
+        /// <summary>Solo las de fuera del enemigo: qué variable de qué FSM la apunta (igual en todos los PCs).</summary>
+        public uint Key;
+
         public Transform Transform;
         public tk2dSpriteAnimator Animator;
         public Collider2D Collider;
+        public Renderer Renderer;
         public DamageHero Damage;
         public byte DamageSent;
+        public float ScaleX;
+        public float ScaleY;
         public tk2dSpriteAnimationClip LastClipRef;
         public ushort ClipIndex;
         public byte Flags;
@@ -286,6 +307,11 @@ internal sealed class EnemySync {
     /// <summary>Alguien entró en la sala: le llegan los objetos encendidos y apagados de los enemigos que mueve este PC.</summary>
     private bool _sendLinkedSnapshot;
     private uint _lastPartsKeepAlive;
+    private uint _lastLinkedRefresh;
+    private bool _linkedRefreshDue;
+
+    /// <summary>Cada cuánto se repasan todos los objetos de la arena aunque no hayan cambiado (2 s).</summary>
+    private const uint LinkedRefreshTicks = 120;
     private readonly List<(uint Id, ushort Controller)> _controlOut = new();
     private float _nextAssign;
     private readonly Action<SessionPlayer> _onPlayerScene;
@@ -477,6 +503,8 @@ internal sealed class EnemySync {
                 var enemy = _enemies[i];
                 if (!enemy.LinkedResolved && now - enemy.ScannedAt >= LinkedResolveDelay) {
                     ResolveLinked(enemy);
+                    AddSatellites(enemy);
+                    CollectExternalParts(enemy);
                 }
 
                 if (enemy.Spawned) {
@@ -602,8 +630,12 @@ internal sealed class EnemySync {
         }
 
         SendParts(tick);
-        SendLinked(_sendLinkedSnapshot);
+        SendLinked(_sendLinkedSnapshot || _linkedRefreshDue);
         _sendLinkedSnapshot = false;
+        _linkedRefreshDue = false;
+        foreach (var enemy in _enemies) {
+            enemy.SendFull = false;
+        }
         PacketWriter writer = null;
         var countPosition = 0;
         var count = 0;
@@ -929,22 +961,26 @@ internal sealed class EnemySync {
         CollectParts(enemy);
         enemy.Fsms = enemy.Root.GetComponentsInChildren<PlayMakerFSM>(true);
         for (var i = 0; i < enemy.Fsms.Length && i < byte.MaxValue; i++) {
-            _enemyFsms[enemy.Fsms[i].Fsm] = (enemy, (byte) i);
-            var states = enemy.Fsms[i].FsmStates;
-            bool[] soundStates = null;
-            for (var s = 0; s < states.Length; s++) {
-                foreach (var action in states[s].Actions) {
-                    if (IsEffectAction(action)) {
-                        soundStates ??= new bool[states.Length];
-                        soundStates[s] = true;
-                        break;
-                    }
+            RegisterFsm(enemy, i);
+        }
+    }
+
+    private void RegisterFsm(Enemy enemy, int i) {
+        _enemyFsms[enemy.Fsms[i].Fsm] = (enemy, (byte) i);
+        var states = enemy.Fsms[i].FsmStates;
+        bool[] soundStates = null;
+        for (var s = 0; s < states.Length; s++) {
+            foreach (var action in states[s].Actions) {
+                if (IsEffectAction(action)) {
+                    soundStates ??= new bool[states.Length];
+                    soundStates[s] = true;
+                    break;
                 }
             }
+        }
 
-            if (soundStates != null) {
-                _soundFsms[enemy.Fsms[i].Fsm] = new SoundFsm { Enemy = enemy, Index = (byte) i, SoundStates = soundStates };
-            }
+        if (soundStates != null) {
+            _soundFsms[enemy.Fsms[i].Fsm] = new SoundFsm { Enemy = enemy, Index = (byte) i, SoundStates = soundStates };
         }
     }
 
@@ -1384,6 +1420,7 @@ internal sealed class EnemySync {
 
     private void TakeOverUnguarded(Enemy enemy) {
         SetPuppet(enemy, false);
+        enemy.SendFull = true;
         var handover = enemy.Handover;
         enemy.Handover = null;
         enemy.HandoverReady = false;
@@ -1420,7 +1457,14 @@ internal sealed class EnemySync {
                 try {
                     fsm.Fsm.SetState(states[data.State].Name);
                 } catch (Exception e) {
-                    Log.Warn($"No se pudo seguir {enemy.Root.name} desde {states[data.State].Name}: {e.Message}");
+                    // A medias en ese estado podría quedarse parado: vuelve al principio de su lógica
+                    Log.Warn($"No se pudo seguir {enemy.Root.name} desde {states[data.State].Name} ({e.Message}): " +
+                             "empieza de nuevo");
+                    try {
+                        fsm.Fsm.SetState(fsm.Fsm.StartState);
+                    } catch (Exception again) {
+                        Log.Warn($"{enemy.Root.name} tampoco pudo empezar de nuevo: {again.Message}");
+                    }
                 }
             }
         }
@@ -1712,7 +1756,7 @@ internal sealed class EnemySync {
             parts ??= new List<Part>();
             parts.Add(new Part {
                 Transform = child, Animator = animator, Collider = child.GetComponent<Collider2D>(),
-                Damage = child.GetComponent<DamageHero>()
+                Renderer = child.GetComponent<Renderer>(), Damage = child.GetComponent<DamageHero>()
             });
             if (parts.Count == MaxParts) {
                 break;
@@ -1722,12 +1766,180 @@ internal sealed class EnemySync {
         enemy.Parts = parts?.ToArray();
     }
 
+    /// <summary>
+    /// Objetos de la sala que la lógica del enemigo mueve y enseña pero que no cuelgan de él: los apunta una variable
+    /// de sus FSM, y a veces los suelta al prepararse (el rayo del Guardián de Cristal, su impacto y su bola de luz).
+    /// Se siguen como sus piezas, identificados por esa variable porque su sitio en la sala puede no coincidir.
+    /// </summary>
+    private static void CollectExternalParts(Enemy enemy) {
+        List<Part> external = null;
+        var hero = HeroController.instance;
+        for (var f = 0; f < enemy.Fsms.Length && f < 256; f++) {
+            var fsm = enemy.Fsms[f];
+            if (fsm == null) {
+                continue;
+            }
+
+            if (enemy.FirstSatellite > 0 && f >= enemy.FirstSatellite) {
+                external ??= new List<Part>();
+                if (!external.Exists(part => part.Transform == fsm.transform)) {
+                    external.Add(new Part { Key = (uint) (f << 16 | 0xFFFF) + 1, Transform = fsm.transform });
+                }
+            }
+
+            var variables = fsm.FsmVariables.GameObjectVariables;
+            for (var v = 0; v < variables.Length && v < 0xFFFF; v++) {
+                var target = variables[v].Value;
+                if (target == null || target.scene.buildIndex < 0 || target.transform.IsChildOf(enemy.Transform) ||
+                    target.GetComponentInParent<HealthManager>() != null ||
+                    hero != null && target.transform.IsChildOf(hero.transform)) {
+                    continue;
+                }
+
+                var animator = target.GetComponent<tk2dSpriteAnimator>();
+                var renderer = target.GetComponent<Renderer>();
+                var damage = target.GetComponent<DamageHero>();
+                if (animator == null && damage == null && renderer is not MeshRenderer) {
+                    continue;
+                }
+
+                external ??= new List<Part>();
+                if (external.Exists(part => part.Transform == target.transform) ||
+                    enemy.Parts != null && Array.Exists(enemy.Parts, part => part.Transform == target.transform)) {
+                    continue;
+                }
+
+                external.Add(new Part {
+                    Key = (uint) (f << 16 | v) + 1, Transform = target.transform, Animator = animator,
+                    Collider = target.GetComponent<Collider2D>(), Renderer = renderer, Damage = damage
+                });
+                if (external.Count == MaxExternalParts) {
+                    break;
+                }
+            }
+        }
+
+        if (external == null) {
+            return;
+        }
+
+        if (enemy.Parts != null) {
+            external.InsertRange(0, enemy.Parts);
+        }
+
+        enemy.Parts = external.ToArray();
+    }
+
+    /// <summary>
+    /// Trampas de la sala que el enemigo dispara con un aviso a todos (las torretas del techo del Guardián de Cristal con
+    /// LASER SHOOT): cada una apunta y espera al azar, así que solo deben funcionar en el PC que mueve al enemigo. Sus FSM
+    /// pasan a ser del enemigo: en la marioneta se paran, sus efectos llegan como los suyos y su giro, rayos y
+    /// animaciones se copian como piezas. Solo las que pueden hacer daño (las puertas de la arena van aparte).
+    /// </summary>
+    private void AddSatellites(Enemy enemy) {
+        if (enemy.Fsms == null || enemy.Root == null) {
+            return;
+        }
+
+        HashSet<string> events = null;
+        foreach (var fsm in enemy.Fsms) {
+            if (fsm == null) {
+                continue;
+            }
+
+            foreach (var state in fsm.FsmStates) {
+                foreach (var action in state.Actions) {
+                    if (action is HutongGames.PlayMaker.Actions.SendEventByName send &&
+                        send.eventTarget.target == HutongGames.PlayMaker.FsmEventTarget.EventTarget.BroadcastAll &&
+                        !string.IsNullOrEmpty(send.sendEvent?.Value)) {
+                        (events ??= new HashSet<string>()).Add(send.sendEvent.Value);
+                    }
+                }
+            }
+        }
+
+        if (events == null) {
+            return;
+        }
+
+        var hero = HeroController.instance;
+        List<(uint Path, PlayMakerFSM Fsm)> found = null;
+        foreach (var fsm in PlayMakerFSM.FsmList) {
+            var owner = fsm != null ? fsm.gameObject : null;
+            // De la sala, aunque sea otra escena que el enemigo (los jefes suelen estar en una escena "_boss" aparte)
+            if (owner == null || owner.scene.buildIndex < 0 || _enemyFsms.ContainsKey(fsm.Fsm) ||
+                owner.transform.IsChildOf(enemy.Transform) || owner.GetComponentInParent<HealthManager>() != null ||
+                hero != null && owner.transform.IsChildOf(hero.transform) ||
+                owner.GetComponentInChildren<DamageHero>(true) == null || !Listens(fsm, events)) {
+                continue;
+            }
+
+            (found ??= new List<(uint, PlayMakerFSM)>()).Add((ScenePaths.Hash(owner.transform), fsm));
+        }
+
+        if (found == null) {
+            return;
+        }
+
+        // En el mismo orden en todos los PCs: los mensajes las identifican por su posición en la lista del enemigo
+        found.Sort((a, b) => a.Path != b.Path ? a.Path.CompareTo(b.Path) : string.CompareOrdinal(a.Fsm.FsmName, b.Fsm.FsmName));
+        var first = enemy.Fsms.Length;
+        var count = Math.Min(found.Count, Math.Min(MaxSatellites, byte.MaxValue - first));
+        if (count <= 0) {
+            return;
+        }
+
+        var fsms = new PlayMakerFSM[first + count];
+        Array.Copy(enemy.Fsms, fsms, first);
+        for (var i = 0; i < count; i++) {
+            fsms[first + i] = found[i].Fsm;
+        }
+
+        enemy.Fsms = fsms;
+        enemy.FirstSatellite = first;
+        for (var i = first; i < fsms.Length; i++) {
+            RegisterFsm(enemy, i);
+            if (enemy.Puppet && fsms[i].enabled) {
+                Pause(enemy, fsms[i]);
+                fsms[i].enabled = false;
+                enemy.Disabled.Add(fsms[i]);
+            }
+        }
+
+        Log.Info($"{enemy.Root.name}: {count} trampas de la sala van con él");
+    }
+
+    /// <summary>Si la FSM cambia de estado con alguno de esos avisos.</summary>
+    private static bool Listens(PlayMakerFSM fsm, HashSet<string> events) {
+        foreach (var transition in fsm.FsmGlobalTransitions) {
+            if (events.Contains(transition.EventName)) {
+                return true;
+            }
+        }
+
+        foreach (var state in fsm.FsmStates) {
+            foreach (var transition in state.Transitions) {
+                if (events.Contains(transition.EventName)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Estado de las piezas de los enemigos que mueve este PC (solo las que cambiaron, o todas de vez en cuando).</summary>
     private void SendParts(uint tick) {
         PacketWriter writer = null;
         var enemyCountPosition = 0;
         var enemyCount = 0;
         var keepAlive = tick - _lastPartsKeepAlive >= KeepAliveTicks;
+        // De vez en cuando, también todos los objetos de la arena (por si se perdió algún cambio)
+        if (tick - _lastLinkedRefresh >= LinkedRefreshTicks) {
+            _lastLinkedRefresh = tick;
+            _linkedRefreshDue = true;
+        }
+
         if (keepAlive) {
             _lastPartsKeepAlive = tick;
         }
@@ -1747,9 +1959,13 @@ internal sealed class EnemySync {
 
                 var transform = part.Transform;
                 var local = transform.localPosition;
-                // Si se ve, si está girada y si su caja de daño está encendida (la enciende su lógica, parada en la copia)
-                var flags = (byte) ((transform.gameObject.activeSelf ? 1 : 0) | (transform.localScale.x < 0f ? 2 : 0) |
-                                    (part.Collider != null && part.Collider.enabled ? 4 : 0));
+                // Si está activa, si su caja de daño está encendida y si se dibuja (lo decide su lógica, parada en la copia;
+                // p. ej. el rayo del Guardián de Cristal: se coloca, se estira hasta donde llega y se enciende al disparar)
+                var flags = (byte) ((transform.gameObject.activeSelf ? 1 : 0) |
+                                    (part.Collider != null && part.Collider.enabled ? 4 : 0) |
+                                    (part.Renderer != null && part.Renderer.enabled ? 8 : 0) |
+                                    (transform.parent == null ? 16 : 0));
+                var scale = transform.localScale;
                 var rotation = (ushort) Mathf.RoundToInt(Mathf.Repeat(transform.localEulerAngles.z, 360f) * 100f);
                 ushort clip = ushort.MaxValue;
                 byte frame = 0;
@@ -1766,7 +1982,8 @@ internal sealed class EnemySync {
                 }
 
                 var damage = part.Damage != null ? (byte) Mathf.Clamp(part.Damage.damageDealt, 0, 255) : (byte) 0;
-                if (!keepAlive && flags == part.Flags && local.x == part.X && local.y == part.Y && local.z == part.Z &&
+                if (!keepAlive && !enemy.SendFull && flags == part.Flags && local.x == part.X && local.y == part.Y && local.z == part.Z &&
+                    scale.x == part.ScaleX && scale.y == part.ScaleY &&
                     rotation == part.Rotation &&
                     clip == part.Clip && frame == part.Frame && damage == part.DamageSent) {
                     continue;
@@ -1778,6 +1995,8 @@ internal sealed class EnemySync {
                 part.X = local.x;
                 part.Y = local.y;
                 part.Z = local.z;
+                part.ScaleX = scale.x;
+                part.ScaleY = scale.y;
                 part.Rotation = rotation;
                 part.Clip = clip;
                 part.Frame = frame;
@@ -1802,11 +2021,19 @@ internal sealed class EnemySync {
                     enemyCount++;
                 }
 
-                writer.WriteByte((byte) i);
+                if (part.Key != 0 || i >= MaxParts) {
+                    writer.WriteByte(ExternalPartIndex);
+                    writer.WriteUInt(part.Key);
+                } else {
+                    writer.WriteByte((byte) i);
+                }
+
                 writer.WriteByte(flags);
                 writer.WriteFloat(local.x);
                 writer.WriteFloat(local.y);
                 writer.WriteFloat(local.z);
+                writer.WriteFloat(scale.x);
+                writer.WriteFloat(scale.y);
                 writer.WriteUShort(rotation);
                 writer.WriteUShort(clip);
                 writer.WriteByte(frame);
@@ -1850,20 +2077,31 @@ internal sealed class EnemySync {
             var apply = sceneHash == _sceneHash && enemy != null && enemy.Puppet && enemy.Parts != null &&
                         enemy.Health != null && !enemy.Health.isDead;
             for (var p = 0; p < partCount; p++) {
-                var index = reader.ReadByte();
+                int index = reader.ReadByte();
+                var key = index == ExternalPartIndex ? reader.ReadUInt() : 0u;
                 var flags = reader.ReadByte();
                 var x = reader.ReadFloat();
                 var y = reader.ReadFloat();
                 var z = reader.ReadFloat();
+                var scaleX = reader.ReadFloat();
+                var scaleY = reader.ReadFloat();
                 var rotation = reader.ReadUShort();
                 var clip = reader.ReadUShort();
                 var frame = reader.ReadByte();
                 var damage = reader.ReadByte();
-                if (!apply || index >= enemy.Parts.Length || enemy.Parts[index].Transform == null) {
+                if (!apply) {
                     continue;
                 }
 
-                ApplyPart(enemy.Parts[index], flags, x, y, z, rotation, clip, frame);
+                if (index == ExternalPartIndex) {
+                    index = Array.FindIndex(enemy.Parts, part => part.Key == key && part.Transform != null);
+                }
+
+                if (index < 0 || index >= enemy.Parts.Length || enemy.Parts[index].Transform == null) {
+                    continue;
+                }
+
+                ApplyPart(enemy.Parts[index], flags, x, y, z, scaleX, scaleY, rotation, clip, frame);
                 if (enemy.Parts[index].Damage != null) {
                     enemy.Parts[index].Damage.damageDealt = damage;
                 }
@@ -1871,7 +2109,8 @@ internal sealed class EnemySync {
         }
     }
 
-    private static void ApplyPart(Part part, byte flags, float x, float y, float z, ushort rotation, ushort clip, byte frame) {
+    private static void ApplyPart(Part part, byte flags, float x, float y, float z, float scaleX, float scaleY, ushort rotation,
+        ushort clip, byte frame) {
         var transform = part.Transform;
         var active = (flags & 1) != 0;
         if (part.Collider != null) {
@@ -1882,6 +2121,12 @@ internal sealed class EnemySync {
             transform.gameObject.SetActive(active);
         }
 
+        // Hay piezas que su lógica suelta del enemigo al prepararse (el impacto y la bola del rayo del Guardián de
+        // Cristal): entonces su posición es la de la sala, y aquí puede que la copia no llegara a soltarlas
+        if ((flags & 16) != 0 && transform.parent != null) {
+            transform.SetParent(null, true);
+        }
+
         transform.localPosition = new Vector3(x, y, z);
         var angle = rotation / 100f;
         if (Mathf.Abs(Mathf.DeltaAngle(transform.localEulerAngles.z, angle)) > 0.5f) {
@@ -1889,10 +2134,12 @@ internal sealed class EnemySync {
         }
 
         var scale = transform.localScale;
-        var flipped = (flags & 2) != 0;
-        if ((scale.x < 0f) != flipped) {
-            scale.x = -scale.x;
-            transform.localScale = scale;
+        if (scale.x != scaleX || scale.y != scaleY) {
+            transform.localScale = new Vector3(scaleX, scaleY, scale.z);
+        }
+
+        if (part.Renderer != null) {
+            part.Renderer.enabled = (flags & 8) != 0;
         }
 
         var animator = part.Animator;
@@ -1973,6 +2220,8 @@ internal sealed class EnemySync {
                 continue;
             }
 
+            var full = all || enemy.SendFull;
+
             PacketWriter writer = null;
             var countPosition = 0;
             var count = 0;
@@ -1982,7 +2231,7 @@ internal sealed class EnemySync {
                 }
 
                 var active = link.Object.activeSelf;
-                if (!all && active == link.Active) {
+                if (!full && active == link.Active) {
                     continue;
                 }
 
@@ -2066,6 +2315,15 @@ internal sealed class EnemySync {
                     Pause(enemy, fsm);
                     fsm.enabled = false;
                     enemy.Disabled.Add(fsm);
+                }
+            }
+
+            for (var i = enemy.FirstSatellite; enemy.FirstSatellite > 0 && i < enemy.Fsms.Length; i++) {
+                var satellite = enemy.Fsms[i];
+                if (satellite != null && satellite.enabled) {
+                    Pause(enemy, satellite);
+                    satellite.enabled = false;
+                    enemy.Disabled.Add(satellite);
                 }
             }
 
@@ -2559,8 +2817,11 @@ internal sealed class EnemySync {
 
                 var local = part.Transform.localPosition;
                 var clip = part.Animator != null && part.Animator.CurrentClip != null ? part.Animator.CurrentClip.name : "-";
-                yield return $"{enemy.Root.name}/{part.Transform.name} {(part.Transform.gameObject.activeSelf ? "visible" : "oculta")} " +
-                             $"pos=({local.x:0.00},{local.y:0.00}) anim={clip}";
+                var drawn = part.Renderer == null ? "-" : part.Renderer.enabled ? "sí" : "no";
+                var angle = part.Transform.localEulerAngles.z;
+                yield return $"{enemy.Root.name}/{part.Transform.name}{(part.Key != 0 ? " (fuera)" : "")} " +
+                             $"{(part.Transform.gameObject.activeSelf ? "visible" : "oculta")} dibujada={drawn} " +
+                             $"pos=({local.x:0.00},{local.y:0.00}) giro={angle:0} escala={part.Transform.localScale.x:0.00} anim={clip}";
             }
 
             yield break;

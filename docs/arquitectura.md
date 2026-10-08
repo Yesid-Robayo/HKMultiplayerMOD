@@ -113,11 +113,16 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     su marioneta (mismo prefab). Si hace daño o tiene vida, es una copia que sigue al original hasta que desaparece; los
     efectos solo visuales del pool corren solos. Lo que crean al prepararse (cadáveres, piezas propias) no se replica.
   - Piezas que se mueven aparte (hijos con animación o que dañan, como la aguja de Hornet): posición, profundidad,
-    giro, si se ven, si su caja de daño está encendida, cuánto dañan y animación vienen del PC que mueve el enemigo.
+    giro, escala, si están activas y si se dibujan, si su caja de daño está encendida, cuánto dañan y animación vienen
+    del PC que mueve el enemigo. También las de fuera del enemigo que apuntan las variables de sus FSM (el rayo del
+    Guardián de Cristal, que suelta al prepararse): se identifican por esa variable, no por su sitio en la sala.
+  - Trampas de la sala que el enemigo dispara con un aviso a todos (las torretas del techo del Guardián con
+    `LASER SHOOT`): sus FSM pasan a ser del enemigo, así que solo funcionan en el PC que lo mueve; en los demás se
+    paran y su giro, rayos, sonidos y animaciones se copian. Solo las que dañan (las puertas de la arena van aparte).
   - La sombra de cada jugador no es un enemigo compartido.
-  - Probados: Mamá Gruz, Falso Caballero, Hornet, Mawlek, Maestro de Almas, Defensor del Estiércol, Nosk y Vasija Rota
-    (despiertan, atacan al jugador que no es dueño de la sala y siguen el combate al cambiar de PC), escupidores y
-    zombis.
+  - Probados: Mamá Gruz, Falso Caballero, Hornet, Mawlek, Maestro de Almas, Defensor del Estiércol, Nosk, Vasija Rota
+    y Guardián de Cristal (despiertan, atacan al jugador que no es dueño de la sala y siguen el combate al cambiar de
+    PC; el rayo y las torretas del Guardián se ven igual en los dos), escupidores y zombis.
 - **Efectos del otro jugador**: eventos (ataque, hechizo, dash, curación...) que el receptor reproduce con los prefabs
   del propio héroe. Son solo visuales: el daño real va por los golpes directos.
 
@@ -142,6 +147,8 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
   (`tools/mp-test-lib.sh`): conexión, movimiento, memoria por segundo, tirones, suavidad, sincronización. Capturas de
   pantalla de las dos a la vez (`shot`) para comparar lo que se ve; cada daño que recibe el caballero se registra con
   lo que lo hizo. La memoria creada en combate (≈300 KB/s) es la del juego: es la misma con la partida cerrada.
+  `netsim <ms> <variación ms> <pérdida %>` simula una mala conexión en la próxima partida (`LaggyTransport`, solo en
+  modo de prueba); probado con 80 ± 20 ms y 5 % de pérdida.
 
 ## Hitos
 
@@ -156,9 +163,9 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
 
 ## Pendientes
 
-- **M3**: probar el resto de jefes (fases, plataformas, cinemáticas propias). Guardián de Cristal y Señores Mantis sin
-  probar (necesitan entrar por su zona de activación). Lo que crea un objeto que no es enemigo (controladores de arena
-  sin vida) aún no se replica.
+- **M3**: probar el resto de jefes (fases, plataformas, cinemáticas propias). Señores Mantis sin sincronizar: su
+  combate lo lleva un controlador de la sala sin vida (`Mantis Battle`), no los enemigos. Lo que crea un objeto que no
+  es enemigo (controladores de arena sin vida) aún no se replica.
 - **M4**: efectos del otro jugador (tajos, hechizos, dash, curación). `PlayerEvent` está reservado y sin usar.
 - **M5**: revivir, sombras compartidas, barras de vida y HUD del compañero, cinemáticas compartidas, skins y ajustes
   del host en el panel (la 0.7 los tenía en `HollowKnightCoop/src/HollowKnightCoop/Coop`).

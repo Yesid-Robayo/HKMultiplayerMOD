@@ -222,7 +222,7 @@ internal sealed class TestDriver : MonoBehaviour {
 
                     var components = string.Join(",", found.GetComponents<Component>().Select(c => c.GetType().Name));
                     var fsms = string.Join(",", found.GetComponents<PlayMakerFSM>().Select(f => f.FsmName + ":" + f.ActiveStateName));
-                    Log.Info($"{Tag}obj {found.name}{(found.gameObject.activeInHierarchy ? "" : " (inactivo)")} [{components}] fsm=[{fsms}] " +
+                    Log.Info($"{Tag}obj {found.name} padre={(found.parent != null ? found.parent.name : "-")}{(found.gameObject.activeInHierarchy ? "" : " (inactivo)")} [{components}] fsm=[{fsms}] " +
                              $"pos=({found.position.x:0.0},{found.position.y:0.0})");
                 }
 
@@ -283,6 +283,12 @@ internal sealed class TestDriver : MonoBehaviour {
                     Log.Info($"{Tag}{line}");
                 }
 
+                break;
+            case "netsim":
+                // netsim <retraso ms> <variación ms> <pérdida %>: la próxima partida (host o unirse) va como una mala conexión
+                HKMultiplayer.Net.Transport.LaggyTransport.NextLatency = ParseFloat(args[1]) / 1000f;
+                HKMultiplayer.Net.Transport.LaggyTransport.NextJitter = ParseFloat(args[2]) / 1000f;
+                HKMultiplayer.Net.Transport.LaggyTransport.NextLoss = ParseFloat(args[3]) / 100f;
                 break;
             case "hitall":
                 // hitall <daño>: golpea a todos los enemigos vivos de la sala, como el caballero

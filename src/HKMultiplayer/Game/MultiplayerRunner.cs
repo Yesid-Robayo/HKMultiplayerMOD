@@ -189,7 +189,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
         transport.Error += message => Log.Warn($"Red: {message}");
         var code = roomCode != null ? RoomCode.Normalize(roomCode) : RoomCode.Generate();
-        Session = GameSession.Host(transport, code, SanitizeName(name), CurrentScene(), HKMultiplayerMod.Version,
+        Session = GameSession.Host(WithTestNetwork(transport), code, SanitizeName(name), CurrentScene(), HKMultiplayerMod.Version,
             Log.Info);
         Wire(Session);
         _announceCode = true;
@@ -215,6 +215,17 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         }
 
         return true;
+    }
+
+    /// <summary>En el modo de prueba, si se pidió (netsim), la conexión se estropea como una mala conexión.</summary>
+    private static ITransport WithTestNetwork(ITransport transport) {
+        if (!TestDriver.IsEnabled() || !LaggyTransport.Configured) {
+            return transport;
+        }
+
+        Log.Info($"Red de prueba: {LaggyTransport.NextLatency * 1000:0} ms ± {LaggyTransport.NextJitter * 1000:0} ms, " +
+                 $"{LaggyTransport.NextLoss * 100:0}% de pérdida");
+        return new LaggyTransport(transport, LaggyTransport.NextLatency, LaggyTransport.NextJitter, LaggyTransport.NextLoss);
     }
 
     /// <summary>Se une a la partida de <paramref name="address"/>.</summary>
@@ -249,7 +260,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         }
 
         transport.Error += message => Log.Warn($"Red: {message}");
-        Session = GameSession.Join(transport, new IPEndPoint(ip, port), code, SanitizeName(name),
+        Session = GameSession.Join(WithTestNetwork(transport), new IPEndPoint(ip, port), code, SanitizeName(name),
             HKMultiplayerMod.Version, Log.Info);
         Wire(Session);
         SetStatus($"Conectando con {ip}:{port}...");
