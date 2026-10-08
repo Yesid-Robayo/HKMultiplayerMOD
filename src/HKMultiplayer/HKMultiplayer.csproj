@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!--
+      HKMultiplayer: mod cooperativo para Hollow Knight 1.5.12620 (Unity 6) sobre la Modding API.
+      El transporte (carpeta Net) no depende de Unity y se prueba también fuera del juego (tests/NetTests).
+    -->
+    <PropertyGroup>
+        <AssemblyName>HKMultiplayer</AssemblyName>
+        <RootNamespace>HKMultiplayer</RootNamespace>
+        <AssemblyVersion>0.1.0.0</AssemblyVersion>
+        <TargetFramework>net472</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>disable</Nullable>
+        <!-- Referencias para compilar: juego + Modding API (carpeta lib, solo local) -->
+        <References>$(MSBuildProjectDirectory)\..\..\lib</References>
+        <OutputDirectory>$(MSBuildProjectDirectory)\..\..\out\HKMultiplayer</OutputDirectory>
+        <!-- Unity 6: compilar contra el mscorlib/System del juego -->
+        <FrameworkPathOverride>$(References)</FrameworkPathOverride>
+        <PathMap Condition="'$(Configuration)' == 'Release'">$(MSBuildProjectDirectory)=source</PathMap>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Reference Include="$(References)\Assembly-CSharp.dll" Private="False" />
+        <Reference Include="$(References)\MMHOOK_Assembly-CSharp.dll" Private="False" />
+        <Reference Include="$(References)\MMHOOK_PlayMaker.dll" Private="False" />
+        <Reference Include="$(References)\MonoMod.RuntimeDetour.dll" Private="False" />
+        <Reference Include="$(References)\MonoMod.Utils.dll" Private="False" />
+        <Reference Include="$(References)\Newtonsoft.Json.dll" Private="False" />
+        <Reference Include="$(References)\PlayMaker.dll" Private="False" />
+        <Reference Include="$(References)\UnityEngine.dll" Private="False" />
+        <Reference Include="$(References)\UnityEngine.CoreModule.dll" Private="False" />
+        <Reference Include="$(References)\UnityEngine.IMGUIModule.dll" Private="False" />
+        <Reference Include="$(References)\UnityEngine.InputLegacyModule.dll" Private="False" />
+        <Reference Include="$(References)\UnityEngine.Physics2DModule.dll" Private="False" />
+        <Reference Include="$(References)\UnityEngine.ScreenCaptureModule.dll" Private="False" />
+        <Reference Include="$(References)\UnityEngine.TextRenderingModule.dll" Private="False" />
+        <Reference Include="$(References)\UnityEngine.UI.dll" Private="False" />
+        <Reference Include="$(References)\UnityEngine.UIModule.dll" Private="False" />
+        <Reference Include="$(References)\TeamCherry.*.dll" Private="False" />
+        <Reference Include="$(References)\MMHOOK_TeamCherry.*.dll" Private="False" />
+        <Reference Include="$(References)\netstandard.dll" Private="False" />
+        <!-- Primitivas de cifrado (X25519, HKDF, ChaCha20-Poly1305) -->
+        <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
+    </ItemGroup>
+
+    <!-- En out/HKMultiplayer queda solo lo que se instala: el mod y su dependencia de cifrado -->
+    <Target Name="CopyMod" AfterTargets="Build">
+        <Copy SourceFiles="$(TargetDir)HKMultiplayer.dll;$(TargetDir)HKMultiplayer.pdb;$(TargetDir)BouncyCastle.Cryptography.dll"
+              DestinationFolder="$(OutputDirectory)" />
+    </Target>
+</Project>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!-- Pruebas del transporte fuera del juego: se compilan los mismos archivos de src/HKMultiplayer/Net -->
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net472</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>disable</Nullable>
+        <RootNamespace>HKMultiplayer.Tests</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="..\..\src\HKMultiplayer\Net\**\*.cs" Link="Net\%(RecursiveDir)%(Filename)%(Extension)" />
+        <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
+    </ItemGroup>
+</Project>
