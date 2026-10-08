@@ -145,7 +145,7 @@ internal sealed class WorldSync {
             return;
         }
 
-        var json = CharacterData.Extract(playerData).ToString(Formatting.None);
+        var json = CharacterData.Extract(playerData, SceneData.instance).ToString(Formatting.None);
         _session.SendLargeToHost(LargeCharacter, Compress(json));
         Log.Info("Personaje enviado al host");
     }
@@ -178,9 +178,9 @@ internal sealed class WorldSync {
         gm.SaveLevelState();
         var json = JObject.Parse(JsonConvert.SerializeObject(new SaveGameData(gm.playerData, gm.sceneData),
             Formatting.None, WorldStore.SaveSettings));
-        var playerJson = (JObject) json["playerData"];
         var character = WorldStore.LoadCharacter(world.Id, key);
-        CharacterData.ApplyTo(playerJson, character ?? CharacterData.CreateNew(gm.playerData));
+        var fresh = CharacterData.CreateNew(gm.playerData);
+        CharacterData.ApplyToWorld(json, character ?? fresh, fresh);
         var data = Compress(json.ToString(Formatting.None));
         _session.SendLargeTo(target, LargeWorld, data);
         Log.Info($"Mundo enviado a {target.Name} ({data.Length / 1024} KB, personaje {(character != null ? "guardado" : "nuevo")})");
@@ -200,9 +200,7 @@ internal sealed class WorldSync {
         try {
             var character = JObject.Parse(Decompress(data, MaxCharacterChars));
             // Solo se guardan los campos de personaje conocidos y válidos
-            var clean = new JObject();
-            CharacterData.ApplyTo(clean, character);
-            WorldStore.SaveCharacter(world.Id, key, clean);
+            WorldStore.SaveCharacter(world.Id, key, CharacterData.Sanitize(character));
             Log.Info($"Personaje de {from.Name} guardado en el mundo");
         } catch (Exception e) when (e is JsonException or InvalidDataException or IOException) {
             Log.Warn($"No se pudo guardar el personaje de {from.Name}: {e.Message}");

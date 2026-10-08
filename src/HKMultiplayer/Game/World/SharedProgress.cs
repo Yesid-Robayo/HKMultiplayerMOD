@@ -20,8 +20,8 @@ namespace HKMultiplayer.Game.World;
 /// retroceden: un objeto activado sigue activado, un contador solo sube y una piedra de geo solo baja. Los que el juego
 /// reinicia al descansar (semipersistentes) no se comparten.</item>
 /// </list>
-/// Los cambios van al host, que los aplica y los reenvía a los demás. Todos los campos del personaje
-/// (<see cref="CharacterData"/>) quedan fuera.
+/// Los cambios van al host, que los aplica y los reenvía a los demás. El personaje y su inventario
+/// (<see cref="CharacterData"/>) y los objetos que recoge cada uno quedan fuera.
 /// </summary>
 internal sealed class SharedProgress {
     /// <summary>Un cambio del mundo (jugador → host → los demás).</summary>
@@ -60,7 +60,6 @@ internal sealed class SharedProgress {
     private static readonly Func<PlayerData, int>[] IntGetters;
     private static readonly Action<PlayerData, int>[] IntSetters;
     private static readonly FieldInfo[] ListFields;
-    private static readonly int MaxHealthBaseIndex;
 
     private GameSession _session;
     private readonly MessageHandler _onChange;
@@ -95,7 +94,6 @@ internal sealed class SharedProgress {
         BoolSetters = BoolFields.Select(Setter<bool>).ToArray();
         IntGetters = IntFields.Select(Getter<int>).ToArray();
         IntSetters = IntFields.Select(Setter<int>).ToArray();
-        MaxHealthBaseIndex = Array.FindIndex(IntFields, f => f.Name == "maxHealthBase");
     }
 
     public SharedProgress() {
@@ -278,7 +276,8 @@ internal sealed class SharedProgress {
     private static bool _hookInstalled;
 
     private void OnSceneBool(PersistentBoolData data) {
-        if (_applying || !_active || data.semiPersistent || !data.activated) {
+        // Lo que recoge cada uno (objetos, fragmentos, cofres...) no se comparte
+        if (_applying || !_active || data.semiPersistent || !data.activated || CharacterData.IsIndividualItem(data.id)) {
             return;
         }
 
@@ -427,15 +426,6 @@ internal sealed class SharedProgress {
 
                     break;
                 case Kind.Int:
-                    if (change.Index == MaxHealthBaseIndex) {
-                        // Otro consiguió una máscara: también sube la vida máxima de este personaje y se llena
-                        var gained = change.Value - IntGetters[change.Index](playerData);
-                        if (gained > 0) {
-                            playerData.maxHealth += gained;
-                            HeroController.instance?.MaxHealth();
-                        }
-                    }
-
                     IntSetters[change.Index](playerData, change.Value);
                     if (_ints.Length > change.Index) {
                         _ints[change.Index] = change.Value;
@@ -452,6 +442,10 @@ internal sealed class SharedProgress {
 
                     break;
                 case Kind.SceneBool:
+                    if (CharacterData.IsIndividualItem(change.Id)) {
+                        break;
+                    }
+
                     _knownActivated.Add(Key(change.Scene, change.Id));
                     SceneData.instance.SaveMyState(new PersistentBoolData {
                         sceneName = change.Scene, id = change.Id, activated = true, semiPersistent = false

@@ -70,8 +70,10 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Al unirse, el host envía el mundo comprimido con el personaje del jugador dentro (o uno nuevo); el jugador lo carga
     y no guarda nada en su PC: su personaje va al host en los bancos, al salir y cada minuto
     (`players/<clave>.json`). El host guarda el mundo solo cada 2 minutos.
-  - **Personaje** (`CharacterData`): vida y alma actuales, vida máxima, geo, banco y reaparición, sombra, amuletos
-    equipados, portal de sueño e interfaz. Todo lo demás es del mundo.
+  - **Personaje** (`CharacterData`): estado (vida, alma, geo, banco, sombra, portal de sueño) e **inventario propio**
+    (máscaras y vasijas, aguijón y artes, amuletos, llaves, reliquias, mapas, esencia, compras), más los objetos de
+    sala que recoge cada uno (objetos brillantes, fragmentos, cofres, orbes de sueño). Del mundo y compartido:
+    habilidades de movimiento y hechizos, jefes, puertas, palancas, paredes, personajes y salas visitadas.
   - **Progreso compartido en directo** (`SharedProgress`): los campos del mundo se comparan cada 0,2 s con una copia
     (lectores compilados, sin memoria por lectura) y los cambios van al host, que los aplica y reenvía. Los objetos de
     sala (paredes, palancas, piedras de geo) se envían al guardarse y nunca retroceden.
