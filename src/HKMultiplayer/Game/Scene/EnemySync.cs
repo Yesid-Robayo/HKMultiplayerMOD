@@ -242,10 +242,30 @@ internal sealed class EnemySync {
         public int[] Ints;
         public float[] Floats;
         public bool[] Bools;
+        public ObjectRef[] Objects;
         public bool HasBody;
         public Vector2 Velocity;
         public float Gravity;
         public RigidbodyType2D BodyType;
+    }
+
+    /// <summary>A qué apunta una variable de objeto, de forma que otro PC encuentre su equivalente.</summary>
+    private enum ObjectKind : byte {
+        None = 0,
+
+        /// <summary>El caballero del que lo movía: en quien lo recibe, su propio caballero.</summary>
+        Hero = 1,
+
+        /// <summary>El enemigo o una pieza suya, por su ruta dentro de él.</summary>
+        Own = 2,
+
+        /// <summary>Un objeto de la sala, por su ruta en la sala.</summary>
+        Scene = 3
+    }
+
+    private struct ObjectRef {
+        public ObjectKind Kind;
+        public uint Path;
     }
 
     /// <summary>FSM de enemigos que tienen estados con sonido: su enemigo, su posición y qué estados suenan.</summary>
@@ -1342,6 +1362,19 @@ internal sealed class EnemySync {
                 writer.WriteBool(bools[v].Value);
             }
 
+            // Sus variables de objeto (el caballero al que sigue, él mismo...): las que guarda al despertar no las tiene
+            // la marioneta, que no pasó por ahí
+            var objects = variables?.GameObjectVariables;
+            var objectCount = objects == null ? 0 : Math.Min(objects.Length, MaxHandoverVars);
+            writer.WriteByte((byte) objectCount);
+            for (var v = 0; v < objectCount; v++) {
+                var reference = Reference(enemy, objects[v].Value);
+                writer.WriteByte((byte) reference.Kind);
+                if (reference.Kind is ObjectKind.Own or ObjectKind.Scene) {
+                    writer.WriteUInt(reference.Path);
+                }
+            }
+
             // La física con la que iba (a mitad de un salto, su gravedad la pone el estado que ya pasó)
             var body = enemy.Body;
             writer.WriteBool(body != null);
@@ -1380,6 +1413,14 @@ internal sealed class EnemySync {
             bools[v] = reader.ReadBool();
         }
 
+        var objects = new ObjectRef[reader.ReadByte()];
+        for (var v = 0; v < objects.Length; v++) {
+            objects[v].Kind = (ObjectKind) reader.ReadByte();
+            if (objects[v].Kind is ObjectKind.Own or ObjectKind.Scene) {
+                objects[v].Path = reader.ReadUInt();
+            }
+        }
+
         var hasBody = reader.ReadBool();
         var velocity = Vector2.zero;
         var gravity = 0f;
@@ -1400,7 +1441,7 @@ internal sealed class EnemySync {
         }
 
         enemy.Handover[index] = new HandoverFsm {
-            State = state, Ints = ints, Floats = floats, Bools = bools, HasBody = hasBody, Velocity = velocity, Gravity = gravity,
+            State = state, Ints = ints, Floats = floats, Bools = bools, Objects = objects, HasBody = hasBody, Velocity = velocity, Gravity = gravity,
             BodyType = bodyType
         };
         if (index == count - 1) {
@@ -1455,6 +1496,14 @@ internal sealed class EnemySync {
                 variables.BoolVariables[v].Value = data.Bools[v];
             }
 
+            // Solo las vacías aquí: las que ya apuntan a algo las preparó su propia lógica en este PC
+            for (var v = 0; v < data.Objects.Length && v < variables.GameObjectVariables.Length; v++) {
+                var variable = variables.GameObjectVariables[v];
+                if (variable.Value == null && data.Objects[v].Kind != ObjectKind.None) {
+                    variable.Value = Resolve(enemy, data.Objects[v]);
+                }
+            }
+
             var states = fsm.Fsm.States;
             if (data.State < states.Length && fsm.Fsm.ActiveState != states[data.State]) {
                 try {
@@ -1481,6 +1530,67 @@ internal sealed class EnemySync {
 
         var first = handover.Length > 0 && enemy.Fsms.Length > 0 && enemy.Fsms[0] != null ? enemy.Fsms[0].ActiveStateName : "-";
         Log.Info($"{enemy.Root.name}: lo mueve este PC, sigue desde {first}");
+    }
+
+    private static ObjectRef Reference(Enemy enemy, GameObject target) {
+        if (target == null) {
+            return default;
+        }
+
+        var hero = HeroController.instance;
+        if (hero != null && target == hero.gameObject) {
+            return new ObjectRef { Kind = ObjectKind.Hero };
+        }
+
+        if (enemy.Root != null && target.transform.IsChildOf(enemy.Transform)) {
+            return new ObjectRef { Kind = ObjectKind.Own, Path = OwnPath(enemy.Transform, target.transform) };
+        }
+
+        return target.scene.buildIndex >= 0
+            ? new ObjectRef { Kind = ObjectKind.Scene, Path = ScenePaths.Hash(target.transform) }
+            : default;
+    }
+
+    private static GameObject Resolve(Enemy enemy, ObjectRef reference) {
+        switch (reference.Kind) {
+            case ObjectKind.Hero:
+                return HeroController.instance != null ? HeroController.instance.gameObject : null;
+            case ObjectKind.Own:
+                foreach (var child in enemy.Root.GetComponentsInChildren<Transform>(true)) {
+                    if (OwnPath(enemy.Transform, child) == reference.Path) {
+                        return child.gameObject;
+                    }
+                }
+
+                return null;
+            case ObjectKind.Scene:
+                // Raro (solo variables vacías al retomarlo) y caro: se recorre la sala
+                foreach (var candidate in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include,
+                             FindObjectsSortMode.None)) {
+                    if (candidate.gameObject.scene.buildIndex >= 0 && ScenePaths.Hash(candidate) == reference.Path) {
+                        return candidate.gameObject;
+                    }
+                }
+
+                return null;
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>Huella de la ruta de una pieza dentro del enemigo (0: el propio enemigo).</summary>
+    private static uint OwnPath(Transform root, Transform target) {
+        var hash = 2166136261u;
+        for (var t = target; t != null && t != root; t = t.parent) {
+            foreach (var c in t.name) {
+                hash = (hash ^ c) * 16777619u;
+            }
+
+            hash = (hash ^ (uint) t.GetSiblingIndex()) * 16777619u;
+            hash = (hash ^ '/') * 16777619u;
+        }
+
+        return target == root ? 0u : hash;
     }
 
     // =====================================================================================================
@@ -2736,7 +2846,7 @@ internal sealed class EnemySync {
 
             // Los de otro enemigo (o de sí mismo) son de su lógica: ya pasan en el PC que los mueve
             var sender = eventData?.SentByFsm ?? HutongGames.PlayMaker.Fsm.EventData?.SentByFsm;
-            if (sender != null && sync._enemyFsms.ContainsKey(sender)) {
+            if (sender != null && (sync._enemyFsms.ContainsKey(sender) || FsmStateSync.IsSharedController(sender))) {
                 return;
             }
 

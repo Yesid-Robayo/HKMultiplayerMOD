@@ -53,10 +53,27 @@ internal sealed class FsmStateSync {
     /// </summary>
     private const float GateClearance = 0.9f;
 
-    /// <summary>Objetos con controlador: principio del nombre del objeto y nombre de su FSM.</summary>
+    private const string LiftFsm = "Lift Control";
+
+    /// <summary>Cartel para desafiar a un jefe (Señores Mantis) y su estado de reposo.</summary>
+    private const string ChallengeFsm = "Challenge Start";
+
+    private const string ChallengeIdle = "Idle 2";
+
+    /// <summary>
+    /// Objetos con controlador: principio del nombre del objeto y nombre de su FSM. Además de ascensores y rejas, los
+    /// controladores de batalla que no son enemigos (los tronos y la batalla de los Señores Mantis: quién acepta el
+    /// desafío, cuándo baja la jaula, qué señores salen y la IA que coordina a la pareja). Así el combate empieza y
+    /// avanza igual en todos, y la IA de la pareja la lleva un solo PC.
+    /// </summary>
     private static readonly (string Name, string Fsm)[] Targets = {
-        ("Ruins Lift", "Lift Control"),
-        ("Battle Gate", GateFsm)
+        ("Ruins Lift", LiftFsm),
+        ("Battle Gate", GateFsm),
+        ("Mantis Lord Throne", "Mantis Throne Main"),
+        ("Mantis Lord Throne", "Mantis Throne Sub"),
+        ("Mantis Battle", "Battle Control"),
+        ("Battle Main", "Start"),
+        ("Battle Sub", "Start")
     };
 
     private sealed class Tracked {
@@ -136,6 +153,13 @@ internal sealed class FsmStateSync {
 
     /// <summary>Si ahora mismo se está poniendo un estado llegado de otro PC (lo que provoque no es de este PC).</summary>
     public static bool IsApplyingRemote => _applying != null;
+
+    /// <summary>
+    /// Si la FSM es de un objeto con controlador: sus estados llegan a todos los PCs, así que sus órdenes a un enemigo
+    /// ya se dan en el PC que lo mueve (no hay que reenviárselas).
+    /// </summary>
+    public static bool IsSharedController(Fsm fsm) =>
+        _active != null && fsm != null && _active._byFsm.TryGetValue(fsm, out var item) && !item.CopyTransitions;
 
     /// <summary>El primer cambio de estado al aplicar uno de otro PC es el pedido; los que encadene, se retienen.</summary>
     private static bool _requested;
@@ -459,7 +483,7 @@ internal sealed class FsmStateSync {
 
             var item = new Tracked {
                 Id = id, Fsm = fsm, LastState = fsm.ActiveStateName, CopyTransitions = !target,
-                LastStateTime = Time.unscaledTime, Platform = target ? FindPlatform(fsm) : null,
+                LastStateTime = Time.unscaledTime, Platform = target && fsm.FsmName is LiftFsm or GateFsm ? FindPlatform(fsm) : null,
                 Lift = target ? fsm.GetComponent<RuinsLift>() : null,
                 CurrentPosition = target ? fsm.FsmVariables.FindFsmInt("Current Position") : null,
                 Gate = target && fsm.FsmName == GateFsm ? fsm.GetComponent<BoxCollider2D>() : null
@@ -580,6 +604,10 @@ internal sealed class FsmStateSync {
     /// pidan sus acciones corta las acciones siguientes (igual que en el PC de origen) y se retiene.
     /// </summary>
     private static void ApplyRemoteState(Tracked item, string state) {
+        if (item.Fsm.FsmName != LiftFsm && item.Fsm.FsmName != GateFsm) {
+            CloseChallengePrompts();
+        }
+
         var fsm = item.Fsm.Fsm;
         PrepareCopy(item, state);
         _applying = item;
@@ -597,6 +625,38 @@ internal sealed class FsmStateSync {
             }
 
             DisabledActions.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Un combate de batalla empezó en otro PC: el cartel para desafiar (Señores Mantis) se apaga también aquí, como
+    /// hace el juego en el PC que lo aceptó (le quita la colisión y esconde la flecha). Si no, este jugador podría
+    /// desafiar otra vez a mitad del combate y su caballero se quedaría sin control.
+    /// </summary>
+    private static void CloseChallengePrompts() {
+        foreach (var fsm in PlayMakerFSM.FsmList) {
+            if (fsm == null || fsm.FsmName != ChallengeFsm) {
+                continue;
+            }
+
+            var collider = fsm.GetComponent<Collider2D>();
+            if (collider == null || !collider.enabled) {
+                continue;
+            }
+
+            collider.enabled = false;
+            var arrow = fsm.FsmVariables.FindFsmGameObject("Prompt")?.Value;
+            var arrowFsm = arrow != null ? arrow.GetComponent<PlayMakerFSM>() : null;
+            if (arrowFsm != null) {
+                arrowFsm.SendEvent("DOWN");
+            }
+
+            // De vuelta al reposo (si el caballero estaba al lado, su FSM esperaba la tecla para desafiar)
+            if (fsm.ActiveStateName != ChallengeIdle && Array.Exists(fsm.FsmStates, state => state.Name == ChallengeIdle)) {
+                fsm.SetState(ChallengeIdle);
+            }
+
+            Log.Info($"{fsm.gameObject.name}: el combate empezó en otro PC, ya no se puede desafiar aquí");
         }
     }
 
@@ -627,12 +687,30 @@ internal sealed class FsmStateSync {
             }
 
             foreach (var action in fsmState.Actions) {
-                if (action.Enabled && PlayerDataActions.Contains(action.GetType().Name)) {
+                if (action.Enabled && (PlayerDataActions.Contains(action.GetType().Name) || TouchesHero(action))) {
                     action.Enabled = false;
                     DisabledActions.Add(action);
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Llamadas al caballero (devolverle el control, girarlo): en el PC de origen son para quien aceptó el desafío; aquí
+    /// el caballero no lo había perdido.
+    /// </summary>
+    private static bool TouchesHero(FsmStateAction action) {
+        var hero = HeroController.instance;
+        if (hero == null) {
+            return false;
+        }
+
+        var target = action switch {
+            HutongGames.PlayMaker.Actions.CallMethodProper call => action.Fsm.GetOwnerDefaultTarget(call.gameObject),
+            HutongGames.PlayMaker.Actions.SendMessage message => action.Fsm.GetOwnerDefaultTarget(message.gameObject),
+            _ => null
+        };
+        return target != null && target == hero.gameObject;
     }
 
     /// <summary>

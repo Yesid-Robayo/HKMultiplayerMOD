@@ -85,8 +85,10 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     animación, profundidad, activo, vida, daño al tocarlo) con detección de cambios sin crear objetos.
   - En los demás juegos el enemigo es una "marioneta": su lógica (FSM, física) se pausa (no se reinicia) y se dibuja
     con el estado recibido e interpolación; sus colisiones de daño siguen funcionando para el jugador local.
-  - Traspaso: el que lo suelta envía cómo iba (estado y números de cada FSM, velocidad, gravedad y tipo de cuerpo) y el
-    nuevo lo sigue desde ahí. También al salir de la sala o morir (aún dentro, al empezar el cambio de sala): un jefe no
+  - Traspaso: el que lo suelta envía cómo iba (estado, números y objetos de cada FSM, velocidad, gravedad y tipo de
+    cuerpo) y el nuevo lo sigue desde ahí. Los objetos van como "su caballero" (en quien lo recibe, el suyo), "una
+    pieza del enemigo" o "un objeto de la sala" por su ruta, y solo rellenan las variables vacías: la marioneta no pasó
+    por los estados que las guardan (el escupidor guarda al caballero al alertarse). También al salir de la sala o morir (aún dentro, al empezar el cambio de sala): un jefe no
     repite su presentación.
   - Los golpes del jugador local a una marioneta van al PC que la mueve, que los aplica al enemigo real. Cualquier
     aviso de fuera que llegue a una marioneta (el de daño del ataque, la zona de la arena en la que entró el caballero,
@@ -105,6 +107,13 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     efectos fuera del objeto (el ascensor voltea la dirección de su palanca al llegar) se harían dos veces.
   - Rejas de batalla y de jefes: si una se cierra con un jugador dentro, el otro puede entrar a ayudar pero no salir
     hasta que se abra. Las que ya están cerradas al cargar la sala no se cruzan.
+  - Controladores de batalla que no son enemigos (Señores Mantis: los tronos, `Mantis Battle`, `Battle Main` y
+    `Battle Sub`, que coordina a la pareja): igual que ascensores y rejas, los lleva un PC y los demás siguen sus
+    estados. Quien acepta el desafío pasa a controlarlos, y el combate (jaula, suelo con pinchos, qué señores salen,
+    final) avanza igual en todos. En las copias no se hacen las llamadas al caballero (devolverle el control,
+    girarlo), y el cartel para desafiar se apaga en los demás PCs (si no, se podría desafiar otra vez a mitad del
+    combate y ese caballero se quedaría sin control). Las órdenes de esos controladores a un enemigo no se reenvían:
+    ya las da su copia en el PC que lo mueve.
   - Las copias no tocan los datos del jugador (contadores como las larvas llegan una vez, del PC de origen). Los tarros
     de larva se rompen en todos y la larva sale también en los demás.
   - Quien entra en una sala recibe del dueño lo ya activado (puertas, palancas, paredes), los golpes de cada piedra de
@@ -121,8 +130,8 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     paran y su giro, rayos, sonidos y animaciones se copian. Solo las que dañan (las puertas de la arena van aparte) y
     de la misma sala (la sala y su escena `_boss`). Al morir el enemigo vuelven a ser de cada PC y sus rayos se apagan.
   - La sombra de cada jugador no es un enemigo compartido.
-  - Probados: Mamá Gruz, Falso Caballero, Hornet, Mawlek, Maestro de Almas, Defensor del Estiércol, Nosk, Vasija Rota
-    y Guardián de Cristal normal y enfurecido (despiertan, atacan al jugador que no es dueño de la sala y siguen el
+  - Probados: Mamá Gruz, Falso Caballero, Hornet, Mawlek, Maestro de Almas, Defensor del Estiércol, Nosk, Vasija Rota,
+    Guardián de Cristal normal y enfurecido y Señores Mantis (despiertan, atacan al jugador que no es dueño de la sala y siguen el
     combate al cambiar de PC; el rayo y las torretas del Guardián se ven igual en los dos), escupidores y zombis. El
     contador del diario (`killsMegaBeamMiner`, que la sala del enfurecido usa para darlo por vencido) baja una sola vez.
 - **Efectos del otro jugador**: eventos (ataque, hechizo, dash, curación...) que el receptor reproduce con los prefabs
@@ -165,9 +174,10 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
 
 ## Pendientes
 
-- **M3**: probar el resto de jefes (fases, plataformas, cinemáticas propias). Señores Mantis sin sincronizar: su
-  combate lo lleva un controlador de la sala sin vida (`Mantis Battle`), no los enemigos. Lo que crea un objeto que no
-  es enemigo (controladores de arena sin vida) aún no se replica.
+- **M3**: probar el resto de jefes (fases, plataformas, cinemáticas propias). Otros combates llevados por
+  controladores de la sala sin vida (como los Mantis) hay que añadirlos a `FsmStateSync.Targets` uno a uno. Lo que
+  crea un objeto que no es enemigo aún no se replica. Quien entra a mitad de un combate de Mantis no recibe en qué
+  estado va.
 - **M4**: efectos del otro jugador (tajos, hechizos, dash, curación). `PlayerEvent` está reservado y sin usar.
 - **M5**: revivir, sombras compartidas, barras de vida y HUD del compañero, cinemáticas compartidas, skins y ajustes
   del host en el panel (la 0.7 los tenía en `HollowKnightCoop/src/HollowKnightCoop/Coop`).
