@@ -134,6 +134,14 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Lo que crean los enemigos en combate (proyectiles, crías, invocaciones) se crea en los demás con la misma acción de
     su marioneta (mismo prefab). Si hace daño o tiene vida, es una copia que sigue al original hasta que desaparece; los
     efectos solo visuales del pool corren solos. Lo que crean al prepararse (cadáveres, piezas propias) no se replica.
+  - Los tarros del Coleccionista sueltan su bicho con su propio código: el original y su copia caen juntos y cada PC
+    rompe el suyo; el bicho se reconoce al encenderse junto a su tarro y se sigue con un identificador sacado del del
+    tarro, igual en todos. La copia sabe qué bicho lleva porque la lógica del jefe apunta en ella lo que crea (como en
+    el original). Una copia que acaba sola no borra el original, salvo un disparo: si su copia choca (con el caballero
+    de ese PC o una pared), el original también se acaba.
+  - Cadáveres: tras morir, el PC donde murió de verdad sigue enviando la posición de su cadáver unos segundos (sale
+    despedido con física, y algunos explotan, como el Gruzzer volátil): cae y explota en el mismo sitio en todos.
+  - Nombre del jefe al despertar: la marioneta hace también lo que le dice al título de zona qué nombre poner.
   - Enemigos creados por objetos de la sala que no son enemigos (las jaulas del Coliseo crean el suyo al prepararse):
     cada PC los crea igual. Si se crean después de repasar la sala, se siguen desde ese momento con un identificador
     sacado de quién los creó; los clonados en la raíz de la sala (mismo nombre y mismo puesto entre hermanos) se
@@ -199,8 +207,8 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
   un `Battle Scene` que ya se copia por cadena. Sin probar en vivo: jefes de sueño, Grimm, Uumuu y Coleccionista. En
   el Coliseo, una acción de sonido del minero aún no suena en la copia. Probados con los dos dañados: Cazador de
   Cristal (cristales), bichos de cristal (láser), Madre Aspid (crías), Aspid primigenio (disparos), minero (pico) y
-  Gruzzer volátil (explosión). El cadáver que explota sale despedido con física propia en cada PC, así que la
-  explosión ocurre en sitios algo distintos (cada uno recibe el daño de la que ve).
+  Gruzzer volátil (explosión), Uumuu (descargas) y Coleccionista (tarros y sus bichos, cuerpo, embestida). Sin probar
+  en vivo: Grimm (necesita la Compañía) y los jefes de sueño (se entra con el aguijón onírico).
 - **M4**: efectos del otro jugador (tajos, hechizos, dash, curación). `PlayerEvent` está reservado y sin usar.
 - **M5**: revivir, sombras compartidas, barras de vida y HUD del compañero, cinemáticas compartidas, skins y ajustes
   del host en el panel (la 0.7 los tenía en `HollowKnightCoop/src/HollowKnightCoop/Coop`).

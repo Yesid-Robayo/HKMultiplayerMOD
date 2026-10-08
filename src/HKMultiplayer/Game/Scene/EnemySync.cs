@@ -77,6 +77,9 @@ internal sealed class EnemySync {
 
     private const int MaxParts = 24;
 
+    /// <summary>Tras morir, lo que se sigue copiando su cadáver (lo que tarda en caer y, si explota, en explotar).</summary>
+    private const float CorpseFollowSeconds = 5f;
+
     /// <summary>A partir de aquí, los estados de los enemigos siguientes van en otro mensaje.</summary>
     private const int StatesMessageLimit = 900;
 
@@ -207,6 +210,12 @@ internal sealed class EnemySync {
         // Lo último enviado (dueño)
         public int LastHp;
         public bool ReportedDead;
+
+        /// <summary>Cuándo murió (o llegó su muerte): su cadáver se sigue un rato más.</summary>
+        public float DiedAt = -1f;
+
+        /// <summary>Murió en otro PC: su cadáver sigue al de allí (no al que lanza la física de este PC).</summary>
+        public bool CorpseFollows;
         public PlayerSnapshot LastSent;
         public uint LastSentTick;
         public tk2dSpriteAnimationClip LastClip;
@@ -221,6 +230,9 @@ internal sealed class EnemySync {
     }
 
     private sealed class Part {
+        /// <summary>Su cadáver (escondido hasta que muere): se sigue unos segundos tras la muerte.</summary>
+        public bool IsCorpse;
+
         /// <summary>Solo las de fuera del enemigo: qué variable de qué FSM la apunta (igual en todos los PCs).</summary>
         public uint Key;
 
@@ -591,9 +603,16 @@ internal sealed class EnemySync {
         _killedOut.Clear();
         for (var i = _enemies.Count - 1; i >= 0; i--) {
             var enemy = _enemies[i];
-            // Lo creado en combate que ya no está (vuelto al pool o destruido): desaparece también en los demás
+            // Lo creado en combate que ya no está (vuelto al pool o destruido): desaparece también en los demás. Si era
+            // una copia, solo aquí: el original lo quita quien lo mueve (una copia puede acabar sola, como el tarro del
+            // Coleccionista al llegar abajo, y borraría el original antes de que soltara su bicho)
             if (enemy.Spawned && (enemy.Root == null || !enemy.Root.activeInHierarchy)) {
-                SendDespawn(enemy.Id);
+                // Salvo un disparo: si su copia chocó (con el caballero de este PC o con una pared), en los demás también
+                // se acaba ahí, en vez de seguir y atravesar a este jugador
+                if (!enemy.Puppet || enemy.Root != null && enemy.Root.GetComponent<EnemyBullet>() != null) {
+                    SendDespawn(enemy.Id);
+                }
+
                 Forget(enemy);
                 continue;
             }
@@ -626,6 +645,7 @@ internal sealed class EnemySync {
             var dead = enemy.Health == null || enemy.Health.isDead;
             if (dead) {
                 enemy.ReportedDead = true;
+                enemy.DiedAt = Time.unscaledTime;
                 _healthOut.Add((enemy.Id, HealthKind.Died, 0));
                 if (!enemy.Spawned && !enemy.Created) {
                     _killedOut.Add(enemy.Id);
@@ -1017,6 +1037,43 @@ internal sealed class EnemySync {
     }
 
     /// <summary>
+    /// Un enemigo se acaba de encender: si es el bicho que suelta un tarro del Coleccionista al romperse (lo hace el código
+    /// del tarro, no una FSM), está justo donde el tarro y es del tipo que lleva. Cada PC rompe el suyo (el original y su
+    /// copia caen juntos), así que el bicho se sigue como uno de la sala, con un identificador sacado del del tarro, igual
+    /// en todos: uno lo mueve y los demás lo ven, con la misma vida y la misma muerte.
+    /// </summary>
+    private void NoteEnabled(HealthManager health) {
+        if (_session == null || _scene.Length == 0 || _byHealth.ContainsKey(health)) {
+            return;
+        }
+
+        var position = health.transform.position;
+        foreach (var enemy in _enemies) {
+            if (!enemy.Spawned || enemy.Root == null || !enemy.Root.activeInHierarchy ||
+                (enemy.Transform.position - position).sqrMagnitude > JarReach * JarReach) {
+                continue;
+            }
+
+            var jar = enemy.Root.GetComponent<SpawnJarControl>();
+            var prefab = jar != null ? JarEnemyField?.GetValue(jar) as GameObject : null;
+            if (prefab == null || !health.name.StartsWith(prefab.name, StringComparison.Ordinal)) {
+                continue;
+            }
+
+            var id = ((enemy.Id ^ 0x9e3779b9u) * 16777619u) & ~SpawnedIdFlag;
+            if (!_byId.ContainsKey(id)) {
+                AddEnemy(health, id).Created = true;
+                Log.Info($"Tarro roto: su {health.name} se sigue como {id:x8}");
+            }
+
+            return;
+        }
+    }
+
+    /// <summary>Distancia del tarro a la que aparece su bicho.</summary>
+    private const float JarReach = 4f;
+
+    /// <summary>
     /// Enemigo creado durante la partida por un objeto de la sala que no es enemigo (cada jaula del Coliseo crea el suyo
     /// cuando se activa su oleada, después de repasar la sala). Cada PC lo crea igual, así que se sigue como uno de la
     /// sala; su identificador sale de quién lo creó (su sitio en la sala, la FSM, el estado y la acción), que es el mismo
@@ -1078,7 +1135,9 @@ internal sealed class EnemySync {
     /// <summary>Acciones visuales que la marioneta también hace (además del sonido): no deciden nada de su lógica.</summary>
     private static readonly HashSet<string> EffectActions = new() {
         "ActivateGameObject", "PlayParticleEmitter", "StopParticleEmitter", "SetParticleEmission", "SetParticleEmissionRate",
-        "SetParticleEmissionSpeed", "SpawnRandomObjects", "FlingObjectsFromGlobalPool", "SendEventByName", "CreateObject"
+        "SetParticleEmissionSpeed", "SpawnRandomObjects", "FlingObjectsFromGlobalPool", "SendEventByName", "CreateObject",
+        // Qué bicho lleva el tarro que lanza el Coleccionista: la copia del tarro lo suelta igual
+        "SetSpawnJarContents"
     };
 
     /// <summary>
@@ -1088,8 +1147,27 @@ internal sealed class EnemySync {
     private static bool IsEffectAction(HutongGames.PlayMaker.FsmStateAction action) {
         var name = action.GetType().Name;
         return name.IndexOf("Audio", StringComparison.Ordinal) >= 0 || name.IndexOf("Sound", StringComparison.Ordinal) >= 0 ||
-               name.IndexOf("Music", StringComparison.Ordinal) >= 0 || EffectActions.Contains(name);
+               name.IndexOf("Music", StringComparison.Ordinal) >= 0 || EffectActions.Contains(name) || IsAreaTitleAction(action);
     }
+
+    private const string AreaTitleVariable = "Area Title";
+
+    /// <summary>
+    /// El nombre del jefe al despertar: su lógica busca el título de zona, lo enciende y le dice qué nombre poner. En la
+    /// marioneta se hace todo (antes solo se encendía, vacío, y en ese PC no salía el nombre).
+    /// </summary>
+    private static bool IsAreaTitleAction(HutongGames.PlayMaker.FsmStateAction action) {
+        return action switch {
+            HutongGames.PlayMaker.Actions.SetGameObject set => set.variable?.Name == AreaTitleVariable,
+            HutongGames.PlayMaker.Actions.SetFsmBool flag => TargetsAreaTitle(flag.gameObject),
+            HutongGames.PlayMaker.Actions.SetFsmString text => TargetsAreaTitle(text.gameObject),
+            _ => false
+        };
+    }
+
+    private static bool TargetsAreaTitle(HutongGames.PlayMaker.FsmOwnerDefault target) =>
+        target != null && target.OwnerOption == HutongGames.PlayMaker.OwnerDefaultOption.SpecifyGameObject &&
+        target.GameObject?.Name == AreaTitleVariable;
 
     /// <summary>
     /// Si la marioneta hace esta acción. No: lo que suelta geo; lo que crea con vida o daño (llega como copia); los avisos
@@ -1800,14 +1878,17 @@ internal sealed class EnemySync {
         // El mismo prefab que usa esa acción en la marioneta (es el mismo objeto del juego en todos los PCs)
         GameObject prefab;
         bool pooled;
+        HutongGames.PlayMaker.FsmGameObject store;
         switch (states[stateIndex].Actions[actionIndex]) {
             case HutongGames.PlayMaker.Actions.SpawnObjectFromGlobalPool spawn:
                 prefab = spawn.gameObject.Value;
                 pooled = true;
+                store = spawn.storeObject;
                 break;
             case HutongGames.PlayMaker.Actions.CreateObject create:
                 prefab = create.gameObject.Value;
                 pooled = false;
+                store = create.storeObject;
                 break;
             default:
                 return;
@@ -1837,6 +1918,12 @@ internal sealed class EnemySync {
             return;
         }
 
+        // La lógica de la marioneta lo apunta donde lo apunta la del original: sus efectos siguientes actúan sobre la
+        // copia (p. ej. el Coleccionista mete el bicho en el tarro que acaba de lanzar)
+        if (store != null && !store.IsNone) {
+            store.Value = copy;
+        }
+
         var scale = copy.transform.localScale;
         if ((scale.x < 0f) != facingRight) {
             scale.x = -scale.x;
@@ -1863,7 +1950,25 @@ internal sealed class EnemySync {
     private void OnDespawn(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
+        // La copia de un disparo chocó en otro PC (con su caballero o una pared): el original también se acaba
+        if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var original) && original.Spawned && !original.Puppet &&
+            original.Root != null && original.Root.activeInHierarchy && original.Root.GetComponent<EnemyBullet>() != null) {
+            if (original.Pooled) {
+                original.Root.Recycle();
+            } else {
+                UnityEngine.Object.Destroy(original.Root);
+            }
+
+            return;
+        }
+
         if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var enemy) && enemy.Spawned && enemy.Puppet) {
+            // Un tarro del Coleccionista se rompe solo al llegar abajo (y suelta aquí su bicho, que se sigue junto al
+            // de allí); su copia va justo detrás del original, así que se deja acabar
+            if (enemy.Root != null && enemy.Root.activeInHierarchy && enemy.Root.GetComponent<SpawnJarControl>() != null) {
+                return;
+            }
+
             RemoveSpawned(enemy);
         }
     }
@@ -1957,15 +2062,18 @@ internal sealed class EnemySync {
                 continue;
             }
 
+            // También su cadáver aunque no tenga animación propia: tras morir se sigue un rato (ver CorpseFollowSeconds)
             var animator = child.GetComponent<tk2dSpriteAnimator>();
-            if (animator == null && child.GetComponent<DamageHero>() == null) {
+            if (animator == null && child.GetComponent<DamageHero>() == null &&
+                !child.name.StartsWith("Corpse", StringComparison.Ordinal)) {
                 continue;
             }
 
             parts ??= new List<Part>();
             parts.Add(new Part {
                 Transform = child, Animator = animator, Collider = child.GetComponent<Collider2D>(),
-                Renderer = child.GetComponent<Renderer>(), Damage = child.GetComponent<DamageHero>()
+                Renderer = child.GetComponent<Renderer>(), Damage = child.GetComponent<DamageHero>(),
+                IsCorpse = child.name.StartsWith("Corpse", StringComparison.Ordinal)
             });
             if (parts.Count == MaxParts) {
                 break;
@@ -2222,7 +2330,19 @@ internal sealed class EnemySync {
         }
 
         foreach (var enemy in _enemies) {
-            if (enemy.Parts == null || enemy.Puppet || enemy.Root == null || enemy.ReportedDead || !enemy.Root.activeInHierarchy) {
+            // Muerto, solo su cadáver y solo un rato: sale despedido con física, y algunos explotan (el Gruzzer
+            // volátil); así cae y explota en el mismo sitio en todos los PCs
+            var corpseOnly = enemy.ReportedDead;
+            if (corpseOnly && enemy.CorpseFollows) {
+                // Murió en otro PC: su cadáver lo envía aquel
+                continue;
+            }
+
+            // (muerto, el juego suele destruir el enemigo; su cadáver ya se soltó y sigue)
+            if (enemy.Parts == null || enemy.Puppet ||
+                (corpseOnly
+                    ? Time.unscaledTime - enemy.DiedAt > CorpseFollowSeconds
+                    : enemy.Root == null || !enemy.Root.activeInHierarchy)) {
                 continue;
             }
 
@@ -2230,7 +2350,7 @@ internal sealed class EnemySync {
             var partCount = 0;
             for (var i = 0; i < enemy.Parts.Length; i++) {
                 var part = enemy.Parts[i];
-                if (part.Transform == null) {
+                if (part.Transform == null || corpseOnly && !part.IsCorpse) {
                     continue;
                 }
 
@@ -2351,8 +2471,9 @@ internal sealed class EnemySync {
             var id = reader.ReadUInt();
             var partCount = reader.ReadByte();
             _byId.TryGetValue(id, out var enemy);
-            var apply = sceneHash == _sceneHash && enemy != null && enemy.Puppet && enemy.Parts != null &&
-                        enemy.Health != null && !enemy.Health.isDead;
+            var alive = enemy != null && enemy.Puppet && enemy.Health != null && !enemy.Health.isDead;
+            var corpse = enemy != null && enemy.CorpseFollows && Time.unscaledTime - enemy.DiedAt <= CorpseFollowSeconds;
+            var apply = sceneHash == _sceneHash && enemy?.Parts != null && (alive || corpse);
             for (var p = 0; p < partCount; p++) {
                 int index = reader.ReadByte();
                 var key = index == ExternalPartIndex ? reader.ReadUInt() : 0u;
@@ -2374,8 +2495,17 @@ internal sealed class EnemySync {
                     index = Array.FindIndex(enemy.Parts, part => part.Key == key && part.Transform != null);
                 }
 
-                if (index < 0 || index >= enemy.Parts.Length || enemy.Parts[index].Transform == null) {
+                if (index < 0 || index >= enemy.Parts.Length || enemy.Parts[index].Transform == null ||
+                    !alive && !enemy.Parts[index].IsCorpse) {
                     continue;
+                }
+
+                // El cadáver lo mueve la física de allí: aquí se le quita el impulso que le dio la de este PC
+                if (!alive) {
+                    var body = enemy.Parts[index].Transform.GetComponent<Rigidbody2D>();
+                    if (body != null) {
+                        body.velocity = Vector2.zero;
+                    }
                 }
 
                 ApplyPart(enemy.Parts[index], flags, x, y, z, scaleX, scaleY, rotation, clip, frame);
@@ -2734,6 +2864,8 @@ internal sealed class EnemySync {
                 SetPuppet(enemy, false);
                 health.Die(null, AttackTypes.Nail, true);
                 enemy.ReportedDead = true;
+                enemy.DiedAt = Time.unscaledTime;
+                enemy.CorpseFollows = true;
                 break;
             case HealthKind.AlreadyDead:
                 // Murió antes de entrar: no aparece
@@ -2907,6 +3039,9 @@ internal sealed class EnemySync {
     // Golpes locales a marionetas
     // =====================================================================================================
 
+    private static readonly System.Reflection.FieldInfo JarEnemyField = typeof(SpawnJarControl).GetField("enemyToSpawn",
+        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+
     private static void InstallHooks() {
         if (_hooked) {
             return;
@@ -2941,6 +3076,11 @@ internal sealed class EnemySync {
             orig(self);
             _active?.OnSpawned(self, self.storeObject?.Value, pooled: true);
         };
+        On.HealthManager.OnEnable += (orig, self) => {
+            orig(self);
+            _active?.NoteEnabled(self);
+        };
+
         On.HutongGames.PlayMaker.Actions.CreateObject.OnEnter += (orig, self) => {
             orig(self);
             _active?.OnSpawned(self, self.storeObject?.Value, pooled: false);

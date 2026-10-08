@@ -280,6 +280,38 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "findactive":
+                // findactive <texto>: solo los objetos activos cuyo nombre lo contiene, con su posición
+                var activeNeedle = string.Join(" ", args.Skip(1));
+                foreach (var found in FindObjectsByType<Transform>(FindObjectsSortMode.None)) {
+                    if (found.name.IndexOf(activeNeedle, StringComparison.OrdinalIgnoreCase) >= 0) {
+                        var fsms = string.Join(",", found.GetComponents<PlayMakerFSM>().Select(f => f.FsmName + ":" + f.ActiveStateName));
+                        Log.Info($"{Tag}activo {found.name} padre={(found.parent != null ? found.parent.name : "-")} " +
+                                 $"pos=({found.position.x:0.0},{found.position.y:0.0}) fsm=[{fsms}]");
+                    }
+                }
+
+                break;
+            case "methods":
+                // methods <tipo>: métodos y campos de un tipo del juego (para saber cómo engancharse a él)
+                var type = typeof(HeroController).Assembly.GetType(args[1]);
+                if (type == null) {
+                    Log.Warn($"{Tag}no existe el tipo '{args[1]}'");
+                    break;
+                }
+
+                const System.Reflection.BindingFlags all = System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.DeclaredOnly;
+                foreach (var method in type.GetMethods(all)) {
+                    Log.Info($"{Tag}método {method.ReturnType.Name} {method.Name}({string.Join(", ", method.GetParameters().Select(x => x.ParameterType.Name))})");
+                }
+
+                foreach (var field in type.GetFields(all)) {
+                    Log.Info($"{Tag}campo {field.FieldType.Name} {field.Name}");
+                }
+
+                break;
             case "fsmnames":
                 // Nombres de FSM de la sala y cuántas hay de cada uno
                 foreach (var group in FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None)
