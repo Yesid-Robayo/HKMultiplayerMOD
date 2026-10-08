@@ -83,7 +83,11 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     activo, vida, estado de sus FSM) con detección de cambios sin crear objetos.
   - En los demás juegos los enemigos son "marionetas": su lógica (FSM, física) se detiene y se dibujan con el estado
     recibido e interpolación; sus colisiones de daño siguen funcionando para el jugador local.
-  - Los golpes del jugador local a una marioneta se envían al dueño, que los aplica al enemigo real.
+  - Los golpes del jugador local a una marioneta se envían al dueño, que los aplica al enemigo real. Cada golpe que
+    recibe un enemigo real se avisa a la sala: los demás ven el impacto, el destello y oyen el golpe (quien golpeó ya
+    los vio en su PC). La marioneta copia también su giro, si se dibuja, si choca y si es invencible (y desde dónde).
+  - Los sonidos de la lógica del enemigo (gritos, ataques, música de jefe) suenan también en las marionetas: cuando su
+    FSM entra en un estado con sonido, la marioneta hace solo esas acciones.
   - Ascensores y rejas: los mueve quien los usa (su controlador). Las copias de los demás no avanzan solas: solo pasan
     por los estados que llegan, una vez cada uno, aplicados dentro de la ejecución de su FSM. Si no, los estados con
     efectos fuera del objeto (el ascensor voltea la dirección de su palanca al llegar) se harían dos veces.
@@ -129,3 +133,23 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
 | M4 | Efectos del otro jugador | Se ven sus ataques, hechizos y movimientos especiales |
 | M5 | Funciones del coop (revivir, sombras, skins, panel...) | Igual o mejor que la 0.7.3 |
 | M6 | Instalador y paquete | Tu amigo lo instala y jugáis |
+
+## Pendientes
+
+- **M3**: probar y ajustar los jefes con escenario propio (fases, plataformas, cinemáticas); solo está probada Mamá
+  Gruz. Y lo que hoy solo pasa en el PC del dueño de la sala:
+  - los enemigos atacan solo a su caballero (su lógica no ve al otro jugador);
+  - proyectiles y objetos que crean en combate (escupitajos, crías, invocaciones) solo existen en su PC;
+  - las piezas aparte de algunos jefes (hijos con su propia animación) no se mueven en las marionetas.
+- **M4**: efectos del otro jugador (tajos, hechizos, dash, curación). `PlayerEvent` está reservado y sin usar.
+- **M5**: revivir, sombras compartidas, barras de vida y HUD del compañero, cinemáticas compartidas, skins y ajustes
+  del host en el panel (la 0.7 los tenía en `HollowKnightCoop/src/HollowKnightCoop/Coop`).
+- **M6**: `tools/package.sh` aún usa los nombres del mod anterior (`HollowKnightCoop`).
+- **Pasto y telas al paso del compañero** (solo estético, baja prioridad): hoy se sincroniza el corte, pero no el
+  balanceo cuando el otro caballero pasa por encima. Sin red: en cada PC, cada pocos frames, buscar el pasto
+  (`GrassBehaviour`) cercano al avatar del otro y darle el mismo empujón que da el héroe local, con la velocidad del
+  avatar. No poner la etiqueta `Player` al avatar: muchas cosas del juego reaccionan a ella (puertas entre salas, zonas
+  de cámara, NPCs, rangos de alerta de enemigos).
+- Auditoría: los objetos guardables los siguen a la vez `SceneObjectSync` y la copia de cadenas de `FsmStateSync`;
+  funciona, pero conviene que los lleve uno solo. Sin confirmar: posible aviso falso de "roto" justo al entrar en una
+  sala, si se escanea antes del `Start` de los objetos.

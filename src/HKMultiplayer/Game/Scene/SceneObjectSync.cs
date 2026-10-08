@@ -34,6 +34,12 @@ internal sealed class SceneObjectSync {
     private const string HitsVariable = "Hits";
     private const string BrokenState = "Broken";
 
+    /// <summary>Estado de la piedra al romperse (sonido, trozos, animación).</summary>
+    private const string DestroyState = "Destroy";
+
+    /// <summary>Estado tras un golpe que no la rompe: suena y elige hacia dónde tiembla.</summary>
+    private const string HitFeedbackState = "Check Direction";
+
     private sealed class Rock {
         public string Id;
         public PlayMakerFSM Fsm;
@@ -202,7 +208,7 @@ internal sealed class SceneObjectSync {
             var lower = hits < rock.LastValue;
             rock.LastValue = hits;
             if (lower && _session.CanSend) {
-                SendRockHits(rock);
+                SendRockHits(rock, live: true);
             }
         }
 
@@ -223,7 +229,7 @@ internal sealed class SceneObjectSync {
 
             foreach (var rock in _rocks) {
                 if (rock.Fsm != null) {
-                    SendRockHits(rock);
+                    SendRockHits(rock, live: false);
                 }
             }
 
@@ -231,11 +237,12 @@ internal sealed class SceneObjectSync {
         }
     }
 
-    private void SendRockHits(Rock rock) {
+    private void SendRockHits(Rock rock, bool live) {
         var writer = _session.Begin(GeoRockHits);
         writer.WriteUShort(_sceneHash);
         writer.WriteString(rock.Id);
         writer.WriteInt(rock.Hits.Value);
+        writer.WriteBool(live);
         _session.End();
     }
 
@@ -308,27 +315,72 @@ internal sealed class SceneObjectSync {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadString(256);
         var hits = reader.ReadInt();
+        var live = reader.ReadBool();
         if (sceneHash != _sceneHash) {
             return;
         }
 
         if (_rocksById.TryGetValue(id, out var rock)) {
-            ApplyRockHits(rock, hits);
+            if (live) {
+                Log.Info($"{from.Name} golpeó {id} (quedan {hits})");
+            }
+
+            ApplyRockHits(rock, hits, live);
         } else if (!_pendingRocks.TryGetValue(id, out var pending) || hits < pending) {
             _pendingRocks[id] = hits;
         }
     }
 
-    private static void ApplyRockHits(Rock rock, int hits) {
+    /// <summary>
+    /// Golpes que dio otro jugador. En directo se ve y se oye como aquí: el golpe (sonido, temblor, esquirlas) o la rotura;
+    /// sin soltar geo, que es de quien golpeó. Lo que llega al entrar en la sala solo deja la piedra como está.
+    /// </summary>
+    private static void ApplyRockHits(Rock rock, int hits, bool live = false) {
         if (rock.Fsm == null || hits >= rock.Hits.Value) {
             return;
         }
 
         rock.Hits.Value = Mathf.Max(0, hits);
         rock.LastValue = rock.Hits.Value;
-        if (rock.Hits.Value <= 0 && rock.Fsm.ActiveStateName != BrokenState) {
-            // Rota por otro: se ve rota, sin soltar geo aquí (se lo lleva quien la rompió)
-            rock.Fsm.SetState(BrokenState);
+        var visible = live && rock.Fsm.gameObject.activeInHierarchy;
+        if (visible) {
+            RockFxPlayed++;
+        }
+
+        if (rock.Hits.Value <= 0) {
+            if (rock.Fsm.ActiveStateName != BrokenState && rock.Fsm.ActiveStateName != DestroyState) {
+                PlayRockState(rock, visible ? DestroyState : BrokenState);
+            }
+        } else if (visible && (rock.Fsm.ActiveStateName == "Idle" || rock.Fsm.ActiveStateName == "Gleam")) {
+            PlayRockState(rock, HitFeedbackState);
+        }
+    }
+
+    /// <summary>Golpes de otros a piedras vistos en directo (modo de prueba).</summary>
+    public static int RockFxPlayed { get; private set; }
+
+    private static readonly List<FsmStateAction> MutedActions = new();
+
+    /// <summary>Pone un estado de la piedra sin las acciones que lanzan geo (en sus estados encadenados tampoco).</summary>
+    private static void PlayRockState(Rock rock, string state) {
+        foreach (var fsmState in rock.Fsm.FsmStates) {
+            foreach (var action in fsmState.Actions) {
+                if (action.Enabled && action is FlingObjectsFromGlobalPool fling && fling.gameObject?.Value != null &&
+                    fling.gameObject.Value.name.StartsWith("Geo", System.StringComparison.Ordinal)) {
+                    action.Enabled = false;
+                    MutedActions.Add(action);
+                }
+            }
+        }
+
+        try {
+            rock.Fsm.SetState(state);
+        } finally {
+            foreach (var action in MutedActions) {
+                action.Enabled = true;
+            }
+
+            MutedActions.Clear();
         }
     }
 
@@ -465,6 +517,7 @@ internal sealed class SceneObjectSync {
 
     /// <summary>Piedras de geo y estalactitas de la sala.</summary>
     public IEnumerable<string> DescribeExtras() {
+        yield return $"golpes ajenos a piedras vistos={RockFxPlayed}";
         foreach (var rock in _rocks) {
             yield return $"piedra {rock.Id} golpes={rock.Hits.Value} ({Where(rock.Fsm)})";
         }

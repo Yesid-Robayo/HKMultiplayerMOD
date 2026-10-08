@@ -20,6 +20,12 @@ internal struct PlayerSnapshot {
 
     public ushort SpriteId;
 
+    /// <summary>Solo enemigos: giro en centésimas de grado (no viaja en el estado de los jugadores).</summary>
+    public ushort Rotation;
+
+    /// <summary>Solo enemigos: si se dibuja, si choca, si es invencible y desde dónde (no viaja con los jugadores).</summary>
+    public byte Extra;
+
     private const byte FacingRightFlag = 1;
     private const byte VisibleFlag = 2;
 

@@ -30,6 +30,12 @@ internal sealed class EnemySync {
     public const MessageType EnemyHit = (MessageType) 44;
     public const MessageType EnemyHealth = (MessageType) 45;
 
+    /// <summary>Un enemigo real recibió un golpe (dueño → sala): los demás ven el impacto, el destello y oyen el golpe.</summary>
+    public const MessageType EnemyHitFx = (MessageType) 61;
+
+    /// <summary>La lógica de un enemigo real entró en un estado con sonido (dueño → sala): las marionetas lo suenan.</summary>
+    public const MessageType EnemySound = (MessageType) 62;
+
     /// <summary>Enemigos muertos en una sala (dueño → host, que los recuerda hasta que alguien descansa).</summary>
     public const MessageType EnemyKilled = (MessageType) 46;
 
@@ -39,6 +45,12 @@ internal sealed class EnemySync {
     private const int StateTickDivider = 2; // 60 / 2 = 30 envíos por segundo
     private const int KeepAliveTicks = 30;
     private const int MaxEntriesPerMessage = 50;
+
+    // Banderas extra del estado de un enemigo (los 4 bits altos: desde qué dirección es invencible)
+    private const byte ShownFlag = 1;
+    private const byte SolidFlag = 2;
+    private const byte InvincibleFlag = 4;
+    private const byte FlippedYFlag = 8;
 
     private enum HealthKind : byte {
         Update = 0,
@@ -59,6 +71,11 @@ internal sealed class EnemySync {
         public Transform Transform;
         public tk2dSpriteAnimator Animator;
         public Rigidbody2D Body;
+        public Renderer Renderer;
+        public Collider2D Collider;
+
+        /// <summary>FSM del enemigo y sus hijos, en el mismo orden en todos los PCs (para los sonidos).</summary>
+        public PlayMakerFSM[] Fsms;
         public bool Puppet;
         public readonly List<Behaviour> Disabled = new();
         public RigidbodyType2D BodyType;
@@ -72,6 +89,15 @@ internal sealed class EnemySync {
         public tk2dSpriteAnimationClip LastClip;
         public ushort LastClipIndex;
     }
+
+    /// <summary>FSM de enemigos que tienen estados con sonido: su enemigo, su posición y qué estados suenan.</summary>
+    private sealed class SoundFsm {
+        public Enemy Enemy;
+        public byte Index;
+        public bool[] SoundStates;
+    }
+
+    private readonly Dictionary<HutongGames.PlayMaker.Fsm, SoundFsm> _soundFsms = new();
 
     private readonly List<Enemy> _enemies = new();
     private readonly Dictionary<uint, Enemy> _byId = new();
@@ -92,6 +118,8 @@ internal sealed class EnemySync {
     private readonly MessageHandler _onStates;
     private readonly MessageHandler _onHit;
     private readonly MessageHandler _onHealth;
+    private readonly MessageHandler _onHitFx;
+    private readonly MessageHandler _onSound;
     private readonly Action<SessionPlayer> _onPlayerScene;
 
     private GameSession _session;
@@ -107,10 +135,18 @@ internal sealed class EnemySync {
     private static bool _hooked;
     private static bool _applyingRemoteHit;
 
+    /// <summary>Quién dio el golpe que se está aplicando desde otro PC (para que él no repita sus propios efectos).</summary>
+    private static ushort _remoteHitter;
+
+    /// <summary>Se reproducen en una marioneta los efectos de un golpe que dio otro: ni se reenvía ni quita vida.</summary>
+    private static bool _playingFx;
+
     static EnemySync() {
         MessageRoutes.Register(EnemyStates, Route.SameScene, reliable: false);
         MessageRoutes.Register(EnemyHit, Route.SceneOwner, reliable: true);
         MessageRoutes.Register(EnemyHealth, Route.SameScene, reliable: true);
+        MessageRoutes.Register(EnemyHitFx, Route.SameScene, reliable: true);
+        MessageRoutes.Register(EnemySound, Route.SameScene, reliable: false);
         MessageRoutes.Register(EnemyKilled, Route.Server, reliable: true);
         MessageRoutes.Register(Rested, Route.Server, reliable: true);
     }
@@ -119,6 +155,8 @@ internal sealed class EnemySync {
         _onStates = OnStates;
         _onHit = OnHit;
         _onHealth = OnHealth;
+        _onHitFx = OnHitFx;
+        _onSound = OnSound;
         _onPlayerScene = OnPlayerScene;
         _onKilled = OnKilled;
         _onRested = (from, _) => {
@@ -133,6 +171,8 @@ internal sealed class EnemySync {
         session.On(EnemyStates, _onStates);
         session.On(EnemyHit, _onHit);
         session.On(EnemyHealth, _onHealth);
+        session.On(EnemyHitFx, _onHitFx);
+        session.On(EnemySound, _onSound);
         session.On(EnemyKilled, _onKilled);
         session.On(Rested, _onRested);
         session.PlayerSceneChanged += _onPlayerScene;
@@ -147,6 +187,8 @@ internal sealed class EnemySync {
             _session.On(EnemyStates, null);
             _session.On(EnemyHit, null);
             _session.On(EnemyHealth, null);
+            _session.On(EnemyHitFx, null);
+            _session.On(EnemySound, null);
             _session.On(EnemyKilled, null);
             _session.On(Rested, null);
             _session.PlayerSceneChanged -= _onPlayerScene;
@@ -169,6 +211,7 @@ internal sealed class EnemySync {
         _enemies.Clear();
         _byId.Clear();
         _byHealth.Clear();
+        _soundFsms.Clear();
         _pendingHealth.Clear();
         _scene = string.Empty;
         _sceneHash = 0;
@@ -188,6 +231,7 @@ internal sealed class EnemySync {
             _enemies.Clear();
             _byId.Clear();
             _byHealth.Clear();
+            _soundFsms.Clear();
             if (hash != _sceneHash) {
                 _pendingHealth.Clear();
             }
@@ -304,7 +348,8 @@ internal sealed class EnemySync {
             }
 
             var state = Capture(enemy, tick);
-            if (state.SameLook(enemy.LastSent) && tick - enemy.LastSentTick < KeepAliveTicks) {
+            if (state.SameLook(enemy.LastSent) && state.Rotation == enemy.LastSent.Rotation &&
+                state.Extra == enemy.LastSent.Extra && tick - enemy.LastSentTick < KeepAliveTicks) {
                 continue;
             }
 
@@ -329,6 +374,8 @@ internal sealed class EnemySync {
             writer.WriteByte((byte) ((state.FacingRight ? 1 : 0) | (state.Visible ? 2 : 0)));
             writer.WriteUShort(state.SpriteId);
             writer.WriteByte(state.Collection);
+            writer.WriteUShort(state.Rotation);
+            writer.WriteByte(state.Extra);
             count++;
         }
 
@@ -345,15 +392,40 @@ internal sealed class EnemySync {
         _session.End();
     }
 
-    /// <summary>Estado del enemigo: posición, orientación, si se ve, animación (clip en SpriteId, fotograma en Collection).</summary>
+    /// <summary>
+    /// Estado del enemigo: posición, orientación y giro, si está activo, si se dibuja y si choca (los que se entierran o
+    /// se vuelven intangibles), si es invencible y desde dónde, y animación (clip en SpriteId, fotograma en Collection).
+    /// </summary>
     private static PlayerSnapshot Capture(Enemy enemy, uint tick) {
-        var position = enemy.Transform.position;
+        var transform = enemy.Transform;
+        var position = transform.position;
+        var scale = transform.localScale;
+        var health = enemy.Health;
+        var extra = (health.InvincibleFromDirection & 0x0F) << 4;
+        if (enemy.Renderer == null || enemy.Renderer.enabled) {
+            extra |= ShownFlag;
+        }
+
+        if (enemy.Collider == null || enemy.Collider.enabled) {
+            extra |= SolidFlag;
+        }
+
+        if (health.IsInvincible) {
+            extra |= InvincibleFlag;
+        }
+
+        if (scale.y < 0f) {
+            extra |= FlippedYFlag;
+        }
+
         var state = new PlayerSnapshot {
             Tick = tick,
             X = position.x,
             Y = position.y,
-            FacingRight = enemy.Transform.localScale.x < 0f,
-            Visible = enemy.Root.activeInHierarchy
+            FacingRight = scale.x < 0f,
+            Visible = enemy.Root.activeInHierarchy,
+            Rotation = (ushort) Mathf.RoundToInt(Mathf.Repeat(transform.eulerAngles.z, 360f) * 100f),
+            Extra = (byte) extra
         };
 
         var animator = enemy.Animator;
@@ -480,14 +552,35 @@ internal sealed class EnemySync {
                 enemy.Root.SetActive(state.Visible);
             }
 
-            var position = enemy.Transform.position;
-            enemy.Transform.position = new Vector3(state.X, state.Y, position.z);
-            var scale = enemy.Transform.localScale;
-            var facingRight = scale.x < 0f;
-            if (facingRight != state.FacingRight) {
-                scale.x = -scale.x;
-                enemy.Transform.localScale = scale;
+            var transform = enemy.Transform;
+            var position = transform.position;
+            transform.position = new Vector3(state.X, state.Y, position.z);
+            var scale = transform.localScale;
+            var flippedY = (state.Extra & FlippedYFlag) != 0;
+            if ((scale.x < 0f) != state.FacingRight || (scale.y < 0f) != flippedY) {
+                scale.x = state.FacingRight ? -Mathf.Abs(scale.x) : Mathf.Abs(scale.x);
+                scale.y = flippedY ? -Mathf.Abs(scale.y) : Mathf.Abs(scale.y);
+                transform.localScale = scale;
             }
+
+            var rotation = state.Rotation / 100f;
+            if (Mathf.Abs(Mathf.DeltaAngle(transform.eulerAngles.z, rotation)) > 0.5f) {
+                transform.rotation = Quaternion.Euler(0f, 0f, rotation);
+            }
+
+            // Lo que decide la lógica del dueño: si se dibuja, si choca y si los golpes le entran
+            var shown = (state.Extra & ShownFlag) != 0;
+            if (enemy.Renderer != null && enemy.Renderer.enabled != shown) {
+                enemy.Renderer.enabled = shown;
+            }
+
+            var solid = (state.Extra & SolidFlag) != 0;
+            if (enemy.Collider != null && enemy.Collider.enabled != solid) {
+                enemy.Collider.enabled = solid;
+            }
+
+            enemy.Health.IsInvincible = (state.Extra & InvincibleFlag) != 0;
+            enemy.Health.InvincibleFromDirection = state.Extra >> 4;
 
             var animator = enemy.Animator;
             if (animator != null && state.SpriteId != ushort.MaxValue && animator.Library != null &&
@@ -530,15 +623,98 @@ internal sealed class EnemySync {
                         Transform = health.transform,
                         Animator = health.GetComponent<tk2dSpriteAnimator>(),
                         Body = health.GetComponent<Rigidbody2D>(),
+                        Renderer = health.GetComponent<Renderer>(),
+                        Collider = health.GetComponent<Collider2D>(),
                         LastHp = health.hp
                     };
                     _enemies.Add(enemy);
                     _byId[id] = enemy;
                     _byHealth[health] = enemy;
+                    RegisterSounds(enemy);
                     if (_pendingHealth.TryGetValue(id, out var pending)) {
                         ApplyHealth(enemy, pending.Kind, pending.Hp);
                     }
                 }
+            }
+        }
+    }
+
+    /// <summary>Apunta las FSM del enemigo con estados que suenan (solo al entrar en una sala).</summary>
+    private void RegisterSounds(Enemy enemy) {
+        enemy.Fsms = enemy.Root.GetComponentsInChildren<PlayMakerFSM>(true);
+        for (var i = 0; i < enemy.Fsms.Length && i < byte.MaxValue; i++) {
+            var states = enemy.Fsms[i].FsmStates;
+            bool[] soundStates = null;
+            for (var s = 0; s < states.Length; s++) {
+                foreach (var action in states[s].Actions) {
+                    if (IsSoundAction(action)) {
+                        soundStates ??= new bool[states.Length];
+                        soundStates[s] = true;
+                        break;
+                    }
+                }
+            }
+
+            if (soundStates != null) {
+                _soundFsms[enemy.Fsms[i].Fsm] = new SoundFsm { Enemy = enemy, Index = (byte) i, SoundStates = soundStates };
+            }
+        }
+    }
+
+    /// <summary>Acciones de sonido o música de una FSM (las únicas que una marioneta hace de su lógica).</summary>
+    private static bool IsSoundAction(HutongGames.PlayMaker.FsmStateAction action) {
+        var name = action.GetType().Name;
+        return name.IndexOf("Audio", StringComparison.Ordinal) >= 0 || name.IndexOf("Sound", StringComparison.Ordinal) >= 0 ||
+               name.IndexOf("Music", StringComparison.Ordinal) >= 0;
+    }
+
+    /// <summary>Una FSM entró en un estado: si es de un enemigo real de este PC y suena, los demás lo oyen.</summary>
+    private void OnFsmState(HutongGames.PlayMaker.Fsm fsm, HutongGames.PlayMaker.FsmState state) {
+        if (!_soundFsms.TryGetValue(fsm, out var sound) || sound.Enemy.Puppet || !_session.CanSend) {
+            return;
+        }
+
+        var index = Array.IndexOf(fsm.States, state);
+        if (index < 0 || index >= sound.SoundStates.Length || !sound.SoundStates[index] || !OthersInScene()) {
+            return;
+        }
+
+        var writer = _session.Begin(EnemySound);
+        writer.WriteUShort(_sceneHash);
+        writer.WriteUInt(sound.Enemy.Id);
+        writer.WriteByte(sound.Index);
+        writer.WriteUShort((ushort) index);
+        _session.End();
+    }
+
+    private void OnSound(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        var fsmIndex = reader.ReadByte();
+        var stateIndex = reader.ReadUShort();
+        if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var enemy) || !enemy.Puppet || enemy.Fsms == null ||
+            fsmIndex >= enemy.Fsms.Length || enemy.Fsms[fsmIndex] == null) {
+            return;
+        }
+
+        var states = enemy.Fsms[fsmIndex].FsmStates;
+        if (stateIndex >= states.Length) {
+            return;
+        }
+
+        // Solo las acciones de sonido del estado; la lógica de la marioneta sigue parada
+        var state = states[stateIndex];
+        foreach (var action in state.Actions) {
+            if (!action.Enabled || !IsSoundAction(action)) {
+                continue;
+            }
+
+            try {
+                SoundsPlayed++;
+                action.Init(state);
+                action.OnEnter();
+            } catch (Exception e) {
+                Log.Warn($"Sonido de {enemy.Root.name} ({state.Name}) no reproducido: {e.Message}");
             }
         }
     }
@@ -622,6 +798,8 @@ internal sealed class EnemySync {
             _incoming.Visible = (flags & 2) != 0;
             _incoming.SpriteId = reader.ReadUShort();
             _incoming.Collection = reader.ReadByte();
+            _incoming.Rotation = reader.ReadUShort();
+            _incoming.Extra = reader.ReadByte();
             if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var enemy) && enemy.Puppet) {
                 enemy.Buffer.Add(_incoming, time, reliableTiming);
             }
@@ -752,10 +930,79 @@ internal sealed class EnemySync {
         hit.Multiplier = Mathf.Clamp(hit.Multiplier, 0f, 10f);
         hit.Source = _players.TryGetAvatarObject(from.Id, out var avatar) ? avatar : enemy.Root;
         _applyingRemoteHit = true;
+        _remoteHitter = from.Id;
         try {
             enemy.Health.Hit(hit);
         } finally {
             _applyingRemoteHit = false;
+            _remoteHitter = 0;
+        }
+    }
+
+    /// <summary>El enemigo real de este PC recibió daño: los demás de la sala ven el golpe (salvo quien lo dio).</summary>
+    private void SendHitFx(Enemy enemy, HitInstance hit) {
+        if (!_session.CanSend || !OthersInScene()) {
+            return;
+        }
+
+        var writer = _session.Begin(EnemyHitFx);
+        writer.WriteUShort(_sceneHash);
+        writer.WriteUInt(enemy.Id);
+        writer.WriteUShort(_applyingRemoteHit ? _remoteHitter : _session.LocalId);
+        writer.WriteByte((byte) hit.AttackType);
+        writer.WriteFloat(hit.GetActualDirection(enemy.Transform));
+        _session.End();
+    }
+
+    private void OnHitFx(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        var hitter = reader.ReadUShort();
+        var attackType = (AttackTypes) reader.ReadByte();
+        var direction = reader.ReadFloat();
+        if (hitter == _session.LocalId || sceneHash != _sceneHash || !_byId.TryGetValue(id, out var enemy) ||
+            !enemy.Puppet || enemy.Health == null || enemy.Health.isDead || enemy.Root == null ||
+            !enemy.Root.activeInHierarchy) {
+            return;
+        }
+
+        // Los efectos salen entre el enemigo y quien golpeó, como en su PC
+        var source = _players.TryGetAvatarObject(hitter, out var avatar) ? avatar : enemy.Root;
+        var health = enemy.Health;
+        var invincible = health.IsInvincible;
+        health.IsInvincible = false;
+        _playingFx = true;
+        _applyingRemoteHit = true;
+        try {
+            HitFxPlayed++;
+            HitWithoutDamage(health, new HitInstance {
+                Source = source, AttackType = attackType, DamageDealt = 1, Multiplier = 0f, MagnitudeMultiplier = 0f,
+                Direction = direction, IgnoreInvulnerable = true
+            }, null);
+        } finally {
+            _playingFx = false;
+            _applyingRemoteHit = false;
+            health.IsInvincible = invincible;
+        }
+    }
+
+    /// <summary>
+    /// Golpe solo de efectos (impacto, destello, sonido, alma de quien golpea) en una marioneta: su vida no cambia aquí.
+    /// Algunos enemigos restan siempre 1 por golpe (<c>damageOverride</c>), así que la vida se guarda y se repone, y
+    /// nunca baja a 0 en medio (moriría solo en este PC).
+    /// </summary>
+    private static void HitWithoutDamage(HealthManager health, HitInstance hit, On.HealthManager.orig_Hit orig) {
+        var hp = health.hp;
+        health.hp = Math.Max(hp, 2);
+        hit.Multiplier = 0f;
+        try {
+            if (orig != null) {
+                orig(health, hit);
+            } else {
+                health.Hit(hit);
+            }
+        } finally {
+            health.hp = hp;
         }
     }
 
@@ -771,7 +1018,7 @@ internal sealed class EnemySync {
         _hooked = true;
         On.HealthManager.Hit += (orig, self, hit) => {
             var sync = _active;
-            if (sync == null || !sync._byHealth.TryGetValue(self, out var enemy) || !enemy.Puppet) {
+            if (_playingFx || sync == null || !sync._byHealth.TryGetValue(self, out var enemy) || !enemy.Puppet) {
                 orig(self, hit);
                 return;
             }
@@ -779,8 +1026,25 @@ internal sealed class EnemySync {
             sync.SendHit(enemy, hit);
             if (self.hp > 0) {
                 // Efectos del golpe y alma para quien golpea, sin quitar vida aquí (la quita el dueño)
-                hit.Multiplier = 0f;
-                orig(self, hit);
+                HitWithoutDamage(self, hit, orig);
+            }
+        };
+
+        // Estados de la lógica de los enemigos reales: los que suenan, también en las marionetas
+        On.HutongGames.PlayMaker.Fsm.SwitchState += (orig, self, toState) => {
+            orig(self, toState);
+            var sync = _active;
+            if (sync?._session != null && toState != null && sync._soundFsms.Count > 0) {
+                sync.OnFsmState(self, toState);
+            }
+        };
+
+        // Daño recibido por un enemigo real: los demás de la sala lo ven
+        On.HealthManager.TakeDamage += (orig, self, hit) => {
+            orig(self, hit);
+            var sync = _active;
+            if (!_playingFx && sync?._session != null && sync._byHealth.TryGetValue(self, out var enemy) && !enemy.Puppet) {
+                sync.SendHitFx(enemy, hit);
             }
         };
 
@@ -828,7 +1092,14 @@ internal sealed class EnemySync {
     // Modo de prueba
     // =====================================================================================================
 
+    /// <summary>Golpes y sonidos de otros reproducidos en marionetas (modo de prueba).</summary>
+    public int HitFxPlayed { get; private set; }
+
+    public int SoundsPlayed { get; private set; }
+
     public IEnumerable<string> Describe() {
+        yield return $"efectos de golpes ajenos={HitFxPlayed} sonidos de marionetas={SoundsPlayed} " +
+                     $"fsm con sonido={_soundFsms.Count}";
         foreach (var enemy in _enemies) {
             if (enemy.Root == null) {
                 yield return $"id={enemy.Id:x8} MUERTO (ya no existe)";
@@ -837,7 +1108,8 @@ internal sealed class EnemySync {
 
             var p = enemy.Transform.position;
             yield return $"{enemy.Root.name} id={enemy.Id:x8} {(enemy.Puppet ? "marioneta" : "real")} hp={enemy.Health.hp}" +
-                         $"{(enemy.Health.isDead ? " MUERTO" : "")}{(enemy.Root.activeInHierarchy ? "" : " (inactivo)")} " +
+                         $"{(enemy.Health.isDead ? " MUERTO" : "")}{(enemy.Health.IsInvincible ? " invencible" : "")}" +
+                         $"{(enemy.Root.activeInHierarchy ? "" : " (inactivo)")} " +
                          $"pos=({p.x:0.00},{p.y:0.00})";
         }
     }

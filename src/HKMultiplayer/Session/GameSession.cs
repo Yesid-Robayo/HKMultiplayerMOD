@@ -49,14 +49,18 @@ public sealed class GameSession : INetListener, IDisposable {
     private readonly Dictionary<ushort, SessionPlayer> _players = new();
     private readonly Dictionary<string, List<ushort>> _sceneMembers = new();
     private readonly MessageHandler[] _handlers = new MessageHandler[256];
-    private readonly List<SessionPlayer> _targets = new();
-
     // Mensaje del jugador del host en curso (se reparte al terminar)
     private readonly byte[] _localScratch = new byte[NetConstants.MaxMessageSize];
     private readonly PacketWriter _localWriter = new();
-    private readonly PacketReader _localReader = new();
     private byte _localType;
     private bool _writingLocal;
+
+    // Un manejador puede enviar otro mensaje mientras se reparte el suyo (p. ej. un golpe que provoca el aviso de sus
+    // efectos): cada nivel de anidamiento tiene su lista de destinatarios, su lector y su copia del mensaje
+    private readonly List<List<SessionPlayer>> _targetsByDepth = new();
+    private readonly List<PacketReader> _readersByDepth = new();
+    private readonly List<byte[]> _scratchByDepth = new();
+    private int _depth;
 
     private readonly Action<string> _log;
 
@@ -236,13 +240,48 @@ public sealed class GameSession : INetListener, IDisposable {
 
         var local = _players[HostPlayerId];
         if (MessageRoutes.RouteOf(_localType) == Route.Server) {
-            // Mensaje del host a su propio servidor: se procesa en el sitio
-            _localReader.Reset(_localScratch, 0, _localWriter.Length);
-            _handlers[_localType]?.Invoke(local, _localReader);
+            // Mensaje del host a su propio servidor: se procesa en el sitio, desde una copia (si su manejador envía algo,
+            // el búfer del mensaje local se vuelve a usar)
+            var depth = _depth++;
+            try {
+                var length = _localWriter.Length;
+                var copy = ScratchAt(depth);
+                Buffer.BlockCopy(_localScratch, 0, copy, 0, length);
+                var reader = ReaderAt(depth);
+                reader.Reset(copy, 0, length);
+                _handlers[_localType]?.Invoke(local, reader);
+            } finally {
+                _depth--;
+            }
+
             return;
         }
 
         Relay(local, _localType, _localScratch, 0, _localWriter.Length);
+    }
+
+    private List<SessionPlayer> TargetsAt(int depth) {
+        while (_targetsByDepth.Count <= depth) {
+            _targetsByDepth.Add(new List<SessionPlayer>());
+        }
+
+        return _targetsByDepth[depth];
+    }
+
+    private PacketReader ReaderAt(int depth) {
+        while (_readersByDepth.Count <= depth) {
+            _readersByDepth.Add(new PacketReader());
+        }
+
+        return _readersByDepth[depth];
+    }
+
+    private byte[] ScratchAt(int depth) {
+        while (_scratchByDepth.Count <= depth) {
+            _scratchByDepth.Add(new byte[NetConstants.MaxMessageSize]);
+        }
+
+        return _scratchByDepth[depth];
     }
 
     /// <summary>Si se puede enviar ahora (conectado).</summary>
@@ -305,34 +344,42 @@ public sealed class GameSession : INetListener, IDisposable {
 
     /// <summary>Reenvía un mensaje de <paramref name="from"/> según su ruta (en el host).</summary>
     private void Relay(SessionPlayer from, byte type, byte[] buffer, int offset, int length) {
-        _targets.Clear();
-        var route = MessageRoutes.RouteOf(type);
-        foreach (var player in _players.Values) {
-            if (player == from) {
-                continue;
+        var depth = _depth++;
+        try {
+            var targets = TargetsAt(depth);
+            targets.Clear();
+            var route = MessageRoutes.RouteOf(type);
+            foreach (var player in _players.Values) {
+                if (player == from) {
+                    continue;
+                }
+
+                if (route == Route.Everyone ||
+                    route == Route.SameScene && player.Scene == from.Scene && from.Scene.Length > 0 ||
+                    route == Route.SceneOwner && player.Id == OwnerOf(from.Scene)) {
+                    targets.Add(player);
+                }
             }
 
-            if (route == Route.Everyone ||
-                route == Route.SameScene && player.Scene == from.Scene && from.Scene.Length > 0 ||
-                route == Route.SceneOwner && player.Id == OwnerOf(from.Scene)) {
-                _targets.Add(player);
-            }
-        }
+            var reliable = MessageRoutes.IsReliable(type);
+            for (var i = 0; i < targets.Count; i++) {
+                var target = targets[i];
+                if (target.IsLocal) {
+                    var reader = ReaderAt(depth);
+                    reader.Reset(buffer, offset, offset + length);
+                    _handlers[type]?.Invoke(from, reader);
+                    continue;
+                }
 
-        var reliable = MessageRoutes.IsReliable(type);
-        foreach (var target in _targets) {
-            if (target.IsLocal) {
-                _localReader.Reset(buffer, offset, offset + length);
-                _handlers[type]?.Invoke(from, _localReader);
-                continue;
+                var connection = target.Connection;
+                var writer = reliable ? connection.BeginReliable() : connection.BeginUnreliable();
+                writer.WriteByte(type);
+                writer.WriteUShort(from.Id);
+                writer.WriteBytes(buffer, offset, length);
+                connection.EndMessage();
             }
-
-            var connection = target.Connection;
-            var writer = reliable ? connection.BeginReliable() : connection.BeginUnreliable();
-            writer.WriteByte(type);
-            writer.WriteUShort(from.Id);
-            writer.WriteBytes(buffer, offset, length);
-            connection.EndMessage();
+        } finally {
+            _depth--;
         }
     }
 
