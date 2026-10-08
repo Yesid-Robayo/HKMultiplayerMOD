@@ -107,6 +107,20 @@ internal sealed class TestDriver : MonoBehaviour {
                 var stored = SceneData.instance.FindMyState(new PersistentBoolData { sceneName = args[1], id = args[2] });
                 Log.Info($"{Tag}sd {args[1]}/{args[2]}={(stored == null ? "ninguno" : stored.activated.ToString())}");
                 break;
+            case "objs":
+                // Objetos de la sala que se sincronizan en directo
+                foreach (var line in runner.SceneObjects.Describe()) {
+                    Log.Info($"{Tag}obj {line}");
+                }
+
+                break;
+            case "activate":
+                // activate <inicio del id>: activa un objeto de la sala como si lo hubiera hecho este jugador
+                if (!runner.SceneObjects.TestActivate(string.Join(" ", args.Skip(1)))) {
+                    Log.Warn($"{Tag}no hay objeto sin activar '{string.Join(" ", args.Skip(1))}'");
+                }
+
+                break;
             case "leavegame":
                 // Sale de la partida como desde la pausa (en el mundo del host: guarda y vuelve al menú)
                 runner.LeaveFromGame();
