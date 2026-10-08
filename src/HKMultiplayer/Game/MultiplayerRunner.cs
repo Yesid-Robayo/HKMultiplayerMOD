@@ -35,6 +35,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     public Scene.EnemySync Enemies { get; } = new();
 
+    public Scene.FsmStateSync MovingObjects { get; } = new();
+
     /// <summary>El jugador salió de un mundo ajeno: al llegar al menú se deja la partida.</summary>
     private bool _leaveOnMenu;
 
@@ -85,6 +87,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         session.SetLocalScene(scene);
         Players.SetLocalScene(scene);
         SceneObjects.Update(scene);
+        MovingObjects.Update(scene);
 
         try {
             Players.SendLocalState(Time.unscaledTimeAsDouble);
@@ -105,6 +108,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Progress.Detach();
         SceneObjects.Detach();
         Enemies.Detach();
+        MovingObjects.Detach();
                 closing.Dispose();
             }
         }
@@ -246,6 +250,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Progress.Detach();
         SceneObjects.Detach();
         Enemies.Detach();
+        MovingObjects.Detach();
         session.Dispose();
         SetStatus(session.IsHost ? "Partida cerrada" : "Desconectado");
     }
@@ -256,6 +261,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Progress.Attach(session);
         SceneObjects.Attach(session);
         Enemies.Attach(session, Players);
+        MovingObjects.Attach(session);
         session.Connected += () => SetStatus($"Conectado como jugador {session.LocalId}");
         session.Disconnected += reason => {
             // Al salir uno mismo (Leave) la sesión ya no es la actual: nada que avisar

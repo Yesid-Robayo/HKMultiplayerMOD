@@ -133,6 +133,26 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "movers":
+                foreach (var line in runner.MovingObjects.Describe()) {
+                    Log.Info($"{Tag}movil {line}");
+                }
+
+                break;
+            case "setstate":
+                // setstate <inicio del nombre>|<estado>
+                var stateArgs = string.Join(" ", args.Skip(1)).Split('|');
+                if (!runner.MovingObjects.TestSetState(stateArgs[0], stateArgs[1])) {
+                    Log.Warn($"{Tag}no hay objeto móvil '{stateArgs[0]}'");
+                }
+
+                break;
+            case "gates":
+                foreach (var gate in FindObjectsByType<TransitionPoint>(FindObjectsSortMode.None)) {
+                    Log.Info($"{Tag}puerta {gate.name} pos=({gate.transform.position.x:0.0},{gate.transform.position.y:0.0})");
+                }
+
+                break;
             case "activate":
                 // activate <inicio del id>: activa un objeto de la sala como si lo hubiera hecho este jugador
                 if (!runner.SceneObjects.TestActivate(string.Join(" ", args.Skip(1)))) {
