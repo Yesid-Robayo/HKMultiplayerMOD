@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using HKMultiplayer.Game.Players;
+using HKMultiplayer.Game.World;
 using HKMultiplayer.Net;
 using HKMultiplayer.Net.Crypto;
 using HKMultiplayer.Net.Transport;
@@ -37,6 +38,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     private void Awake() {
         Instance = this;
+        CoopSaves.Install();
         if (Enum.TryParse(HKMultiplayerMod.Settings.PanelKey, true, out KeyCode key)) {
             _panelKey = key;
         }
@@ -47,6 +49,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     }
 
     private void Update() {
+        CoopSaves.Update();
+
         if (Input.GetKeyDown(_panelKey)) {
             // Se crea al abrirlo la primera vez: al añadirse, Unity ya lo activa (y bloquearía las teclas)
             if (_panel == null) {
@@ -119,6 +123,26 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Log.Info);
         Wire(Session);
         SetStatus($"Partida abierta en el puerto {port}. Código: {FormatCode(code)}");
+        return true;
+    }
+
+    /// <summary>Hostea un mundo coop: abre la partida y carga el mundo (desde el menú principal).</summary>
+    public bool HostWorld(CoopWorldInfo world, string name, int port, string roomCode = null) {
+        if (!CoopSaves.CanStart) {
+            SetStatus("Vuelve al menú principal para abrir un mundo coop");
+            return false;
+        }
+
+        if (!Host(name, port, roomCode)) {
+            return false;
+        }
+
+        if (!CoopSaves.Start(world)) {
+            Leave();
+            SetStatus($"No se pudo abrir el mundo {world.Name}");
+            return false;
+        }
+
         return true;
     }
 

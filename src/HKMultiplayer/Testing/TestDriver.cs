@@ -75,6 +75,19 @@ internal sealed class TestDriver : MonoBehaviour {
                 // host <nombre> <puerto> [código]
                 runner.Host(args[1], int.Parse(args[2]), args.Length > 3 ? args[3] : null);
                 break;
+            case "hostworld":
+                // hostworld <mundo> <nombre> <puerto> [código]: hostea ese mundo coop (lo crea si no existe)
+                var world = HKMultiplayer.Game.World.WorldStore.List().FirstOrDefault(w => w.Name == args[1]) ??
+                            HKMultiplayer.Game.World.WorldStore.Create(args[1]);
+                runner.HostWorld(world, args[2], int.Parse(args[3]), args.Length > 4 ? args[4] : null);
+                break;
+            case "save":
+                // Guarda como en un banco
+                GameManager.instance.SaveGame();
+                break;
+            case "tomenu":
+                StartCoroutine(GameManager.instance.ReturnToMainMenu(GameManager.ReturnToMainMenuSaveModes.SaveAndContinueOnFail));
+                break;
             case "join":
                 // join <dirección> <puerto> <código> <nombre>
                 runner.Join(args[1], int.Parse(args[2]), args[3], args[4]);

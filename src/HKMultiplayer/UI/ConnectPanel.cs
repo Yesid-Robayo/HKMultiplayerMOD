@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using HKMultiplayer.Game;
+using HKMultiplayer.Game.World;
 using HKMultiplayer.Settings;
 using UnityEngine;
 
@@ -17,6 +19,9 @@ internal sealed class ConnectPanel : MonoBehaviour {
     private string _address;
     private string _port;
     private string _code = string.Empty;
+    private string _newWorldName = string.Empty;
+    private List<CoopWorldInfo> _worlds = new();
+    private string _selectedWorld;
 
     private bool _inputBlocked;
     private bool _previousAccepting;
@@ -27,6 +32,10 @@ internal sealed class ConnectPanel : MonoBehaviour {
         _name = settings.PlayerName;
         _address = settings.LastAddress;
         _port = settings.Port.ToString();
+        _worlds = WorldStore.List();
+        if (_selectedWorld == null && _worlds.Count > 0) {
+            _selectedWorld = _worlds[0].Id;
+        }
 
         _previousCursor = Cursor.visible;
         Cursor.visible = true;
@@ -58,12 +67,7 @@ internal sealed class ConnectPanel : MonoBehaviour {
         if (session == null) {
             DrawField("Tu nombre", ref _name);
             GUILayout.Space(6);
-            GUILayout.Label("Hostear: tu compañero se une con tu IP, el puerto y el código que aparecerá aquí.");
-            DrawField("Puerto", ref _port);
-            if (GUILayout.Button("Hostear partida") && TryPort(out var hostPort)) {
-                Remember(hostPort);
-                runner.Host(_name, hostPort);
-            }
+            DrawHostSection(runner);
 
             GUILayout.Space(10);
             GUILayout.Label("Unirse a la partida de otro:");
@@ -106,6 +110,45 @@ internal sealed class ConnectPanel : MonoBehaviour {
         }
 
         GUI.DragWindow();
+    }
+
+    private void DrawHostSection(MultiplayerRunner runner) {
+        GUILayout.Label("Hostear un mundo coop (aparte de tus partidas normales, que no se tocan):");
+        foreach (var world in _worlds) {
+            var selected = world.Id == _selectedWorld;
+            var text = world.IsNew
+                ? $"{world.Name} — nuevo"
+                : $"{world.Name} — {FormatTime(world.PlayTime)} — {world.Area}";
+            if (GUILayout.Toggle(selected, text) && !selected) {
+                _selectedWorld = world.Id;
+            }
+        }
+
+        GUILayout.BeginHorizontal();
+        _newWorldName = GUILayout.TextField(_newWorldName, 40);
+        if (GUILayout.Button("Crear mundo", GUILayout.Width(110))) {
+            var created = WorldStore.Create(_newWorldName);
+            _newWorldName = string.Empty;
+            _worlds = WorldStore.List();
+            _selectedWorld = created.Id;
+        }
+
+        GUILayout.EndHorizontal();
+        DrawField("Puerto", ref _port);
+        var world0 = _worlds.Find(w => w.Id == _selectedWorld);
+        if (!CoopSaves.CanStart) {
+            GUILayout.Label("Vuelve al menú principal para abrir un mundo coop.");
+        } else if (world0 == null) {
+            GUILayout.Label("Crea un mundo o elige uno de la lista.");
+        } else if (GUILayout.Button($"Hostear «{world0.Name}»") && TryPort(out var hostPort)) {
+            Remember(hostPort);
+            runner.HostWorld(world0, _name, hostPort);
+        }
+    }
+
+    private static string FormatTime(float seconds) {
+        var minutes = (int) (seconds / 60);
+        return minutes >= 60 ? $"{minutes / 60} h {minutes % 60} min" : $"{minutes} min";
     }
 
     private static void DrawField(string label, ref string value) {
