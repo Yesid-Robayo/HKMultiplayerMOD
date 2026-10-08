@@ -139,13 +139,55 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
-            case "setstate":
-                // setstate <inicio del nombre>|<estado>
-                var stateArgs = string.Join(" ", args.Skip(1)).Split('|');
-                if (!runner.MovingObjects.TestSetState(stateArgs[0], stateArgs[1])) {
-                    Log.Warn($"{Tag}no hay objeto móvil '{stateArgs[0]}'");
+            case "fsmevent":
+                // fsmevent <inicio del nombre>|<evento>: orden a un objeto móvil como desde su palanca o botón
+                var eventArgs = string.Join(" ", args.Skip(1)).Split('|');
+                if (!runner.MovingObjects.TestSendEvent(eventArgs[0], eventArgs[1])) {
+                    Log.Warn($"{Tag}no hay objeto móvil '{eventArgs[0]}'");
                 }
 
+                break;
+            case "fsmstate":
+                // fsmstate <objeto>|<estado>: pone la FSM del objeto en ese estado (p. ej. el golpe de una palanca)
+                var fsmArgs = string.Join(" ", args.Skip(1)).Split('|');
+                var fsmObject = GameObject.Find(fsmArgs[0]);
+                var targetFsm = fsmObject != null ? fsmObject.GetComponent<PlayMakerFSM>() : null;
+                if (targetFsm == null) {
+                    Log.Warn($"{Tag}no existe '{fsmArgs[0]}'");
+                } else {
+                    targetFsm.SetState(fsmArgs[1]);
+                }
+
+                break;
+            case "findobj":
+                // findobj <texto>: objetos de la sala cuyo nombre lo contiene, con sus componentes
+                var needle = string.Join(" ", args.Skip(1));
+                var shown = 0;
+                foreach (var found in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+                    if (found.name.IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0 || shown++ >= 15) {
+                        continue;
+                    }
+
+                    var components = string.Join(",", found.GetComponents<Component>().Select(c => c.GetType().Name));
+                    var fsms = string.Join(",", found.GetComponents<PlayMakerFSM>().Select(f => f.FsmName + ":" + f.ActiveStateName));
+                    Log.Info($"{Tag}obj {found.name} [{components}] fsm=[{fsms}] pos=({found.position.x:0.0},{found.position.y:0.0})");
+                }
+
+                break;
+            case "fsmnames":
+                // Nombres de FSM de la sala y cuántas hay de cada uno
+                foreach (var group in FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None)
+                             .GroupBy(f => f.FsmName).OrderByDescending(g => g.Count())) {
+                    Log.Info($"{Tag}fsmname {group.Key} x{group.Count()} ej={group.First().gameObject.name}");
+                }
+
+                break;
+            case "breakables":
+                Log.Info($"{Tag}rompibles: {runner.Breakables.Count} en la sala, {runner.Breakables.BrokenCount()} rotos");
+                break;
+            case "breaknear":
+                // breaknear <cantidad>: rompe los rompibles enteros más cercanos al jugador
+                Log.Info($"{Tag}rotos {runner.Breakables.TestBreakNearest(int.Parse(args[1]))}");
                 break;
             case "gates":
                 foreach (var gate in FindObjectsByType<TransitionPoint>(FindObjectsSortMode.None)) {
