@@ -191,6 +191,8 @@ internal sealed class EnemySync {
         /// <summary>Desde qué FSM de la lista son de las trampas de la sala que dispara (0: ninguna).</summary>
         public int FirstSatellite;
 
+        public bool SatellitesReleased;
+
         /// <summary>FSM paradas en la marioneta y si antes reiniciaban al reactivarse (se pausan, no se reinician).</summary>
         public readonly List<(PlayMakerFSM Fsm, bool Restart)> PausedFsms = new();
         public RigidbodyType2D BodyType;
@@ -518,6 +520,7 @@ internal sealed class EnemySync {
 
                 // Los muertos se quedan como están (su muerte sigue su curso)
                 if (enemy.Health == null || enemy.Health.isDead) {
+                    ReleaseSatellites(enemy);
                     continue;
                 }
 
@@ -1790,7 +1793,7 @@ internal sealed class EnemySync {
             var variables = fsm.FsmVariables.GameObjectVariables;
             for (var v = 0; v < variables.Length && v < 0xFFFF; v++) {
                 var target = variables[v].Value;
-                if (target == null || target.scene.buildIndex < 0 || target.transform.IsChildOf(enemy.Transform) ||
+                if (target == null || !SameRoom(target.scene, enemy.Root.scene) || target.transform.IsChildOf(enemy.Transform) ||
                     target.GetComponentInParent<HealthManager>() != null ||
                     hero != null && target.transform.IsChildOf(hero.transform)) {
                     continue;
@@ -1866,8 +1869,7 @@ internal sealed class EnemySync {
         List<(uint Path, PlayMakerFSM Fsm)> found = null;
         foreach (var fsm in PlayMakerFSM.FsmList) {
             var owner = fsm != null ? fsm.gameObject : null;
-            // De la sala, aunque sea otra escena que el enemigo (los jefes suelen estar en una escena "_boss" aparte)
-            if (owner == null || owner.scene.buildIndex < 0 || _enemyFsms.ContainsKey(fsm.Fsm) ||
+            if (owner == null || !SameRoom(owner.scene, enemy.Root.scene) || _enemyFsms.ContainsKey(fsm.Fsm) ||
                 owner.transform.IsChildOf(enemy.Transform) || owner.GetComponentInParent<HealthManager>() != null ||
                 hero != null && owner.transform.IsChildOf(hero.transform) ||
                 owner.GetComponentInChildren<DamageHero>(true) == null || !Listens(fsm, events)) {
@@ -1907,6 +1909,59 @@ internal sealed class EnemySync {
         }
 
         Log.Info($"{enemy.Root.name}: {count} trampas de la sala van con él");
+    }
+
+    /// <summary>
+    /// Muerto el enemigo, sus trampas vuelven a ser de la sala en cada PC y lo que estaban enseñando se apaga: el que lo
+    /// movía deja de enviar sus piezas, y en las marionetas se quedaría un rayo a medias.
+    /// </summary>
+    private static void ReleaseSatellites(Enemy enemy) {
+        if (enemy.FirstSatellite <= 0 || enemy.SatellitesReleased) {
+            return;
+        }
+
+        enemy.SatellitesReleased = true;
+        if (!enemy.Puppet) {
+            return;
+        }
+
+        for (var i = enemy.FirstSatellite; i < enemy.Fsms.Length; i++) {
+            var satellite = enemy.Fsms[i];
+            if (satellite == null || !enemy.Disabled.Remove(satellite)) {
+                continue;
+            }
+
+            var paused = enemy.PausedFsms.FindIndex(entry => entry.Fsm == satellite);
+            if (paused >= 0) {
+                satellite.Fsm.RestartOnEnable = enemy.PausedFsms[paused].Restart;
+                enemy.PausedFsms.RemoveAt(paused);
+            }
+
+            satellite.enabled = true;
+        }
+
+        foreach (var part in enemy.Parts ?? Array.Empty<Part>()) {
+            if (part.Key != 0 && part.Renderer != null) {
+                part.Renderer.enabled = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Si las dos escenas son de la misma sala: la misma, o la sala y su escena adicional (los jefes suelen estar en
+    /// una "_boss" aparte, como Mines_18 y Mines_18_boss). No la sala que se está descargando al cambiar de sala.
+    /// </summary>
+    private static bool SameRoom(UnityEngine.SceneManagement.Scene scene, UnityEngine.SceneManagement.Scene enemyScene) {
+        if (scene == enemyScene) {
+            return true;
+        }
+
+        if (!scene.isLoaded || scene.buildIndex < 0) {
+            return false;
+        }
+
+        return enemyScene.name.StartsWith(scene.name + "_", StringComparison.Ordinal) ||
+               scene.name.StartsWith(enemyScene.name + "_", StringComparison.Ordinal);
     }
 
     /// <summary>Si la FSM cambia de estado con alguno de esos avisos.</summary>

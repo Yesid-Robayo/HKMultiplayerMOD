@@ -118,11 +118,13 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     Guardián de Cristal, que suelta al prepararse): se identifican por esa variable, no por su sitio en la sala.
   - Trampas de la sala que el enemigo dispara con un aviso a todos (las torretas del techo del Guardián con
     `LASER SHOOT`): sus FSM pasan a ser del enemigo, así que solo funcionan en el PC que lo mueve; en los demás se
-    paran y su giro, rayos, sonidos y animaciones se copian. Solo las que dañan (las puertas de la arena van aparte).
+    paran y su giro, rayos, sonidos y animaciones se copian. Solo las que dañan (las puertas de la arena van aparte) y
+    de la misma sala (la sala y su escena `_boss`). Al morir el enemigo vuelven a ser de cada PC y sus rayos se apagan.
   - La sombra de cada jugador no es un enemigo compartido.
   - Probados: Mamá Gruz, Falso Caballero, Hornet, Mawlek, Maestro de Almas, Defensor del Estiércol, Nosk, Vasija Rota
-    y Guardián de Cristal (despiertan, atacan al jugador que no es dueño de la sala y siguen el combate al cambiar de
-    PC; el rayo y las torretas del Guardián se ven igual en los dos), escupidores y zombis.
+    y Guardián de Cristal normal y enfurecido (despiertan, atacan al jugador que no es dueño de la sala y siguen el
+    combate al cambiar de PC; el rayo y las torretas del Guardián se ven igual en los dos), escupidores y zombis. El
+    contador del diario (`killsMegaBeamMiner`, que la sala del enfurecido usa para darlo por vencido) baja una sola vez.
 - **Efectos del otro jugador**: eventos (ataque, hechizo, dash, curación...) que el receptor reproduce con los prefabs
   del propio héroe. Son solo visuales: el daño real va por los golpes directos.
 

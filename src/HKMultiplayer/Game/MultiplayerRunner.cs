@@ -199,6 +199,11 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     /// <summary>Hostea un mundo coop: abre la partida y carga el mundo (desde el menú principal).</summary>
     public bool HostWorld(CoopWorldInfo world, string name, int port, string roomCode = null) {
+        if (world == null) {
+            SetStatus("No hay mundo que abrir");
+            return false;
+        }
+
         if (!CoopSaves.CanStart) {
             SetStatus("Vuelve al menú principal para abrir un mundo coop");
             return false;
