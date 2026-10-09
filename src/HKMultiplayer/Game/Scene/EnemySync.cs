@@ -1722,9 +1722,10 @@ internal sealed class EnemySync {
                 continue;
             }
 
-            // Un caído no se queda con enemigos: pasan enseguida a quien sigue en pie
+            // Un caído (o quien tiene el juego en pausa: sus enemigos se quedarían congelados para los demás) no se queda
+            // con enemigos: pasan enseguida a quien sigue jugando
             var current = ControllerOf(enemy, roomOwner);
-            var currentDown = Features.PartyState.IsDown(current);
+            var currentDown = Features.PartyState.IsInactive(current);
             var interval = enemy.Health.hp >= BossHp ? BossSwitchInterval : SwitchInterval;
             if (now - enemy.LastSwitch < interval && !currentDown) {
                 continue;
@@ -1737,7 +1738,7 @@ internal sealed class EnemySync {
             var nearest = current;
             var nearestDistance = currentDistance;
             foreach (var player in _session.Players) {
-                if (player.Scene != _scene || player.Id == current || Features.PartyState.IsDown(player.Id) ||
+                if (player.Scene != _scene || player.Id == current || Features.PartyState.IsInactive(player.Id) ||
                     !TryGetPlayerPosition(player.Id, out var playerPosition)) {
                     continue;
                 }
@@ -3601,7 +3602,10 @@ internal sealed class EnemySync {
             }
 
             if (_byId.TryGetValue(id, out var enemy)) {
-                if (kind == HealthKind.Update && !enemy.Puppet) {
+                // La vida de uno que mueve este PC es la suya. Uno recién encontrado aún no es marioneta (lo será en
+                // PuppetDelay) aunque lo mueva otro: la foto de quien llega trae su vida y no se descarta (si no, quien
+                // entraba tarde veía con la vida entera a los enemigos ya heridos)
+                if (kind == HealthKind.Update && !enemy.Puppet && ControllerOf(enemy, _session.OwnerOf(_scene)) == _session.LocalId) {
                     continue;
                 }
 

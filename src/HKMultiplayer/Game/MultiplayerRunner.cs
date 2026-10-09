@@ -213,7 +213,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Dreams.Update(scene);
             Grimmchild.Update(scene);
             Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene
-                : Dreams.InDream ? Features.PlayerStatus.Dream : Features.PlayerStatus.Standing);
+                : Dreams.InDream ? Features.PlayerStatus.Dream : Features.PlayerStatus.Standing,
+                GameManager.instance != null && GameManager.instance.isPaused);
         } catch (Exception e) {
             Log.Error($"Error en la partida: {e}");
         }

@@ -84,7 +84,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     (3 s; 8 s en los jefes, cada cambio corta su ataque). Ese PC lo hace funcionar normal y envía su estado (transform,
     animación, profundidad, activo, vida, daño al tocarlo) con detección de cambios sin crear objetos.
   - En los demás juegos el enemigo es una "marioneta": su lógica (FSM, física) se pausa (no se reinicia) y se dibuja
-    con el estado recibido e interpolación; sus colisiones de daño siguen funcionando para el jugador local.
+    con el estado recibido e interpolación; sus colisiones de daño siguen funcionando para el jugador local. Quien
+    entra en la sala recibe del dueño la vida de cada enemigo: se aplica aunque el enemigo aún no sea marioneta (lo
+    pasa a ser un poco después de cargar la sala); solo se ignora la vida de los que mueve este PC.
   - Traspaso: el que lo suelta envía cómo iba (estado, números y objetos de cada FSM, velocidad, gravedad y tipo de
     cuerpo) y el nuevo lo sigue desde ahí. Los objetos van como "su caballero" (en quien lo recibe, el suyo), "una
     pieza del enemigo" o "un objeto de la sala" por su ruta, y solo rellenan las variables vacías: la marioneta no pasó
@@ -141,6 +143,8 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     palanca: quien lo rompe con el aguijón lo rompe en todos y el bicho sale del tarro roto en los dos. Es un golpe, no
     una zona: no espera a que todos estén cerca. Sus FSM, como las de lo que crean las jaulas en la raíz de la sala, se
     identifican por su sitio (se llaman igual y tienen el mismo puesto entre hermanos).
+  - La campana de las estaciones del ciervo (`Bell Control` de `Station Bell`) también se copia como una palanca: su
+    aviso `STAG BELL RUNG` hace llegar el ciervo en todos los PCs de la sala. Cada uno se sube y viaja por su cuenta.
   - Encuentros con diálogo antes de un combate (Hornet en los Bordes del Reino; se detectan solos: un objeto que no
     es enemigo, con un diálogo, que después despierta o enciende a un enemigo o cierra la arena): van como los
     controladores de batalla, así que los dos ven el diálogo, con su caballero quieto mientras, y la Hornet que habla
@@ -178,7 +182,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     en marcha: se comprueba al acabar y solo se activa si no llegó (como mucho 10 s después). Lo activado por una
     cadena llegada de otro PC no se vuelve a avisar. La línea base de cada objeto se toma después de
     `PersistentBoolItem.Start` (el juego pone ahí lo guardado; en los inactivos llega tarde), y lo que llega de otro PC
-    antes de ese `Start` se pone justo después. El reposo de una cadena se toma cuando el objeto lleva 1 s quieto: si
+    antes de ese `Start` se pone justo después. Qué guardables ya pasaron su `Start` se apunta con el gancho de
+    `PersistentBoolItem.Start` (o si se vieron encendidos en un frame anterior): su campo privado `started` no sirve,
+    el juego nunca lo pone a verdadero, y por eso el que recibía la activación no ponía `Activated`. El reposo de una cadena se toma cuando el objeto lleva 1 s quieto: si
     no, el fin de su inicio al cargar la sala (`Pause` → `Idle`) parecía un golpe y se copiaba a los demás.
   - Rompibles con FSM propia (la plantilla genérica del juego: recibe `TAKE DAMAGE`, tiene `Break` y la variable
     `Activated`, sin componente rompible ni guardable, como el letrero de la bajada a Cruces Olvidados): se copia su
@@ -355,7 +361,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   recargar la sala al quitar la pausa.
 - **Lo que hace cada uno** (`PartyState`, mensaje 91): cada jugador informa al host si está en una cinemática
   compartida o en un sueño; es su estado mientras no está caído (al revivir en un sueño vuelve a "en sueño"). El
-  mini-HUD lo muestra si está en otra sala.
+  mini-HUD lo muestra si está en otra sala. Con eso va si tiene el juego en pausa (el host lo reparte en
+  `PartyStatus`): con la escala de tiempo a 0 sus enemigos se quedaban congelados para los demás, así que quien está
+  en pausa, como un caído, no se queda con enemigos (`PartyState.IsInactive` en `EnemySync.AssignControllers`).
 - **Cinemáticas compartidas** (`SharedCutscenes`, mensajes 87 a 90): los finales, los créditos, Mr. Mushroom y las
   pantallas con las que acaba el final (partida completada, Alma de Acero). Quien entra en una lo dice al host, que
   lleva a los demás (con un cambio de sala, esperando si están en pausa o cambiando de sala; un caído no va). Al

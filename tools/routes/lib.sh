@@ -7,6 +7,8 @@
 # agente o una persona prueba a mano con b y c, y nunca se cierran juegos que no son suyos.
 
 HK_TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Carpeta de las copias (se puede cambiar, p. ej. desde un worktree: HK_INSTANCES_DIR=.../test-instances)
+HK_INSTANCES_DIR="${HK_INSTANCES_DIR:-$HK_TEST_ROOT/test-instances}"
 HK_STEAM_GAME="${HK_STEAM_GAME:-/c/Program Files (x86)/Steam/steamapps/common/Hollow Knight}"
 HK_LOCALLOW="/c/Users/$USERNAME/AppData/LocalLow/Team Cherry"
 HK_TEMPLATE="B"                      # copia de la que se toman el nombre de producto parcheado y la carpeta Mods
@@ -26,7 +28,7 @@ HK_IGNORE_ERRORS="${HK_IGNORE_ERRORS:-zz_never_matches}"
 # Copias del juego
 # =====================================================================================================
 
-_inst_dir() { echo "$HK_TEST_ROOT/test-instances/$(echo "$1" | tr 'A-Z' 'a-z')"; }
+_inst_dir() { echo "$HK_INSTANCES_DIR/$(echo "$1" | tr 'A-Z' 'a-z')"; }
 _data_dir() { echo "$HK_LOCALLOW/HollowKnight$1"; }
 _log_file() { echo "$(_data_dir "$1")/ModLog.txt"; }
 
@@ -167,6 +169,10 @@ setup_pair() {
   send "$host" "hostworld $HK_ROUTE_WORLD Host $port $HK_ROUTE_CODE"
   local deadline=$((SECONDS + 150))
   until log_since "$host" 0 | grep -aq "Progreso compartido activo"; do
+    if log_since "$host" 0 | grep -aq "No se crea el mundo: ya hay"; then
+      echo "par $n: el host ya tiene el máximo de mundos coop; aparta uno de $(_data_dir "$host")/HKMultiplayer/Mundos" >&2
+      return 1
+    fi
     [ $SECONDS -ge $deadline ] && { echo "par $n: el host no entró en su mundo" >&2; return 1; }
     send "$host" "skip"; sleep 3
   done
@@ -184,7 +190,8 @@ setup_pair() {
 }
 
 # Salas que no son de juego (menús, cinemáticas)
-HK_NOT_PLAYABLE='^(|Pre_Menu_Intro|Menu_Title|Quit_To_Menu|BetaEnd|Knight_Pickup|Opening_Sequence|Cinematic_.*|End_.*)$'
+# (sin alternativa vacía: "^(|...)$" deja pasar cualquier sala con la regex de bash en Windows; la sala vacía se mira aparte)
+HK_NOT_PLAYABLE='^(Pre_Menu_Intro|Menu_Title|Quit_To_Menu|BetaEnd|Knight_Pickup|Opening_Sequence|Cinematic_.*|End_.*)$'
 
 # Espera a que la copia esté jugando en una sala normal; mientras tanto salta cinemáticas
 wait_playable() {
@@ -213,7 +220,7 @@ stop_pair() { stop_instance "${HK_PAIR_HOSTS[$1]}"; stop_instance "${HK_PAIR_GUE
 
 # Reserva el par <n> para este proceso (mkdir es atómico). Una reserva de un proceso que ya no existe se recupera.
 lock_pair() {
-  local lock="$HK_TEST_ROOT/test-instances/.locks/pair$1"
+  local lock="$HK_INSTANCES_DIR/.locks/pair$1"
   mkdir -p "$(dirname "$lock")"
   if mkdir "$lock" 2>/dev/null; then
     echo $$ > "$lock/pid"; return 0
@@ -228,6 +235,6 @@ lock_pair() {
 }
 
 unlock_pair() {
-  local lock="$HK_TEST_ROOT/test-instances/.locks/pair$1"
+  local lock="$HK_INSTANCES_DIR/.locks/pair$1"
   [ "$(cat "$lock/pid" 2>/dev/null)" = "$$" ] && rm -rf "$lock"
 }

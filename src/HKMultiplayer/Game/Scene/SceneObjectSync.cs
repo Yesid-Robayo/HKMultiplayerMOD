@@ -98,11 +98,19 @@ internal sealed class SceneObjectSync {
 
         // Llegó activado de otro PC con su cadena en marcha: se comprueba al acabar
         public float VerifySince;
+
+        // Frame en el que se vio encendido al buscarlo (-1 si no): en el siguiente su Start ya pasó
+        public int ActiveSeenFrame = -1;
     }
 
-    /// <summary>Si el juego ya puso en el objeto lo guardado (privado en <see cref="PersistentBoolItem"/>).</summary>
-    private static readonly System.Reflection.FieldInfo StartedField =
-        typeof(PersistentBoolItem).GetField("started", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+    /// <summary>
+    /// Guardables cuyo Start ya puso lo guardado. El campo privado "started" de <see cref="PersistentBoolItem"/> no
+    /// sirve: el juego nunca lo pone a verdadero, así que todo parecía sin empezar y lo que llegaba de otro PC se
+    /// dejaba para un Start que ya había pasado (la variable "Activated" nunca se ponía en quien no lo activó).
+    /// </summary>
+    private static readonly HashSet<PersistentBoolItem> StartedItems = new();
+
+    private static readonly System.Predicate<PersistentBoolItem> IsDestroyed = item => item == null;
 
     private readonly List<Tracked> _tracked = new();
     private readonly Dictionary<string, Tracked> _byId = new();
@@ -171,6 +179,8 @@ internal sealed class SceneObjectSync {
         _sendSnapshot = false;
         _scene = string.Empty;
         _sceneHash = 0;
+        // Solo al cambiar de sala: los de la sala anterior ya se destruyeron
+        StartedItems.RemoveWhere(IsDestroyed);
     }
 
     /// <summary>Llamar cada frame con la sala local (vacía si no se está jugando).</summary>
@@ -331,7 +341,8 @@ internal sealed class SceneObjectSync {
                 Fsm = fsm,
                 Activated = activated,
                 LastValue = activated.Value,
-                ActivatedState = FindActivatedState(fsm)
+                ActivatedState = FindActivatedState(fsm),
+                ActiveSeenFrame = persistent.isActiveAndEnabled ? Time.frameCount : -1
             };
             _tracked.Add(tracked);
             _byId[id] = tracked;
@@ -476,6 +487,7 @@ internal sealed class SceneObjectSync {
         // El juego pone lo guardado en el objeto: esa es su línea base (no algo que acabe de pasar aquí)
         On.PersistentBoolItem.Start += (orig, self) => {
             orig(self);
+            StartedItems.Add(self);
             _active?.OnPersistentStart(self);
         };
 
@@ -516,7 +528,8 @@ internal sealed class SceneObjectSync {
         item.ActivatedState != null && item.Fsm.ActiveStateName == item.ActivatedState;
 
     private static bool HasStarted(Tracked item) =>
-        item.Persistent == null || StartedField == null || (bool) StartedField.GetValue(item.Persistent);
+        item.Persistent == null || StartedItems.Contains(item.Persistent) ||
+        item.ActiveSeenFrame >= 0 && Time.frameCount > item.ActiveSeenFrame && item.Persistent.isActiveAndEnabled;
 
     private void OnStalactite(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();

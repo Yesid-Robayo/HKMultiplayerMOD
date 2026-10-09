@@ -144,17 +144,19 @@ step_expect_pd() {
 }
 
 step_partner_moves() {
-  local before after
+  # Hacia dónde camina (right por defecto). Si se entró por una puerta de la derecha, a la derecha saldría de la sala
+  local dir="${1:-right}" back before after
+  [ "$dir" = left ] && back=right || back=left
   before="$(status_of "$_R_HOST" | grep -aoE 'compañero=\([-0-9.]+' | grep -oE '[-0-9.]+$')"
   if [ -z "$before" ]; then
     _result FALLO "partner-moves" "el host no ve al invitado en la sala"
     return
   fi
 
-  send "$_R_GUEST" "press right 1.2"; sleep 2.5
+  send "$_R_GUEST" "press $dir 1.2"; sleep 2.5
   after="$(status_of "$_R_HOST" | grep -aoE 'compañero=\([-0-9.]+' | grep -oE '[-0-9.]+$')"
   # Vuelve a donde estaba (para no acabar dentro de la siguiente puerta)
-  send "$_R_GUEST" "press left 1.2"; sleep 1.5
+  send "$_R_GUEST" "press $back 1.2"; sleep 1.5
   if [ -n "$after" ] && awk -v a="$before" -v b="$after" 'BEGIN { d = a - b; exit !(d > 0.5 || d < -0.5) }'; then
     _result OK "partner-moves" "el host lo ve moverse (x $before → $after)"
   else
@@ -222,7 +224,8 @@ step_enemies_sync() {
 step_objects_sync() {
   local who="${1:-guest}" src dst id deadline
   src="$(_who "$who")"; dst="$(_who "$(_other "$who")")"
-  id="$(query "$src" "objs" | grep -a '\[TEST\] obj ' | grep -a '=no→' | head -n1 | sed -E 's/.*\[TEST\] obj (.*)=no→.*/\1/')"
+  # Uno que siga en la sala: lo ya destruido (una batalla terminada, un suelo roto) no se puede activar
+  id="$(query "$src" "objs" | grep -a '\[TEST\] obj ' | grep -a '=no→' | grep -av '(destruido)' | head -n1 | sed -E 's/.*\[TEST\] obj (.*)=no→.*/\1/')"
   if [ -z "$id" ]; then
     _result NOCONC "objects-sync" "no hay objetos sin activar en la sala"
     return
@@ -232,8 +235,16 @@ step_objects_sync() {
   deadline=$((SECONDS + 10))
   while [ $SECONDS -lt $deadline ]; do
     sleep 2
-    if query "$dst" "objs" | grep -aF "obj $id=sí" >/dev/null; then
+    local seen
+    seen="$(query "$dst" "objs" | grep -aF "obj $id=")"
+    if echo "$seen" | grep -aqF "obj $id=sí"; then
       _result OK "objects-sync" "$who activó '$id' y el otro lo ve activado"
+      return
+    fi
+
+    # Lo que se rompe y se destruye a sí mismo (suelos que se rompen con la caída del hechizo): en el otro ya no existe
+    if echo "$seen" | grep -aqF "(destruido)"; then
+      _result OK "objects-sync" "$who activó '$id' y en el otro se rompió (destruido)"
       return
     fi
   done
@@ -383,7 +394,7 @@ run_route() {
       private) step_private "${args[1]:-}" "${args[2]:-}" "${args[3]:-}" ;;
       same-pd) step_same_pd "${args[1]:-}" ;;
       expect-pd) step_expect_pd "${args[1]:-}" "${args[2]:-}" "${args[3]:-}" "${args[4]:-}" ;;
-      partner-moves) step_partner_moves ;;
+      partner-moves) step_partner_moves "${args[1]:-}" ;;
       breakables-sync) step_breakables_sync "${args[1]:-}" ;;
       enemies-sync) step_enemies_sync "${args[1]:-}" ;;
       objects-sync) step_objects_sync "${args[1]:-}" ;;

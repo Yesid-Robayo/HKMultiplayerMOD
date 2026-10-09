@@ -8,7 +8,7 @@ Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más)
 sigue: [docs/estado.md](docs/estado.md). El diseño detallado está en
 [docs/arquitectura.md](docs/arquitectura.md).
 
-**Versión actual: 0.18.3** · Hitos M1 a M4 terminados (ver [Estado](#estado)).
+**Versión actual: 0.18.4** · Hitos M1 a M5 terminados (ver [Estado](#estado)).
 
 ---
 
@@ -181,7 +181,7 @@ El paquete para jugadores incluye la Modding API, el mod y un instalador:
 | M2 | Mundo compartido (progreso, objetos persistentes, unirse) | Hecho |
 | M3 | Enemigos, jefes y objetos de sala | Hecho |
 | M4 | Efectos del otro jugador (tajos, hechizos, dash, curación) | Hecho |
-| M5 | Revivir, sombras compartidas, HUD del compañero y barra del jefe, ajustes del host, cinemáticas compartidas, sueños, skins | Hecho (algunos jefes sin probar en vivo) |
+| M5 | Revivir, sombras compartidas, HUD del compañero y barra del jefe, ajustes del host, cinemáticas compartidas, sueños, skins | Hecho |
 | M6 | Instalador y paquete con el nombre nuevo | Pendiente |
 
 De M5 quedan sin probar en vivo enteros el Tirano de Almas (su segunda fase), Grimm, Hollow Knight y la Radiancia. La

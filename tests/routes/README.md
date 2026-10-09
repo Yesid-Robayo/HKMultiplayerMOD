@@ -49,14 +49,14 @@ Un paso por línea. `#` empieza un comentario. Los pasos que tocan un PC aceptan
 
 | Paso | Qué comprueba |
 |------|---------------|
-| `partner-moves` | El invitado camina y el host ve moverse su avatar. |
+| `partner-moves [left]` | El invitado camina (a la derecha, o a la izquierda con `left`: si se entró por una puerta de la derecha saldría de la sala) y el host ve moverse su avatar. |
 | `shared <quién> <campo> <valor>` | Un campo de `PlayerData` que es **del mundo** (habilidades, puertas, jefes...): se cambia en un PC y debe llegar al otro. |
 | `private <quién> <campo> <valor>` | Un campo que es **del personaje** (geo, amuletos, máscaras...): se cambia en un PC y el otro **no** debe cambiar. |
 | `same-pd <campo>` | El campo vale lo mismo en los dos. |
 | `expect-pd <quién> <campo> <valor> [s]` | El campo vale eso en ese PC (espera hasta 8 s o `[s]`). |
 | `breakables-sync [n]` | El invitado rompe los `n` rompibles más cercanos (3 por defecto) y los dos tienen los mismos rotos. |
 | `rock-sync` | El invitado golpea una piedra de geo y el host ve el golpe. |
-| `objects-sync [quién]` | Activa el primer objeto de sala sin activar (palanca, pared, puerta...) y el otro lo ve activado. |
+| `objects-sync [quién]` | Activa el primer objeto de sala sin activar que siga en la sala (palanca, pared, puerta...) y el otro lo ve activado (o roto y destruido, como un suelo que se rompe solo). |
 | `enemies-sync [quién]` | Golpea a todos los enemigos de la sala y comprueba que quedan vivos los mismos en los dos. |
 | `scene-data-sync [Sala]` | Los dos guardan y lo guardado de la sala (objetos activados, contadores) es igual, sin contar lo que recoge cada uno. |
 | `boss <campo> [quién] [intentos]` | Golpea a todo hasta que muera el jefe y comprueba que su campo de derrota (`falseKnightDefeated`...) es `true` en los dos. Si el jefe no muere (la pelea no empezó), da `NOCONC`. |

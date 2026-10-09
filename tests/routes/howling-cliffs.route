@@ -1,6 +1,6 @@
 title Riscos Aulladores
 room Cliffs_01 right1
-partner-moves
+partner-moves left
 breakables-sync
 rock-sync
 objects-sync

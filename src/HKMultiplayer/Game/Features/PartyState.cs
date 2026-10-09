@@ -59,6 +59,12 @@ internal sealed class PartyState {
         /// caído: al revivir dentro de un sueño vuelve a "en sueño", no a "en pie".
         /// </summary>
         public PlayerStatus Activity;
+
+        /// <summary>
+        /// Con el menú de pausa abierto: su juego está parado (escala de tiempo 0), así que no puede mover enemigos (se
+        /// quedarían congelados para los demás). Se lo dice él mismo al host, como lo que hace.
+        /// </summary>
+        public bool Paused;
     }
 
     private static PartyState _current;
@@ -74,6 +80,8 @@ internal sealed class PartyState {
 
     /// <summary>Lo último que el jugador local informó de sí mismo (se envía solo al cambiar).</summary>
     private PlayerStatus _reportedActivity;
+
+    private bool _reportedPaused;
 
     /// <summary>Cambió el estado de un jugador (jugador y estado anterior).</summary>
     public event Action<Member, PlayerStatus> StatusChanged;
@@ -99,6 +107,17 @@ internal sealed class PartyState {
     public static bool IsDown(ushort id) =>
         _current != null && _current._members.TryGetValue(id, out var member) && member.Status == PlayerStatus.Downed;
 
+    /// <summary>Si el jugador tiene el juego en pausa.</summary>
+    public static bool IsPaused(ushort id) =>
+        _current != null && _current._members.TryGetValue(id, out var member) && member.Paused;
+
+    /// <summary>
+    /// Si el jugador no puede mover enemigos: caído o con el juego en pausa. Los suyos pasan enseguida a otro de la sala.
+    /// </summary>
+    public static bool IsInactive(ushort id) =>
+        _current != null && _current._members.TryGetValue(id, out var member) &&
+        (member.Status == PlayerStatus.Downed || member.Paused);
+
     /// <summary>Jugadores conocidos (incluido el local).</summary>
     public IReadOnlyList<Member> Members => _list;
 
@@ -112,6 +131,7 @@ internal sealed class PartyState {
         _members.Clear();
         _list.Clear();
         _reportedActivity = PlayerStatus.Standing;
+        _reportedPaused = false;
         session.On(PartyStatus, _onStatus);
         session.On(ActivityReport, _onActivity);
         session.PlayerJoined += OnPlayerJoined;
@@ -217,22 +237,26 @@ internal sealed class PartyState {
     }
 
     /// <summary>
-    /// Lo que hace el jugador local cuando no está caído (en pie, en cinemática o en sueño). Barato: llamar cada frame;
-    /// solo se envía al host cuando cambia.
+    /// Lo que hace el jugador local cuando no está caído (en pie, en cinemática o en sueño) y si tiene el juego en pausa.
+    /// Barato: llamar cada frame; solo se envía al host cuando cambia.
     /// </summary>
-    public void ReportLocal(PlayerStatus activity) {
-        if (_session == null || !_session.CanSend || activity == _reportedActivity || activity == PlayerStatus.Downed) {
+    public void ReportLocal(PlayerStatus activity, bool paused) {
+        if (_session == null || !_session.CanSend || activity == PlayerStatus.Downed ||
+            activity == _reportedActivity && paused == _reportedPaused) {
             return;
         }
 
         _reportedActivity = activity;
+        _reportedPaused = paused;
         var writer = _session.Begin(ActivityReport);
         writer.WriteByte((byte) activity);
+        writer.WriteBool(paused);
         _session.End();
     }
 
     private void OnActivity(SessionPlayer from, PacketReader reader) {
         var activity = (PlayerStatus) reader.ReadByte();
+        var paused = reader.ReadBool();
         if (_session == null || !_session.IsHost || activity == PlayerStatus.Downed || activity > PlayerStatus.Dream ||
             !_members.TryGetValue(from.Id, out var member)) {
             return;
@@ -241,7 +265,12 @@ internal sealed class PartyState {
         member.Activity = activity;
         // Un caído sigue caído: lo que hace cuenta al levantarse
         if (member.Status != PlayerStatus.Downed && member.Status != activity) {
+            member.Paused = paused;
             SetStatus(from.Id, activity);
+        } else if (member.Paused != paused) {
+            member.Paused = paused;
+            Log.Info($"{member.Name}: {(paused ? "en pausa" : "sin pausa")}");
+            Broadcast();
         }
     }
 
@@ -263,6 +292,7 @@ internal sealed class PartyState {
             writer.WriteString(member.BodyScene);
             writer.WriteFloat(member.BodyX);
             writer.WriteFloat(member.BodyY);
+            writer.WriteBool(member.Paused);
         }
 
         _session.EndTo();
@@ -286,9 +316,12 @@ internal sealed class PartyState {
             var scene = reader.ReadString(128);
             var x = reader.ReadFloat();
             var y = reader.ReadFloat();
+            var paused = reader.ReadBool();
             if (!_members.TryGetValue(id, out var member)) {
                 continue;
             }
+
+            member.Paused = paused;
 
             var previous = member.Status;
             var changed = previous != status || member.Partner != partner || member.BodyScene != scene;
@@ -315,7 +348,7 @@ internal sealed class PartyState {
     public string DescribeAll() {
         var text = new System.Text.StringBuilder();
         foreach (var member in _list) {
-            text.Append($"{member.Id}:{member.Name}={Describe(member.Status)}");
+            text.Append($"{member.Id}:{member.Name}={Describe(member.Status)}{(member.Paused ? " (en pausa)" : "")}");
             if (member.Status == PlayerStatus.Downed) {
                 text.Append($"@{member.BodyScene}({member.BodyX:0.0},{member.BodyY:0.0}) sigue a {member.Partner}");
             }

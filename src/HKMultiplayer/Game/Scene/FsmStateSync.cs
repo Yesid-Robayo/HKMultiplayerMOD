@@ -755,7 +755,7 @@ internal sealed class FsmStateSync {
         }
 
         var name = fsm.gameObject.name;
-        if (IsMimicBottle(fsm) || IsHollowKnightChain(fsm)) {
+        if (IsMimicBottle(fsm) || IsHollowKnightChain(fsm) || IsStagBell(fsm)) {
             return true;
         }
 
@@ -775,6 +775,13 @@ internal sealed class FsmStateSync {
     /// </summary>
     private static bool IsMimicBottle(PlayMakerFSM fsm) =>
         fsm.FsmName == "Bottle Control" && fsm.gameObject.name.StartsWith("Grub Mimic Bottle", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Campana de una estación del ciervo: al tocarla avisa a toda la sala ("STAG BELL RUNG") y el ciervo llega. Sin
+    /// copiar su cadena, el ciervo solo llegaba en el PC de quien la tocaba y el otro no lo veía ni podía subirse.
+    /// </summary>
+    private static bool IsStagBell(PlayMakerFSM fsm) =>
+        fsm.FsmName == "Bell Control" && fsm.transform.parent != null && fsm.transform.parent.name == "Station Bell";
 
     /// <summary>
     /// Cadenas que sujetan al Hollow Knight: cada una aguanta unos golpes de aguijón del caballero local y, rota, avisa a
