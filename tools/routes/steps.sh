@@ -224,7 +224,8 @@ step_enemies_sync() {
 step_objects_sync() {
   local who="${1:-guest}" src dst id deadline
   src="$(_who "$who")"; dst="$(_who "$(_other "$who")")"
-  id="$(query "$src" "objs" | grep -a '\[TEST\] obj ' | grep -a '=no→' | head -n1 | sed -E 's/.*\[TEST\] obj (.*)=no→.*/\1/')"
+  # Uno que siga en la sala: lo ya destruido (una batalla terminada, un suelo roto) no se puede activar
+  id="$(query "$src" "objs" | grep -a '\[TEST\] obj ' | grep -a '=no→' | grep -av '(destruido)' | head -n1 | sed -E 's/.*\[TEST\] obj (.*)=no→.*/\1/')"
   if [ -z "$id" ]; then
     _result NOCONC "objects-sync" "no hay objetos sin activar en la sala"
     return
@@ -234,8 +235,16 @@ step_objects_sync() {
   deadline=$((SECONDS + 10))
   while [ $SECONDS -lt $deadline ]; do
     sleep 2
-    if query "$dst" "objs" | grep -aF "obj $id=sí" >/dev/null; then
+    local seen
+    seen="$(query "$dst" "objs" | grep -aF "obj $id=")"
+    if echo "$seen" | grep -aqF "obj $id=sí"; then
       _result OK "objects-sync" "$who activó '$id' y el otro lo ve activado"
+      return
+    fi
+
+    # Lo que se rompe y se destruye a sí mismo (suelos que se rompen con la caída del hechizo): en el otro ya no existe
+    if echo "$seen" | grep -aqF "(destruido)"; then
+      _result OK "objects-sync" "$who activó '$id' y en el otro se rompió (destruido)"
       return
     fi
   done

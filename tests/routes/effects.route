@@ -32,6 +32,12 @@ wait 1
 guest press jump 0.4
 wait 0.6
 guest press jump 0.3
+# Segundo intento: si el juego se para un momento (varias copias abiertas), las dos pulsaciones llegan en la misma
+# lectura de órdenes y no hay doble salto
+wait 2
+guest press jump 0.4
+wait 0.6
+guest press jump 0.3
 expect-log host efecto DoubleJump de
 
 # Hechizos: bola de fuego, grito y caída (cada uno es un estado de Spell Control)
