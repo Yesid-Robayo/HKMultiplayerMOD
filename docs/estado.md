@@ -5,9 +5,11 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
 
 ## Versión y ramas
 
-- Rama principal `main`: **0.18.3**. M1 a M4 hechos; M5 juntado (primera y segunda parte) y sus jefes comprobados en
+- Rama principal `main`: **0.18.4**. M1 a M4 hechos; M5 juntado (primera y segunda parte) y sus jefes comprobados en
   vivo (ver abajo); amuletos y acompañantes del compañero en 0.18.0.
 - Ramas de agentes (en `.claude/worktrees/`, cada una con su rama `worktree-agent-...`):
+  - `worktree-agent-a3fca8e41ebb6684d`: **M6, paquete para jugadores** (sobre 0.18.4, sin subir versión ni juntar).
+    Ver "M6: paquete e instalador" abajo.
   - `worktree-agent-a8e869211b55a23d1`: **M5, segunda parte, en curso** (cinemáticas, sueños y jefes, skins). Lleva
     un commit (`78cd576`, cinemáticas) y cambios sin commit (`DreamSync.cs`, `BossPresentation.cs`,
     `GrimmchildGift.cs`). Hay que revisarla, terminarla y juntarla.
@@ -144,6 +146,33 @@ estético, en el PC del caído su etiqueta "† Nombre" se pisa con el nombre de
 Nota: la copia F tenía ya 4 mundos y la ruta no podía crear el suyo; `M3Jefes2` se apartó (sin borrar) a
 `LocalLow/Team Cherry/HollowKnightF/HKMultiplayer/Mundos-apartados/`.
 
+## M6: paquete e instalador (9 de octubre, mañana; copias H/I)
+
+Hecho sobre 0.18.4 (detalle en [arquitectura.md](arquitectura.md#paquete-e-instalador) y en la sección Instalar del
+README):
+
+- `tools/package.sh` con el nombre nuevo: compila en Release y deja `out/package/HKMultiplayer-0.18.4.zip` (≈7,7 MB)
+  con `instalar.bat`, `desinstalar.bat`, `LEEME.txt`, `scripts/`, `files/` (Modding API de `vendor/` y
+  `Mods/HKMultiplayer` con el mod, su `.pdb` y BouncyCastle) y `SHA256SUMS.txt`. Nada más del juego.
+- Instalador y desinstalador reescritos (`tools/installer/`: `install.ps1`, `uninstall.ps1`, `common.ps1`, los dos
+  .bat y `LEEME.txt`): búsqueda del juego (ruta pasada o arrastrada, Steam, rutas típicas), comprobación de la versión
+  del juego (Unity 6), copia de lo que se reemplaza con un manifiesto de cambios, quita `HollowKnightCoop` (guardado
+  para devolverlo al desinstalar), aparta los demás mods a `Mods\Disabled` y lo deshace todo al desinstalar.
+- Probado con `tools/manual-tests/installer-test.sh` (copias H e I en `test-instances` del repo principal, con
+  `Managed` y `steam_appid.txt` como archivos propios para no escribir en los de Steam):
+  - H (juego sin mods) e I (además `Mods/HollowKnightCoop` y `Mods/Satchel`): `instalar.bat <ruta>` instala 26
+    archivos y guarda 3 originales (`Assembly-CSharp.dll`, `TeamCherry.Localization.dll`, `System.ValueTuple.dll`); en
+    I quita el mod anterior y aparta Satchel.
+  - Las dos copias arrancan con el mod: ModLog con "Iniciando HKMultiplayer 0.18.4", "HKMultiplayer : 0.18.4",
+    "Menú Multijugador añadido al menú principal" y "Multijugador añadido al menú de pausa"; I no carga el mod anterior
+    ni Satchel.
+  - Segunda instalación encima (actualización) y `desinstalar.bat`: rutas, tamaños y hashes de la raíz y de `Managed`
+    iguales a los de antes de instalar (en I vuelven `HollowKnightCoop` y Satchel).
+  - El juego de Steam no se tocó (mismos hashes). Las copias H e I se borraron al terminar.
+- Pendiente: instalarlo en el PC de otro jugador desde el zip y jugar por internet con el puerto abierto. En este PC no
+  hay una `Assembly-CSharp.dll` sin la Modding API: la copia "limpia" de la prueba usa otra versión parcheada
+  (`Assembly-CSharp.dll.v`) como original.
+
 ## Pendiente después
 
 - **M3**:
@@ -167,11 +196,12 @@ Nota: la copia F tenía ya 4 mundos y la ruta no podía crear el suyo; `M3Jefes2
   para ver fallos intermitentes.
 - **Pruebas finales**: agentes que pasen todas las rutas (`bash tools/run-routes.sh --pairs 2`) sobre la versión
   completa, con el PC sin otros juegos abiertos (la memoria va justa: cada copia ~1,1 GB; Edge y Discord ocupan mucho).
-- **M6**: `tools/package.sh` aún usa los nombres del mod anterior (HollowKnightCoop).
+- **M6**: hecho en la rama `worktree-agent-a3fca8e41ebb6684d` (ver arriba); falta juntarlo y probarlo en otro PC.
 
 ## Cómo se trabaja (recordatorio)
 
-- Copias del juego: B/C (agente M5), D/E (rutas automáticas), F/G (pruebas de M3/Coliseo). Cada agente instala solo
+- Copias del juego: B/C (agente M5), D/E (rutas automáticas), F/G (pruebas de M3/Coliseo), H/I (prueba del
+  instalador; `installer-test.sh` las rehace desde cero). Cada agente instala solo
   en las suyas (`bash tools/test-cycle.sh --only "f g"`, `HK_INSTANCES_DIR` desde un worktree) y cierra solo las suyas
   (`stop_all F G`). Puertos: 26950 (B/C), 27100+ (rutas), 27300 (F/G).
 - Órdenes de prueba útiles: `hero` (por qué un caballero no responde) y `regain`; `enemies` marca "oculto",

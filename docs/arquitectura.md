@@ -440,6 +440,29 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   `tree` buscando también entre lo cargado, `fsmvars` da los valores de las variables de sus FSM, `heroprefabs` los
   objetos a los que apunta el caballero y `spawnlog <segundos>` registra lo que sale del pool. `effects` dice también
   qué copias de amuletos y cuántos acompañantes del compañero hay encendidos. Ruta: `tests/routes/effects.route`.
+- Paquete para jugadores: `tools/manual-tests/installer-test.sh <zip>` (ver [Paquete e instalador](#paquete-e-instalador)).
+
+## Paquete e instalador
+
+- `tools/package.sh` compila en Release y arma `out/package/HKMultiplayer-<versión>.zip` con una carpeta
+  `HKMultiplayer-<versión>`: `instalar.bat`, `desinstalar.bat` y `LEEME.txt` (instrucciones para jugadores) en la raíz,
+  los scripts de PowerShell en `scripts/` (con `version.txt`), lo que se copia al juego en `files/` (la Modding API de
+  `vendor/modding-api/OutputFinal` sin su README, y `Mods/HKMultiplayer` con el mod, su `.pdb` y BouncyCastle) y
+  `SHA256SUMS.txt`. Del juego solo van los dos ensamblados que parchea la Modding API (`Assembly-CSharp.dll` y
+  `TeamCherry.Localization.dll`). Fuentes del instalador en `tools/installer/`.
+- `instalar.bat` (→ `scripts/install.ps1`): carpeta del juego pasada (también arrastrada sobre el .bat) o buscada
+  (registro de Steam, `libraryfolders.vdf`, desinstalación de Steam, rutas típicas en los discos locales, GOG); si hay
+  varias pregunta, si no hay ninguna pide la ruta. Exige Unity 6 (`UnityPlayer.dll` 6000.x) y `TeamCherry.TK2D.dll`:
+  con otra versión del juego la Modding API lo dejaría sin arrancar. Solo bloquea si hay un `hollow_knight.exe`
+  abierto desde esa carpeta (otras copias no molestan).
+- Cada cambio se apunta en `<juego>\HKMultiplayer-backup\manifest.txt` antes de hacerlo: `added-dir`, `added`,
+  `replaced` (el original en `HKMultiplayer-backup\files\`), `old-mod` (el mod anterior `HollowKnightCoop`, movido a
+  la copia porque también abre la red) y `moved` (otros mods apartados a `Mods\Disabled`). Volver a instalar es una
+  actualización: lo ya apuntado no se vuelve a copiar, así que la copia sigue siendo la del juego antes de la primera
+  instalación.
+- `desinstalar.bat` (→ `scripts/uninstall.ps1`) recorre el manifiesto al revés. De `Mods\HKMultiplayer` solo deja
+  `Skins` si tiene algo; las carpetas añadidas se borran si quedan vacías. Si algo no se pudo devolver, conserva la
+  copia y remite a "Verificar integridad" de Steam. Sin manifiesto (mod puesto a mano) quita solo el mod.
 
 ## Hitos
 
@@ -522,7 +545,11 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   - **Jefes de sueño** (Campeón Fallido, Tirano de Almas, Kin Perdido, Zote el Poderoso, guerreros soñadores): se
     entra con el aguijón onírico y cada jugador entraría por su cuenta; hay que llevar a los dos al sueño.
   - **Hollow Knight y la Radiancia**: cinemáticas de entrada y final.
-- **M6**: `tools/package.sh` aún usa los nombres del mod anterior (`HollowKnightCoop`).
+- **M6** (hecho sobre 0.18.4): paquete, instalador, desinstalador y `LEEME.txt` con el nombre nuevo. Probado con
+  `tools/manual-tests/installer-test.sh` en copias limpias (`test-instances/h` e `i`), sin tocar el juego de Steam.
+  Falta: instalarlo en el PC de otro jugador desde el zip descargado y jugar por internet con el puerto abierto. La
+  copia "limpia" de la prueba no tiene la `Assembly-CSharp.dll` original del juego (en este PC no hay ninguna sin la
+  Modding API): usa otra versión parcheada en su lugar, que sirve para ver que el original se guarda y se devuelve.
 - **Pasto y telas al paso del compañero** (solo estético, baja prioridad): hoy se sincroniza el corte, pero no el
   balanceo cuando el otro caballero pasa por encima. Sin red: en cada PC, cada pocos frames, buscar el pasto
   (`GrassBehaviour`) cercano al avatar del otro y darle el mismo empujón que da el héroe local, con la velocidad del

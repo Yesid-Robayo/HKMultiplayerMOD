@@ -1,0 +1,134 @@
+﻿HKMultiplayer @VERSION@ - mod cooperativo para Hollow Knight
+=============================================================
+
+Un jugador hostea un mundo coop y sus compañeros se unen con la dirección del host y el código de
+la partida: comparten el mundo, se ven en tiempo real y pelean juntos contra los mismos enemigos y
+jefes.
+
+Necesitas:
+  - Hollow Knight 1.5.12620 en Windows (la versión actual de Steam).
+  - Que todos los jugadores tengan instalada la MISMA versión de HKMultiplayer.
+
+
+1. INSTALAR
+-----------
+
+  1. Cierra Hollow Knight.
+  2. Descomprime el .zip entero en cualquier carpeta (clic derecho > Extraer todo). No lo ejecutes
+     desde dentro del .zip.
+  3. Abre la carpeta y haz doble clic en "instalar.bat".
+
+El instalador:
+  - Busca la carpeta del juego (Steam y las rutas típicas). Si no la encuentra, te pide la ruta:
+    en Steam, clic derecho en Hollow Knight > Administrar > Ver archivos locales, y copia la ruta
+    de la ventana que se abre. También puedes arrastrar la carpeta del juego sobre instalar.bat.
+  - Guarda una copia de los archivos del juego que va a cambiar, en la carpeta
+    "HKMultiplayer-backup" dentro de la del juego. No la borres: la usa el desinstalador.
+  - Instala la Modding API (la que carga los mods) y el mod.
+  - Quita el mod anterior "HollowKnightCoop" si lo tenías: los dos usan la red a la vez y no
+    pueden estar juntos.
+  - Aparta los demás mods a la carpeta Mods\Disabled (los hechos para otra versión de la Modding
+    API pueden romper el juego). Al desinstalar vuelven a su sitio.
+
+Después abre Hollow Knight desde Steam: en el menú principal aparece "Multijugador".
+
+Si Windows no deja escribir en la carpeta del juego, haz clic derecho en instalar.bat y elige
+"Ejecutar como administrador".
+
+Para actualizar a una versión nueva del mod, ejecuta el instalador del paquete nuevo: conserva la
+copia del juego de la primera instalación.
+
+
+2. HOSTEAR UN MUNDO (el que invita)
+-----------------------------------
+
+  1. Menú principal > Multijugador. Escribe tu nombre. El puerto es 26950 si no lo cambias.
+  2. "Hostear un mundo" > "Nuevo mundo" (o elige uno que ya tengas) > "Crear y hostear".
+  3. Pasa a tus compañeros:
+       - tu dirección (IP),
+       - el puerto (26950),
+       - el código de la partida que sale en pantalla (como ABCD-EFGH).
+     El código y la IP también salen en Pausa > Multijugador, con un botón para copiar el código.
+
+Qué dirección dar:
+  - Misma casa (misma red o wifi): la IP que sale en Pausa > Multijugador (suele ser 192.168.x.x).
+  - Por internet: tu IP pública. La ves buscando "cuál es mi IP" en el navegador. Además tienes que
+    abrir el puerto (punto 4).
+
+
+3. UNIRSE A UN MUNDO (el invitado)
+----------------------------------
+
+  1. Menú principal > Multijugador. Escribe tu nombre y el mismo puerto que el host (26950).
+  2. "Unirse a un mundo": escribe la dirección del host y el código de la partida > "Unirse".
+
+Tu personaje se guarda en el mundo del host, en su PC. Si vuelves a unirte a ese mundo, lo
+recuperas.
+
+
+4. JUGAR POR INTERNET: ABRIR EL PUERTO UDP (solo el host)
+---------------------------------------------------------
+
+El juego usa el puerto 26950 por UDP (o el que pongas en Multijugador > Puerto).
+
+  a) Firewall de Windows: la primera vez que hosteas, Windows puede preguntar si Hollow Knight
+     puede usar la red. Marca "Redes privadas" y "Redes públicas" y pulsa "Permitir".
+  b) Router: entra en la configuración del router (suele ser http://192.168.1.1 o
+     http://192.168.0.1; el usuario y la clave vienen en una etiqueta del router) y busca
+     "Redirección de puertos", "Port forwarding", "NAT" o "Servidor virtual". Crea una regla:
+       - Protocolo: UDP
+       - Puerto externo e interno: 26950
+       - IP del equipo: la IP local de tu PC (la de Pausa > Multijugador, 192.168.x.x)
+     Guarda los cambios.
+
+Si no puedes tocar el router (o tu proveedor no lo permite), usad un programa de red local virtual
+como Radmin VPN, ZeroTier o Tailscale: el invitado se une con la IP que el programa da al host.
+
+En la misma red (misma casa) no hace falta abrir nada.
+
+
+5. DÓNDE SE GUARDAN LOS MUNDOS
+------------------------------
+
+Los mundos coop se guardan solo en el PC del host, en:
+
+  C:\Users\<tu usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\HKMultiplayer\Mundos
+
+(una carpeta por mundo, hasta 4). La página "Hostear un mundo" tiene un botón "Abrir carpeta de los
+mundos". Para hacer una copia de seguridad o pasar un mundo a otro PC, copia su carpeta.
+
+Los mundos coop van aparte de las 4 partidas normales del juego, que no se tocan. Los personajes
+de los invitados se guardan dentro del mundo del host.
+
+
+6. SKINS
+--------
+
+Compatibles con CustomKnight. Pon cada skin (una carpeta con Knight.png) en
+  <carpeta del juego>\hollow_knight_Data\Managed\Mods\HKMultiplayer\Skins
+y elígela en Pausa > Multijugador > Skin. Los demás la ven aunque no la tengan.
+
+
+7. DESINSTALAR
+--------------
+
+Cierra el juego y haz doble clic en "desinstalar.bat" (del mismo paquete). Deja el juego como
+estaba antes de instalar: devuelve los archivos originales, quita la Modding API y el mod, y
+devuelve a su sitio los mods apartados y el mod anterior si lo tenías.
+
+No borra tus mundos coop, tus partidas ni tus skins.
+
+Si algo se queda mal, Steam lo arregla: clic derecho en Hollow Knight > Propiedades >
+Archivos instalados > Verificar integridad de los archivos del juego.
+
+
+8. SI ALGO FALLA
+----------------
+
+  - No aparece "Multijugador" en el menú: vuelve a ejecutar instalar.bat. Si sigue sin salir, mira
+    el registro de la Modding API:
+      C:\Users\<tu usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt
+  - El invitado no conecta: comprobad la dirección, el puerto y el código; que los dos tenéis la
+    misma versión del mod; y, por internet, que el host abrió el puerto UDP (punto 4).
+  - Si Steam actualiza Hollow Knight a otra versión, el mod puede dejar de cargar hasta que salga
+    una versión del mod para la nueva. Para volver al juego sin mods: punto 7.

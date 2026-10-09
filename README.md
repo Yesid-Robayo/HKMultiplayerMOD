@@ -8,7 +8,7 @@ Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más)
 sigue: [docs/estado.md](docs/estado.md). El diseño detallado está en
 [docs/arquitectura.md](docs/arquitectura.md).
 
-**Versión actual: 0.18.4** · Hitos M1 a M5 terminados (ver [Estado](#estado)).
+**Versión actual: 0.18.4** · Hitos M1 a M6 terminados (ver [Estado](#estado)).
 
 ---
 
@@ -164,12 +164,51 @@ Se ven y se oyen las acciones del compañero con los mismos efectos del juego, a
 
 ## Instalar
 
-El paquete para jugadores incluye la Modding API, el mod y un instalador:
+Para jugadores hay un paquete, `HKMultiplayer-<versión>.zip`, con la Modding API para Hollow Knight 1.5.12620, el mod
+y un instalador. Las instrucciones para jugadores (instalar, hostear, unirse, abrir el puerto UDP, dónde se guardan los
+mundos, desinstalar) van en el `LEEME.txt` del paquete.
 
-- `instalar.bat`: busca la carpeta del juego, guarda una copia de los archivos que reemplaza y copia el mod.
-- `desinstalar.bat`: deja el juego como estaba.
+1. Cerrar el juego, descomprimir el zip entero y hacer doble clic en `instalar.bat` (también se puede arrastrar la
+   carpeta del juego encima o pasarla: `instalar.bat "D:\Juegos\Hollow Knight"`).
+2. Abrir Hollow Knight desde Steam: en el menú principal aparece *Multijugador*.
 
-> El paquete se arma con `tools/package.sh` (pendiente de actualizar al nombre nuevo del mod, ver M6).
+Qué hace `instalar.bat`:
+
+- Busca la carpeta del juego: la que se le pasa; si no, Steam (registro, bibliotecas de `libraryfolders.vdf` y la
+  desinstalación de Steam) y rutas típicas en cada disco (`SteamLibrary`, GOG...). Si encuentra varias pregunta cuál, y
+  si no encuentra ninguna pide la ruta.
+- Comprueba que el juego es la versión 1.5.12620 (Unity 6) y que está cerrado, y que los archivos del paquete están
+  completos (`SHA256SUMS.txt`).
+- Guarda en `<juego>\HKMultiplayer-backup` una copia de cada archivo que reemplaza y apunta cada cambio en
+  `manifest.txt` (archivos y carpetas añadidos, reemplazados, mods movidos).
+- Quita el mod anterior **HollowKnightCoop** si está (los dos abren la red a la vez); queda guardado en la copia.
+- Aparta los demás mods a `Mods\Disabled` (la Modding API no carga esa carpeta).
+- Copia la Modding API y el mod, y comprueba lo copiado.
+- Instalar otra versión encima es una actualización: conserva la copia de la primera instalación.
+
+`desinstalar.bat` deshace el manifiesto al revés: devuelve los originales, borra lo añadido y devuelve a su sitio los
+mods apartados y el mod anterior. El juego queda como estaba; los mundos coop, las partidas y las skins no se tocan.
+
+### Armar el paquete
+
+`bash tools/package.sh` compila el mod en Release y deja `out/package/HKMultiplayer-<versión>.zip`. Necesita la
+Modding API compilada en `vendor/modding-api/OutputFinal` (solo local). Dentro del zip, una carpeta
+`HKMultiplayer-<versión>`:
+
+| Ruta | Contenido |
+|---|---|
+| `instalar.bat`, `desinstalar.bat`, `LEEME.txt` | Lo que usa el jugador (fuentes en `tools/installer/`). |
+| `scripts/` | `install.ps1`, `uninstall.ps1`, `common.ps1` y `version.txt`. |
+| `files/hollow_knight_Data/Managed/` | La Modding API (todo `OutputFinal` salvo su README). |
+| `files/hollow_knight_Data/Managed/Mods/HKMultiplayer/` | `HKMultiplayer.dll` y `.pdb`, y `BouncyCastle.Cryptography.dll` (cifrado). |
+| `SHA256SUMS.txt` | Hashes de `files/`. |
+
+Del juego de Team Cherry solo van los dos ensamblados que parchea la Modding API (`Assembly-CSharp.dll` y
+`TeamCherry.Localization.dll`), que son parte de ella.
+
+Prueba del paquete sin tocar el juego de Steam: `bash tools/manual-tests/installer-test.sh <zip>` crea las copias
+`test-instances/h` (juego sin mods) e `i` (con el mod anterior y otro mod), instala, arranca cada copia y mira en su
+ModLog que carga el mod y el menú *Multijugador*, desinstala y compara con la copia de antes.
 
 ---
 
@@ -182,7 +221,7 @@ El paquete para jugadores incluye la Modding API, el mod y un instalador:
 | M3 | Enemigos, jefes y objetos de sala | Hecho |
 | M4 | Efectos del otro jugador (tajos, hechizos, dash, curación) | Hecho |
 | M5 | Revivir, sombras compartidas, HUD del compañero y barra del jefe, ajustes del host, cinemáticas compartidas, sueños, skins | Hecho |
-| M6 | Instalador y paquete con el nombre nuevo | Pendiente |
+| M6 | Instalador y paquete para jugadores (`tools/package.sh`) | Hecho |
 
 De M5 quedan sin probar en vivo enteros el Tirano de Almas (su segunda fase), Grimm, Hollow Knight y la Radiancia. La
 lista completa de pendientes está al final de la arquitectura.
