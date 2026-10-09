@@ -42,16 +42,18 @@ internal sealed class SharedCutscenes {
 
     /// <summary>
     /// Escenas que se ven juntos: los finales, los créditos y Mr. Mushroom (que sale tras los créditos si se completó su
-    /// búsqueda). Todas son parte del final de la partida.
+    /// búsqueda). Todas son parte del final de la partida, igual que las dos pantallas con las que acaba: la de partida
+    /// completada y la que desbloquea el modo Alma de Acero. Esas dos también se comparten: al saltarlas (o al acabar)
+    /// el juego iría al menú principal, que cerraría el mundo coop, y en su lugar todos vuelven a su banco.
     /// </summary>
     private static readonly HashSet<string> SharedScenes = new() {
         "Cinematic_Ending_A", "Cinematic_Ending_B", "Cinematic_Ending_C", "Cinematic_Ending_D", "Cinematic_Ending_E",
-        "End_Credits", "Cinematic_MrMushroom"
+        "End_Credits", "Cinematic_MrMushroom", "End_Game_Completion", "PermaDeath_Unlock"
     };
 
     /// <summary>Escenas fuera del juego a las que se llega sin volver a ninguna sala (menú, cierre).</summary>
     private static readonly HashSet<string> OutOfGameScenes = new() {
-        "Menu_Title", "Quit_To_Menu", "PermaDeath", "BetaEnd", "End_Game_Completion", "PermaDeath_Unlock"
+        "Menu_Title", "Quit_To_Menu", "PermaDeath", "BetaEnd"
     };
 
     /// <summary>Lo más que se espera para llevar a alguien que está cambiando de sala o en pausa.</summary>
@@ -420,9 +422,12 @@ internal sealed class SharedCutscenes {
         }
     }
 
-    /// <summary>"Esperando a X para saltar 1/2" mientras el jugador local votó y faltan otros (se rehace al cambiar).</summary>
+    /// <summary>
+    /// "Esperando a X para saltar 1/2" en todos los que la ven en cuanto alguien votó y mientras falten otros (a quien
+    /// falta se le nombra como "ti"). Se rehace solo al cambiar.
+    /// </summary>
     private void RefreshOverlay() {
-        SetOverlay(_current != null && _voted && _watchers > 1 && _votes < _watchers
+        SetOverlay(_current != null && _votes > 0 && _watchers > 1 && _votes < _watchers
             ? $"Esperando a {_waitingFor} para saltar {_votes}/{_watchers}"
             : string.Empty);
     }
@@ -477,7 +482,7 @@ internal sealed class SharedCutscenes {
             var id = reader.ReadUShort();
             foreach (var player in _session.Players) {
                 if (player.Id == id) {
-                    text.Append(text.Length > 0 ? ", " : string.Empty).Append(player.Name);
+                    text.Append(text.Length > 0 ? ", " : string.Empty).Append(player.IsLocal ? "ti" : player.Name);
                 }
             }
         }
@@ -717,7 +722,7 @@ internal sealed class SharedCutscenes {
             writer.WriteByte(0);
             var missing = 0;
             foreach (var other in watch.Watchers) {
-                if (other != id && !watch.Votes.Contains(other)) {
+                if (!watch.Votes.Contains(other)) {
                     writer.WriteUShort(other);
                     missing++;
                 }
