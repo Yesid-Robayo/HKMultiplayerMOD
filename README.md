@@ -7,7 +7,7 @@ real y pelean juntos contra los mismos enemigos y jefes.
 Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más). El diseño detallado está en
 [docs/arquitectura.md](docs/arquitectura.md).
 
-**Versión actual: 0.15.0** · Hitos M1 a M4 terminados (ver [Estado](#estado)).
+**Versión actual: 0.15.1** · Hitos M1 a M4 terminados (ver [Estado](#estado)).
 
 ---
 
@@ -15,8 +15,11 @@ Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más)
 
 ### Partida y conexión
 
-- **Mundos coop** propios: hasta 4, guardados en el PC del host (`HKMultiplayer/Mundos/`). Son aparte de las 4 ranuras
-  del juego, que nunca se tocan. Desde el menú se crean, se hostean y se borran.
+- **Mundos coop** propios: hasta 4, guardados en el PC del host, en
+  `C:\Users\<usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\HKMultiplayer\Mundos` (una carpeta por mundo). Son
+  aparte de las 4 ranuras del juego, que nunca se tocan. Desde el menú se crean, se hostean y se borran, y la página de
+  hostear muestra esa carpeta con un botón para abrirla (copias de seguridad o pasarlos a otro PC). El personaje de cada
+  invitado se guarda dentro del mundo del host.
 - **Hostear y unirse** desde el menú principal (*Multijugador*): el host abre su mundo y comparte su **dirección**, el
   **puerto** (26950 por defecto) y el **código de la partida** (formato `ABCD-EFGH`). Botones para copiar el código y
   mostrar u ocultar la IP.

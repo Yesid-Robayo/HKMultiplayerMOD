@@ -103,6 +103,11 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         _newWorldButton = AddButton(host, "Nuevo mundo", () => ShowPage(NewWorldPage));
         _limitText = AddText(host, $"Ya tienes {WorldStore.MaxWorlds} mundos: borra uno para crear otro.", 34);
         _hostStatus = AddText(host, string.Empty, 34);
+        AddSpace(host, 10);
+        // Dónde están los mundos: para hacer copias de seguridad o pasarlos a otro PC
+        var where = AddText(host, $"Los mundos se guardan en este PC, en:\n{WorldStore.Root.Replace('/', '\\')}", 30);
+        where.GetComponent<LayoutElement>().preferredHeight = 30 * 3.4f;
+        AddButton(host, "Abrir carpeta de los mundos", OpenWorldsFolder, fontSize: 34);
 
         var newWorld = NewPage(NewWorldPage);
         AddText(newWorld, "Un mundo coop empieza como una partida nueva y lo guarda tu PC.", 38);
@@ -129,6 +134,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         AddSpace(join, 30);
         AddButton(join, "Unirse", Join);
         _joinStatus = AddText(join, string.Empty, 34);
+        AddText(join, "Tu personaje se guarda en el mundo del host, en su PC (al volver a unirte lo recuperas).", 28);
 
         var delete = NewPage(DeletePage);
         _deleteQuestion = AddText(delete, string.Empty, 44, title: true);
@@ -273,6 +279,16 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
             // No se pudo: se vuelve a mostrar el menú con el motivo
             _hostStatus.text = runner.StatusMessage;
             yield return ui.StartCoroutine(ui.ShowMenu(Screen));
+        }
+    }
+
+    /// <summary>Abre en el explorador la carpeta de los mundos coop (la crea si aún no existe).</summary>
+    private static void OpenWorldsFolder() {
+        try {
+            System.IO.Directory.CreateDirectory(WorldStore.Root);
+            Application.OpenURL("file:///" + WorldStore.Root.Replace('\\', '/'));
+        } catch (Exception e) {
+            Log.Warn($"No se pudo abrir la carpeta de los mundos ({WorldStore.Root}): {e.Message}");
         }
     }
 
