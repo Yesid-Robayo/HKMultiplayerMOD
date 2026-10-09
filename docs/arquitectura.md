@@ -78,6 +78,33 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - **Progreso compartido en directo** (`SharedProgress`): los campos del mundo se comparan cada 0,2 s con una copia
     (lectores compilados, sin memoria por lectura) y los cambios van al host, que los aplica y reenvía. Los objetos de
     sala (paredes, palancas, piedras de geo) se envían al guardarse y nunca retroceden.
+  - Lo que pasa con el Forjaguijones tras la última mejora (perdonarlo, matarlo, la cabaña de Sheo) es del personaje,
+    como sus mejoras: si fuera del mundo, en cuanto uno lo perdonaba se iba y el otro no podía terminar las suyas.
+  - **Personajes de misión** (`QuestNpcSync`): el avance de una misión es un dato del mundo y llega al otro PC, pero el
+    personaje en la sala es de cada PC y el juego solo mira ese dato al cargar la sala. Cuando llega de otro PC un
+    cambio de un dato del mundo (sí/no o número), en la sala se vuelve a hacer lo que hace el juego al cargarla con el
+    valor nuevo:
+    - Las FSM que miran ese dato al empezar (en los estados a los que llegan solas desde el inicial, con `FINISHED` o
+      con lo que deciden sus acciones, hasta uno que espera al caballero) vuelven a su estado inicial. Solo las de un
+      personaje (su objeto, un hijo o su padre tienen `npc_control` o `Conversation Control`) o las que al empezar solo
+      enseñan, esconden o animan (sin crear objetos, avisar a otros, cambiar datos, sonar...): así no se repite la
+      apertura de una arena ni un combate. Mr. Mushroom se destruye en el otro PC en cuanto uno le habla (su `Control`
+      compara `mrMushroomState` con su sitio), Bretta y Quirrel se van, el farol de la Pesadilla aparece.
+    - Los objetos que el juego enciende o apaga según un dato (`DeactivateIfPlayerdataTrue`, `...False`,
+      `ActivateIfPlayerdataTrue`; Myla, las larvas del Padre de las Larvas) se encienden o apagan igual. No los enemigos.
+    - Se mira al cargar la sala qué FSM y objetos miran cada dato (una vez, sin memoria al jugar). No se tocan los
+      enemigos, los controladores compartidos ni lo que copia su cadena (llega de allí). Si el caballero local está sin
+      control (hablando o en una cinemática) se espera a que lo recupere: si no, el personaje con el que habla se iría a
+      mitad del diálogo.
+    - La misma conversación no avanza la misión dos veces: si los dos hablan a la vez con su copia del personaje y el
+      otro avanza el número mientras este habla (su caballero perdió el control antes de que llegara), la lógica del
+      personaje (la FSM que lo cambia lee ese dato, o lo mira al empezar otra del mismo objeto) no lo vuelve a cambiar
+      (`PlayerData.IncrementInt`, `DecrementInt`, `IntAdd`, `SetInt` enganchados) y lo lee como estaba al empezar la
+      conversación (`GetInt`): cada uno lee el mismo texto. Un cambio de antes de la conversación no cuenta (hablar otra
+      vez con un personaje que se queda sigue avanzando su diálogo). Antes, si uno hablaba con Mr. Mushroom y luego el
+      otro con su copia, `mrMushroomState` subía dos y se saltaba un sitio.
+    - En el PC de quien habla el personaje hace lo del juego (Bretta o Tiso siguen ahí hasta volver a entrar); en el otro
+      se va enseguida, como si se cargara la sala.
 - **Enemigos y objetos de sala**:
   - Cada enemigo lo mueve el PC del jugador más cercano, porque su lógica solo ataca al caballero de su PC. Lo reparte
     el dueño de la sala; cambia solo si el otro está claramente más cerca (4 unidades) y hace un rato del último cambio
@@ -151,6 +178,12 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     palanca: quien lo rompe con el aguijón lo rompe en todos y el bicho sale del tarro roto en los dos. Es un golpe, no
     una zona: no espera a que todos estén cerca. Sus FSM, como las de lo que crean las jaulas en la raíz de la sala, se
     identifican por su sitio (se llaman igual y tienen el mismo puesto entre hermanos).
+  - Objetos de misión que se golpean con el aguijón (`Trigger2dEvent` con "Nail Attack" en un estado que sale con ese
+    aviso) y cambian un dato del mundo también se copian como una palanca: Zote atrapado en Nido Profundo se descuelga en
+    los dos (y cada uno habla con su Zote) y el farol de la Pesadilla se aviva con los golpes de los dos (cada golpe
+    suma y se apaga solo; antes cada PC contaba los de su jugador y no se encendía) y se enciende a la vez en los dos.
+    Un golpe de este jugador desde el reposo cuenta aunque acabe de llegar la cadena de otro PC (antes se descartaba
+    durante 3 s).
   - La campana de las estaciones del ciervo (`Bell Control` de `Station Bell`) también se copia como una palanca: su
     aviso `STAG BELL RUNG` hace llegar el ciervo en todos los PCs de la sala. Cada uno se sube y viaja por su cuenta.
   - Encuentros con diálogo antes de un combate (Hornet en los Bordes del Reino; se detectan solos: un objeto que no
@@ -493,6 +526,10 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   enemigos ocultos (sin dibujarse) y sin caja de colisión. Si algo apaga un enemigo vivo, el registro dice
   "apagado vivo" con la FSM que lo hizo y la pila de llamadas. `slashes <n> <s> [up|down]` da una ráfaga de
   aguijonazos seguidos (varios `press attack` en la misma lectura de órdenes serían uno solo).
+- Personajes de misión: `questnpcs` (datos del mundo que miran al empezar las FSM de la sala y los objetos que se
+  encienden o apagan según ellos), `fsmuses <texto>` (FSM de la sala, también apagadas, con una acción que nombra ese
+  texto, p. ej. `mrMushroomState`) y `pressat <hora en ms UTC> <botón>` (pulsar a una hora del reloj: dos copias a la
+  vez o una medio segundo después de la otra).
 - Ajustes del host e "Ir con ...": `goto <nombre>|#<id>` (como pulsar "Ir con ..."; con `#id` aunque ya no esté),
   `travel` (lo pedido, el viaje y el último suelo pisado), `warp <sala> <x> <y>` (viaje sin puerta, p. ej. a un sueño
   o a una cinemática), `scenetrace <s>` (sala, cambio de sala y posición cada 0,2 s), `enemybars`, `invulwatch <s>`

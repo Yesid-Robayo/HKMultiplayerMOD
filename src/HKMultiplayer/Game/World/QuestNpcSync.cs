@@ -268,7 +268,10 @@ internal sealed class QuestNpcSync {
     }
 
     private void AddToggle(string field, MonoBehaviour toggle) {
-        if (string.IsNullOrEmpty(field) || toggle.gameObject.scene.buildIndex < 0 || CharacterData.IsCharacterField(field)) {
+        // Los enemigos no: su muerte va por la sincronización de enemigos (apagarlo aquí cortaría la del jefe que acaba de
+        // morir en el otro PC)
+        if (string.IsNullOrEmpty(field) || toggle.gameObject.scene.buildIndex < 0 || CharacterData.IsCharacterField(field) ||
+            Scene.EnemySync.IsEnemyObject(toggle.transform)) {
             return;
         }
 
