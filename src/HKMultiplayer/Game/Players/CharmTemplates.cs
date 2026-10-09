@@ -121,6 +121,12 @@ internal sealed class CharmTemplates {
         public AudioClip LandClip;
 
         public AudioClip WetClip;
+
+        /// <summary>
+        /// Profundidad que le pone su FSM al salir (la nube de Defender's Crest se va detrás del caballero), o NaN si se
+        /// queda en la suya. Su FSM la pone después de enviarse, así que no viaja.
+        /// </summary>
+        public float Z = float.NaN;
     }
 
     /// <summary>
@@ -198,6 +204,11 @@ internal sealed class CharmTemplates {
             }
 
             PrepareGround(puff, prefab);
+            var place = HeroEffectTemplates.FirstAction<SetPosition>(FSMUtility.LocateFSM(prefab, "Control"), "Init");
+            if (place != null && !place.z.IsNone) {
+                puff.Z = place.z.Value;
+            }
+
             Puffs.Add(puff);
         }
 

@@ -638,7 +638,8 @@ internal sealed class RemoteCharmEffects {
 
         var baseScale = info.Template.transform.localScale;
         puff.Object.SetActive(false);
-        puff.Transform.position = new Vector3(position.x, position.y, info.Template.transform.position.z);
+        var z = float.IsNaN(info.Z) ? info.Template.transform.position.z : info.Z;
+        puff.Transform.position = new Vector3(position.x, position.y, z);
         puff.Transform.localEulerAngles = new Vector3(0f, 0f, angle);
         puff.Transform.localScale = new Vector3(scaleX, baseScale.y, baseScale.z);
         puff.Age = 0f;

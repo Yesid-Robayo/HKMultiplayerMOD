@@ -256,6 +256,13 @@ internal sealed class RemoteEffects {
         root.localRotation = Quaternion.identity;
         root.localScale = Vector3.one;
         _root.SetActive(true);
+
+        // El humo de Defender's Crest va detrás del caballero, como en el suyo (si no, el avatar se veía tras la nube)
+        var auraRenderer = _dungAuraParticles != null ? _dungAuraParticles.GetComponent<ParticleSystemRenderer>() : null;
+        if (auraRenderer != null && avatar.Renderer != null) {
+            auraRenderer.sortingLayerID = avatar.Renderer.sortingLayerID;
+            auraRenderer.sortingOrder = avatar.Renderer.sortingOrder - 1;
+        }
     }
 
     /// <summary>
