@@ -110,6 +110,11 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     el dueño de la sala; cambia solo si el otro está claramente más cerca (4 unidades) y hace un rato del último cambio
     (3 s; 8 s en los jefes, cada cambio corta su ataque). Ese PC lo hace funcionar normal y envía su estado (transform,
     animación, profundidad, activo, vida, daño al tocarlo) con detección de cambios sin crear objetos.
+  - Los de un caído o de quien está en pausa pasan enseguida a otro, también los apagados: en una marioneta, apagado
+    es solo lo último que envió quien la movía, y antes se saltaban; con un invitado caído junto a los enemigos que
+    movía, el dueño creía que los movía el caído y el caído que el dueño, y quedaban quietos en los dos. Además el
+    dueño repite su reparto entero a la sala cada 2 s (y 1,5 s después de que entre alguien): los cambios solo se
+    avisaban al hacerse, y quien recargaba la sala o perdía uno por un cambio de dueño se quedaba con otro reparto.
   - En los demás juegos el enemigo es una "marioneta": su lógica (FSM, física) se pausa (no se reinicia) y se dibuja
     con el estado recibido e interpolación; sus colisiones de daño siguen funcionando para el jugador local. Quien
     entra en la sala recibe del dueño la vida de cada enemigo: se aplica aunque el enemigo aún no sea marioneta (lo
@@ -141,6 +146,14 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     saca al Grimm que se inclina y habla). Solo muerto de verdad: el Hollow Knight pasa por vida negativa entre fases.
     Lo que su lógica suelta de sí al morir (`SetParent` sin padre: el cadáver del Hollow Knight) se suelta también en la
     marioneta y sus FSM pasan a funcionar solas en ese PC (allí es donde se absorbe el vacío para el final).
+  - Los efectos que su lógica repite cada frame mientras dura el estado también siguen en la marioneta
+    (`EnemySync.UpdateRunningEffects`): partículas con `everyFrame`, salpicaduras continuas (`SpawnBloodTime`,
+    `SpawnRandomObjectsOverTime`) y, si el estado tiene alguno, las cuentas con sus números que usan (`FloatAdd`,
+    `FloatClamp`, `EaseFloat` sin aviso al acabar...). Se apuntan por estado al encontrar el enemigo, se repiten
+    (`OnUpdate`) hasta que llega otro estado de esa FSM (el PC que lo mueve avisa también al salir de un estado así,
+    aunque el siguiente no tenga efectos), y se acaban si pasa a moverlo este PC o deja de seguirse. Antes solo se
+    hacían al entrar: el vapor del Falso Caballero y del Campeón Fallido al morir (su ritmo sube 5 cada frame) salía
+    más flojo en el PC que no lo movía y su salpicadura continua no salía.
   - Un objeto con dos `HealthManager` (la segunda fase del Tirano de Almas del sueño) es un solo enemigo, el primero.
   - Los objetos de la arena que su lógica enciende y apaga se sincronizan además como estado (al cambiar, y todos a
     quien entra en la sala): no dependen de haber visto el efecto en directo.
@@ -362,6 +375,30 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     20 veces por segundo dónde está cada uno, su giro, escala y el sprite de cada parte (mensaje 34, no fiable, a la
     sala). En los demás PCs son copias solo con sus sprites, interpoladas al tick en que se dibuja el avatar de su
     dueño. No dañan ni atacan: el daño ya lo hizo el PC del dueño.
+  - **Dreamshield**: su escudo (`Orbit Shield`, que saca la FSM `Spawn Orbit Shield`) va como un acompañante más, con
+    su brillo (sus partículas se conservan solo en él).
+  - **Aura de Defender's Crest**: su humo y su zumbido (copia de `Charm Effects/Dung`) van pegados al avatar, detrás
+    de él. Si está encendida viaja en el estado del jugador (una bandera en el byte de `PlayerSnapshot`, sin ocupar
+    más), así que la ve también quien entra después. La nube que deja cada 0,75 s sale del pool y llega como los
+    demás efectos sueltos, a la profundidad que le pone su FSM (detrás del caballero).
+  - **Polvo al correr y saltar**: el del salto (`Jump Effects`) y el del aterrizaje suave (`Soft Land Effect`) son
+    efectos sueltos que encienden solo el hijo del suelo de la sala, como `JumpEffects` y `SoftLandEffect` (polvo,
+    pasto, hueso o salpicadura), con el sonido del aterrizaje. El de correr (`Run Effects`, `EffectKind.Run`) empieza
+    cuando el caballero lo saca del pool y para cuando lo suelta: en el compañero va pegado al avatar con las
+    partículas del suelo y al parar se suelta, deja de emitir y se apaga a los 2 s.
+  - **Máscaras azules**: el estado `Blue Effects` de `Knight Damage` (gotas `Spatter Blue`, `Splat Explode Blue` y
+    `Blue Flash`, con el tamaño de su `SetScale` sobre lo recién creado, y su `SpawnBlood` azul). Si el golpe se llevó
+    una máscara azul (`EffectCharms.DamagedBlue`) no salen la grieta, las partículas ni los tajos oscuros del golpe
+    normal: allí su lógica salta antes a `Blue Effects`.
+  - **Parpadeo de invulnerabilidad**: si es invulnerable (`cState.invulnerable`, tras un golpe o al revivir) viaja
+    como otra bandera del estado y el avatar va y vuelve entre su color y el de invulnerable, con el color y el ritmo
+    del `InvulnerablePulse` del caballero local.
+  - **Pasto y telas a su paso** (`PartnerGrass`, sin red): en cada PC se mira unas 20 veces por segundo qué pasto toca
+    la caja de cada avatar (la del caballero local, `Physics2D.OverlapBox` sobre las colisiones del pasto de la sala,
+    buscadas una vez al cambiar de sala) y se hace lo mismo que la entrada del caballero: `GrassBehaviour.WindReact`
+    (también al andar por dentro, como su `FixedUpdate`), el `OnTriggerEnter2D` de `GrassSpriteBehaviour` y
+    `Grass.Push` (también las telas). Al pasto le llega una caja apagada puesta donde está el avatar (solo mira su
+    posición para inclinarse). El avatar sigue sin colisión ni la etiqueta `Player`.
   - Lo que vuela suelto (bolas de fuego, rayos, moscas, acompañantes) no cuelga del avatar, pero `Skins` le pone la
     skin de su dueño igual (`RemoteAvatar.LooseEffects`).
   - Comprobados igual en los dos PCs: Quick Slash (cada tajo llega), Mark of Pride y Longnail (tamaño del tajo),
@@ -431,6 +468,7 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   derecha, espejo exacto del HUD del compañero (sprites de `HUD Cln`: la llena `appear_v020004`, la vacía
   `health_backboard` y la azul `idle0000`, a escala entre sí por sus vértices de tk2d y girados si tk2d los guarda
   girados), con su orbe de alma y su estado; sus máscaras sobre su cabeza 3 s al cambiarle la vida y flechas en el borde.
+  Nunca pone una zona `NONE` (salas de paso del juego); mientras viaja en ciervo dice "viajando en ciervo".
 - **Barra del jefe** (`BossBar`): los jefes se apuntan al encenderse (`HealthManager.OnEnable`), con el nombre de su
   entrada del diario; la vida máxima es la mayor vista. Con barras visibles, `Notice.SetLift` sube los avisos (abajo a
   la derecha) por encima de ellas: el de dos líneas pisaba la barra.
@@ -463,7 +501,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   ponía al caballero en la primera puerta de la sala (`FindTransitionPoint` con "cualquiera"): en Cruces Olvidados
   (sala de Madre Gruz) aparecía en `right1` y salía por ella a `Crossroads_50` antes de que el mod lo colocara.
 - **Lo que hace cada uno** (`PartyState`, mensaje 91): cada jugador informa al host si está en una cinemática
-  compartida o en un sueño; es su estado mientras no está caído (al revivir en un sueño vuelve a "en sueño"). El
+  compartida, en un sueño o viajando en ciervo (`StagTravel`: la sala del viaje, `Cinematic_Stag_travel`, no es de
+  juego ni de ninguna zona, así que su sala llega vacía y su zona es `NONE`; el HUD de los demás ponía "en None"); es
+  su estado mientras no está caído (al revivir en un sueño vuelve a "en sueño"). El
   mini-HUD lo muestra si está en otra sala. Con eso va si tiene el juego en pausa (el host lo reparte en
   `PartyStatus`): con la escala de tiempo a 0 sus enemigos se quedaban congelados para los demás, así que quien está
   en pausa, como un caído, no se queda con enemigos (`PartyState.IsInactive` en `EnemySync.AssignControllers`).
@@ -619,9 +659,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   Grimm, los jefes de sueño, Hollow Knight y la Radiancia pasan a M5. El sonido del minero del Coliseo ya suena en el
   PC que no lo mueve (comprobado en M5: tajo, lanzamiento del pico y voz al morir).
 - **M4** (hecho, con los amuletos del compañero): sin reproducir aún la muerte del compañero (su animación ya se ve en
-  su sprite, sin la cabeza ni el aguijón que salen despedidos), el destello parpadeante de invulnerabilidad, el aura de
-  Defender's Crest mientras se lleva (humo y nubecillas al andar), Dreamshield, el polvo al correr y saltar, y los
-  efectos azules de los golpes con vidas azules. Sharp Shadow no tiene efecto propio: su dash es el dash sombra y sus
+  su sprite, sin la cabeza ni el aguijón que salen despedidos; con revivir solo se ve al caer todos). El parpadeo de
+  invulnerabilidad, el aura de Defender's Crest, Dreamshield, el polvo al correr y saltar y los efectos azules ya
+  salen (ver "Efectos del otro jugador"). Sharp Shadow no tiene efecto propio: su dash es el dash sombra y sus
   golpes a los enemigos se ven por `EnemyHitFx` (M3); comprobado en vivo contra un Zombie Runner de Crossroads_01,
   con los acompañantes atacándolo a la vez.
 - **M5**: hecho, probado en vivo con dos copias:
@@ -665,8 +705,5 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   Falta: instalarlo en el PC de otro jugador desde el zip descargado y jugar por internet con el puerto abierto. La
   copia "limpia" de la prueba no tiene la `Assembly-CSharp.dll` original del juego (en este PC no hay ninguna sin la
   Modding API): usa otra versión parcheada en su lugar, que sirve para ver que el original se guarda y se devuelve.
-- **Pasto y telas al paso del compañero** (solo estético, baja prioridad): hoy se sincroniza el corte, pero no el
-  balanceo cuando el otro caballero pasa por encima. Sin red: en cada PC, cada pocos frames, buscar el pasto
-  (`GrassBehaviour`) cercano al avatar del otro y darle el mismo empujón que da el héroe local, con la velocidad del
-  avatar. No poner la etiqueta `Player` al avatar: muchas cosas del juego reaccionan a ella (puertas entre salas, zonas
-  de cámara, NPCs, rangos de alerta de enemigos).
+- **Pasto y telas al paso del compañero**: hecho (`PartnerGrass`, ver "Efectos del otro jugador"); comprobado en
+  Fungus1_01. Sin probar en las telas de la Ciudad de las Lágrimas.

@@ -37,7 +37,11 @@ internal sealed class CompanionTemplates {
     private readonly Dictionary<string, byte> _collectionByName = new();
 
     /// <summary>FSM de los amuletos del caballero que sacan a sus acompañantes del pool.</summary>
-    private static readonly string[] SpawnerFsms = { "Hatchling Spawn", "Weaverling Control", "Spawn Grimmchild" };
+    private static readonly string[] SpawnerFsms = {
+        "Hatchling Spawn", "Weaverling Control", "Spawn Grimmchild",
+        // Dreamshield: el escudo que gira alrededor del caballero (su sprite y su giro llegan como los de los demás)
+        OrbitShieldSpawner
+    };
 
     public CompanionTemplates(HeroController hero, Transform holder) {
         var charmEffects = hero.transform.Find("Charm Effects");
@@ -63,7 +67,9 @@ internal sealed class CompanionTemplates {
                     continue;
                 }
 
-                AddKind(prefab, holder);
+                // El escudo de Dreamshield conserva su brillo (partículas que deja al girar); en los demás saldría el humo
+                // de Defender's Crest también sin él
+                AddKind(prefab, holder, keepParticles: depth == 0 && fsm.FsmName == OrbitShieldSpawner);
                 if (depth == 0) {
                     foreach (var child in prefab.GetComponents<PlayMakerFSM>()) {
                         AddSpawnsOf(child, holder, depth + 1);
@@ -73,7 +79,9 @@ internal sealed class CompanionTemplates {
         }
     }
 
-    private void AddKind(GameObject prefab, Transform holder) {
+    private const string OrbitShieldSpawner = "Spawn Orbit Shield";
+
+    private void AddKind(GameObject prefab, Transform holder, bool keepParticles) {
         var sprites = prefab.GetComponentsInChildren<tk2dSprite>(true);
         var count = Mathf.Min(sprites.Length, MaxParts);
         var paths = new string[count];
@@ -106,13 +114,16 @@ internal sealed class CompanionTemplates {
         }
 
         foreach (var component in template.GetComponentsInChildren<Component>(true)) {
-            if (component is tk2dSpriteAnimator or AudioSource or ParticleSystemRenderer or Animator or SpriteRenderer) {
+            if (component is tk2dSpriteAnimator or AudioSource or Animator or SpriteRenderer ||
+                component is ParticleSystemRenderer && !keepParticles) {
                 Object.DestroyImmediate(component);
             }
         }
 
-        foreach (var particles in template.GetComponentsInChildren<ParticleSystem>(true)) {
-            Object.DestroyImmediate(particles);
+        if (!keepParticles) {
+            foreach (var particles in template.GetComponentsInChildren<ParticleSystem>(true)) {
+                Object.DestroyImmediate(particles);
+            }
         }
 
         _kindByPrefab[prefab] = Kinds.Count;

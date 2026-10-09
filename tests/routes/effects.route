@@ -38,6 +38,11 @@ wait 2
 guest press jump 0.4
 wait 0.6
 guest press jump 0.3
+# Tercer intento sin depender del tiempo entre lecturas de órdenes: ya en el aire (4 por encima del suelo), un salto
+# es el doble salto. Las dos órdenes van en la misma lectura y se hacen en el mismo frame
+wait 2
+guest tp 56 15.8
+guest press jump 0.3
 expect-log host efecto DoubleJump de
 
 # Hechizos: bola de fuego, grito y caída (cada uno es un estado de Spell Control)

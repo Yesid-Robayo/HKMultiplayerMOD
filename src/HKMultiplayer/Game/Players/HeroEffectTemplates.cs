@@ -38,7 +38,9 @@ internal sealed class HeroEffectTemplates {
 
     /// <summary>Lo que crean los estados reproducidos y es solo visual (se crea igual junto al avatar).</summary>
     private static readonly HashSet<string> VisualSpawns = new() {
-        "White Flash R", "Slash Effect GhostDark1", "Slash Effect GhostDark2"
+        "White Flash R", "Slash Effect GhostDark1", "Slash Effect GhostDark2",
+        // Al perder una máscara azul ("Blue Effects" de Knight Damage): gotas, estallido y destello azules
+        "Spatter Blue", "Splat Explode Blue", "Blue Flash"
     };
 
     /// <summary>Tamaño con el que la FSM de un arte del aguijón pone su efecto (Great Slash y Dash Slash).</summary>
@@ -285,6 +287,8 @@ internal sealed class HeroEffectTemplates {
                 return IsSpawnEffect(a.gameObject.Value);
             case FlingObjectsFromGlobalPool a:
                 return IsVisualSpawn(a.gameObject.Value);
+            case SpawnBlood:
+                return true;
             case CreateObject a:
                 return IsSpawnEffect(a.gameObject.Value);
             default:

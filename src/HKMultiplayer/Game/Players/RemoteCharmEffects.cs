@@ -583,6 +583,7 @@ internal sealed class RemoteCharmEffects {
         public MeshRenderer[] Renderers;
         public ParticleSystem[] Particles;
         public SpriteRenderer Sprite;
+        public AudioSource Audio;
         public CharmTemplates.PuffInfo Info;
         public float StartScale;
         public float Age;
@@ -612,6 +613,7 @@ internal sealed class RemoteCharmEffects {
                     Renderers = copy.GetComponentsInChildren<MeshRenderer>(true),
                     Particles = copy.GetComponentsInChildren<ParticleSystem>(true),
                     Sprite = copy.GetComponent<SpriteRenderer>(),
+                    Audio = copy.GetComponent<AudioSource>(),
                     Info = info
                 };
                 foreach (var animator in candidate.Animators) {
@@ -636,7 +638,8 @@ internal sealed class RemoteCharmEffects {
 
         var baseScale = info.Template.transform.localScale;
         puff.Object.SetActive(false);
-        puff.Transform.position = new Vector3(position.x, position.y, info.Template.transform.position.z);
+        var z = float.IsNaN(info.Z) ? info.Template.transform.position.z : info.Z;
+        puff.Transform.position = new Vector3(position.x, position.y, z);
         puff.Transform.localEulerAngles = new Vector3(0f, 0f, angle);
         puff.Transform.localScale = new Vector3(scaleX, baseScale.y, baseScale.z);
         puff.Age = 0f;
@@ -648,6 +651,10 @@ internal sealed class RemoteCharmEffects {
 
         puff.Active = true;
         puff.Object.SetActive(true);
+        if (info.ByGround) {
+            ShowGround(puff, position);
+        }
+
         foreach (var renderer in puff.Renderers) {
             renderer.enabled = true;
         }
@@ -662,6 +669,44 @@ internal sealed class RemoteCharmEffects {
         foreach (var particles in puff.Particles) {
             particles.Clear();
             particles.Play();
+        }
+    }
+
+    /// <summary>
+    /// Polvo del salto o del aterrizaje suave: como <see cref="SoftLandEffect"/> y <see cref="JumpEffects"/>, solo el
+    /// hijo del suelo de la sala (el mismo en los dos PCs: están en la misma sala), y el sonido del aterrizaje.
+    /// </summary>
+    private void ShowGround(Puff puff, Vector2 position) {
+        var info = puff.Info;
+        var transform = puff.Transform;
+        for (var i = 0; i < transform.childCount; i++) {
+            transform.GetChild(i).gameObject.SetActive(false);
+        }
+
+        var ground = PlayerData.instance != null ? PlayerData.instance.environmentType : 0;
+        var shown = ground switch {
+            1 => info.Grass,
+            2 => info.Bone,
+            // Agua poco profunda (salpica gotas sueltas) y sin efecto
+            3 or 5 => -1,
+            6 => info.Splash,
+            _ => info.Dust
+        };
+        SetChildActive(transform, shown);
+        if (shown >= 0 && shown != info.Splash) {
+            SetChildActive(transform, info.JumpPuff);
+            SetChildActive(transform, info.Trail);
+        }
+
+        var clip = ground is 3 or 6 ? info.WetClip : ground == 5 ? null : info.LandClip;
+        if (puff.Audio != null && clip != null && Audible(position)) {
+            puff.Audio.PlayOneShot(clip);
+        }
+    }
+
+    private static void SetChildActive(Transform parent, int index) {
+        if (index >= 0 && index < parent.childCount) {
+            parent.GetChild(index).gameObject.SetActive(true);
         }
     }
 

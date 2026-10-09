@@ -36,6 +36,9 @@ internal sealed class PartnerHud {
     private static readonly Vector2 Margin = new(64f, 52f);
 
     private const float SlotHeight = 118f;
+
+    /// <summary>Zona de las salas de paso (cinemáticas del juego): no se muestra.</summary>
+    private const byte NoZone = (byte) GlobalEnums.MapZone.NONE;
     private static readonly Color DimMask = new(0.35f, 0.35f, 0.4f, 0.6f);
     private static readonly Color BlueTint = new(0.45f, 0.75f, 1f, 1f);
 
@@ -263,13 +266,16 @@ internal sealed class PartnerHud {
         var statusKey = downed ? 1000
             : elsewhere && member.Status == PlayerStatus.Cutscene ? 1001
             : elsewhere && member.Status == PlayerStatus.Dream ? 1002
-            : vitals != null && vitals.Zone != localZone && elsewhere ? vitals.Zone : -2;
+            : elsewhere && member.Status == PlayerStatus.StagTravel ? 1003
+            // Sin zona (salas de paso como las cinemáticas del juego): nada, no "en None"
+            : vitals != null && vitals.Zone != localZone && elsewhere && vitals.Zone != NoZone ? vitals.Zone : -2;
         if (statusKey != slot.StatusKey) {
             slot.StatusKey = statusKey;
             slot.Status.text = statusKey switch {
                 1000 => "caído",
                 1001 => "viendo una cinemática",
                 1002 => "en un sueño",
+                1003 => "viajando en ciervo",
                 >= 0 => $"en {Zones.Name((byte) statusKey)}",
                 _ => string.Empty
             };

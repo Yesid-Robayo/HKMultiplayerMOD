@@ -227,7 +227,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Dreams.Update(scene);
             Grimmchild.Update(scene);
             Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene
-                : Dreams.InDream ? Features.PlayerStatus.Dream : Features.PlayerStatus.Standing,
+                : Dreams.InDream ? Features.PlayerStatus.Dream
+                : InStagTravel() ? Features.PlayerStatus.StagTravel : Features.PlayerStatus.Standing,
                 GameManager.instance != null && GameManager.instance.isPaused);
         } catch (Exception e) {
             Log.Error($"Error en la partida: {e}");
@@ -245,6 +246,11 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     }
 
     private void OnApplicationQuit() => Leave();
+
+    /// <summary>Sala del viaje en ciervo (no es de juego: mientras se viaja la sala local queda vacía).</summary>
+    private const string StagTravelScene = "Cinematic_Stag_travel";
+
+    private static bool InStagTravel() => GameManager.instance != null && GameManager.instance.sceneName == StagTravelScene;
 
     /// <summary>Sala en la que se está jugando, o vacía (menú, cinemática, cargando).</summary>
     private static string CurrentScene() {
