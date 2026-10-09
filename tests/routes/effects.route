@@ -24,7 +24,10 @@ guest pdset canDash true
 guest pdset hasDoubleJump true
 guest press dash 0.1
 expect-log host efecto Dash de
-# Que termine el dash y aterrice: un salto pulsado durante el dash no cuenta y el segundo sería un salto normal
+# Que termine el dash y vuelva al sitio de antes (el dash lo lleva bajo un saliente): un salto pulsado durante el dash
+# no cuenta y, con el techo cerca, el segundo sería un salto normal
+wait 1
+guest tp 56 11.8
 wait 1
 guest press jump 0.4
 wait 0.6
