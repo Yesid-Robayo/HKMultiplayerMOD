@@ -7,7 +7,7 @@ real y pelean juntos contra los mismos enemigos y jefes.
 Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más). El diseño detallado está en
 [docs/arquitectura.md](docs/arquitectura.md).
 
-**Versión actual: 0.16.0** · Hitos M1 a M4 terminados (ver [Estado](#estado)).
+**Versión actual: 0.16.1** · Hitos M1 a M4 terminados (ver [Estado](#estado)).
 
 ---
 

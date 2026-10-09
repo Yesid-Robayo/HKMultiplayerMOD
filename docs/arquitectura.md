@@ -184,8 +184,16 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Nombre del jefe al despertar: la marioneta hace también lo que le dice al título de zona qué nombre poner.
   - Enemigos creados por objetos de la sala que no son enemigos (las jaulas del Coliseo crean el suyo al prepararse):
     cada PC los crea igual. Si se crean después de repasar la sala, se siguen desde ese momento con un identificador
-    sacado de quién los creó; los clonados en la raíz de la sala (mismo nombre y mismo puesto entre hermanos) se
-    distinguen por su sitio al cargarla. No quedan muertos para siempre (el Coliseo se repite).
+    sacado de quién los creó. Los clonados en la raíz de la sala (mismo nombre y mismo puesto entre hermanos) se
+    identifican por la FSM que los apunta (la variable "Enemy" de su jaula; si los apuntan varias, la menor), y si no
+    los apunta ninguna, por su sitio al cargarla. Por su sitio no bastaba: en Oro hay jaulas de oleadas distintas en
+    el mismo punto, sus enemigos se repartían los identificadores en distinto orden en cada PC y el enemigo de una
+    oleada era otro en el otro PC (no salía, o salía invisible, o quedaba su cadáver solo en un PC). No quedan muertos
+    para siempre (el Coliseo se repite).
+  - Zonas del enemigo que apuntan si el caballero está dentro (una FSM hija que al entrar y salir pone una variable
+    de otra, como el "Hero Saver" de los Mage Blob, que no salen con el caballero donde aparecerían): al pasar a
+    mover el enemigo se vuelven a poner según el caballero de ese PC. Lo que llega del anterior es su caballero; si
+    no, el Mage Blob heredaba "dentro", aquí nunca llegaba la salida y la oleada esperaba para siempre.
   - Piezas que se mueven aparte (hijos con animación o que dañan, como la aguja de Hornet): posición, profundidad,
     giro, escala, si están activas y si se dibujan, si su caja de daño está encendida, cuánto dañan y animación vienen
     del PC que mueve el enemigo. También las de fuera del enemigo que apuntan las variables de sus FSM (el rayo del
@@ -300,7 +308,8 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   con vida y su huella, y `die` mata al caballero; cada muerte de enemigo se registra con quién la provocó. `moving <s>` lista lo sólido o
   dañino que se mueve o gira, `hazards` los peligros animados alineados y `wake <nombre>` enciende un enemigo apagado. `hero` dice por qué el
   caballero no responde (si acepta órdenes, si cedió el control, reaparición tras pinchos, pausa) y `regain` le
-  devuelve el control. `tp x y` no fija el punto de reaparición (`tp x y respawn` sí).
+  devuelve el control. `tp x y` no fija el punto de reaparición (`tp x y respawn` sí). `enemies` marca también los
+  enemigos ocultos (sin dibujarse) y sin caja de colisión.
 - Funciones del coop: `settings` (ajustes que rigen), `party` (revivir y estado de cada jugador), `vitals`, `shades`,
   `killshade` (mata la copia de la sombra de un compañero), `bossbar`, `focus <s>` (Focus simulado), `tpbody`, `heal`
   (vida llena por la vía del juego: `pdset maxHealth` no redibuja el HUD del juego y el mini-HUD lo mostraría distinto),
@@ -344,7 +353,11 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
     rompe en los dos y la oleada sigue.
   - Shielded Fool, Sturdy Fool y Winged Fool dañan a los dos, también desde la marioneta.
   Falta por ver en vivo:
-  - El Coliseo de Oro entero (Domadora de Dioses) con la prueba sin atajos.
+  - El Coliseo de Oro entero (Domadora de Dioses). Con la 0.16.1 los 137 enemigos del Oro recién cargado tienen el
+    mismo identificador y sitio en los dos PCs; la vuelta entera está pendiente. La prueba automática no basta: hay
+    oleadas que esperan a que el caballero se acerque a enemigos escondidos (magos, Mage Blob) y voladores que
+    esquivan el tajo, así que conviene jugarlo a mano.
+  - Que el arreglo de las zonas ("Hero Saver" de los Mage Blob, oleada 23 de Oro) desatasca la oleada en vivo.
   - Una espera en "WaveCheck 5" del Coliseo de Bronce en la prueba automática: un minero que sale de debajo de la tierra
     cuando el caballero se acerca, y en la prueba los caballeros no se mueven (jugando no debería pasar).
   Grimm, los jefes de sueño, Hollow Knight y la Radiancia pasan a M5. El sonido del minero del Coliseo ya suena en el

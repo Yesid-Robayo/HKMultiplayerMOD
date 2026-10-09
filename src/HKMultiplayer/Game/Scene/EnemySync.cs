@@ -1007,6 +1007,12 @@ internal sealed class EnemySync {
 
     /// <summary>Busca los enemigos de la sala, también los aún inactivos (solo crea memoria al entrar en una sala).</summary>
     private void Scan() {
+        _creatorIds = null;
+        ScanScenes();
+        _creatorIds = null;
+    }
+
+    private void ScanScenes() {
         for (var s = 0; s < UnitySceneManager.sceneCount; s++) {
             var unityScene = UnitySceneManager.GetSceneAt(s);
             if (!unityScene.isLoaded) {
@@ -1024,7 +1030,7 @@ internal sealed class EnemySync {
                     // Los clonados en la raíz de la sala (los de las jaulas del Coliseo) se llaman igual y Unity les da a
                     // todos el mismo puesto entre hermanos: se distinguen por dónde están al cargarla, igual en todos
                     var cloned = health.transform.parent == null && health.name.EndsWith("(Clone)", StringComparison.Ordinal);
-                    var id = cloned ? PlacedId(health.transform) : ScenePaths.Hash(health.transform);
+                    var id = cloned ? CreatorId(health.gameObject) ?? PlacedId(health.transform) : ScenePaths.Hash(health.transform);
                     if (_byId.ContainsKey(id)) {
                         id = PlacedId(health.transform) ^ 0x5bd1e995u;
                         if (_byId.ContainsKey(id)) {
@@ -1039,6 +1045,47 @@ internal sealed class EnemySync {
                 }
             }
         }
+    }
+
+    /// <summary>Durante un repaso de la sala: clonados en la raíz y su identificador por quién los apunta.</summary>
+    private Dictionary<GameObject, uint> _creatorIds;
+
+    /// <summary>
+    /// Clonados en la raíz que apunta una FSM de la sala que no es un enemigo (la jaula del Coliseo que lo creó guarda
+    /// su enemigo en una variable): su identificador sale de esa FSM y esa variable. Por su sitio no basta: en Oro hay
+    /// jaulas de oleadas distintas en el mismo punto, sus enemigos tenían la misma huella y cada PC le daba la de
+    /// repuesto a uno distinto (el enemigo de una oleada era, en el otro PC, el de otra: no salía nunca).
+    /// </summary>
+    private uint? CreatorId(GameObject clone) {
+        if (_creatorIds == null) {
+            _creatorIds = new Dictionary<GameObject, uint>();
+            foreach (var fsm in UnityEngine.Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include,
+                         FindObjectsSortMode.None)) {
+                if (fsm.gameObject.scene.buildIndex < 0 || IsEnemyObject(fsm.transform)) {
+                    continue;
+                }
+
+                uint path = 0;
+                foreach (var variable in fsm.FsmVariables.GameObjectVariables) {
+                    var value = variable.Value;
+                    if (value == null || value.transform.parent != null || value.GetComponent<HealthManager>() == null) {
+                        continue;
+                    }
+
+                    if (path == 0) {
+                        path = ScenePaths.Hash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode();
+                    }
+
+                    var id = (path ^ (uint) variable.Name.GetHashCode() * 16777619u) & ~SpawnedIdFlag;
+                    // Si lo apuntan varias, la menor: igual en todos los PCs, sea cual sea el orden en que se recorren
+                    if (!_creatorIds.TryGetValue(value, out var known) || id < known) {
+                        _creatorIds[value] = id;
+                    }
+                }
+            }
+        }
+
+        return _creatorIds.TryGetValue(clone, out var found) ? found : null;
     }
 
     /// <summary>Huella de un objeto por su sala, su nombre y su posición (redondeada a una décima).</summary>
@@ -1833,8 +1880,76 @@ internal sealed class EnemySync {
             enemy.Body.velocity = last.Velocity;
         }
 
+        RefreshZoneFlags(enemy);
         var first = handover.Length > 0 && enemy.Fsms.Length > 0 && enemy.Fsms[0] != null ? enemy.Fsms[0].ActiveStateName : "-";
         Log.Info($"{enemy.Root.name}: lo mueve este PC, sigue desde {first}");
+    }
+
+    /// <summary>
+    /// Zonas del enemigo que apuntan si el caballero está dentro (una FSM hija que al entrar y salir pone una variable
+    /// de otra, como el "Hero Saver" de los Mage Blob del Coliseo: no salen mientras el caballero esté donde
+    /// aparecerían). Lo que llega del anterior es su caballero; aquí se pone según si el de este PC está dentro. Si no,
+    /// el Mage Blob heredaba "dentro" del otro PC, aquí nunca llegaba la salida y no salía nunca (la oleada esperaba).
+    /// </summary>
+    private static void RefreshZoneFlags(Enemy enemy) {
+        var hero = HeroController.instance;
+        var heroCollider = hero != null ? hero.GetComponent<Collider2D>() : null;
+        if (heroCollider == null || enemy.Fsms == null) {
+            return;
+        }
+
+        foreach (var zone in enemy.Fsms) {
+            var collider = zone != null ? zone.GetComponent<Collider2D>() : null;
+            if (collider == null) {
+                continue;
+            }
+
+            string enterEvent = null, exitEvent = null;
+            foreach (var state in zone.FsmStates) {
+                foreach (var action in state.Actions) {
+                    if (action is not HutongGames.PlayMaker.Actions.Trigger2dEvent trigger) {
+                        continue;
+                    }
+
+                    var name = trigger.sendEvent?.Name;
+                    if (trigger.trigger == PlayMakerUnity2d.Trigger2DType.OnTriggerExit2D) {
+                        exitEvent ??= name;
+                    } else {
+                        enterEvent ??= name;
+                    }
+                }
+            }
+
+            if (enterEvent == null || exitEvent == null) {
+                continue;
+            }
+
+            var inside = collider.enabled && collider.gameObject.activeInHierarchy && collider.IsTouching(heroCollider);
+            var wanted = inside ? enterEvent : exitEvent;
+            foreach (var state in zone.FsmStates) {
+                foreach (var transition in state.Transitions) {
+                    if (transition.EventName != wanted) {
+                        continue;
+                    }
+
+                    var target = Array.Find(zone.FsmStates, s => s.Name == transition.ToState);
+                    if (target == null) {
+                        continue;
+                    }
+
+                    foreach (var action in target.Actions) {
+                        if (action is HutongGames.PlayMaker.Actions.SetFsmBool set) {
+                            var owner = zone.Fsm.GetOwnerDefaultTarget(set.gameObject);
+                            var fsm = owner != null ? FSMUtility.LocateFSM(owner, set.fsmName.Value) : null;
+                            var variable = fsm != null ? fsm.FsmVariables.FindFsmBool(set.variableName.Value) : null;
+                            if (variable != null) {
+                                variable.Value = set.setValue.Value;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // =====================================================================================================
@@ -3518,7 +3633,9 @@ internal sealed class EnemySync {
                          $" mueve={ControllerOf(enemy, _session.OwnerOf(_scene))}" +
                          $" hp={enemy.Health.hp}{(enemy.Damage != null ? $" daño={enemy.Damage.damageDealt}" : "")}" +
                          $"{(enemy.Health.isDead ? " MUERTO" : "")}{(enemy.Health.IsInvincible ? " invencible" : "")}" +
-                         $"{(enemy.Root.activeInHierarchy ? "" : " (inactivo)")} " +
+                         $"{(enemy.Root.activeInHierarchy ? "" : " (inactivo)")}" +
+                         $"{(enemy.Root.GetComponent<Renderer>() is { enabled: false } ? " oculto" : "")}" +
+                         $"{(enemy.Root.GetComponent<Collider2D>() is { enabled: false } ? " sin-caja" : "")} " +
                          $"pos=({p.x:0.00},{p.y:0.00})";
         }
     }
