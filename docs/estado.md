@@ -45,6 +45,12 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
 - **M4**: está juntado pero sin repasar en el juego tras el merge: pasar `tests/routes/effects.route`.
 - **M5**: terminar la segunda parte, juntarla, subir a 0.17.0 y repasar todo M5 en vivo (revivir, sombras, HUD,
   ajustes, sueños, cinemáticas, skins).
+- **Amuletos del compañero (pedido del usuario)**: que se vea igual lo que hace el otro caballero con amuletos que
+  cambian sus ataques. M4 dejó sin reproducir: moscas de Flukenest, rayos de Grubberfly, nubes de Spore Shroom y
+  Defender's Crest, Thorns of Agony y el golpe de Sharp Shadow. Comprobar también Quick Slash (el tajo del compañero al
+  ritmo rápido), Mark of Pride y Longnail (alcance), Shaman Stone y Spell Twister (hechizos), Dashmaster/Sprintmaster,
+  y los acompañantes que atacan solos (crías de Glowing Womb, tejedoras de Weaversong, Grimmchild). Todo visual en el
+  PC que mira; el daño lo hace el PC del dueño.
 - **Pruebas finales**: agentes que pasen todas las rutas (`bash tools/run-routes.sh --pairs 2`) sobre la versión
   completa, con el PC sin otros juegos abiertos (la memoria va justa: cada copia ~1,1 GB; Edge y Discord ocupan mucho).
 - **M6**: `tools/package.sh` aún usa los nombres del mod anterior (HollowKnightCoop).
