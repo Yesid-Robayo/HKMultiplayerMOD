@@ -170,6 +170,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Players.UpdateAvatars();
             Enemies.Update(scene);
             Vitals.Update();
+            UI.HudCanvas.Sync();
             Revive.Update(scene);
             Shades.Update(scene);
             Hud.Update(scene);

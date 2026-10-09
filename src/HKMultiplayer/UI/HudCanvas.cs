@@ -8,10 +8,16 @@ namespace HKMultiplayer.UI;
 /// Lienzo de pantalla (uGUI) de las funciones del coop durante la partida: HUD del compañero, flechas, barra del jefe y
 /// textos de revivir. Se crea una vez y se reutiliza; cada pieza se crea al principio y luego solo se mueve, se muestra
 /// o se oculta (sin memoria nueva por frame). Coordenadas de referencia 1920×1080, origen abajo a la izquierda.
+/// <para>Como el HUD del juego, ocupa la zona de la cámara del juego (16:9; con otra proporción el juego deja franjas
+/// negras) y escala con su alto: <see cref="Sync"/> lo ajusta al cambiar la ventana.</para>
 /// </summary>
 internal static class HudCanvas {
     private static Canvas _canvas;
+    private static CanvasScaler _scaler;
     private static RectTransform _root;
+
+    /// <summary>Zona de la cámara del juego en píxeles de pantalla (la última aplicada).</summary>
+    private static Rect _viewport;
     private static Font _bodyFont;
     private static Font _titleFont;
     private static Sprite _circle;
@@ -29,7 +35,7 @@ internal static class HudCanvas {
     }
 
     /// <summary>Escala del lienzo: píxeles de pantalla por unidad de referencia.</summary>
-    public static float ScaleFactor => _canvas != null ? _canvas.scaleFactor : 1f;
+    public static float ScaleFactor => _scaler != null ? _scaler.scaleFactor : 1f;
 
     /// <summary>Letra del texto del juego (Perpetua).</summary>
     public static Font BodyFont {
@@ -62,11 +68,36 @@ internal static class HudCanvas {
         _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         // Debajo de los avisos (500) y del cartel (510)
         _canvas.sortingOrder = 400;
-        var scaler = root.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.matchWidthOrHeight = 0.5f;
-        _root = (RectTransform) root.transform;
+        _scaler = root.GetComponent<CanvasScaler>();
+        _scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+        var viewport = new GameObject("Zona de juego", typeof(RectTransform));
+        _root = (RectTransform) viewport.transform;
+        _root.SetParent(root.transform, false);
+        _root.anchorMin = _root.anchorMax = Vector2.zero;
+        _root.pivot = Vector2.zero;
+        _viewport = default;
+        Sync();
+    }
+
+    /// <summary>
+    /// Ajusta el lienzo a la zona de la cámara del juego (barato: solo cambia algo si cambió la ventana). Llamar cada frame.
+    /// </summary>
+    public static void Sync() {
+        if (_root == null) {
+            return;
+        }
+
+        var camera = GameCameras.instance != null ? GameCameras.instance.mainCamera : null;
+        var rect = camera != null ? camera.pixelRect : new Rect(0f, 0f, UnityEngine.Screen.width, UnityEngine.Screen.height);
+        if (rect == _viewport || rect.height < 1f) {
+            return;
+        }
+
+        _viewport = rect;
+        var scale = rect.height / 1080f;
+        _scaler.scaleFactor = scale;
+        _root.anchoredPosition = rect.position / scale;
+        _root.sizeDelta = rect.size / scale;
     }
 
     /// <summary>Contenedor vacío anclado abajo a la izquierda (para moverlo por posición).</summary>
@@ -144,12 +175,12 @@ internal static class HudCanvas {
     public static bool WorldToCanvas(Camera camera, Vector3 world, out Vector2 position) {
         var screen = camera.WorldToScreenPoint(world);
         var scale = ScaleFactor;
-        position = new Vector2(screen.x / scale, screen.y / scale);
+        position = new Vector2((screen.x - _viewport.x) / scale, (screen.y - _viewport.y) / scale);
         return screen.z > 0f;
     }
 
-    /// <summary>Tamaño del lienzo en unidades de referencia.</summary>
-    public static Vector2 Size => Root.rect.size;
+    /// <summary>Tamaño de la zona de juego en unidades de referencia.</summary>
+    public static Vector2 Size => Root.sizeDelta;
 
     /// <summary>Círculo blanco (orbe de alma), creado una vez.</summary>
     public static Sprite Circle {
