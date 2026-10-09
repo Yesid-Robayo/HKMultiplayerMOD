@@ -118,7 +118,8 @@ internal sealed class PlayerSync {
     }
 
     /// <summary>Efectos enviados, recibidos y reproducidos (modo de prueba).</summary>
-    public string DescribeEffects() => $"efectos enviados={_effects.Sent} recibidos={_effects.Received} reproducidos={_effects.Played}";
+    public string DescribeEffects() => $"efectos enviados={_effects.Sent} recibidos={_effects.Received} reproducidos={_effects.Played} " +
+                                       $"amuletos: {_effects.DescribeCharms()}";
 
     /// <summary>Primer jugador remoto dibujado en la sala (0 si ninguno).</summary>
     public ushort FirstVisibleId() {
@@ -145,6 +146,9 @@ internal sealed class PlayerSync {
 
     /// <summary>Búfer de un jugador (diagnóstico en el modo de prueba).</summary>
     internal SnapshotBuffer BufferOf(ushort id) => _remotes.TryGetValue(id, out var remote) ? remote.Buffer : null;
+
+    /// <summary>Huella de la sala local (0 si no se está jugando).</summary>
+    public ushort LocalSceneHash => _localSceneHash;
 
     /// <summary>La sala local cambió (vacía si no se está jugando).</summary>
     public void SetLocalScene(string scene) {

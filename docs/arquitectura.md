@@ -244,11 +244,40 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     del avatar).
   - **Bolas de fuego**: lo que lanza `Spell Control` crea la bola real con daño, así que se reproduce aparte: el
     objeto que la lanza sin su lógica (estallido y partículas), y una copia visual del proyectil que vuela recta a su
-    velocidad hasta chocar con el terreno (rayo contra sus capas) o deshacerse. La de Flukenest no se reproduce.
+    velocidad hasta chocar con el terreno (rayo contra sus capas) o deshacerse. Con Flukenest sale el estallido con su
+    sonido y, en lugar de la bola, sus moscas (abajo).
   - **Al mismo tiempo que la animación**: cada evento lleva el tick del remitente (el mismo reloj que su estado) y
     espera en una cola fija hasta que el avatar, que se dibuja un poco en el pasado, llega a ese tick (como mucho medio
     segundo). Sin memoria nueva por evento; la memoria creada mientras el compañero ataca es la del juego.
   - Los amuletos que cambian cómo se ve (Mark of Pride, Longnail, furia, Shaman Stone, Flukenest) viajan en un byte.
+  - **Lo que los amuletos y el código del caballero sacan del pool del juego** (`CharmTemplates`,
+    `RemoteCharmEffects`): un gancho a `ObjectPool.Spawn` reconoce el prefab y lo apunta; al final del frame (ya con la
+    velocidad, giro y escala que le pone quien lo crea) se envía cuál es, dónde y cómo. El PC que mira pone una copia
+    sin colisiones, cuerpo ni lógica, que se mueve sola contra el terreno (rayos contra sus capas), y la reutiliza:
+    - Rayos de Grubberfly's Elegy (normales y de furia, en las cuatro direcciones, con Mark of Pride): salen del
+      avatar con la velocidad y el desplazamiento de su FSM, se deshacen o chocan con su impacto.
+    - Nubes al curarse de Spore Shroom (más grande con Deep Focus) y de Defender's Crest, donde salieron.
+    - Moscas de Flukenest, cada una con la posición y velocidad con las que salió: caen con su gravedad, rebotan hacia
+      arriba como `SpellFluke` y revientan a los 2-3 s o al tocar un enemigo. Con Defender's Crest, la mosca grande
+      vuela girando, tiembla y explota en su nube a los 2 s.
+    - Ráfagas y anillo del dash sombra (también con Sharp Shadow y hacia abajo con Dashmaster), el polvo del dash en el
+      suelo y el aterrizaje fuerte. M4 los buscaba como hijos del caballero y no salían.
+  - **Onda de los gritos**: la crea el estado del grito como en el caballero (`CreateObject`, sin sus ondas, solo las
+    líneas) y su final llega con el estado siguiente. Solo si el compañero está a la vista de la cámara local: su FSM y
+    los temblores del grito mueven la cámara del que mira.
+  - **Thorns of Agony y golpe recibido**: las FSM `Charm Effects/Thorn Counter` (su sonido; las espinas son la
+    animación del caballero, que ya llega en su estado) y `Effects/Damage Effect/Knight Damage` (la grieta blanca y
+    los tajos oscuros, que salen del pool como objetos visuales) se reproducen como las demás FSM de acciones.
+  - **Acompañantes que atacan solos** (`Companions`: crías de Glowing Womb, tejedoras de Weaversong, Grimmchild y sus
+    bolas de fuego): el dueño los apunta al salir del pool (los que ya estaban, al preparar los efectos) y envía unas
+    20 veces por segundo dónde está cada uno, su giro, escala y el sprite de cada parte (mensaje 34, no fiable, a la
+    sala). En los demás PCs son copias solo con sus sprites, interpoladas al tick en que se dibuja el avatar de su
+    dueño. No dañan ni atacan: el daño ya lo hizo el PC del dueño.
+  - Lo que vuela suelto (bolas de fuego, rayos, moscas, acompañantes) no cuelga del avatar, pero `Skins` le pone la
+    skin de su dueño igual (`RemoteAvatar.LooseEffects`).
+  - Comprobados igual en los dos PCs: Quick Slash (cada tajo llega), Mark of Pride y Longnail (tamaño del tajo),
+    Shaman Stone (tamaño de la bola), Spell Twister (el alma del mini-HUD baja lo mismo) y Dashmaster y Sprintmaster
+    (el dash hacia abajo y la carrera llegan con la posición y la animación).
 
 ### Interfaz (`UI/`)
 
@@ -378,8 +407,11 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
 - Efectos del otro jugador: `burst <nombre> <n> <segundos>` hace capturas seguidas (las órdenes se leen cada medio
   segundo, así que para ver un efecto en el otro PC su ráfaga empieza antes), `hurt` da un golpe de 1 al caballero,
   `effects` cuenta los enviados, recibidos y reproducidos, y cada efecto reproducido se registra
-  ("efecto Slash de ..."). `tree <profundidad> <objeto>` y `fsmall <objeto>` muestran la jerarquía y todas las FSM de
-  un objeto (también inactivo o del pool, como `Fireball Top`). Ruta: `tests/routes/effects.route`.
+  ("efecto Slash de ...", con la FSM y el estado o el objeto). `tree <profundidad> <objeto>` y `fsmall <objeto>`
+  muestran la jerarquía y todas las FSM de un objeto (también inactivo o del pool, como `Fireball Top`); `ptree` es
+  `tree` buscando también entre lo cargado, `fsmvars` da los valores de las variables de sus FSM, `heroprefabs` los
+  objetos a los que apunta el caballero y `spawnlog <segundos>` registra lo que sale del pool. `effects` dice también
+  qué copias de amuletos y cuántos acompañantes del compañero hay encendidos. Ruta: `tests/routes/effects.route`.
 
 ## Hitos
 
@@ -420,11 +452,12 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
     cuando el caballero se acerca, y en la prueba los caballeros no se mueven (jugando no debería pasar).
   Grimm, los jefes de sueño, Hollow Knight y la Radiancia pasan a M5. El sonido del minero del Coliseo ya suena en el
   PC que no lo mueve (comprobado en M5: tajo, lanzamiento del pico y voz al morir).
-- **M4** (hecho): sin reproducir aún, porque no salen de una FSM de acciones del caballero o crean objetos con daño:
-  los rayos de Grubberfly's Elegy, las moscas de Flukenest (y su versión con Defender's Crest), las nubes de Spore
-  Shroom y Defender's Crest al curarse, Thorns of Agony, Sharp Shadow (su golpe; el sonido sí), la onda en pantalla de
-  los gritos, la muerte del compañero (su animación ya se ve en su sprite, sin la cabeza ni el aguijón que salen
-  despedidos), los aterrizajes fuertes y el destello parpadeante de invulnerabilidad.
+- **M4** (hecho, con los amuletos del compañero): sin reproducir aún la muerte del compañero (su animación ya se ve en
+  su sprite, sin la cabeza ni el aguijón que salen despedidos), el destello parpadeante de invulnerabilidad, el aura de
+  Defender's Crest mientras se lleva (humo y nubecillas al andar), Dreamshield, el polvo al correr y saltar, y los
+  efectos azules de los golpes con vidas azules. Sharp Shadow no tiene efecto propio: su dash es el dash sombra y sus
+  golpes a los enemigos se ven por `EnemyHitFx` (M3); comprobado en vivo contra un Zombie Runner de Crossroads_01,
+  con los acompañantes atacándolo a la vez.
 - **M5**: hecho, probado en vivo con dos copias:
   - Cinemáticas: los finales A, B y C, Mr. Mushroom, los créditos y las pantallas del final (el llevado ve el mismo
     vídeo a la vez), votación y vuelta al banco. Los vídeos de los finales y Mr. Mushroom no dejan saltar la primera

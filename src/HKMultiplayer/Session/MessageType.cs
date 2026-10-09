@@ -38,6 +38,9 @@ public enum MessageType : byte {
     /// <summary>Evento del jugador (efectos, golpes recibidos...).</summary>
     PlayerEvent = 33,
 
+    /// <summary>Acompañantes del jugador (crías, tejedoras, Grimmchild): dónde están y qué sprite muestran.</summary>
+    PlayerCompanions = 34,
+
     /// <summary>Primer tipo libre para las capas de juego.</summary>
     FirstGameType = 40
 }
@@ -68,6 +71,7 @@ public static class MessageRoutes {
     static MessageRoutes() {
         Register(MessageType.PlayerState, Route.SameScene, reliable: false);
         Register(MessageType.PlayerEvent, Route.SameScene, reliable: true);
+        Register(MessageType.PlayerCompanions, Route.SameScene, reliable: false);
     }
 
     public static void Register(MessageType type, Route route, bool reliable) {

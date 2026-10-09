@@ -45,12 +45,10 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
 - **M4**: está juntado pero sin repasar en el juego tras el merge: pasar `tests/routes/effects.route`.
 - **M5**: terminar la segunda parte, juntarla, subir a 0.17.0 y repasar todo M5 en vivo (revivir, sombras, HUD,
   ajustes, sueños, cinemáticas, skins).
-- **Amuletos del compañero (pedido del usuario)**: que se vea igual lo que hace el otro caballero con amuletos que
-  cambian sus ataques. M4 dejó sin reproducir: moscas de Flukenest, rayos de Grubberfly, nubes de Spore Shroom y
-  Defender's Crest, Thorns of Agony y el golpe de Sharp Shadow. Comprobar también Quick Slash (el tajo del compañero al
-  ritmo rápido), Mark of Pride y Longnail (alcance), Shaman Stone y Spell Twister (hechizos), Dashmaster/Sprintmaster,
-  y los acompañantes que atacan solos (crías de Glowing Womb, tejedoras de Weaversong, Grimmchild). Todo visual en el
-  PC que mira; el daño lo hace el PC del dueño.
+- **Amuletos del compañero (pedido del usuario)**: hecho en la rama del agente de amuletos (sobre `merge-m5`, sin
+  juntar): Grubberfly, Flukenest (y con Defender's Crest), nubes al curarse, Thorns of Agony, efecto del golpe recibido,
+  onda de los gritos, ráfagas del dash sombra y acompañantes (crías, tejedoras, Grimmchild), comprobados con capturas
+  en los dos PCs, también Sharp Shadow y los acompañantes atacando a un enemigo.
 - **Cinemáticas**: saltarlas solo cuando le dan los dos (voto 1/2, 2/2), sin bloquearse si uno se va.
 - **Pruebas extra para sincronizar al 100 %** (pedido del usuario): las dos a la vez entrando y saliendo de salas por
   puertas distintas; bancos (sentarse uno con el otro en combate); viaje en ciervo y ascensores con los dos; tiendas y

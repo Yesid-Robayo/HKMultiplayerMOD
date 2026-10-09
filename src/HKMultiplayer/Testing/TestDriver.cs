@@ -21,6 +21,9 @@ internal sealed class TestDriver : MonoBehaviour {
 
     private const string Tag = "[TEST] ";
 
+    private static float _spawnLogUntil;
+    private static bool _spawnLogHooked;
+
     private string _commandFile;
     private int _processedLines;
     private float _nextPoll;
@@ -918,15 +921,70 @@ internal sealed class TestDriver : MonoBehaviour {
 
                 Dump(treeRoot.transform, 0, int.Parse(args[1]));
                 break;
+            case "ptree":
+                // ptree <profundidad> <nombre>: como tree, pero busca también entre lo cargado e inactivo (prefabs del
+                // pool, objetos de los amuletos); prefiere una copia de la sala al prefab
+                var ptreeName = string.Join(" ", args.Skip(2));
+                var ptreeRoot = FindLoaded(ptreeName);
+                if (ptreeRoot == null) {
+                    Log.Warn($"{Tag}no existe '{ptreeName}'");
+                    break;
+                }
+
+                Log.Info($"{Tag}ptree {ptreeRoot.name} escena={(ptreeRoot.scene.IsValid() ? ptreeRoot.scene.name : "prefab")} " +
+                         $"padre={(ptreeRoot.transform.parent != null ? ptreeRoot.transform.parent.name : "-")} " +
+                         $"escala={ptreeRoot.transform.localScale} capa={ptreeRoot.layer}");
+                Dump(ptreeRoot.transform, 0, int.Parse(args[1]));
+                break;
+            case "fsmvars":
+                // fsmvars <nombre>: valores de las variables de todas las FSM del objeto y sus hijos (también prefabs)
+                var varsRoot = FindLoaded(string.Join(" ", args.Skip(1)));
+                if (varsRoot == null) {
+                    Log.Warn($"{Tag}no existe '{string.Join(" ", args.Skip(1))}'");
+                    break;
+                }
+
+                foreach (var fsm in varsRoot.GetComponentsInChildren<PlayMakerFSM>(true)) {
+                    foreach (var variable in fsm.FsmVariables.GetAllNamedVariables()) {
+                        Log.Info($"{Tag}var {fsm.gameObject.name}/{fsm.FsmName} {variable.Name}={variable}");
+                    }
+                }
+
+                break;
+            case "spawnlog":
+                // spawnlog <segundos>: registra cada objeto que sale del pool del juego durante ese tiempo
+                _spawnLogUntil = Time.unscaledTime + ParseFloat(args[1]);
+                if (!_spawnLogHooked) {
+                    _spawnLogHooked = true;
+                    On.ObjectPool.Spawn_GameObject_Transform_Vector3_Quaternion += (orig, prefab, parent, position, rotation) => {
+                        var spawned = orig(prefab, parent, position, rotation);
+                        if (Time.unscaledTime < _spawnLogUntil && prefab != null) {
+                            Log.Info($"{Tag}pool {prefab.name} en {(spawned != null ? spawned.transform.position : position)}");
+                        }
+
+                        return spawned;
+                    };
+                }
+
+                break;
+            case "heroprefabs":
+                // Objetos a los que apunta el caballero en sus campos (prefabs de amuletos, efectos) con su nombre
+                foreach (var field in typeof(HeroController).GetFields(System.Reflection.BindingFlags.Public |
+                                                                       System.Reflection.BindingFlags.NonPublic |
+                                                                       System.Reflection.BindingFlags.Instance)) {
+                    if (field.FieldType == typeof(GameObject) && field.GetValue(hero) is GameObject referenced && referenced != null) {
+                        Log.Info($"{Tag}campo {field.Name}={referenced.name} " +
+                                 $"{(referenced.scene.IsValid() ? referenced.transform.parent != null ? "hijo de " + referenced.transform.parent.name : "en escena" : "prefab")}");
+                    }
+                }
+
+                break;
             case "fsmall":
                 // fsmall <ruta del objeto>: acciones de todas las FSM del objeto y sus hijos, también inactivos. Si no
                 // está en la sala, se busca por nombre entre todo lo cargado (prefabs del pool, como "Fireball Top"):
                 // antes una copia ya creada (sus acciones tienen los valores con los que funciona) que el prefab
                 var fsmName = string.Join(" ", args.Skip(1));
-                var loaded = Resources.FindObjectsOfTypeAll<GameObject>();
-                var fsmRoot = GameObject.Find(fsmName) ??
-                              loaded.FirstOrDefault(g => g.scene.IsValid() && (g.name == fsmName || g.name == fsmName + "(Clone)")) ??
-                              loaded.FirstOrDefault(g => g.name == fsmName);
+                var fsmRoot = FindLoaded(fsmName);
                 if (fsmRoot == null) {
                     Log.Warn($"{Tag}no existe '{string.Join(" ", args.Skip(1))}'");
                     break;
@@ -988,6 +1046,24 @@ internal sealed class TestDriver : MonoBehaviour {
     private static HKMultiplayer.UI.GameStyledMenu VisibleMenu() =>
         FindObjectsByType<HKMultiplayer.UI.GameStyledMenu>(FindObjectsSortMode.None).FirstOrDefault(m => m.isActiveAndEnabled);
 
+    /// <summary>
+    /// Un objeto por nombre o ruta: activo en la sala, o entre todo lo cargado (prefabs del pool, objetos inactivos). Antes
+    /// una copia ya creada (sus acciones tienen los valores con los que funciona) que el prefab; nunca las copias del mod.
+    /// </summary>
+    private static GameObject FindLoaded(string name) {
+        var found = GameObject.Find(name);
+        if (found != null) {
+            return found;
+        }
+
+        var loaded = Resources.FindObjectsOfTypeAll<GameObject>()
+            .Where(g => !g.transform.root.name.StartsWith("HKMultiplayer", StringComparison.Ordinal) &&
+                        !g.transform.root.name.StartsWith("Jugador remoto", StringComparison.Ordinal))
+            .ToArray();
+        return loaded.FirstOrDefault(g => g.scene.IsValid() && (g.name == name || g.name == name + "(Clone)")) ??
+               loaded.FirstOrDefault(g => g.name == name);
+    }
+
     private static void Dump(Transform node, int depth, int maxDepth) {
         var components = string.Join(",", node.GetComponents<Component>().Select(c => c.GetType().Name));
         var text = node.GetComponent<UnityEngine.UI.Text>();
@@ -995,6 +1071,10 @@ internal sealed class TestDriver : MonoBehaviour {
         Log.Info($"{Tag}ui {new string(' ', depth * 2)}{node.name} [{components}]" +
                  (rect != null ? $" pos={rect.anchoredPosition} size={rect.sizeDelta}" : "") +
                  (text != null ? $" texto='{text.text}' fuente={text.font?.name} tamaño={text.fontSize}" : "") +
+                 (rect == null ? $" capa={node.gameObject.layer} local={node.localPosition} escala={node.localScale}" : "") +
+                 (node.GetComponent<PlayMakerFSM>() != null
+                     ? " fsm=" + string.Join(",", node.GetComponents<PlayMakerFSM>().Select(f => f.FsmName))
+                     : "") +
                  (node.gameObject.activeSelf ? "" : " (inactivo)"));
         if (depth >= maxDepth) {
             return;
