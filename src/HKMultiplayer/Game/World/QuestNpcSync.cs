@@ -35,6 +35,13 @@ internal sealed class QuestNpcSync {
     /// <summary>Por dato del mundo, las FSM de la sala que lo miran al empezar.</summary>
     private readonly Dictionary<string, List<PlayMakerFSM>> _startReaders = new();
 
+    /// <summary>
+    /// Por dato del mundo, los objetos de la sala que el juego enciende o apaga según él al encenderse o al empezar
+    /// (<c>DeactivateIfPlayerdataTrue</c>, <c>DeactivateIfPlayerdataFalse</c>, <c>ActivateIfPlayerdataTrue</c>): el
+    /// Forjaguijones, el farol de la Pesadilla...
+    /// </summary>
+    private readonly Dictionary<string, List<MonoBehaviour>> _toggles = new();
+
     /// <summary>Datos del mundo que cambiaron en otro PC desde que se cargó esta sala, y cuándo (el último cambio).</summary>
     private readonly Dictionary<string, float> _remoteChangedAt = new();
 
@@ -67,6 +74,7 @@ internal sealed class QuestNpcSync {
     private void Clear() {
         _scene = string.Empty;
         _startReaders.Clear();
+        _toggles.Clear();
         _remoteChangedAt.Clear();
         _pending.Clear();
         _conversationStart = -1f;
@@ -91,7 +99,7 @@ internal sealed class QuestNpcSync {
             _beforeRemote[field] = before;
         }
 
-        if (_startReaders.ContainsKey(field) && !_pending.Contains(field)) {
+        if ((_startReaders.ContainsKey(field) || _toggles.ContainsKey(field)) && !_pending.Contains(field)) {
             _pending.Add(field);
         }
     }
@@ -145,6 +153,7 @@ internal sealed class QuestNpcSync {
     /// (Mr. Mushroom se destruye si ya no es su sitio), se apagan o cambian.
     /// </summary>
     private void Recheck(string field) {
+        RecheckToggles(field);
         if (!_startReaders.TryGetValue(field, out var fsms)) {
             return;
         }
@@ -172,11 +181,40 @@ internal sealed class QuestNpcSync {
         }
     }
 
+    /// <summary>Los objetos que el juego enciende o apaga según el dato se ponen como al cargar la sala con el valor nuevo.</summary>
+    private void RecheckToggles(string field) {
+        if (!_toggles.TryGetValue(field, out var toggles) || PlayerData.instance == null) {
+            return;
+        }
+
+        var value = PlayerData.instance.GetBool(field);
+        foreach (var toggle in toggles) {
+            if (toggle == null) {
+                continue;
+            }
+
+            var target = toggle switch {
+                DeactivateIfPlayerdataTrue => value ? false : (bool?) null,
+                DeactivateIfPlayerdataFalse => value ? null : false,
+                ActivateIfPlayerdataTrue => value ? true : null,
+                _ => null
+            };
+            var go = toggle.gameObject;
+            if (target == null || go.activeSelf == target.Value) {
+                continue;
+            }
+
+            Log.Info($"{go.name}: {field} cambió en otro PC, se {(target.Value ? "enciende" : "apaga")} como al cargar la sala");
+            go.SetActive(target.Value);
+        }
+    }
+
     // =====================================================================================================
     // Qué FSM miran cada dato al empezar
     // =====================================================================================================
 
     private void Scan() {
+        ScanToggles();
         var hero = HeroController.instance;
         var reads = new List<string>();
         foreach (var fsm in UnityEngine.Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include,
@@ -210,6 +248,35 @@ internal sealed class QuestNpcSync {
                 }
             }
         }
+    }
+
+    private void ScanToggles() {
+        foreach (var toggle in UnityEngine.Object.FindObjectsByType<DeactivateIfPlayerdataTrue>(FindObjectsInactive.Include,
+                     FindObjectsSortMode.None)) {
+            AddToggle(toggle.boolName, toggle);
+        }
+
+        foreach (var toggle in UnityEngine.Object.FindObjectsByType<DeactivateIfPlayerdataFalse>(FindObjectsInactive.Include,
+                     FindObjectsSortMode.None)) {
+            AddToggle(toggle.boolName, toggle);
+        }
+
+        foreach (var toggle in UnityEngine.Object.FindObjectsByType<ActivateIfPlayerdataTrue>(FindObjectsInactive.Include,
+                     FindObjectsSortMode.None)) {
+            AddToggle(toggle.boolName, toggle);
+        }
+    }
+
+    private void AddToggle(string field, MonoBehaviour toggle) {
+        if (string.IsNullOrEmpty(field) || toggle.gameObject.scene.buildIndex < 0 || CharacterData.IsCharacterField(field)) {
+            return;
+        }
+
+        if (!_toggles.TryGetValue(field, out var list)) {
+            _toggles[field] = list = new List<MonoBehaviour>();
+        }
+
+        list.Add(toggle);
     }
 
     /// <summary>FSM de un personaje con el que se habla: el suyo, el de algo suyo o el que lo enciende.</summary>
@@ -492,6 +559,17 @@ internal sealed class QuestNpcSync {
 
             yield return $"{pair.Key}{(_remoteChangedAt.ContainsKey(pair.Key) ? " (cambió en otro PC)" : "")} -> " +
                          string.Join(", ", names);
+        }
+
+        foreach (var pair in _toggles) {
+            var names = new List<string>();
+            foreach (var toggle in pair.Value) {
+                if (toggle != null) {
+                    names.Add($"{toggle.gameObject.name}[{toggle.GetType().Name}]{(toggle.gameObject.activeSelf ? "" : " (apagado)")}");
+                }
+            }
+
+            yield return $"{pair.Key} -> " + string.Join(", ", names);
         }
     }
 }
