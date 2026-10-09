@@ -143,7 +143,10 @@ internal sealed class PartyActions {
 
     private void HandleGeo(string name, int amount, bool refund) {
         GiveGeo(amount);
-        Notice.Show(refund ? $"No se pudo dar el geo a {name}: se te devolvió" : $"{name} te regaló {amount} geo", 5f);
+        // La devolución responde a lo que hizo el jugador: se avisa siempre; el regalo, si el host deja los avisos
+        if (refund || HostSettings.Current.ShowNotices) {
+            Notice.Show(refund ? $"No se pudo dar el geo a {name}: se te devolvió" : $"{name} te regaló {amount} geo", 5f);
+        }
         Log.Info(refund ? $"Geo devuelto ({amount})" : $"{name} regaló {amount} geo");
     }
 

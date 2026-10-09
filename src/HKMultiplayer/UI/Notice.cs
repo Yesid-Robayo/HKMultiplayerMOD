@@ -14,6 +14,11 @@ internal sealed class Notice : MonoBehaviour {
     private CanvasGroup _group;
     private Coroutine _routine;
 
+    /// <summary>Cuánto se sube el aviso sobre su sitio (para no pisar la barra del jefe).</summary>
+    private static float _lift;
+
+    private const float BaseY = 40f;
+
     public static void Show(string message, float seconds = 6f) {
         if (_instance == null) {
             Create();
@@ -25,6 +30,21 @@ internal sealed class Notice : MonoBehaviour {
 
         _instance._text.text = message;
         _instance._routine = _instance.StartCoroutine(_instance.Run(seconds));
+    }
+
+    /// <summary>
+    /// Sube el aviso (en unidades de 1920×1080) para dejar libre lo que hay abajo: con la barra del jefe visible el aviso
+    /// de dos líneas la pisaba. Barato: solo cambia algo si cambia la altura.
+    /// </summary>
+    public static void SetLift(float lift) {
+        if (Mathf.Approximately(_lift, lift)) {
+            return;
+        }
+
+        _lift = lift;
+        if (_instance != null) {
+            ((RectTransform) _instance._text.transform).anchoredPosition = new Vector2(-48f, BaseY + lift);
+        }
     }
 
     /// <summary>Quita ya el aviso si es el que empieza por ese texto (p. ej. una espera que ya terminó).</summary>
@@ -55,7 +75,7 @@ internal sealed class Notice : MonoBehaviour {
         textObject.transform.SetParent(root.transform, false);
         var rect = (RectTransform) textObject.transform;
         rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 0f);
-        rect.anchoredPosition = new Vector2(-48f, 40f);
+        rect.anchoredPosition = new Vector2(-48f, BaseY + _lift);
         rect.sizeDelta = new Vector2(1200f, 200f);
         var text = textObject.GetComponent<Text>();
         text.font = FindGameFont() ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");

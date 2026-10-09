@@ -518,7 +518,9 @@ internal sealed class ShadeSync {
         }
 
         Log.Info($"{killer} mató nuestra sombra: se recupera el geo y el alma");
-        Notice.Show($"Recuperaste tu sombra gracias a {killer}", 5f);
+        if (HostSettings.Current.ShowNotices) {
+            Notice.Show($"Recuperaste tu sombra gracias a {killer}", 5f);
+        }
         MultiplayerRunner.Instance.StartCoroutine(KillOwnShade());
     }
 

@@ -53,8 +53,11 @@ internal sealed class HostSettings {
     /// <summary>Ajustes de la partida (host → todos), con la versión de su formato delante.</summary>
     public const MessageType HostSettingsMessage = (MessageType) 73;
 
-    /// <summary>Versión del formato del mensaje: un invitado con otra la ignora (sigue con los de por defecto).</summary>
-    private const byte FormatVersion = 1;
+    /// <summary>
+    /// Versión del formato del mensaje: un invitado con otra la ignora (sigue con los de por defecto). La 2 añadió las
+    /// barras de enemigos y "ir con un compañero" (y cambió el orden).
+    /// </summary>
+    private const byte FormatVersion = 2;
 
     private const string FileName = "settings.json";
 
@@ -92,7 +95,7 @@ internal sealed class HostSettings {
     public static readonly HostOption ReviveAtBenchOption = new(9, "reviveAtBench", "Revivir en el banco del compañero",
         YesNoValues, YesNo, 0);
 
-    // ---- Pantalla y permisos ----
+    // ---- Pantalla ----
     public static readonly HostOption ShowNamesOption = new(10, "showNames", "Nombres", YesNoValues, YesNo, 0);
 
     public static readonly HostOption ShowPartnerHealthOption = new(11, "showPartnerHealth", "Vida del compañero",
@@ -105,21 +108,30 @@ internal sealed class HostSettings {
 
     public static readonly HostOption ShowBossBarOption = new(14, "showBossBar", "Barra del jefe", YesNoValues, YesNo, 0);
 
-    public static readonly HostOption GeoGiftsOption = new(15, "geoGifts", "Regalar geo", YesNoValues, YesNo, 0);
+    /// <summary>Barra de vida pequeña sobre los enemigos heridos (no los jefes, que tienen la suya). Desactivada por defecto.</summary>
+    public static readonly HostOption ShowEnemyBarsOption = new(15, "showEnemyBars", "Barras de enemigos", YesNoValues,
+        YesNo, 1);
+
+    // ---- Permisos ----
+    public static readonly HostOption GeoGiftsOption = new(16, "geoGifts", "Regalar geo", YesNoValues, YesNo, 0);
+
+    /// <summary>Si cada jugador puede ir junto a un compañero desde el panel ("Ir con ...") para desatascarse.</summary>
+    public static readonly HostOption PartnerTravelOption = new(17, "partnerTravel", "Permitir ir con un compañero",
+        YesNoValues, YesNo, 0);
 
     /// <summary>
     /// Cómo se salta una cinemática compartida: cuando todos los que la ven votan saltarla, o en cuanto la salta
     /// cualquiera (para todos).
     /// </summary>
-    public static readonly HostOption SkipCutscenesOption = new(16, "skipCutscenes", "Saltar cinemáticas",
+    public static readonly HostOption SkipCutscenesOption = new(18, "skipCutscenes", "Saltar cinemáticas",
         new[] { 0f, 1f }, new[] { "Votación", "Cualquiera" }, 0);
 
-    /// <summary>Todos, en el orden del mensaje y del panel.</summary>
+    /// <summary>Todos, en el orden del mensaje y del panel (su posición es su <see cref="HostOption.Index"/>).</summary>
     public static readonly HostOption[] Options = {
         BossHealthOption, EnemyHealthOption, PartnerInRoomOption, DamageTakenOption,
         ReviveOption, ReviveSecondsOption, ReviveSoulOption, ReviveMasksOption, ReviveInvulnerableOption, ReviveAtBenchOption,
-        ShowNamesOption, ShowPartnerHealthOption, ShowArrowsOption, ShowNoticesOption, ShowBossBarOption, GeoGiftsOption,
-        SkipCutscenesOption
+        ShowNamesOption, ShowPartnerHealthOption, ShowArrowsOption, ShowNoticesOption, ShowBossBarOption,
+        ShowEnemyBarsOption, GeoGiftsOption, PartnerTravelOption, SkipCutscenesOption
     };
 
     /// <summary>Posición elegida de cada ajuste.</summary>
@@ -132,6 +144,7 @@ internal sealed class HostSettings {
     public static event Action Changed;
 
     private HostSettings() {
+        _onSettings = OnSettings;
         ResetToDefaults();
     }
 
@@ -166,7 +179,11 @@ internal sealed class HostSettings {
     public bool ShowArrows => Flag(ShowArrowsOption);
     public bool ShowNotices => Flag(ShowNoticesOption);
     public bool ShowBossBar => Flag(ShowBossBarOption);
+    public bool ShowEnemyBars => Flag(ShowEnemyBarsOption);
     public bool AllowGeoGifts => Flag(GeoGiftsOption);
+
+    /// <summary>Si se puede ir junto a un compañero desde el panel.</summary>
+    public bool AllowPartnerTravel => Flag(PartnerTravelOption);
 
     /// <summary>Una cinemática compartida se salta en cuanto la salta cualquiera (si no, votan todos).</summary>
     public bool AnyoneSkipsCutscenes => Flag(SkipCutscenesOption);
@@ -190,7 +207,7 @@ internal sealed class HostSettings {
 
     public void Attach(GameSession session) {
         _session = session;
-        session.On(HostSettingsMessage, OnSettings);
+        session.On(HostSettingsMessage, _onSettings);
         session.PlayerJoined += OnPlayerJoined;
         _loadedWorld = null;
         if (session.IsHost) {

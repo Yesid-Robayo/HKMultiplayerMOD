@@ -17,6 +17,12 @@ namespace HKMultiplayer.Game.Features;
 internal sealed class BossBar {
     private const int MaxBars = 3;
 
+    /// <summary>Distancia entre una barra y la siguiente (hacia arriba).</summary>
+    private const float BarStep = 78f;
+
+    /// <summary>Cuánto suben los avisos con una barra visible (hasta encima de su nombre).</summary>
+    private const float NoticeLift = 125f;
+
     /// <summary>Vida a partir de la cual no se dibuja barra (objetos que el juego hace prácticamente invencibles).</summary>
     private const int MaxSensibleHealth = 5000;
 
@@ -103,7 +109,7 @@ internal sealed class BossBar {
         for (var i = 0; i < MaxBars; i++) {
             var bar = new Bar();
             bar.Root = HudCanvas.NewGroup($"Jefe {i + 1}", _root);
-            bar.Root.anchoredPosition = new Vector2(0f, 90f + i * 78f);
+            bar.Root.anchoredPosition = new Vector2(0f, 90f + i * BarStep);
             bar.Fill = HudCanvas.NewBar("Vida", bar.Root, new Vector2(900f, 22f), new Color(0.78f, 0.1f, 0.1f, 1f), out _);
             bar.Name = HudCanvas.NewText("Nombre", bar.Root, 30, TextAnchor.MiddleCenter, title: true);
             bar.Name.rectTransform.anchoredPosition = new Vector2(0f, 32f);
@@ -115,6 +121,10 @@ internal sealed class BossBar {
     }
 
     private void SetVisible(bool visible) {
+        if (!visible) {
+            Notice.SetLift(0f);
+        }
+
         if (_visible == visible) {
             return;
         }
@@ -187,6 +197,9 @@ internal sealed class BossBar {
                 _bars[i].Shown = null;
             }
         }
+
+        // Los avisos (abajo a la derecha) suben por encima de las barras para no pisarlas
+        Notice.SetLift(used > 0 ? NoticeLift + (used - 1) * BarStep : 0f);
     }
 
     /// <summary>Si el jefe está a la vista (o cerca del borde): antes de que aparezca no se muestra su barra.</summary>
