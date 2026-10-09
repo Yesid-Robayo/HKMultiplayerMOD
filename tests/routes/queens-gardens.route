@@ -1,6 +1,6 @@
 title Jardines de la Reina
 room Fungus3_34 right1
-partner-moves
+partner-moves left
 breakables-sync
 objects-sync
 enemies-sync

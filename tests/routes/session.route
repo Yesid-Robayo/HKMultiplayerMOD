@@ -17,11 +17,22 @@ expect-pd guest geo 2468
 room Town left1
 partner-moves
 
-# Morir: los dos siguen en la partida y vuelven a juntarse
+# Morir con el compañero en pie (M5): el invitado queda caído (su avatar no se dibuja) y el host lo revive con Focus
+# junto a su cuerpo
 die guest
+expect-log guest Caído en Town
+host tpbody
+host soul 99
+wait 1
+host focus 3
+expect-log guest Revivido por Host 15
+expect-log guest De pie otra vez 10
 room Crossroads_01 left1
 partner-moves
+# Si cae el último en pie, muerte normal para todos: los dos siguen en la partida y vuelven a juntarse
+die guest
 die host
+expect-log guest Todos caídos 20
 room Crossroads_01 left1
 partner-moves
 

@@ -19,9 +19,13 @@ wait 1
 
 # Dash y doble salto
 guest pdset hasDash true
+# El juego solo deja hacer el dash con canDash (en un mundo nuevo es false aunque hasDash sea true)
+guest pdset canDash true
 guest pdset hasDoubleJump true
 guest press dash 0.1
 expect-log host efecto Dash de
+# Que termine el dash y aterrice: un salto pulsado durante el dash no cuenta y el segundo sería un salto normal
+wait 1
 guest press jump 0.4
 wait 0.6
 guest press jump 0.3

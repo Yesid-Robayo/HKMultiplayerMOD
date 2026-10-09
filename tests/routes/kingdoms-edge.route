@@ -1,6 +1,6 @@
 title Borde del Reino y Colmena
 room Deepnest_East_01 right1
-partner-moves
+partner-moves left
 breakables-sync
 rock-sync
 objects-sync

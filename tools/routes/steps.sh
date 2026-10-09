@@ -144,17 +144,19 @@ step_expect_pd() {
 }
 
 step_partner_moves() {
-  local before after
+  # Hacia dónde camina (right por defecto). Si se entró por una puerta de la derecha, a la derecha saldría de la sala
+  local dir="${1:-right}" back before after
+  [ "$dir" = left ] && back=right || back=left
   before="$(status_of "$_R_HOST" | grep -aoE 'compañero=\([-0-9.]+' | grep -oE '[-0-9.]+$')"
   if [ -z "$before" ]; then
     _result FALLO "partner-moves" "el host no ve al invitado en la sala"
     return
   fi
 
-  send "$_R_GUEST" "press right 1.2"; sleep 2.5
+  send "$_R_GUEST" "press $dir 1.2"; sleep 2.5
   after="$(status_of "$_R_HOST" | grep -aoE 'compañero=\([-0-9.]+' | grep -oE '[-0-9.]+$')"
   # Vuelve a donde estaba (para no acabar dentro de la siguiente puerta)
-  send "$_R_GUEST" "press left 1.2"; sleep 1.5
+  send "$_R_GUEST" "press $back 1.2"; sleep 1.5
   if [ -n "$after" ] && awk -v a="$before" -v b="$after" 'BEGIN { d = a - b; exit !(d > 0.5 || d < -0.5) }'; then
     _result OK "partner-moves" "el host lo ve moverse (x $before → $after)"
   else
@@ -383,7 +385,7 @@ run_route() {
       private) step_private "${args[1]:-}" "${args[2]:-}" "${args[3]:-}" ;;
       same-pd) step_same_pd "${args[1]:-}" ;;
       expect-pd) step_expect_pd "${args[1]:-}" "${args[2]:-}" "${args[3]:-}" "${args[4]:-}" ;;
-      partner-moves) step_partner_moves ;;
+      partner-moves) step_partner_moves "${args[1]:-}" ;;
       breakables-sync) step_breakables_sync "${args[1]:-}" ;;
       enemies-sync) step_enemies_sync "${args[1]:-}" ;;
       objects-sync) step_objects_sync "${args[1]:-}" ;;
