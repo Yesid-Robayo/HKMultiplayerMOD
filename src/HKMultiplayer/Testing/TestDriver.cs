@@ -715,6 +715,19 @@ internal sealed class TestDriver : MonoBehaviour {
                          $"hud={cams?.hudCamera?.isActiveAndEnabled} estado={GameManager.instance.gameState} " +
                          $"ui={UIManager.instance?.uiState} omitir={GameManager.instance.inputHandler.skipMode}");
                 break;
+            case "skins":
+                // Skin propia, las cargadas, la que lleva cada uno y qué textura dibuja cada caballero
+                Log.Info($"{Tag}skins {runner.Skins.Describe()}");
+                break;
+            case "skin":
+                // skin <nombre de la carpeta>|normal: elige la skin propia (como en el panel)
+                var skinName = string.Join(" ", args.Skip(1));
+                HKMultiplayer.Game.Features.Skins.SelectLocalSkin(skinName == "normal" ? string.Empty : skinName);
+                break;
+            case "skinshow":
+                // skinshow si|no: ver o no las skins de los demás en este PC
+                HKMultiplayer.Game.Features.Skins.SetShowOthers(args.Length < 2 || args[1] != "no");
+                break;
             case "charmupdate":
                 // Como cambiar de amuletos en un banco: el caballero aplica los equipados (p. ej. sale Grimmchild)
                 hero.CharmUpdate();

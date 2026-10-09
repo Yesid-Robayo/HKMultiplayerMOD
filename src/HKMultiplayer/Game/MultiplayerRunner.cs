@@ -70,6 +70,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Grimmchild para todos si uno lo recibe.</summary>
     public Features.GrimmchildGift Grimmchild { get; } = new();
 
+    /// <summary>Skins: la propia y las de los demás.</summary>
+    public Features.Skins Skins { get; } = new();
+
     /// <summary>El jugador salió de un mundo ajeno: al llegar al menú se deja la partida.</summary>
     private bool _leaveOnMenu;
 
@@ -152,6 +155,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         SessionMenu.UpdateInstalled(Session != null);
         World.Update();
         Progress.Update();
+        Skins.Update();
         if (Session != null) {
             Features.HostSettings.Current.Update();
             Actions.Update();
@@ -161,6 +165,13 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     private void LateUpdate() {
         var session = Session;
         if (session == null) {
+            // La skin propia se ve también jugando solo
+            try {
+                Skins.LateUpdate(string.Empty);
+            } catch (Exception e) {
+                Log.Error($"Error en las skins: {e}");
+            }
+
             return;
         }
 
@@ -196,6 +207,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Shades.Update(scene);
             Hud.Update(scene);
             BossBar.Update(scene);
+            Skins.LateUpdate(scene);
             Cutscenes.Update();
             Presentations.Update();
             Dreams.Update(scene);
@@ -409,6 +421,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     /// <summary>Cada capa deja la partida (las funciones del coop primero: usan las demás).</summary>
     private void DetachAll() {
+        Skins.Detach();
         Grimmchild.Detach();
         Dreams.Detach();
         Presentations.Detach();
@@ -453,6 +466,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Presentations.Attach(session, Revive);
         Dreams.Attach(session, Revive);
         Grimmchild.Attach(session);
+        Skins.Attach(session, Players);
         session.Connected += () => SetStatus($"Conectado como jugador {session.LocalId}");
         session.Disconnected += reason => {
             // Al salir uno mismo (Leave) la sesión ya no es la actual: nada que avisar

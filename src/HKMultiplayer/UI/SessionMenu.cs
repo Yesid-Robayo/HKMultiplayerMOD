@@ -27,6 +27,7 @@ internal sealed class SessionMenu : GameStyledMenu {
     private const int SettingsPage = 2;
     private const int MoreSettingsPage = 3;
     private const int PartnersPage = 4;
+    private const int SkinPage = 5;
 
     /// <summary>Ajustes de la primera página (dificultad y revivir); el resto va en la segunda.</summary>
     private const int FirstPageOptions = 8;
@@ -64,6 +65,12 @@ internal sealed class SessionMenu : GameStyledMenu {
     private Text _partnersMessage;
     private Text _ownGeo;
     private int _geoIndex = 2;
+
+    // Página "Skin" (ajustes de este PC, no del host)
+    private MenuOptionHorizontal _skinOption;
+    private MenuOptionHorizontal _showSkinsOption;
+    private Text _skinStatus;
+    private string[] _skinChoices = { "Normal" };
 
     /// <summary>
     /// Crea el botón de la pausa y la pantalla si faltan, y muestra el botón solo durante una partida multijugador.
@@ -197,8 +204,9 @@ internal sealed class SessionMenu : GameStyledMenu {
         _players.GetComponent<LayoutElement>().preferredHeight = 150;
         _players.alignment = TextAnchor.UpperCenter;
         var pages = AddRow(main, "Páginas", 84, 10);
-        AddButton(pages, "Ajustes de la partida", () => ShowPage(SettingsPage), 36, 620);
-        AddButton(pages, "Compañeros", () => ShowPage(PartnersPage), 36, 520);
+        AddButton(pages, "Ajustes de la partida", () => ShowPage(SettingsPage), 36, 560);
+        AddButton(pages, "Compañeros", () => ShowPage(PartnersPage), 36, 420);
+        AddButton(pages, "Skin", () => ShowPage(SkinPage), 36, 260);
         _leave = AddButton(main, "Cerrar partida", () => ShowPage(LeavePage));
 
         var leave = NewPage(LeavePage);
@@ -210,7 +218,48 @@ internal sealed class SessionMenu : GameStyledMenu {
 
         BuildSettingsPages();
         BuildPartnersPage();
+        BuildSkinPage();
         ShowPage(MainPage, instant: true);
+    }
+
+    /// <summary>Skin propia y si se ven las de los demás (de este PC; se guardan en sus ajustes).</summary>
+    private void BuildSkinPage() {
+        var page = NewPage(SkinPage);
+        AddText(page, "Skins compatibles con CustomKnight: una carpeta con Knight.png (y, si quiere, los hechizos y el HUD)", 30);
+        _skinOption = AddOption(page, "Tu skin", _skinChoices, 0, index => {
+            Skins.SelectLocalSkin(index <= 0 || index >= _skinChoices.Length ? string.Empty : _skinChoices[index]);
+            Refresh();
+        });
+        _showSkinsOption = AddOption(page, "Ver las skins de los demás", new[] { "Sí", "No" },
+            Skins.ShowOthers ? 0 : 1, index => Skins.SetShowOthers(index == 0));
+        _skinStatus = AddText(page, string.Empty, 30);
+        _skinStatus.GetComponent<LayoutElement>().preferredHeight = 120;
+        AddSpace(page, 6);
+        AddButton(page, "Abrir la carpeta de skins", Skins.OpenFolder, 36);
+    }
+
+    /// <summary>Lista de skins (puede cambiar con el juego abierto) y qué lleva cada uno.</summary>
+    private void RefreshSkins(Session.GameSession session) {
+        if (_skinOption == null) {
+            return;
+        }
+
+        var available = Skins.Available;
+        var choices = new string[available.Count + 1];
+        choices[0] = "Normal";
+        for (var i = 0; i < available.Count; i++) {
+            choices[i + 1] = available[i];
+        }
+
+        if (!choices.SequenceEqual(_skinChoices)) {
+            _skinChoices = choices;
+            _skinOption.optionList = choices;
+        }
+
+        var selected = Array.IndexOf(_skinChoices, Skins.LocalSkinName);
+        SetOptionValue(_skinOption, selected > 0 ? selected : 0);
+        SetOptionValue(_showSkinsOption, Skins.ShowOthers ? 0 : 1);
+        _skinStatus.text = Skins.Current?.DescribeForPanel(session) ?? string.Empty;
     }
 
     /// <summary>Ajustes de la partida en dos páginas (dificultad y revivir; pantalla y permisos).</summary>
@@ -399,6 +448,7 @@ internal sealed class SessionMenu : GameStyledMenu {
             : "Tu personaje se guarda en el mundo del host y vuelves al menú principal.";
         RefreshSettings(session.IsHost);
         RefreshPartners(session);
+        RefreshSkins(session);
     }
 
     /// <summary>Los valores que rigen (en un invitado, los que dice el host) y si se pueden cambiar.</summary>
@@ -505,6 +555,7 @@ internal sealed class SessionMenu : GameStyledMenu {
             "ajustes" => SettingsPage,
             "ajustes2" => MoreSettingsPage,
             "compañeros" or "companeros" => PartnersPage,
+            "skin" => SkinPage,
             _ => -1
         };
         if (page < 0) {

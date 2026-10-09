@@ -94,6 +94,9 @@ internal sealed class PlayerSync {
     }
 
     /// <summary>Objeto del avatar de un jugador remoto dibujado en la sala.</summary>
+    /// <summary>Avatar del jugador remoto en la sala (null si no se dibuja).</summary>
+    public RemoteAvatar AvatarOf(ushort id) => _remotes.TryGetValue(id, out var remote) ? remote.Avatar : null;
+
     public bool TryGetAvatarObject(ushort id, out GameObject avatar) {
         avatar = _remotes.TryGetValue(id, out var remote) && remote.Avatar != null ? remote.Avatar.Root : null;
         return avatar != null;
