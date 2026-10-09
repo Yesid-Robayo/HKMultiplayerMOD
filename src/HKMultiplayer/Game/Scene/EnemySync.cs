@@ -61,6 +61,9 @@ internal sealed class EnemySync {
 
     private const int MaxEffectVectors = 16;
 
+    /// <summary>Modo de prueba: cada efecto reproducido en una marioneta se registra.</summary>
+    private static readonly bool TestMode = HKMultiplayer.Testing.TestDriver.IsEnabled();
+
     /// <summary>Lo más a menudo que se reenvía el mismo aviso a un mismo enemigo (hay zonas que avisan cada frame).</summary>
     private const float EventForwardInterval = 0.25f;
 
@@ -1438,6 +1441,10 @@ internal sealed class EnemySync {
 
         // Solo sus efectos (sonido y arena); la lógica de la marioneta sigue parada
         var state = states[stateIndex];
+        if (TestMode) {
+            Log.Info($"[TEST] efecto de enemigo {enemy.Fsms[fsmIndex].gameObject.name}/{enemy.Fsms[fsmIndex].FsmName}/{state.Name}");
+        }
+
         foreach (var action in state.Actions) {
             if (!action.Enabled || !IsEffectAction(action)) {
                 continue;

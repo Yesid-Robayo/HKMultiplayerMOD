@@ -456,6 +456,12 @@ internal sealed class TestDriver : MonoBehaviour {
                         Log.Info($"{Tag}  bool {variable.Name}={variable.Value}");
                     }
 
+                    var objectVariables = fsm.FsmVariables.GameObjectVariables;
+                    for (var v = 0; v < objectVariables.Length; v++) {
+                        var value = objectVariables[v].Value;
+                        Log.Info($"{Tag}  objeto {v} {objectVariables[v].Name}={(value != null ? value.name : "-")}");
+                    }
+
                     var globals = string.Join(", ", fsm.FsmGlobalTransitions.Select(tr => $"{tr.EventName}->{tr.ToState}"));
                     Log.Info($"{Tag}  globales: {globals}");
 
