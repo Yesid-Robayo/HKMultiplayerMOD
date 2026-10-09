@@ -1586,9 +1586,10 @@ internal sealed class EnemySync {
                 continue;
             }
 
-            // Un caído no se queda con enemigos: pasan enseguida a quien sigue en pie
+            // Un caído (o quien tiene el juego en pausa: sus enemigos se quedarían congelados para los demás) no se queda
+            // con enemigos: pasan enseguida a quien sigue jugando
             var current = ControllerOf(enemy, roomOwner);
-            var currentDown = Features.PartyState.IsDown(current);
+            var currentDown = Features.PartyState.IsInactive(current);
             var interval = enemy.Health.hp >= BossHp ? BossSwitchInterval : SwitchInterval;
             if (now - enemy.LastSwitch < interval && !currentDown) {
                 continue;
@@ -1601,7 +1602,7 @@ internal sealed class EnemySync {
             var nearest = current;
             var nearestDistance = currentDistance;
             foreach (var player in _session.Players) {
-                if (player.Scene != _scene || player.Id == current || Features.PartyState.IsDown(player.Id) ||
+                if (player.Scene != _scene || player.Id == current || Features.PartyState.IsInactive(player.Id) ||
                     !TryGetPlayerPosition(player.Id, out var playerPosition)) {
                     continue;
                 }
