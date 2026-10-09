@@ -24,6 +24,17 @@ internal sealed class TestDriver : MonoBehaviour {
     private static float _spawnLogUntil;
     private static bool _spawnLogHooked;
 
+    /// <summary>Los golpes al caballero no quitan vida (orden god).</summary>
+    private static bool _god;
+
+    /// <summary>Ráfaga de capturas pendiente de que salga del pool un objeto (orden burston).</summary>
+    private static string _burstOnPrefab;
+
+    private static string _burstOnName;
+    private static int _burstOnCount;
+    private static float _burstOnGap;
+    private static TestDriver _burstOnInstance;
+
     private string _commandFile;
     private int _processedLines;
     private float _nextPoll;
@@ -39,6 +50,12 @@ internal sealed class TestDriver : MonoBehaviour {
 
         // Cada daño que recibe el caballero y qué lo hizo (para comprobar que los ataques dañan a los dos jugadores)
         On.HeroController.TakeDamage += (orig, self, source, side, amount, hazard) => {
+            // Con "god" el golpe se registra pero no quita vida (combates largos en las pruebas); "die" sí mata
+            if (_god && amount < 99) {
+                Log.Info($"{Tag}golpe sin daño ({amount}) de {(source != null ? source.name : "?")}");
+                return;
+            }
+
             var health = PlayerData.instance != null ? PlayerData.instance.health : -1;
             orig(self, source, side, amount, hazard);
             var after = PlayerData.instance != null ? PlayerData.instance.health : -1;
@@ -553,6 +570,10 @@ internal sealed class TestDriver : MonoBehaviour {
                 PlayerData.instance.SetInt("health", 1);
                 hero.TakeDamage(hero.gameObject, GlobalEnums.CollisionSide.top, 99, 1);
                 break;
+            case "god":
+                // god [no]: los golpes al caballero se registran sin quitarle vida
+                _god = args.Length < 2 || args[1] != "no";
+                break;
             case "hurt":
                 // hurt: el caballero recibe un golpe de 1 (para ver el efecto del golpe en el otro PC)
                 hero.TakeDamage(hero.gameObject, GlobalEnums.CollisionSide.left, 1, 1);
@@ -975,18 +996,19 @@ internal sealed class TestDriver : MonoBehaviour {
             case "spawnlog":
                 // spawnlog <segundos>: registra cada objeto que sale del pool del juego durante ese tiempo
                 _spawnLogUntil = Time.unscaledTime + ParseFloat(args[1]);
-                if (!_spawnLogHooked) {
-                    _spawnLogHooked = true;
-                    On.ObjectPool.Spawn_GameObject_Transform_Vector3_Quaternion += (orig, prefab, parent, position, rotation) => {
-                        var spawned = orig(prefab, parent, position, rotation);
-                        if (Time.unscaledTime < _spawnLogUntil && prefab != null) {
-                            Log.Info($"{Tag}pool {prefab.name} en {(spawned != null ? spawned.transform.position : position)}");
-                        }
-
-                        return spawned;
-                    };
-                }
-
+                HookPool();
+                break;
+            case "burston":
+                // burston <prefab>|<nombre> <cuántas> <segundos>: ráfaga de capturas en cuanto sale del pool ese objeto
+                // (en el PC que mueve al enemigo, el original; en los demás, su copia): el mismo momento en los dos PCs
+                var onArgs = string.Join(" ", args.Skip(1)).Split('|');
+                var onRest = onArgs[1].Split(' ');
+                _burstOnPrefab = onArgs[0];
+                _burstOnName = onRest[0];
+                _burstOnCount = int.Parse(onRest[1]);
+                _burstOnGap = ParseFloat(onRest[2]);
+                _burstOnInstance = this;
+                HookPool();
                 break;
             case "heroprefabs":
                 // Objetos a los que apunta el caballero en sus campos (prefabs de amuletos, efectos) con su nombre
@@ -1104,6 +1126,28 @@ internal sealed class TestDriver : MonoBehaviour {
         foreach (Transform child in node) {
             Dump(child, depth + 1, maxDepth);
         }
+    }
+
+    private static void HookPool() {
+        if (_spawnLogHooked) {
+            return;
+        }
+
+        _spawnLogHooked = true;
+        On.ObjectPool.Spawn_GameObject_Transform_Vector3_Quaternion += (orig, prefab, parent, position, rotation) => {
+            var spawned = orig(prefab, parent, position, rotation);
+            if (Time.unscaledTime < _spawnLogUntil && prefab != null) {
+                Log.Info($"{Tag}pool {prefab.name} en {(spawned != null ? spawned.transform.position : position)}");
+            }
+
+            if (_burstOnPrefab != null && prefab != null && prefab.name == _burstOnPrefab && _burstOnInstance != null) {
+                _burstOnPrefab = null;
+                Log.Info($"{Tag}sale {prefab.name}: ráfaga {_burstOnName}");
+                _burstOnInstance.StartCoroutine(Burst(_burstOnName, _burstOnCount, _burstOnGap));
+            }
+
+            return spawned;
+        };
     }
 
     private static IEnumerator Burst(string name, int count, float interval) {

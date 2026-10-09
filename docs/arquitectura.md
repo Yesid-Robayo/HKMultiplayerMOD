@@ -201,6 +201,12 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Lo que crean los enemigos en combate (proyectiles, crías, invocaciones) se crea en los demás con la misma acción de
     su marioneta (mismo prefab). Si hace daño o tiene vida, es una copia que sigue al original hasta que desaparece; los
     efectos solo visuales del pool corren solos. Lo que crean al prepararse (cadáveres, piezas propias) no se replica.
+    Se envía al acabar el estado que lo creó (o el frame), tal como lo dejó su lógica: posición, giro entero (el polvo
+    y los chorros del juego son partículas giradas en X para salir hacia arriba), tamaño (el pool reutiliza objetos con
+    el tamaño de su último uso) y los números de sus FSM. Así una onda solo visual del Falso Caballero, que recibe su
+    velocidad y dirección con `SetFsmFloat`/`SetFsmBool` justo después de salir, avanza igual en cada PC, echa sus
+    chorros (que dañan al caballero de ese PC) y se acaba en la pared. Lo creado en combate no tiene tiempo de
+    preparación: sus efectos (los barriles al romperse) cuentan desde que sale.
   - Los tarros del Coleccionista sueltan su bicho con su propio código. Solo lo suelta el tarro original: el PC que
     lo tiene lo sigue como algo creado en combate (se reconoce al encenderse junto a su tarro) y los demás crean una
     copia que lo sigue; las copias del tarro van vacías y se rompen sin soltar nada. Una copia que acaba sola no borra
@@ -250,6 +256,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     `LASER SHOOT`): sus FSM pasan a ser del enemigo, así que solo funcionan en el PC que lo mueve; en los demás se
     paran y su giro, rayos, sonidos y animaciones se copian. Solo las que dañan (las puertas de la arena van aparte) y
     de la misma sala (la sala y su escena `_boss`). Al morir el enemigo vuelven a ser de cada PC y sus rayos se apagan.
+    Igual lo que el enemigo avisa directamente y crea cosas que dañan (el invocador de barriles del Falso Caballero,
+    `SUMMON`): solo lo usa el PC que mueve al jefe y los barriles llegan como copias (antes caían al azar distintos en
+    cada PC).
   - La sombra de cada jugador no es un enemigo compartido.
   - Probados: Mamá Gruz, Falso Caballero, Hornet, Mawlek, Maestro de Almas, Defensor del Estiércol, Nosk, Vasija Rota,
     Guardián de Cristal normal y enfurecido y Señores Mantis (despiertan, atacan al jugador que no es dueño de la sala y siguen el
