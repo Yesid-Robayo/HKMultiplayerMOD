@@ -27,6 +27,20 @@ internal sealed class Notice : MonoBehaviour {
         _instance._routine = _instance.StartCoroutine(_instance.Run(seconds));
     }
 
+    /// <summary>Quita ya el aviso si es el que empieza por ese texto (p. ej. una espera que ya terminó).</summary>
+    public static void Hide(string prefix) {
+        if (_instance == null || !_instance._text.text.StartsWith(prefix, System.StringComparison.Ordinal)) {
+            return;
+        }
+
+        if (_instance._routine != null) {
+            _instance.StopCoroutine(_instance._routine);
+            _instance._routine = null;
+        }
+
+        _instance._group.alpha = 0f;
+    }
+
     private static void Create() {
         var root = new GameObject("HKMultiplayer Aviso", typeof(Canvas), typeof(CanvasScaler), typeof(CanvasGroup));
         DontDestroyOnLoad(root);

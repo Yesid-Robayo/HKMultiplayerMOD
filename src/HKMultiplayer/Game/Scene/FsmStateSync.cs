@@ -188,6 +188,9 @@ internal sealed class FsmStateSync {
 
         // Combate de jefe que su zona quiso empezar sin estar todos dentro: el aviso, para darlo cuando entren
         public string PendingStart;
+
+        /// <summary>Estado en el que estaba al retener el comienzo (si cambia, el combate ya empezó por otro lado).</summary>
+        public string PendingFrom;
         public Collider2D Zone;
 
         /// <summary>
@@ -1301,6 +1304,7 @@ internal sealed class FsmStateSync {
         }
 
         item.PendingStart = fsmEvent.Name;
+        item.PendingFrom = item.Fsm.ActiveStateName;
         Log.Info($"{item.Fsm.gameObject.name}: el combate espera a que entren todos");
         return true;
     }
@@ -1394,6 +1398,9 @@ internal sealed class FsmStateSync {
         return (sbyte) (vertical ? hero.cState.facingRight ? 1 : -1 : 0);
     }
 
+    /// <summary>Principio del aviso de espera (para quitarlo en cuanto empieza el combate).</summary>
+    private const string WaitNotice = "Esperando a ";
+
     /// <summary>Combate retenido: empieza cuando están todos dentro; si este caballero sale, se olvida (al volver a
     /// entrar la zona avisa otra vez).</summary>
     private void UpdatePendingStart(Tracked item, float now) {
@@ -1404,18 +1411,28 @@ internal sealed class FsmStateSync {
         var hero = HeroController.instance;
         if (hero == null || !InsideZone(item, hero.transform.position, 1.5f)) {
             item.PendingStart = null;
+            HKMultiplayer.UI.Notice.Hide(WaitNotice);
+            return;
+        }
+
+        // El combate ya empezó por otro lado (la cadena copiada del PC de otro jugador que también lo esperaba): aquí
+        // ya no hay nada que esperar. Si no, el aviso seguía saliendo durante el combate
+        if (item.Fsm.ActiveStateName != item.PendingFrom) {
+            item.PendingStart = null;
+            HKMultiplayer.UI.Notice.Hide(WaitNotice);
             return;
         }
 
         if (!EveryoneInside(item)) {
             if (now >= item.NextWaitNotice) {
                 item.NextWaitNotice = now + 4f;
-                HKMultiplayer.UI.Notice.Show($"Esperando a {MissingNames(item)} para empezar el combate", 3.5f);
+                HKMultiplayer.UI.Notice.Show($"{WaitNotice}{MissingNames(item)} para empezar el combate", 3.5f);
             }
 
             return;
         }
 
+        HKMultiplayer.UI.Notice.Hide(WaitNotice);
         var start = item.PendingStart;
         item.PendingStart = null;
         _executing = true;

@@ -5,7 +5,7 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
 
 ## Versión y ramas
 
-- Rama principal `main`: **0.18.7**. M1 a M4 hechos; M5 juntado (primera y segunda parte) y sus jefes comprobados en
+- Rama principal `main`: **0.18.9**. M1 a M4 hechos; M5 juntado (primera y segunda parte) y sus jefes comprobados en
   vivo (ver abajo); amuletos y acompañantes del compañero en 0.18.0.
 - Ramas de agentes (en `.claude/worktrees/`, cada una con su rama `worktree-agent-...`):
   - `worktree-agent-a3fca8e41ebb6684d`: **M6, paquete para jugadores** (sobre 0.18.4, sin subir versión ni juntar).
@@ -213,6 +213,11 @@ Nota: la copia F tenía ya 4 mundos y la ruta no podía crear el suyo; `M3Jefes2
     sigue dentro, gana, sale ("los compañeros del sueño salen también") y B revive a su lado; los dos con control.
   - Sin comprobar: que las puertas se abran a la vez al ganar (el jefe las abre en `Floor Break`, justo antes de la
     salida) y los otros sueños en vivo.
+  - Aviso "Esperando a ... para empezar el combate" (0.18.9): seguía saliendo en el invitado con el combate ya
+    empezado (su espera retenida no se soltaba: la arena había empezado por la cadena copiada del host). Ahora la
+    espera se olvida y el aviso se quita en cuanto la arena sale de su estado de espera o el combate empieza
+    (`FsmStateSync.UpdatePendingStart`, `Notice.Hide`). Comprobado (B/C): C cruza primero y ve el aviso; B entra y
+    2,5 s después C ya no lo tiene y ve la barra del jefe.
   - Nota: `setup_session` de B/C carga partidas propias (no un mundo coop), así que ahí el progreso no se comparte
     (`falseKnightDreamDefeated` quedó en verdadero solo en C). No es un fallo.
 
