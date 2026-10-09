@@ -67,6 +67,9 @@ internal sealed class EnemySync {
     /// <summary>Lo más a menudo que se reenvía el mismo aviso a un mismo enemigo (hay zonas que avisan cada frame).</summary>
     private const float EventForwardInterval = 0.25f;
 
+    /// <summary>Aviso con el que el HealthManager dice a la lógica de un enemigo que su vida llegó a cero.</summary>
+    private const string ZeroHpEvent = "ZERO HP";
+
     /// <summary>Piezas que se mueven aparte (hijos con animación o que dañan) (dueño → sala, no fiable).</summary>
     public const MessageType EnemyParts = (MessageType) 68;
 
@@ -243,6 +246,9 @@ internal sealed class EnemySync {
         /// PC y no siguen los efectos del original. Null si ninguna.
         /// </summary>
         public List<PlayMakerFSM> Detached;
+
+        /// <summary>Su lógica recibió y atendió ZERO HP en este PC (su muerte va por ella, no por HealthManager.Die).</summary>
+        public bool ZeroHp;
         public RigidbodyType2D BodyType;
         public readonly SnapshotBuffer Buffer = new();
 
@@ -1562,9 +1568,10 @@ internal sealed class EnemySync {
         }
 
         // Si ya murió aquí: sus avisos a todos son entonces para la sala (en la marioneta no se sabe). Solo muerto de
-        // verdad: el Hollow Knight pasa por vida negativa entre fases y sus avisos de entonces son de su combate
+        // verdad (o con su muerte en marcha por ZERO HP): el Hollow Knight pasa por vida negativa entre fases y sus avisos
+        // de entonces son de su combate
         var health = sound.Enemy.Health;
-        writer.WriteBool(health != null && health.isDead);
+        writer.WriteBool(sound.Enemy.ZeroHp || health != null && health.isDead);
         _session.End();
     }
 
@@ -2259,7 +2266,7 @@ internal sealed class EnemySync {
         }
 
         if (fsm.ActiveState == null || fsm.ActiveState.Name != enemy.DormantState || !OthersInScene() || EveryoneNear(enemy) ||
-            InBattleScene(enemy)) {
+            InBattleScene(enemy) || !LocalNear(enemy)) {
             WakeUp(enemy);
             return false;
         }
@@ -2325,6 +2332,16 @@ internal sealed class EnemySync {
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Si el caballero de este PC está cerca del jefe. Si no lo está, el jefe no despierta por verlo (lo despierta otra
+    /// cosa: la presentación de la Radiancia la empieza su cartel y ella espera muy arriba de la arena): no se retiene,
+    /// porque nadie llegaría nunca a estar cerca.
+    /// </summary>
+    private static bool LocalNear(Enemy enemy) {
+        var hero = HeroController.instance;
+        return hero != null && ((Vector2) (hero.transform.position - enemy.Transform.position)).sqrMagnitude <= WakeRange * WakeRange;
     }
 
     private bool EveryoneNear(Enemy enemy) {
@@ -3806,6 +3823,10 @@ internal sealed class EnemySync {
             }
 
             sync.SendHit(enemy, hit);
+            if (hit.AttackType == AttackTypes.Nail) {
+                sync.ForwardNailTriggers(enemy, self.gameObject);
+            }
+
             if (self.hp > 0) {
                 // Efectos del golpe y alma para quien golpea, sin quitar vida aquí (la quita el dueño)
                 HitWithoutDamage(self, hit, orig);
@@ -3844,6 +3865,13 @@ internal sealed class EnemySync {
 
         // Los avisos de fuera a la lógica de una marioneta (parada aquí) van al PC que la mueve
         On.HutongGames.PlayMaker.Fsm.ProcessEvent += (orig, self, fsmEvent, eventData) => {
+            // La vida de un jefe real llegó a cero y su lógica lo atiende (la muerte de Grimm va por ZERO HP, sin
+            // HealthManager.Die): desde ahí sus avisos a todos son los de después de vencerlo
+            if (fsmEvent?.Name == ZeroHpEvent && _active != null && _active._enemyFsms.TryGetValue(self, out var dying) &&
+                !dying.Enemy.Puppet && Handles(self, ZeroHpEvent)) {
+                dying.Enemy.ZeroHp = true;
+            }
+
             orig(self, fsmEvent, eventData);
             var sync = _active;
             if (sync?._session == null || fsmEvent == null || _replaying || _playingFx || _spawningCopy ||
@@ -3902,6 +3930,34 @@ internal sealed class EnemySync {
                 orig(self);
             }
         };
+    }
+
+    /// <summary>
+    /// Un aguijonazo de este jugador a una marioneta: si su lógica (parada aquí) esperaba en su estado de ahora un
+    /// aguijonazo en su caja (una acción Trigger2dEvent con la etiqueta "Nail Attack"), su aviso va al PC que la mueve.
+    /// El golpe final de la Radiancia (FINAL HIT) es así: sin esto solo podía darlo quien la movía.
+    /// </summary>
+    private void ForwardNailTriggers(Enemy enemy, GameObject struck) {
+        if (enemy.Fsms == null) {
+            return;
+        }
+
+        for (var i = 0; i < enemy.Fsms.Length && i <= byte.MaxValue; i++) {
+            var fsm = enemy.Fsms[i];
+            var state = fsm != null && !fsm.enabled && fsm.gameObject == struck ? fsm.Fsm.ActiveState : null;
+            if (state == null) {
+                continue;
+            }
+
+            foreach (var action in state.Actions) {
+                if (action is HutongGames.PlayMaker.Actions.Trigger2dEvent trigger &&
+                    trigger.trigger != PlayMakerUnity2d.Trigger2DType.OnTriggerExit2D &&
+                    trigger.collideTag?.Value == "Nail Attack" && !string.IsNullOrEmpty(trigger.sendEvent?.Name)) {
+                    Log.Info($"{enemy.Root.name}/{fsm.FsmName}: {trigger.sendEvent.Name} por un aguijonazo de este PC, al PC que lo mueve");
+                    ForwardEvent(enemy, (byte) i, trigger.sendEvent.Name);
+                }
+            }
+        }
     }
 
     private void SendHit(Enemy enemy, HitInstance hit) {

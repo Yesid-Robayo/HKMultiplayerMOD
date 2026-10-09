@@ -97,7 +97,9 @@ internal sealed class FsmStateSync {
         ("Colosseum Manager", "Battle Control"),
         ("Colosseum Cage", "Spawn"),
         ("Colosseum Cage Zote", "Control"),
-        ("Hornet Outskirts Battle Encounter", "Encounter")
+        ("Hornet Outskirts Battle Encounter", "Encounter"),
+        // La Radiancia: la desafía uno en su cartel y su presentación (y la Radiancia, que enciende) va en todos
+        ("Boss Control", "Control")
     };
 
     /// <summary>
@@ -1238,7 +1240,8 @@ internal sealed class FsmStateSync {
 
         // El aviso de una zona no lleva remitente; y solo cuenta si empieza algo desde su reposo
         var sender = eventData?.SentByFsm ?? Fsm.EventData?.SentByFsm;
-        if (sender != null && sender != fsm || !Handles(fsm, fsmEvent.Name) || !EnemySync.BossInRoom) {
+        if (sender != null && sender != fsm || !Handles(fsm, fsmEvent.Name) || !FromZone(fsm, fsmEvent.Name) ||
+            !EnemySync.BossInRoom) {
             return false;
         }
 
@@ -1250,6 +1253,26 @@ internal sealed class FsmStateSync {
         item.PendingStart = fsmEvent.Name;
         Log.Info($"{item.Fsm.gameObject.name}: el combate espera a que entren todos");
         return true;
+    }
+
+    /// <summary>
+    /// Si el aviso es el de la zona (un Trigger2dEvent del estado de ahora lo manda al entrar el caballero). Los demás
+    /// avisos propios ya empezado el encuentro no se retienen: el LAND con el que Grimm sigue cuando el caballero toca el
+    /// suelo se retenía si el otro aún no estaba del todo dentro, con los dos caballeros ya quietos, y no seguía nunca.
+    /// </summary>
+    private static bool FromZone(Fsm fsm, string eventName) {
+        var state = fsm.ActiveState;
+        if (state == null) {
+            return false;
+        }
+
+        foreach (var action in state.Actions) {
+            if (action is HutongGames.PlayMaker.Actions.Trigger2dEvent trigger && trigger.sendEvent?.Name == eventName) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Si los caballeros de todos los jugadores de la sala están dentro de la zona del combate.</summary>
