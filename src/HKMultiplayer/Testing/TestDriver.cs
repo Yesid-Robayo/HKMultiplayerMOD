@@ -543,9 +543,13 @@ internal sealed class TestDriver : MonoBehaviour {
                 hero.TakeDamage(hero.gameObject, GlobalEnums.CollisionSide.left, 1, 1);
                 break;
             case "tp":
+                // tp <x> <y> [respawn]: con "respawn", si pisa pinchos vuelve aquí y no a la entrada de la sala. Solo en
+                // un sitio seguro: sobre un suelo que luego se llena de pinchos (el Coliseo) reaparecería en ellos sin fin
                 hero.transform.position = new Vector3(ParseFloat(args[1]), ParseFloat(args[2]), hero.transform.position.z);
-                // Si pisa pinchos, vuelve aquí y no a la entrada de la sala (no ha pasado andando por ningún punto seguro)
-                hero.SetHazardRespawn(hero.transform.position, hero.cState.facingRight);
+                if (args.Length > 3 && args[3] == "respawn") {
+                    hero.SetHazardRespawn(hero.transform.position, hero.cState.facingRight);
+                }
+
                 break;
             case "press":
                 // press <botón> [segundos]: botones de HeroActions (left, right, up, down, jump, attack, dash...)
