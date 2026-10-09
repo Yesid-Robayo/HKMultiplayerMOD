@@ -858,6 +858,16 @@ internal sealed class Skins {
     /// </summary>
     private void ApplyToEffects(RemoteAvatar avatar, Skin skin) {
         avatar.SpriteTransform.GetComponentsInChildren(_effectSprites);
+        ApplyToEffectSprites(avatar, skin);
+
+        // Lo que vuela por su cuenta (bolas de fuego, rayos, moscas...)
+        if (avatar.LooseEffects != null) {
+            avatar.LooseEffects.GetComponentsInChildren(_effectSprites);
+            ApplyToEffectSprites(avatar, skin);
+        }
+    }
+
+    private void ApplyToEffectSprites(RemoteAvatar avatar, Skin skin) {
         foreach (var sprite in _effectSprites) {
             if (sprite.gameObject == avatar.Sprite.gameObject) {
                 continue;

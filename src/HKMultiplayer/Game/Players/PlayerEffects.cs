@@ -26,7 +26,16 @@ internal enum EffectKind : byte {
     NailCharge = 6,
 
     /// <summary>Recibió un golpe.</summary>
-    Hit = 7
+    Hit = 7,
+
+    /// <summary>Rayo de Grubberfly's Elegy (cuál, giro y escala).</summary>
+    Beam = 8,
+
+    /// <summary>Nube al curarse con Spore Shroom o Defender's Crest (cuál, dónde y tamaño).</summary>
+    Cloud = 9,
+
+    /// <summary>Una mosca de Flukenest (cuál, dónde, velocidad, giro y tamaño).</summary>
+    Fluke = 10
 }
 
 /// <summary>Amuletos que cambian cómo se ve un efecto (viajan en cada evento, en un byte).</summary>
@@ -79,6 +88,16 @@ internal struct EffectEvent {
     public float Y;
     public float Angle;
 
+    /// <summary>Velocidad con la que sale una mosca de Flukenest.</summary>
+    public float VX;
+
+    public float VY;
+
+    /// <summary>Escala del objeto (con signo si va volteado) y giro por segundo (moscas de Defender's Crest).</summary>
+    public float Scale;
+
+    public float Spin;
+
     /// <summary>Cuándo llegó (instante local), por si su avatar no llega nunca a ese tick.</summary>
     public double Arrival;
 
@@ -86,6 +105,27 @@ internal struct EffectEvent {
         writer.WriteByte((byte) Kind);
         writer.WriteUInt(Tick);
         switch (Kind) {
+            case EffectKind.Beam:
+                writer.WriteByte(A);
+                writer.WriteFloat(Angle);
+                writer.WriteFloat(Scale);
+                break;
+            case EffectKind.Cloud:
+                writer.WriteByte(A);
+                writer.WriteFloat(X);
+                writer.WriteFloat(Y);
+                writer.WriteFloat(Scale);
+                break;
+            case EffectKind.Fluke:
+                writer.WriteByte(A);
+                writer.WriteFloat(X);
+                writer.WriteFloat(Y);
+                writer.WriteFloat(VX);
+                writer.WriteFloat(VY);
+                writer.WriteFloat(Angle);
+                writer.WriteFloat(Scale);
+                writer.WriteFloat(Spin);
+                break;
             case EffectKind.FsmState:
                 writer.WriteByte(A);
                 writer.WriteUShort(B);
@@ -113,8 +153,30 @@ internal struct EffectEvent {
         A = 0;
         B = 0;
         Charms = 0;
-        X = Y = Angle = 0f;
+        X = Y = Angle = VX = VY = Spin = 0f;
+        Scale = 1f;
         switch (Kind) {
+            case EffectKind.Beam:
+                A = reader.ReadByte();
+                Angle = reader.ReadFloat();
+                Scale = reader.ReadFloat();
+                break;
+            case EffectKind.Cloud:
+                A = reader.ReadByte();
+                X = reader.ReadFloat();
+                Y = reader.ReadFloat();
+                Scale = reader.ReadFloat();
+                break;
+            case EffectKind.Fluke:
+                A = reader.ReadByte();
+                X = reader.ReadFloat();
+                Y = reader.ReadFloat();
+                VX = reader.ReadFloat();
+                VY = reader.ReadFloat();
+                Angle = reader.ReadFloat();
+                Scale = reader.ReadFloat();
+                Spin = reader.ReadFloat();
+                break;
             case EffectKind.FsmState:
                 A = reader.ReadByte();
                 B = reader.ReadUShort();
@@ -148,8 +210,11 @@ internal struct EffectEvent {
 /// </para>
 /// </summary>
 internal sealed class PlayerEffects {
-    /// <summary>Eventos que esperan su momento por jugador; si se llena, sale el más viejo ya.</summary>
-    private const int QueueSize = 32;
+    /// <summary>Eventos que esperan su momento por jugador; si se llena, sale el más viejo ya (una bola de Flukenest son 9-16).</summary>
+    private const int QueueSize = 64;
+
+    /// <summary>Objetos de amuletos creados en este frame, que se envían al final (ya con su velocidad, giro y escala).</summary>
+    private const int PendingSize = 32;
 
     /// <summary>Lo más que espera un evento a que su avatar llegue a su tick.</summary>
     private const double MaxWait = 0.5;
@@ -179,6 +244,11 @@ internal sealed class PlayerEffects {
     /// <summary>Carga de las artes del aguijón enviada la última vez (0 nada, 1 cargando, 2 cargada).</summary>
     private byte _chargeStage;
 
+    private readonly GameObject[] _pendingObjects = new GameObject[PendingSize];
+    private readonly CharmTemplates.SpawnKind[] _pendingKinds = new CharmTemplates.SpawnKind[PendingSize];
+    private readonly byte[] _pendingIndexes = new byte[PendingSize];
+    private int _pendingCount;
+
     public PlayerEffects() {
         _onEvent = OnEvent;
     }
@@ -197,6 +267,16 @@ internal sealed class PlayerEffects {
 
             return played;
         }
+    }
+
+    /// <summary>Lo encendido de los amuletos de cada compañero (modo de prueba).</summary>
+    public string DescribeCharms() {
+        var text = string.Empty;
+        foreach (var remote in _remotes.Values) {
+            text += $"{remote.Player.Name}:{remote.Effects?.DescribeCharms() ?? " sin copia"} ";
+        }
+
+        return text;
     }
 
     public void Attach(GameSession session, PlayerSync players) {
@@ -277,10 +357,12 @@ internal sealed class PlayerEffects {
     public void UpdateLocal() {
         var hero = HeroController.instance;
         if (hero == null || _session == null || Templates() == null) {
+            _pendingCount = 0;
             return;
         }
 
-        var stage = hero.artChargedEffect != null && hero.artChargedEffect.activeSelf ? (byte) 2 :
+        SendPendingSpawns();
+        var stage =hero.artChargedEffect != null && hero.artChargedEffect.activeSelf ? (byte) 2 :
             hero.artChargeEffect != null && hero.artChargeEffect.activeSelf ? (byte) 1 : (byte) 0;
         if (stage == _chargeStage) {
             return;
@@ -369,6 +451,71 @@ internal sealed class PlayerEffects {
         });
     }
 
+    /// <summary>
+    /// Algo salió del pool del juego: si es de un amuleto del caballero (rayo, nube, mosca), se apunta para enviarlo al
+    /// final del frame. Antes no: quien lo crea le pone después su velocidad, giro y escala.
+    /// </summary>
+    private void OnPoolSpawn(GameObject prefab, GameObject spawned) {
+        var charms = _templates?.Charms;
+        if (charms == null || spawned == null || _pendingCount == PendingSize ||
+            !charms.TryGetSpawn(prefab, out var kind, out var index) || !CanSend()) {
+            return;
+        }
+
+        _pendingObjects[_pendingCount] = spawned;
+        _pendingKinds[_pendingCount] = kind;
+        _pendingIndexes[_pendingCount] = (byte) index;
+        _pendingCount++;
+    }
+
+    private void SendPendingSpawns() {
+        for (var i = 0; i < _pendingCount; i++) {
+            var spawned = _pendingObjects[i];
+            _pendingObjects[i] = null;
+            if (spawned == null) {
+                continue;
+            }
+
+            var transform = spawned.transform;
+            var position = transform.position;
+            var effect = new EffectEvent { A = _pendingIndexes[i], Scale = 1f };
+            switch (_pendingKinds[i]) {
+                case CharmTemplates.SpawnKind.Beam:
+                    effect.Kind = EffectKind.Beam;
+                    effect.Angle = transform.localEulerAngles.z;
+                    effect.Scale = transform.localScale.y;
+                    break;
+                case CharmTemplates.SpawnKind.Cloud:
+                    effect.Kind = EffectKind.Cloud;
+                    effect.X = position.x;
+                    effect.Y = position.y;
+                    effect.Scale = transform.localScale.x;
+                    break;
+                case CharmTemplates.SpawnKind.Fluke:
+                    effect.Kind = EffectKind.Fluke;
+                    effect.X = position.x;
+                    effect.Y = position.y;
+                    effect.Angle = transform.eulerAngles.z;
+                    effect.Scale = transform.localScale.x;
+                    var body = spawned.GetComponent<Rigidbody2D>();
+                    if (body != null) {
+                        var velocity = body.linearVelocity;
+                        effect.VX = velocity.x;
+                        effect.VY = velocity.y;
+                        effect.Spin = body.angularVelocity;
+                    }
+
+                    break;
+                default:
+                    continue;
+            }
+
+            Send(effect);
+        }
+
+        _pendingCount = 0;
+    }
+
     // =====================================================================================================
     // Red → compañeros
     // =====================================================================================================
@@ -432,7 +579,7 @@ internal sealed class PlayerEffects {
 
             remote.Effects.Play(effect);
             if (TestDriver.IsEnabled()) {
-                Log.Info($"[TEST] efecto {effect.Kind} de {player.Name}");
+                Log.Info($"[TEST] efecto {effect.Kind} de {player.Name} {DescribeEvent(effect)}");
             }
 
             played++;
@@ -444,6 +591,18 @@ internal sealed class PlayerEffects {
         }
 
         remote.Effects.Update(Time.deltaTime);
+    }
+
+    /// <summary>Detalle de un evento para el registro del modo de prueba (FSM y estado, o qué objeto).</summary>
+    private string DescribeEvent(in EffectEvent effect) {
+        if (effect.Kind == EffectKind.FsmState && _templates != null && effect.A < _templates.HeroFsms.Length &&
+            _templates.HeroFsms[effect.A] is { } fsm && effect.B < fsm.FsmStates.Length) {
+            return $"{fsm.FsmName}/{fsm.FsmStates[effect.B].Name}";
+        }
+
+        return effect.Kind is EffectKind.Beam or EffectKind.Cloud or EffectKind.Fluke
+            ? $"#{effect.A} ({effect.X:0.0},{effect.Y:0.0}) v=({effect.VX:0.0},{effect.VY:0.0}) escala={effect.Scale:0.00}"
+            : string.Empty;
     }
 
     /// <summary>El avatar de un jugador se va a destruir (cambio de sala): sus efectos se aparcan y su cola se vacía.</summary>
@@ -478,6 +637,13 @@ internal sealed class PlayerEffects {
             if (toState != null) {
                 _active?.OnFsmState(self, toState);
             }
+        };
+
+        // Lo que sacan los amuletos del pool del juego (rayos de Grubberfly, nubes al curarse, moscas de Flukenest)
+        On.ObjectPool.Spawn_GameObject_Transform_Vector3_Quaternion += (orig, prefab, parent, position, rotation) => {
+            var spawned = orig(prefab, parent, position, rotation);
+            _active?.OnPoolSpawn(prefab, spawned);
+            return spawned;
         };
 
         On.NailSlash.StartSlash += (orig, self) => {

@@ -17,8 +17,15 @@ internal sealed class HeroEffectTemplates {
     /// <summary>Carpetas del caballero que se copian, en este orden.</summary>
     private static readonly string[] Folders = { "Attacks", "Effects", "Spells", "Focus Effects", "Sounds", "Dream Effects" };
 
-    /// <summary>FSM del caballero cuyos estados se reproducen en el compañero (el índice viaja en el evento).</summary>
-    private static readonly string[] ActionFsmNames = { "Spell Control", "Nail Arts", "Superdash", "Dream Nail" };
+    /// <summary>
+    /// FSM del caballero cuyos estados se reproducen en el compañero (el índice viaja en el evento). Con "hijo/FSM", la
+    /// de un hijo del caballero (Thorns of Agony: su sonido, la animación del caballero ya llega en su estado; el efecto
+    /// del golpe recibido: la grieta blanca y los tajos oscuros que salen despedidos).
+    /// </summary>
+    private static readonly string[] ActionFsmNames = {
+        "Spell Control", "Nail Arts", "Superdash", "Dream Nail", "Charm Effects/Thorn Counter",
+        "Effects/Damage Effect/Knight Damage"
+    };
 
     /// <summary>
     /// FSM de los efectos que solo animan su propio objeto (aparecer, animarse, desvanecerse y apagarse): se quedan en
@@ -30,7 +37,9 @@ internal sealed class HeroEffectTemplates {
     };
 
     /// <summary>Lo que crean los estados reproducidos y es solo visual (se crea igual junto al avatar).</summary>
-    private static readonly HashSet<string> VisualSpawns = new() { "White Flash R" };
+    private static readonly HashSet<string> VisualSpawns = new() {
+        "White Flash R", "Slash Effect GhostDark1", "Slash Effect GhostDark2"
+    };
 
     /// <summary>Tamaño con el que la FSM de un arte del aguijón pone su efecto (Great Slash y Dash Slash).</summary>
     private const float NailArtScale = 1.316208f;
@@ -71,6 +80,9 @@ internal sealed class HeroEffectTemplates {
     /// <summary>Partículas del golpe recibido.</summary>
     public readonly GameObject[] HitParticles = new GameObject[2];
 
+    /// <summary>Efectos de amuletos que crean objetos aparte (rayos, nubes, moscas, onda del grito); puede faltar.</summary>
+    public CharmTemplates Charms { get; private set; }
+
     public HeroEffectTemplates(HeroController hero) {
         Hero = hero;
         HeroAudio = hero.GetComponent<HeroAudioController>();
@@ -103,7 +115,10 @@ internal sealed class HeroEffectTemplates {
         }
 
         for (var i = 0; i < ActionFsmNames.Length; i++) {
-            HeroFsms[i] = FSMUtility.LocateFSM(hero.gameObject, ActionFsmNames[i]);
+            var name = ActionFsmNames[i];
+            var slash = name.LastIndexOf('/');
+            var owner = slash < 0 ? hero.gameObject : heroTransform.Find(name.Substring(0, slash))?.gameObject;
+            HeroFsms[i] = owner != null ? FSMUtility.LocateFSM(owner, name.Substring(slash + 1)) : null;
         }
 
         PrepareSlashes(hero);
@@ -112,6 +127,12 @@ internal sealed class HeroEffectTemplates {
             PrepareFireballs();
         } catch (System.Exception e) {
             Log.Warn($"Efectos: sin bolas de fuego del compañero: {e}");
+        }
+
+        try {
+            Charms = new CharmTemplates(this, hero, _holder.transform);
+        } catch (System.Exception e) {
+            Log.Warn($"Efectos: sin los efectos de amuletos del compañero: {e}");
         }
 
         HitParticles[0] = heroTransform.Find("Effects/Damage Effect/Hit Pt 1")?.gameObject;
@@ -236,7 +257,7 @@ internal sealed class HeroEffectTemplates {
                 return IsCopied(fsm, a.gameObject);
             case SendEventByName a:
                 return a.eventTarget.target is FsmEventTarget.EventTarget.GameObject or FsmEventTarget.EventTarget.GameObjectFSM &&
-                       IsCopied(fsm, a.eventTarget.gameObject);
+                       (IsCopied(fsm, a.eventTarget.gameObject) || IsRoarWave(a.eventTarget.gameObject));
             case SendEventByNameV2 a:
                 return a.eventTarget.target is FsmEventTarget.EventTarget.GameObject or FsmEventTarget.EventTarget.GameObjectFSM &&
                        IsCopied(fsm, a.eventTarget.gameObject);
@@ -253,6 +274,8 @@ internal sealed class HeroEffectTemplates {
                 return true;
             case SpawnObjectFromGlobalPool a:
                 return IsSpawnEffect(a.gameObject.Value);
+            case FlingObjectsFromGlobalPool a:
+                return IsVisualSpawn(a.gameObject.Value);
             case CreateObject a:
                 return IsSpawnEffect(a.gameObject.Value);
             default:
@@ -261,7 +284,16 @@ internal sealed class HeroEffectTemplates {
     }
 
     public bool IsSpawnEffect(GameObject prefab) =>
-        prefab != null && (prefab == FireballTop1 || prefab == FireballTop2 || IsVisualSpawn(prefab));
+        prefab != null && (prefab == FireballTop1 || prefab == FireballTop2 || IsVisualSpawn(prefab) ||
+                           Charms != null && prefab == Charms.RoarWave);
+
+    /// <summary>
+    /// Si una acción apunta a la onda del grito que creó el estado anterior (variable "Roar Wave" de Spell Control): en
+    /// el compañero es la suya (<see cref="RemoteCharmEffects"/>).
+    /// </summary>
+    public static bool IsRoarWave(FsmOwnerDefault owner) =>
+        owner is { OwnerOption: OwnerDefaultOption.SpecifyGameObject, GameObject: { UseVariable: true } variable } &&
+        variable.Name == "Roar Wave";
 
     private bool IsCopied(Fsm fsm, FsmOwnerDefault owner) {
         var target = fsm.GetOwnerDefaultTarget(owner);
@@ -353,6 +385,9 @@ internal sealed class HeroEffectTemplates {
         public GameObject Cast;
         public GameObject Blast;
         public AudioClip Sound;
+
+        /// <summary>Sonido al lanzarla con Flukenest (estado "Fluke R" de su FSM).</summary>
+        public AudioClip FlukeSound;
         public float Speed;
         public Vector2 Offset;
         public Vector2 BlastOffset;
@@ -384,6 +419,7 @@ internal sealed class HeroEffectTemplates {
             Projectile = Object.Instantiate(prefab, _holder.transform, false),
             Speed = cast.FsmVariables.FindFsmFloat("Fire Speed")?.Value ?? 0f,
             Sound = FirstAction<AudioPlayerOneShotSingle>(cast, "Cast Right")?.audioClip?.Value as AudioClip,
+            FlukeSound = FirstAction<AudioPlayerOneShotSingle>(cast, "Fluke R")?.audioClip?.Value as AudioClip,
             Offset = spawn.position != null && !spawn.position.IsNone
                 ? new Vector2(Mathf.Abs(spawn.position.Value.x), spawn.position.Value.y)
                 : offset
@@ -416,7 +452,7 @@ internal sealed class HeroEffectTemplates {
         return info;
     }
 
-    private static T FirstAction<T>(PlayMakerFSM fsm, string stateName) where T : FsmStateAction {
+    internal static T FirstAction<T>(PlayMakerFSM fsm, string stateName) where T : FsmStateAction {
         if (fsm == null) {
             return null;
         }

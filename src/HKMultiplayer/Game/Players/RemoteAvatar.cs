@@ -121,6 +121,9 @@ internal sealed class RemoteAvatar {
     /// <summary>Lo que se voltea al mirar a un lado: sus efectos van debajo, como en el caballero.</summary>
     public Transform SpriteTransform => _spriteTransform;
 
+    /// <summary>Efectos suyos que no cuelgan del avatar (vuelan por su cuenta) y llevan también su skin; puede faltar.</summary>
+    public Transform LooseEffects { get; set; }
+
     /// <summary>Lo que dibuja el cuerpo (su skin se pone aquí).</summary>
     public MeshRenderer Renderer => _renderer;
 

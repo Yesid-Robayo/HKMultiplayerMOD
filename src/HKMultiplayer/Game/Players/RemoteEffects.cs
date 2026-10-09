@@ -28,7 +28,7 @@ namespace HKMultiplayer.Game.Players;
 /// </summary>
 internal sealed class RemoteEffects {
     /// <summary>Más lejos del caballero local que esto, sus sonidos no se oyen (el juego los oiría en toda la sala).</summary>
-    private const float AudibleDistance = 30f;
+    internal const float AudibleDistance = 30f;
 
     /// <summary>Bolas de fuego a la vez de cada nivel.</summary>
     private const int FireballsPerLevel = 3;
@@ -37,10 +37,10 @@ internal sealed class RemoteEffects {
     private const float FireballLife = 0.45f;
 
     /// <summary>Capas contra las que choca la bola de fuego (las de su FSM: terreno).</summary>
-    private const int FireballWalls = (1 << 8) | (1 << 25);
+    internal const int FireballWalls = (1 << 8) | (1 << 25);
 
     /// <summary>Los tajos se apagan al terminar su animación (como NailSlash).</summary>
-    private static readonly Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip> HideWhenDone = (animator, _) => {
+    internal static readonly Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip> HideWhenDone = (animator, _) => {
         var renderer = animator.GetComponent<MeshRenderer>();
         if (renderer != null) {
             renderer.enabled = false;
@@ -61,6 +61,12 @@ internal sealed class RemoteEffects {
     private readonly GameObject _root;
 
     private readonly AudioSource _audio;
+
+    /// <summary>
+    /// Lo que sale del avatar y vuela por su cuenta (bolas de fuego, rayos, nubes, moscas): no cuelga del avatar, pero
+    /// lleva la skin de su dueño como lo demás (<see cref="RemoteAvatar.LooseEffects"/>).
+    /// </summary>
+    private readonly GameObject _loose;
     private readonly Transform[][] _nodes;
     private readonly bool[][] _activeAtStart;
     private readonly Transform[][] _parentAtStart;
@@ -69,10 +75,16 @@ internal sealed class RemoteEffects {
     private readonly GameObject[] _blasts = new GameObject[2];
     private readonly CastCopy[] _casts = new CastCopy[2];
 
+    /// <summary>Lo que crean sus amuletos fuera de su caballero (rayos, nubes, moscas, onda del grito); puede faltar.</summary>
+    private readonly RemoteCharmEffects _charms;
+
     private RemoteAvatar _avatar;
     private ParticleSystem _dashParticles;
     private float _dashParticlesUntil;
     private bool _warned;
+
+    /// <summary>Se está reproduciendo un estado de un grito (sus temblores de cámara se hacen si está cerca).</summary>
+    private bool _screaming;
 
     public RemoteEffects(HeroEffectTemplates templates, string playerName, Transform parking) {
         _templates = templates;
@@ -80,6 +92,8 @@ internal sealed class RemoteEffects {
         _root = new GameObject($"Efectos de {playerName}");
         _root.SetActive(false);
         _root.transform.SetParent(parking, false);
+        _loose = new GameObject($"Efectos sueltos de {playerName}");
+        _loose.transform.SetParent(parking, false);
 
         var hero = templates.Hero;
         _audio = _root.AddComponent<AudioSource>();
@@ -138,6 +152,10 @@ internal sealed class RemoteEffects {
             }
         }
 
+        if (templates.Charms != null) {
+            _charms = new RemoteCharmEffects(templates.Charms, hero, _loose.transform);
+        }
+
         foreach (var art in templates.NailArts) {
             var copy = Resolve(art.HeroObject);
             var animator = Component<tk2dSpriteAnimator>(copy);
@@ -155,6 +173,9 @@ internal sealed class RemoteEffects {
 
     /// <summary>Efectos reproducidos (modo de prueba).</summary>
     public int Played { get; private set; }
+
+    /// <summary>Lo encendido de sus amuletos (modo de prueba).</summary>
+    public string DescribeCharms() => _charms?.Describe() ?? " sin efectos de amuletos";
 
     /// <summary>
     /// Algún objeto de la copia se perdió (una FSM lo sacó al mundo y la sala se descargó): hay que crearla de nuevo.
@@ -176,6 +197,7 @@ internal sealed class RemoteEffects {
         }
 
         _avatar = avatar;
+        avatar.LooseEffects = _loose.transform;
         var root = _root.transform;
         root.SetParent(avatar.SpriteTransform, false);
         root.localPosition = Vector3.zero;
@@ -196,6 +218,7 @@ internal sealed class RemoteEffects {
         _avatar = null;
         _audio.Stop();
         HideFireballs();
+        _charms?.Hide();
         for (var f = 0; f < _nodes.Length; f++) {
             var nodes = _nodes[f];
             if (nodes == null) {
@@ -221,6 +244,7 @@ internal sealed class RemoteEffects {
 
     public void Destroy() {
         HideFireballs();
+        _charms?.Destroy();
         foreach (var fireball in _fireballs) {
             if (fireball?.Object != null) {
                 Object.Destroy(fireball.Object);
@@ -241,6 +265,10 @@ internal sealed class RemoteEffects {
 
         if (_root != null) {
             Object.Destroy(_root);
+        }
+
+        if (_loose != null) {
+            Object.Destroy(_loose);
         }
     }
 
@@ -277,6 +305,16 @@ internal sealed class RemoteEffects {
                 case EffectKind.Hit:
                     PlayHit();
                     break;
+                case EffectKind.Beam:
+                    _charms?.SpawnBeam(effect.A, _avatar.Position, effect.Angle, effect.Scale);
+                    break;
+                case EffectKind.Cloud:
+                    _charms?.SpawnCloud(effect.A, new Vector3(effect.X, effect.Y, 0f), effect.Scale);
+                    break;
+                case EffectKind.Fluke:
+                    _charms?.SpawnFluke(effect.A, new Vector2(effect.X, effect.Y), new Vector2(effect.VX, effect.VY),
+                        effect.Angle, effect.Scale, effect.Spin);
+                    break;
             }
         } catch (Exception e) {
             WarnOnce($"Efecto {effect.Kind} del compañero no reproducido: {e}");
@@ -302,6 +340,8 @@ internal sealed class RemoteEffects {
                 cast.Object.SetActive(false);
             }
         }
+
+        _charms?.Update(deltaTime);
     }
 
     // =====================================================================================================
@@ -321,6 +361,7 @@ internal sealed class RemoteEffects {
         }
 
         var state = states[stateIndex];
+        _screaming = state.Name.StartsWith("Scream", StringComparison.Ordinal);
         foreach (var action in state.Actions) {
             if (!action.Enabled) {
                 continue;
@@ -438,11 +479,29 @@ internal sealed class RemoteEffects {
             case CreateObject a:
                 Spawn(a.gameObject.Value, a.position.Value, charms);
                 break;
+            case FlingObjectsFromGlobalPool a:
+                Fling(a);
+                break;
         }
     }
 
     private void SendEvent(Fsm fsm, FsmEventTarget target, string eventName) {
         if (target.target is not (FsmEventTarget.EventTarget.GameObject or FsmEventTarget.EventTarget.GameObjectFSM)) {
+            return;
+        }
+
+        // La onda del grito que creó un estado anterior: en el compañero, la suya
+        if (HeroEffectTemplates.IsRoarWave(target.gameObject)) {
+            _charms?.EndRoarWave(eventName);
+            return;
+        }
+
+        // Los temblores de cámara de un grito, solo si el compañero está a la vista
+        if (_screaming && IsCamera(target.gameObject)) {
+            if (RemoteCharmEffects.NearCamera(_avatar.Position)) {
+                GameCameras.instance.cameraShakeFSM?.SendEvent(eventName);
+            }
+
             return;
         }
 
@@ -478,8 +537,32 @@ internal sealed class RemoteEffects {
             CastFireball(0, charms);
         } else if (prefab == _templates.FireballTop2) {
             CastFireball(1, charms);
+        } else if (_templates.Charms != null && prefab == _templates.Charms.RoarWave) {
+            _charms?.StartRoarWave(_root.transform.position + offset);
         } else if (_templates.IsVisualSpawn(prefab)) {
             prefab.Spawn(_root.transform.position + offset);
+        }
+    }
+
+    /// <summary>Como FlingObjectsFromGlobalPool, solo con objetos visuales (los tajos oscuros del golpe recibido).</summary>
+    private void Fling(FlingObjectsFromGlobalPool action) {
+        var prefab = action.gameObject.Value;
+        if (!_templates.IsVisualSpawn(prefab)) {
+            return;
+        }
+
+        var origin = _root.transform.position;
+        var count = Random.Range(action.spawnMin.Value, action.spawnMax.Value + 1);
+        for (var i = 0; i < count; i++) {
+            var spawned = prefab.Spawn(origin, Quaternion.identity);
+            var body = spawned.GetComponent<Rigidbody2D>();
+            if (body == null) {
+                continue;
+            }
+
+            var angle = Random.Range(action.angleMin.Value, action.angleMax.Value) * Mathf.Deg2Rad;
+            var speed = Random.Range(action.speedMin.Value, action.speedMax.Value);
+            body.linearVelocity = new Vector2(Mathf.Cos(angle) * speed, Mathf.Sin(angle) * speed);
         }
     }
 
@@ -641,25 +724,28 @@ internal sealed class RemoteEffects {
 
     /// <summary>
     /// Vengeful Spirit (nivel 0) o Shade Soul (1): el estallido al lanzarla, el sonido y la bola, que vuela recta hasta
-    /// chocar con una pared o deshacerse. La de Flukenest (moscas) no se reproduce.
+    /// chocar con una pared o deshacerse. Con Flukenest, el estallido y su sonido sin la bola: sus moscas llegan
+    /// aparte, cada una como salió en el PC del dueño (<see cref="RemoteCharmEffects"/>).
     /// </summary>
     private void CastFireball(int level, byte charms) {
         var info = level == 0 ? _templates.Fireball1 : _templates.Fireball2;
-        if (info == null || (charms & EffectCharms.Flukenest) != 0) {
+        if (info == null) {
             return;
         }
 
+        var flukes = (charms & EffectCharms.Flukenest) != 0;
         var direction = _avatar.FacingRight ? 1f : -1f;
         var origin = _avatar.Position;
-        if (Audible() && info.Sound != null) {
-            _audio.PlayOneShot(info.Sound);
+        var sound = flukes ? info.FlukeSound : info.Sound;
+        if (Audible() && sound != null) {
+            _audio.PlayOneShot(sound);
         }
 
         PlayCast(level, info, origin, direction);
         if (info.Blast != null) {
             var blast = _blasts[level];
             if (blast == null) {
-                blast = _blasts[level] = Object.Instantiate(info.Blast, _parking, false);
+                blast = _blasts[level] = Object.Instantiate(info.Blast, _loose.transform, false);
                 blast.SetActive(false);
                 var blastAnimator = blast.GetComponent<tk2dSpriteAnimator>();
                 if (blastAnimator != null) {
@@ -673,7 +759,7 @@ internal sealed class RemoteEffects {
             blast.GetComponent<tk2dSpriteAnimator>()?.PlayFromFrame(0);
         }
 
-        var fireball = FreeFireball(level, info);
+        var fireball = flukes ? null : FreeFireball(level, info);
         if (fireball == null) {
             return;
         }
@@ -709,7 +795,7 @@ internal sealed class RemoteEffects {
 
         var cast = _casts[level];
         if (cast == null) {
-            var copy = Object.Instantiate(info.Cast, _parking, false);
+            var copy = Object.Instantiate(info.Cast, _loose.transform, false);
             copy.SetActive(false);
             var nodes = copy.GetComponentsInChildren<Transform>(true);
             cast = _casts[level] = new CastCopy {
@@ -744,7 +830,7 @@ internal sealed class RemoteEffects {
         for (var i = level * FireballsPerLevel; i < (level + 1) * FireballsPerLevel; i++) {
             var fireball = _fireballs[i];
             if (fireball == null) {
-                var copy = Object.Instantiate(info.Projectile, _parking, false);
+                var copy = Object.Instantiate(info.Projectile, _loose.transform, false);
                 copy.SetActive(false);
                 var animator = copy.GetComponent<tk2dSpriteAnimator>();
                 fireball = _fireballs[i] = new Fireball {
@@ -870,6 +956,11 @@ internal sealed class RemoteEffects {
         var copy = Target(fsm, owner);
         return copy == _root ? null : copy;
     }
+
+    /// <summary>Si una acción apunta a la cámara (variable "CameraParent" de Spell Control, la de sus temblores).</summary>
+    private static bool IsCamera(FsmOwnerDefault owner) =>
+        owner is { OwnerOption: OwnerDefaultOption.SpecifyGameObject, GameObject: { UseVariable: true } variable } &&
+        variable.Name == "CameraParent";
 
     private static T Component<T>(GameObject target) where T : Component =>
         target != null ? target.GetComponent<T>() : null;
