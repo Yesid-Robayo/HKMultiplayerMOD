@@ -75,6 +75,7 @@ Rama de pruebas sobre 0.18.0 con `main` (0.18.3) ya juntado (merge `9dfbd12`). S
 | 1 (1 par: F/G no arrancó) | 0.18.3 + arreglos | 389 / 5 / 38 | effects, crystal-peak, kingdoms-edge (2), resting-grounds |
 | 2 (2 pares) | ídem | 391 / 2 / 39 | kingdoms-edge (2) |
 | 3 (2 pares) | ídem | 383 / 4 / 40 | effects, kingdoms-edge (3) |
+| Final (2 pares, D/E y F/G; `main`) | 0.18.9 | 387 / 0 / 39 | ninguna |
 
 Los NOCONC que quedan son de la ruta, no del mod: los `boss` (la pelea no empieza con `hitall`), salas sin
 enemigos vivos u objetos sin activar en un mundo ya recorrido. Los FALLO que quedan:
@@ -220,6 +221,17 @@ Nota: la copia F tenía ya 4 mundos y la ruta no podía crear el suyo; `M3Jefes2
     2,5 s después C ya no lo tiene y ve la barra del jefe.
   - Nota: `setup_session` de B/C carga partidas propias (no un mundo coop), así que ahí el progreso no se comparte
     (`falseKnightDreamDefeated` quedó en verdadero solo en C). No es un fallo.
+
+- **Pasada final de las rutas** (0.18.9, `bash tools/run-routes.sh --pairs 2` con D/E y F/G, `out/routes/20261009-131301`): 16 rutas, **387 OK, 0 FALLO, 39 NOCONC**. Los NOCONC son de la ruta: los `boss` (la
+  pelea no empieza con `hitall`), salas sin enemigos vivos u objetos sin activar en un mundo ya recorrido, piedras de
+  geo ya rotas y, nuevo, `waterways` no llega a `Waterways_01` por `top1` (los dos se quedan en `Ruins1_05b`; mirar la
+  puerta de la ruta).
+- Sin comprobar (punto 5): matar a un jefe con red mala (`netsim 120 30 2`): no quedó sitio (las copias D/E se
+  usaban para otra prueba y como mucho caben 4 juegos). Tampoco que las puertas de los sueños se abran a la vez al
+  ganar ni los demás sueños de jefe en vivo.
+- Ojo con `run-routes.sh --pairs 2` si un par está reservado: coge el siguiente (H/I) y crea esas copias. Pasó una
+  vez (se cerraron en seguida y se borraron `test-instances/h` e `i`); al crearlas, `setup_pair` borra el mundo
+  `Ruta` de `HollowKnightH` y copia los ajustes del registro de B a H e I.
 
 ## M6: paquete e instalador (9 de octubre, mañana; copias H/I)
 
