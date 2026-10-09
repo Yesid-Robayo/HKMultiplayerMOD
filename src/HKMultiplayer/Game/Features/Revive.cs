@@ -62,6 +62,15 @@ internal sealed class Revive {
     /// <summary>"X te está reviviendo" se quita si deja de llegar su progreso.</summary>
     private const float BeingRevivedTimeout = 0.6f;
 
+    /// <summary>
+    /// Un avatar a menos de esto del cuerpo (en horizontal y en vertical) tiene su nombre junto al "† Nombre": este sube
+    /// por encima del suyo, con este hueco (el alto de una línea y algo más).
+    /// </summary>
+    private const float LabelClearX = 3f;
+
+    private const float LabelClearY = 1.6f;
+    private const float LabelGap = 0.75f;
+
     /// <summary>Salas a las que el caído no sigue a su compañero: cinemáticas, sueños, Panteones y menús.</summary>
     private static readonly string[] NotFollowedPrefixes = {
         "Cinematic_", "Cutscene_", "Dream_", "GG_", "Menu_", "Quit_To_Menu", "Opening_Sequence", "Intro_Cutscene",
@@ -821,6 +830,26 @@ internal sealed class Revive {
                 _bodies[id].Destroy();
                 _bodies.Remove(id);
             }
+        }
+
+        // El nombre de quien está junto a un cuerpo (el que lo revive) y el "† Nombre" no se pisan: este sube
+        foreach (var pair in _bodies) {
+            var lift = 0f;
+            var bodyPosition = pair.Value.Position;
+            foreach (var member in _party.Members) {
+                if (member.Id == pair.Key || member.Id == _session.LocalId ||
+                    !_players.TryGetAvatarPosition(member.Id, out var avatar)) {
+                    continue;
+                }
+
+                var dx = avatar.x - bodyPosition.x;
+                var dy = avatar.y - bodyPosition.y;
+                if (Mathf.Abs(dx) < LabelClearX && Mathf.Abs(dy) < LabelClearY) {
+                    lift = Mathf.Max(lift, dy + LabelGap);
+                }
+            }
+
+            pair.Value.SetLabelLift(lift);
         }
     }
 

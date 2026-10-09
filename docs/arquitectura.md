@@ -350,7 +350,8 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   le asigna el compañero en pie al que seguir. El caballero del caído se oculta (sin colisión, sin gravedad,
   invencible, sin control; se reaplica cada frame) y, tras la animación de muerte, se pega al avatar del compañero, con
   las zonas de cámara emuladas; si el compañero cambia de sala, viaja detrás de él sin puerta de entrada (como la 0.7.3).
-  Su cuerpo (`DownedBody`: animación "Death" y luego "Prostrate", con "† Nombre") se ve en su sala. Junto a él, Focus
+  Su cuerpo (`DownedBody`: animación "Death" y luego "Prostrate", con "† Nombre") se ve en su sala; con un compañero
+  encima (el que lo revive), el "† Nombre" sube por encima del nombre de este para no pisarse. Junto a él, Focus
   cobra el alma al empezar (se devuelve si se suelta o te golpean), no cura (`CanFocus`) y al completarse se pide
   `ReviveRequest`; el host lo valida (en pie y en la sala del cuerpo) y responde `Revived` (cuerpo y vida). El progreso
   va a la sala con `ReviveProgress` (no fiable): el caído lee "X te está reviviendo". `BenchRest` al sentarse revive a

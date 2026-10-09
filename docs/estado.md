@@ -5,7 +5,7 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
 
 ## Versión y ramas
 
-- Rama principal `main`: **0.18.5**. M1 a M4 hechos; M5 juntado (primera y segunda parte) y sus jefes comprobados en
+- Rama principal `main`: **0.18.6**. M1 a M4 hechos; M5 juntado (primera y segunda parte) y sus jefes comprobados en
   vivo (ver abajo); amuletos y acompañantes del compañero en 0.18.0.
 - Ramas de agentes (en `.claude/worktrees/`, cada una con su rama `worktree-agent-...`):
   - `worktree-agent-a3fca8e41ebb6684d`: **M6, paquete para jugadores** (sobre 0.18.4, sin subir versión ni juntar).
@@ -123,10 +123,10 @@ enemigos vivos u objetos sin activar en un mundo ya recorrido. Los FALLO que que
 | Skins (POPKnight y Pale King; cambiar; "ver las de los demás") | OK (la textura llega tras la transferencia y el siguiente momento seguro, como está diseñado) |
 | Sueño: salida al ganar | No comprobado |
 
-Visto en las pruebas y **pendiente**: al volver del sueño del Campeón Fallido en Crossroads_10 (36,4, 48,4) la zona del
-cuerpo del Falso Caballero sale tapada de negro (`Mask 1`, `unmasker` en `Idle Stay`, y los `msk_generic`). En este
-mundo de prueba nunca se rompió la pared de esa zona (`Breakable Wall`); hay que mirarlo en una partida normal. Y,
-estético, en el PC del caído su etiqueta "† Nombre" se pisa con el nombre del compañero cuando este está encima.
+Visto en las pruebas: al volver del sueño del Campeón Fallido en Crossroads_10 (36,4, 48,4) la zona del cuerpo del
+Falso Caballero sale tapada de negro (`Mask 1`, `unmasker` en `Idle Stay`, y los `msk_generic`); era del mundo de
+prueba (ver "Pendientes de la prueba final"). Y, estético, en el PC del caído su etiqueta "† Nombre" se pisaba con el
+nombre del compañero cuando este estaba encima (arreglado en 0.18.6).
 
 ### Arreglos (commits de la rama)
 
@@ -168,6 +168,19 @@ Nota: la copia F tenía ya 4 mundos y la ruta no podía crear el suyo; `M3Jefes2
 - Sin explicar: en dos pasadas con dos lanzadores de rutas a la vez sobre el mismo par (una tarea anterior no se
   había parado) salió en el invitado un `NullReferenceException` en `GameObject.get_scene` ("Error en la partida") y un
   `scene-data-sync` distinto en Hive_01. No se repitió en las pasadas limpias.
+- **Etiquetas solapadas del caído**, 0.18.6. Causa: el "† Nombre" del cuerpo y el nombre del avatar del compañero van
+  los dos a 1,3 sobre su punto; con el compañero encima del cuerpo (reviviéndolo) se pisaban. Arreglo
+  (`Revive.UpdateBodies` y `DownedBody.SetLabelLift`): si un avatar está a menos de 3 en horizontal y 1,6 en vertical
+  del cuerpo, el "† Nombre" sube por encima del nombre de ese avatar (0,75 más arriba); al irse vuelve a su sitio.
+  Comprobado con capturas (F/G): con el host encima, "† Invitado" queda sobre "Host"; con el host a 4 de distancia, a
+  la altura de siempre.
+- **Zona tapada al volver del sueño del Campeón Fallido (Crossroads_10)**: **del mundo de prueba, no del mod**. La
+  puerta de vuelta (`door_dreamReturn`, 36,4, 47,7) está dentro de la zona que tapa `Breakable Wall/Masks` (`Mask 1` y
+  sus `msk_generic`). `Mask 1` no tiene caja (su `Trigger2dEvent` de `Idle Stay` nunca salta): lo único que la quita
+  es esa pared, al romperla (`Break` → `UNCOVER`) o al cargar la sala ya rota (`Activated` apaga `Masks`). Con la pared
+  sin romper, en (36,4, 48,4) `covers` lista los `msk_generic`; con la pared rota (`sdset Crossroads_10 Breakable
+  Wall`) y entrando por `door_dreamReturn`, ya no hay nada que tape. La pared es un objeto del mundo (`SceneObjectSync`):
+  rota por uno, rota para todos.
 
 ## M6: paquete e instalador (9 de octubre, mañana; copias H/I)
 

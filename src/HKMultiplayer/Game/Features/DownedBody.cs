@@ -13,7 +13,15 @@ internal sealed class DownedBody {
     /// <summary>Tendido boca abajo (el mismo del caballero al despertar en el suelo).</summary>
     private const string LyingClip = "Prostrate";
 
+    /// <summary>Altura del nombre sobre el cuerpo (la misma que el nombre de los avatares sobre el suyo).</summary>
+    private const float LabelHeight = 1.3f;
+
     private readonly GameObject _root;
+
+    /// <summary>El "† Nombre" (null si no hay fuente).</summary>
+    private Transform _label;
+
+    private float _labelLift;
 
     public DownedBody(string name, Vector3 position, HeroController hero, Font font) {
         _root = new GameObject($"Cuerpo de {name}");
@@ -57,8 +65,9 @@ internal sealed class DownedBody {
         }
 
         var label = new GameObject("Nombre");
+        _label = label.transform;
         label.transform.SetParent(_root.transform, false);
-        label.transform.localPosition = new Vector3(0f, 1.3f, 0f);
+        label.transform.localPosition = new Vector3(0f, LabelHeight, 0f);
         var text = label.AddComponent<TextMesh>();
         text.font = font;
         text.text = $"† {name}";
@@ -76,6 +85,19 @@ internal sealed class DownedBody {
     }
 
     public Vector3 Position => _root.transform.position;
+
+    /// <summary>
+    /// Sube el "† Nombre" sobre su altura normal (0: en su sitio). Con un compañero encima del cuerpo (el que lo revive),
+    /// su nombre quedaba a la misma altura y se pisaban.
+    /// </summary>
+    public void SetLabelLift(float lift) {
+        if (_label == null || Mathf.Abs(lift - _labelLift) < 0.01f) {
+            return;
+        }
+
+        _labelLift = lift;
+        _label.localPosition = new Vector3(0f, LabelHeight + lift, 0f);
+    }
 
     public void Destroy() {
         if (_root != null) {
