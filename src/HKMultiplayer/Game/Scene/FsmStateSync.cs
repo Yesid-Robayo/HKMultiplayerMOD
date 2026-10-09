@@ -1153,7 +1153,9 @@ internal sealed class FsmStateSync {
         }
 
         foreach (var player in _session.Players) {
-            if (!player.IsLocal && player.Scene == _scene && !item.ConvoDone.Contains(player.Id)) {
+            // Un caído no lee el diálogo: no se le espera
+            if (!player.IsLocal && player.Scene == _scene && !item.ConvoDone.Contains(player.Id) &&
+                !Features.PartyState.IsDown(player.Id)) {
                 return false;
             }
         }
@@ -1221,7 +1223,8 @@ internal sealed class FsmStateSync {
         }
 
         foreach (var player in _session.Players) {
-            if (player.IsLocal || player.Scene != _scene) {
+            // Un caído no bloquea la espera
+            if (player.IsLocal || player.Scene != _scene || Features.PartyState.IsDown(player.Id)) {
                 continue;
             }
 
@@ -1272,7 +1275,7 @@ internal sealed class FsmStateSync {
         bounds.Expand(new Vector3(0.5f, 0.5f, 1000f));
         var names = new List<string>();
         foreach (var player in _session.Players) {
-            if (!player.IsLocal && player.Scene == _scene &&
+            if (!player.IsLocal && player.Scene == _scene && !Features.PartyState.IsDown(player.Id) &&
                 (!_players.TryGetAvatarObject(player.Id, out var avatar) || !bounds.Contains(avatar.transform.position))) {
                 names.Add(player.Name);
             }

@@ -247,8 +247,11 @@ internal sealed class PlayerSync {
         var visible = 0;
         var heroReady = RefreshHero();
         var z = heroReady ? _hero.transform.position.z : 0f;
+        var showNames = Features.HostSettings.Current.ShowNames;
         foreach (var remote in _remotes.Values) {
-            var sameScene = heroReady && _localScene.Length > 0 && remote.Player.Scene == _localScene;
+            // Un caído no se dibuja: se ve su cuerpo (Features.Revive) y su caballero va oculto pegado al compañero
+            var sameScene = heroReady && _localScene.Length > 0 && remote.Player.Scene == _localScene &&
+                            !Features.PartyState.IsDown(remote.Player.Id);
             if (!sameScene) {
                 if (remote.Avatar != null) {
                     DestroyAvatar(remote);
@@ -263,6 +266,7 @@ internal sealed class PlayerSync {
             }
 
             remote.Avatar ??= new RemoteAvatar(remote.Player.Name, _hero, Font);
+            remote.Avatar.SetNameVisible(showNames);
             remote.Avatar.Apply(state, _sprites, z);
             _effects.UpdateRemote(remote.Player, remote.Avatar, remote.Buffer.RenderTick);
             visible++;

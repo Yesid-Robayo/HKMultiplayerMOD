@@ -61,6 +61,9 @@ internal sealed class EnemySync {
 
     private const int MaxEffectVectors = 16;
 
+    /// <summary>Modo de prueba: cada efecto reproducido en una marioneta se registra.</summary>
+    private static readonly bool TestMode = HKMultiplayer.Testing.TestDriver.IsEnabled();
+
     /// <summary>Lo más a menudo que se reenvía el mismo aviso a un mismo enemigo (hay zonas que avisan cada frame).</summary>
     private const float EventForwardInterval = 0.25f;
 
@@ -1442,6 +1445,10 @@ internal sealed class EnemySync {
 
         // Solo sus efectos (sonido y arena); la lógica de la marioneta sigue parada
         var state = states[stateIndex];
+        if (TestMode) {
+            Log.Info($"[TEST] efecto de enemigo {enemy.Fsms[fsmIndex].gameObject.name}/{enemy.Fsms[fsmIndex].FsmName}/{state.Name}");
+        }
+
         foreach (var action in state.Actions) {
             if (!action.Enabled || !IsEffectAction(action)) {
                 continue;
@@ -1512,20 +1519,23 @@ internal sealed class EnemySync {
                 continue;
             }
 
+            // Un caído no se queda con enemigos: pasan enseguida a quien sigue en pie
+            var current = ControllerOf(enemy, roomOwner);
+            var currentDown = Features.PartyState.IsDown(current);
             var interval = enemy.Health.hp >= BossHp ? BossSwitchInterval : SwitchInterval;
-            if (now - enemy.LastSwitch < interval) {
+            if (now - enemy.LastSwitch < interval && !currentDown) {
                 continue;
             }
 
             var position = enemy.Transform.position;
-            var current = ControllerOf(enemy, roomOwner);
-            var currentDistance = TryGetPlayerPosition(current, out var currentPosition)
+            var currentDistance = !currentDown && TryGetPlayerPosition(current, out var currentPosition)
                 ? Vector2.Distance(position, currentPosition)
                 : float.MaxValue;
             var nearest = current;
             var nearestDistance = currentDistance;
             foreach (var player in _session.Players) {
-                if (player.Scene != _scene || player.Id == current || !TryGetPlayerPosition(player.Id, out var playerPosition)) {
+                if (player.Scene != _scene || player.Id == current || Features.PartyState.IsDown(player.Id) ||
+                    !TryGetPlayerPosition(player.Id, out var playerPosition)) {
                     continue;
                 }
 
@@ -1536,7 +1546,7 @@ internal sealed class EnemySync {
                 }
             }
 
-            if (nearest != current && currentDistance - nearestDistance > SwitchMargin) {
+            if (nearest != current && (currentDown || currentDistance - nearestDistance > SwitchMargin)) {
                 _controlOut.Add((enemy.Id, nearest));
                 ApplyControl(enemy, nearest);
             }
@@ -1956,7 +1966,8 @@ internal sealed class EnemySync {
         }
 
         foreach (var player in _session.Players) {
-            if (player.IsLocal || player.Scene != _scene) {
+            // Un caído no bloquea la espera
+            if (player.IsLocal || player.Scene != _scene || Features.PartyState.IsDown(player.Id)) {
                 continue;
             }
 
@@ -1973,7 +1984,7 @@ internal sealed class EnemySync {
         var position = enemy.Transform.position;
         var names = new List<string>();
         foreach (var player in _session.Players) {
-            if (!player.IsLocal && player.Scene == _scene &&
+            if (!player.IsLocal && player.Scene == _scene && !Features.PartyState.IsDown(player.Id) &&
                 (_players == null || !_players.TryGetAvatarObject(player.Id, out var avatar) ||
                  ((Vector2) (avatar.transform.position - position)).sqrMagnitude > WakeRange * WakeRange)) {
                 names.Add(player.Name);

@@ -17,6 +17,11 @@ internal sealed class RemoteAvatar {
     private readonly SpriteFlash _flash;
     private readonly float _scale;
 
+    /// <summary>Nombre encima (se oculta si el host lo pide).</summary>
+    private GameObject _label;
+
+    private bool _nameVisible = true;
+
     private tk2dSpriteCollectionData _collection;
     private int _spriteId = -1;
     private bool _facingRight;
@@ -50,6 +55,7 @@ internal sealed class RemoteAvatar {
 
         if (font != null) {
             var label = new GameObject("Nombre");
+            _label = label;
             label.transform.SetParent(_root.transform, false);
             label.transform.localPosition = new Vector3(0f, 1.3f, 0f);
             var text = label.AddComponent<TextMesh>();
@@ -101,6 +107,16 @@ internal sealed class RemoteAvatar {
     }
 
     public Vector3 Position => _root.transform.position;
+
+    /// <summary>Muestra u oculta el nombre (ajuste del host "Nombres").</summary>
+    public void SetNameVisible(bool visible) {
+        if (visible == _nameVisible || _label == null) {
+            return;
+        }
+
+        _nameVisible = visible;
+        _label.SetActive(visible);
+    }
 
     /// <summary>Lo que se voltea al mirar a un lado: sus efectos van debajo, como en el caballero.</summary>
     public Transform SpriteTransform => _spriteTransform;

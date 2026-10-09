@@ -456,6 +456,12 @@ internal sealed class TestDriver : MonoBehaviour {
                         Log.Info($"{Tag}  bool {variable.Name}={variable.Value}");
                     }
 
+                    var objectVariables = fsm.FsmVariables.GameObjectVariables;
+                    for (var v = 0; v < objectVariables.Length; v++) {
+                        var value = objectVariables[v].Value;
+                        Log.Info($"{Tag}  objeto {v} {objectVariables[v].Name}={(value != null ? value.name : "-")}");
+                    }
+
                     var globals = string.Join(", ", fsm.FsmGlobalTransitions.Select(tr => $"{tr.EventName}->{tr.ToState}"));
                     Log.Info($"{Tag}  globales: {globals}");
 
@@ -638,6 +644,140 @@ internal sealed class TestDriver : MonoBehaviour {
                 var ui = UIManager.instance;
                 var root = args.Length > 2 ? (args[2] == "/" ? ui.UICanvas.transform : args[2] == "@pause" ? ui.pauseMenuScreen.transform : ui.UICanvas.transform.Find(args[2])) : ui.mainMenuScreen.transform;
                 Dump(root, 0, args.Length > 1 ? int.Parse(args[1]) : 4);
+                break;
+            case "mppage":
+                // mppage <partida|ajustes|ajustes2|compañeros>: página del panel Multijugador de la pausa
+                if (HKMultiplayer.UI.SessionMenu.Instance?.TestPage(args[1]) != true) {
+                    Log.Warn($"{Tag}no hay página '{args[1]}'");
+                }
+
+                break;
+            case "mpoption":
+                // mpoption <inicio de la etiqueta>[|pasos]: avanza esa opción del menú visible como la flecha derecha
+                var optionArgs = string.Join(" ", args.Skip(1)).Split('|');
+                var optionValue = VisibleMenu()?.TestOption(optionArgs[0], optionArgs.Length > 1 ? int.Parse(optionArgs[1]) : 1);
+                Log.Info(optionValue != null ? $"{Tag}opción {optionArgs[0]} = {optionValue}" : $"{Tag}no hay opción '{optionArgs[0]}'");
+                break;
+            case "mpoptions":
+                // Opciones del menú visible con su valor
+                foreach (var line in VisibleMenu()?.TestDescribeOptions() ?? Enumerable.Empty<string>()) {
+                    Log.Info($"{Tag}opción {line}");
+                }
+
+                break;
+            case "settings":
+                // Ajustes de la partida que rigen en este PC
+                Log.Info($"{Tag}ajustes {HKMultiplayer.Game.Features.HostSettings.Current.Describe()}");
+                break;
+            case "party":
+                // Estado de revivir: caído, cuerpo, viaje, progreso y estado de cada jugador
+                Log.Info($"{Tag}revivir {runner.Revive.Describe()}");
+                break;
+            case "focus":
+                // focus <segundos>: como mantener Focus (para revivir)
+                runner.Revive.TestFocus(ParseFloat(args[1]));
+                break;
+            case "tpbody":
+                // El caballero va junto al cuerpo de un caído de la sala
+                if (runner.Revive.TestBodyPosition(out var bodyPosition)) {
+                    hero.transform.position = new Vector3(bodyPosition.x, bodyPosition.y + 0.2f, hero.transform.position.z);
+                } else {
+                    Log.Warn($"{Tag}no hay cuerpos en la sala");
+                }
+
+                break;
+            case "heal":
+                // Vida llena como al curarse (el HUD del juego se actualiza, a diferencia de pdset)
+                hero.AddHealth(PlayerData.instance.maxHealth - PlayerData.instance.health);
+                break;
+            case "soul":
+                // soul <cantidad>: alma para el caballero (como al golpear)
+                hero.AddMPCharge(int.Parse(args[1]));
+                break;
+            case "shades":
+                Log.Info($"{Tag}sombras {runner.Shades.Describe()}");
+                break;
+            case "killshade":
+                // Mata la copia de la sombra de un compañero en la sala, como al golpearla
+                Log.Info($"{Tag}sombra de compañero derrotada: {(runner.Shades.TestKillCopy() ? "sí" : "no había")}");
+                break;
+            case "bossbar":
+                Log.Info($"{Tag}jefes {runner.BossBar.Describe()}");
+                break;
+            case "vitals":
+                // Vida y alma recibidas de cada compañero
+                foreach (var member in runner.Party.Members) {
+                    var vitals = runner.Vitals.Get(member.Id);
+                    Log.Info($"{Tag}vida {member.Name}: " + (vitals == null
+                        ? "sin datos"
+                        : $"{vitals.Health}/{vitals.MaxHealth} azules={vitals.Blue} alma={vitals.Soul}/{vitals.MaxSoul} " +
+                          $"zona={HKMultiplayer.Game.Features.Zones.Name(vitals.Zone)}"));
+                }
+
+                break;
+            case "spriteof":
+                // spriteof <nombre>: sprite que muestra ahora cada objeto con ese nombre (p. ej. "Health 1" del HUD)
+                foreach (var drawn in Resources.FindObjectsOfTypeAll<tk2dSprite>()
+                             .Where(t => t.gameObject.scene.IsValid() && t.name == string.Join(" ", args.Skip(1)))) {
+                    var definition = drawn.CurrentSprite;
+                    Log.Info($"{Tag}muestra {drawn.name}: {drawn.Collection?.name}/{definition?.name} " +
+                             $"escala=({drawn.transform.lossyScale.x:0.00},{drawn.transform.lossyScale.y:0.00})");
+                }
+
+                break;
+            case "collections":
+                // collections <texto>: colecciones de sprites cargadas cuyo nombre lo contiene
+                foreach (var collection in Resources.FindObjectsOfTypeAll<tk2dSpriteCollectionData>()
+                             .Where(c => c.name.IndexOf(string.Join(" ", args.Skip(1)), StringComparison.OrdinalIgnoreCase) >= 0)) {
+                    Log.Info($"{Tag}colección {collection.name} ({collection.spriteDefinitions.Length} sprites)");
+                }
+
+                break;
+            case "hudsprite":
+                // hudsprite <full|empty|blue> <sprite>: cambia el sprite de las máscaras del HUD del compañero
+                var kind = args[1] switch {
+                    "empty" => HKMultiplayer.UI.HudSprites.Kind.Empty,
+                    "blue" => HKMultiplayer.UI.HudSprites.Kind.Blue,
+                    _ => HKMultiplayer.UI.HudSprites.Kind.Full
+                };
+                Log.Info($"{Tag}sprite {args[2]}: {(HKMultiplayer.UI.HudSprites.Override(kind, args[2]) ? "puesto" : "no existe")}");
+                runner.Hud.RefreshSprites();
+                break;
+            case "hudrot":
+                // hudrot <grados>: giro de los sprites guardados girados en el atlas
+                HKMultiplayer.UI.HudSprites.RotatedAngle = ParseFloat(args[1]);
+                runner.Hud.RefreshSprites();
+                break;
+            case "sprites":
+                // sprites <colección>[|texto]: sprites de una colección de tk2d (p. ej. "HUD Cln") con su tamaño
+                var spriteArgs = string.Join(" ", args.Skip(1)).Split('|');
+                foreach (var collection in Resources.FindObjectsOfTypeAll<tk2dSpriteCollectionData>()
+                             .Where(c => c.name == spriteArgs[0] || c.spriteCollectionName == spriteArgs[0]).Take(1)) {
+                    foreach (var definition in collection.spriteDefinitions) {
+                        if (spriteArgs.Length > 1 &&
+                            definition.name.IndexOf(spriteArgs[1], StringComparison.OrdinalIgnoreCase) < 0) {
+                            continue;
+                        }
+
+                        var tex = definition.material != null ? definition.material.mainTexture : null;
+                        Log.Info($"{Tag}sprite {definition.name} girado={definition.flipped} " +
+                                 $"uv=[{string.Join(" ", definition.uvs.Select(uv => $"{uv.x:0.000},{uv.y:0.000}"))}] " +
+                                 $"textura={(tex != null ? $"{tex.name} {tex.width}x{tex.height}" : "-")}");
+                    }
+                }
+
+                break;
+            case "clips":
+                // clips [texto]: animaciones del caballero con sus fotogramas
+                foreach (var clip in hero.GetComponent<tk2dSpriteAnimator>().Library.clips) {
+                    if (clip == null || args.Length > 1 && clip.name.IndexOf(args[1], StringComparison.OrdinalIgnoreCase) < 0) {
+                        continue;
+                    }
+
+                    Log.Info($"{Tag}clip {clip.name} modo={clip.wrapMode} fps={clip.fps} fotogramas=" +
+                             string.Join(",", clip.frames.Select(f => f.spriteCollection.spriteDefinitions[f.spriteId].name)));
+                }
+
                 break;
             case "effects":
                 // Efectos del otro jugador enviados, recibidos y reproducidos

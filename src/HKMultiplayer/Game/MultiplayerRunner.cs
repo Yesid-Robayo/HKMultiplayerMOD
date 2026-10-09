@@ -41,6 +41,23 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     public Scene.HazardSync Hazards { get; } = new();
 
+    // ---- Funciones del coop (M5) ----
+
+    /// <summary>Estado de cada jugador (en pie, caído...): lo decide el host.</summary>
+    public Features.PartyState Party { get; } = new();
+
+    public Features.Vitals Vitals { get; } = new();
+
+    public Features.Revive Revive { get; } = new();
+
+    public Features.ShadeSync Shades { get; } = new();
+
+    public Features.PartnerHud Hud { get; } = new();
+
+    public Features.BossBar BossBar { get; } = new();
+
+    public Features.PartyActions Actions { get; } = new();
+
     /// <summary>El jugador salió de un mundo ajeno: al llegar al menú se deja la partida.</summary>
     private bool _leaveOnMenu;
 
@@ -82,6 +99,12 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             _lastLoadedScene = scene;
         };
         CoopSaves.Install();
+        // Ganchos de las funciones del coop ya al cargar el mod (después, el juego ya podría haber compilado lo que los
+        // llama con el método enganchado copiado dentro)
+        Features.Revive.InstallHooks();
+        Features.ShadeSync.InstallHooks();
+        Features.BossBar.InstallHooks();
+        Features.Difficulty.Install();
         CoopSaves.ExitedWorld += () => {
             // El host salió de su mundo (los personajes ya se recogieron al volver al menú): la partida se cierra
             if (_leaveOnMenu || Session is { IsHost: true }) {
@@ -114,6 +137,10 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         SessionMenu.UpdateInstalled(Session != null);
         World.Update();
         Progress.Update();
+        if (Session != null) {
+            Features.HostSettings.Current.Update();
+            Actions.Update();
+        }
     }
 
     private void LateUpdate() {
@@ -148,6 +175,12 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             session.Update();
             Players.UpdateAvatars();
             Enemies.Update(scene);
+            Vitals.Update();
+            UI.HudCanvas.Sync();
+            Revive.Update(scene);
+            Shades.Update(scene);
+            Hud.Update(scene);
+            BossBar.Update(scene);
         } catch (Exception e) {
             Log.Error($"Error en la partida: {e}");
         }
@@ -157,14 +190,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             _closing = null;
             if (Session == closing) {
                 Session = null;
-                Players.Detach();
-        World.Detach();
-        Progress.Detach();
-        SceneObjects.Detach();
-        Enemies.Detach();
-        MovingObjects.Detach();
-        Breakables.Detach();
-        Hazards.Detach();
+                DetachAll();
                 closing.Dispose();
             }
         }
@@ -355,6 +381,21 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
         var session = Session;
         Session = null;
+        DetachAll();
+        session.Dispose();
+        SetStatus(session.IsHost ? "Partida cerrada" : "Desconectado");
+    }
+
+    /// <summary>Cada capa deja la partida (las funciones del coop primero: usan las demás).</summary>
+    private void DetachAll() {
+        Actions.Detach();
+        BossBar.Detach();
+        Hud.Detach();
+        Shades.Detach();
+        Revive.Detach();
+        Vitals.Detach();
+        Features.HostSettings.Current.Detach();
+        Party.Detach();
         Players.Detach();
         World.Detach();
         Progress.Detach();
@@ -363,11 +404,11 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         MovingObjects.Detach();
         Breakables.Detach();
         Hazards.Detach();
-        session.Dispose();
-        SetStatus(session.IsHost ? "Partida cerrada" : "Desconectado");
     }
 
     private void Wire(GameSession session) {
+        // El estado de cada jugador primero: las demás funciones lo consultan al entrar alguien
+        Party.Attach(session);
         Players.Attach(session);
         World.Attach(session);
         Progress.Attach(session);
@@ -376,6 +417,13 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         MovingObjects.Attach(session, Players);
         Breakables.Attach(session);
         Hazards.Attach(session);
+        Features.HostSettings.Current.Attach(session);
+        Vitals.Attach(session);
+        Revive.Attach(session, Party, Players, Vitals);
+        Shades.Attach(session);
+        Hud.Attach(session, Party, Vitals, Players, Revive);
+        BossBar.Attach();
+        Actions.Attach(session, Revive);
         session.Connected += () => SetStatus($"Conectado como jugador {session.LocalId}");
         session.Disconnected += reason => {
             // Al salir uno mismo (Leave) la sesión ya no es la actual: nada que avisar

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using GlobalEnums;
 using HKMultiplayer.Game;
+using HKMultiplayer.Game.Features;
 using HKMultiplayer.Game.World;
 using HKMultiplayer.Util;
 using UnityEngine;
@@ -13,15 +14,29 @@ using UnityEngine.UI;
 namespace HKMultiplayer.UI;
 
 /// <summary>
-/// "Multijugador" en el menú de pausa (solo durante una partida multijugador): código de la partida, IP (oculta hasta
-/// pedirla), jugadores con su ping y cerrar o salir de la partida. El botón es una copia del de "Opciones" de la pausa
-/// y la pantalla tiene el mismo estilo que el resto de menús.
+/// "Multijugador" en el menú de pausa (solo durante una partida multijugador). Páginas: Partida (código, IP oculta hasta
+/// pedirla, jugadores con su ping y cerrar o salir), Ajustes de la partida (los decide el host; los invitados los ven sin
+/// poder cambiarlos) y Compañeros (vida de cada uno, dar geo, desatascarse y recargar la sala). El botón es una copia del
+/// de "Opciones" de la pausa y la pantalla tiene el mismo estilo que el resto de menús.
 /// </summary>
 internal sealed class SessionMenu : GameStyledMenu {
     public static SessionMenu Instance { get; private set; }
 
     private const int MainPage = 0;
     private const int LeavePage = 1;
+    private const int SettingsPage = 2;
+    private const int MoreSettingsPage = 3;
+    private const int PartnersPage = 4;
+
+    /// <summary>Ajustes de la primera página (dificultad y revivir); el resto va en la segunda.</summary>
+    private const int FirstPageOptions = 8;
+
+    private const int MaxPartnerRows = 3;
+
+    /// <summary>Cantidades de geo que se pueden dar (0 = todo).</summary>
+    private static readonly int[] GeoAmounts = { 10, 50, 100, 200, 500, 0 };
+
+    private static readonly string[] GeoLabels = { "10", "50", "100", "200", "500", "Todo" };
     private const string ButtonName = "MultiplayerButton";
 
     private static PauseMenuButton _pauseButton;
@@ -39,6 +54,16 @@ internal sealed class SessionMenu : GameStyledMenu {
     private MenuButton _leaveConfirm;
     private bool _addressVisible;
     private float _nextRefresh;
+
+    private readonly MenuOptionHorizontal[] _settings = new MenuOptionHorizontal[HostSettings.Options.Length];
+    private Text _settingsNote;
+    private Text _moreSettingsNote;
+    private readonly Text[] _partnerTexts = new Text[MaxPartnerRows];
+    private readonly MenuButton[] _partnerButtons = new MenuButton[MaxPartnerRows];
+    private readonly ushort[] _partnerIds = new ushort[MaxPartnerRows];
+    private Text _partnersMessage;
+    private Text _ownGeo;
+    private int _geoIndex = 2;
 
     /// <summary>
     /// Crea el botón de la pausa y la pantalla si faltan, y muestra el botón solo durante una partida multijugador.
@@ -169,8 +194,11 @@ internal sealed class SessionMenu : GameStyledMenu {
         AddSpace(main, 10);
         AddText(main, "Jugadores", 40, title: true);
         _players = AddText(main, string.Empty, 36);
-        _players.GetComponent<LayoutElement>().preferredHeight = 200;
+        _players.GetComponent<LayoutElement>().preferredHeight = 150;
         _players.alignment = TextAnchor.UpperCenter;
+        var pages = AddRow(main, "Páginas", 84, 10);
+        AddButton(pages, "Ajustes de la partida", () => ShowPage(SettingsPage), 36, 620);
+        AddButton(pages, "Compañeros", () => ShowPage(PartnersPage), 36, 520);
         _leave = AddButton(main, "Cerrar partida", () => ShowPage(LeavePage));
 
         var leave = NewPage(LeavePage);
@@ -180,7 +208,84 @@ internal sealed class SessionMenu : GameStyledMenu {
         AddButton(leave, "Cancelar", () => ShowPage(MainPage));
         _leaveConfirm = AddButton(leave, "Cerrar partida", Leave);
 
+        BuildSettingsPages();
+        BuildPartnersPage();
         ShowPage(MainPage, instant: true);
+    }
+
+    /// <summary>Ajustes de la partida en dos páginas (dificultad y revivir; pantalla y permisos).</summary>
+    private void BuildSettingsPages() {
+        var settings = HostSettings.Current;
+        var first = NewPage(SettingsPage);
+        _settingsNote = AddText(first, string.Empty, 32);
+        var second = NewPage(MoreSettingsPage);
+        _moreSettingsNote = AddText(second, string.Empty, 32);
+        var options = HostSettings.Options;
+        for (var i = 0; i < options.Length; i++) {
+            var option = options[i];
+            var page = i < FirstPageOptions ? first : second;
+            _settings[i] = AddOption(page, option.Label, option.Labels, settings.IndexOf(option),
+                index => HostSettings.Current.Set(option, index));
+        }
+
+        AddSpace(first, 6);
+        AddButton(first, "Más ajustes", () => ShowPage(MoreSettingsPage), 36);
+        AddSpace(second, 6);
+        AddButton(second, "Ajustes anteriores", () => ShowPage(SettingsPage), 36);
+    }
+
+    /// <summary>Compañeros: su vida y alma, dar geo, desatascarse y recargar la sala.</summary>
+    private void BuildPartnersPage() {
+        var page = NewPage(PartnersPage);
+        _ownGeo = AddText(page, string.Empty, 34);
+        AddOption(page, "Geo a dar", GeoLabels, _geoIndex, index => _geoIndex = index);
+        for (var i = 0; i < MaxPartnerRows; i++) {
+            var row = i;
+            _partnerTexts[i] = AddText(page, string.Empty, 32);
+            _partnerButtons[i] = AddButton(page, "Dar geo", () => GiveGeo(row), 34);
+        }
+
+        AddSpace(page, 6);
+        var help = AddRow(page, "Ayuda", 84, 10);
+        AddButton(help, "Desatascar", () => Resume(MultiplayerRunner.Instance.Actions.RequestUnstuck()), 36, 420);
+        AddButton(help, "Recargar sala", () => Resume(MultiplayerRunner.Instance.Actions.RequestReload()), 36, 420);
+        _partnersMessage = AddText(page, string.Empty, 30);
+    }
+
+    private void GiveGeo(int row) {
+        var pd = PlayerData.instance;
+        var amount = GeoAmounts[_geoIndex];
+        if (amount == 0 && pd != null) {
+            amount = pd.geo;
+        }
+
+        var error = MultiplayerRunner.Instance.Actions.TryGiftGeo(_partnerIds[row], amount);
+        var name = PartyState.Current?.Get(_partnerIds[row])?.Name ?? "?";
+        _partnersMessage.text = error ?? $"Le diste {amount} geo a {name}";
+        Refresh();
+    }
+
+    /// <summary>Si la acción se aceptó, vuelve al juego (se hace al quitar la pausa); si no, dice por qué.</summary>
+    private void Resume(string error) {
+        if (error != null) {
+            _partnersMessage.text = error;
+            return;
+        }
+
+        UIManager.instance.StartCoroutine(ResumeRoutine());
+    }
+
+    private IEnumerator ResumeRoutine() {
+        Busy = true;
+        var ui = UIManager.instance;
+        yield return ui.StartCoroutine(ui.HideMenu(Screen));
+        ui.UIGoToPauseMenu();
+        Busy = false;
+        // Quitar la pausa como con Esc (la acción se hace al volver a jugar)
+        yield return new WaitForSecondsRealtime(0.3f);
+        if (GameManager.instance != null && GameManager.instance.isPaused) {
+            ui.TogglePauseGame();
+        }
     }
 
     // =====================================================================================================
@@ -211,6 +316,11 @@ internal sealed class SessionMenu : GameStyledMenu {
 
     protected override void OnBack() {
         if (Busy) {
+            return;
+        }
+
+        if (CurrentPage == MoreSettingsPage) {
+            ShowPage(SettingsPage);
             return;
         }
 
@@ -287,6 +397,76 @@ internal sealed class SessionMenu : GameStyledMenu {
         _leaveDetail.text = session.IsHost
             ? "Los demás jugadores se desconectarán. Tú sigues jugando en tu mundo."
             : "Tu personaje se guarda en el mundo del host y vuelves al menú principal.";
+        RefreshSettings(session.IsHost);
+        RefreshPartners(session);
+    }
+
+    /// <summary>Los valores que rigen (en un invitado, los que dice el host) y si se pueden cambiar.</summary>
+    private void RefreshSettings(bool editable) {
+        var settings = HostSettings.Current;
+        var options = HostSettings.Options;
+        for (var i = 0; i < options.Length; i++) {
+            var option = _settings[i];
+            if (option == null) {
+                continue;
+            }
+
+            if (option.interactable != editable) {
+                option.interactable = editable;
+            }
+
+            if (option.selectedOptionIndex != settings.IndexOf(options[i])) {
+                SetOptionValue(option, settings.IndexOf(options[i]));
+            }
+        }
+
+        var note = editable
+            ? "Se aplican a todos al momento y se guardan en este mundo"
+            : "Los decide el host: aquí solo se ven";
+        _settingsNote.text = note;
+        _moreSettingsNote.text = note;
+    }
+
+    private void RefreshPartners(Session.GameSession session) {
+        var pd = PlayerData.instance;
+        _ownGeo.text = pd != null ? $"Tu geo: {pd.geo}" : string.Empty;
+        var party = PartyState.Current;
+        var vitals = MultiplayerRunner.Instance.Vitals;
+        var row = 0;
+        if (party != null) {
+            foreach (var member in party.Members) {
+                if (member.Id == session.LocalId || row >= MaxPartnerRows) {
+                    continue;
+                }
+
+                var entry = vitals.Get(member.Id);
+                var text = new StringBuilder(member.Name);
+                if (member.Status == PlayerStatus.Downed) {
+                    text.Append("  ·  caído");
+                } else if (entry != null) {
+                    text.Append($"  ·  {entry.Health}/{entry.MaxHealth} máscaras");
+                    if (entry.Blue > 0) {
+                        text.Append($" (+{entry.Blue} azules)");
+                    }
+
+                    text.Append($"  ·  {entry.Soul} de alma  ·  {Zones.Name(entry.Zone)}");
+                }
+
+                _partnerIds[row] = member.Id;
+                _partnerTexts[row].text = text.ToString();
+                _partnerTexts[row].gameObject.SetActive(true);
+                _partnerButtons[row].gameObject.SetActive(true);
+                SetButtonText(_partnerButtons[row], $"Dar geo a {member.Name}");
+                _partnerButtons[row].interactable = HostSettings.Current.AllowGeoGifts;
+                row++;
+            }
+        }
+
+        for (var i = row; i < MaxPartnerRows; i++) {
+            _partnerTexts[i].gameObject.SetActive(i == 0);
+            _partnerTexts[i].text = i == 0 ? "No hay compañeros conectados" : string.Empty;
+            _partnerButtons[i].gameObject.SetActive(false);
+        }
     }
 
     private void CopyCode() {
@@ -317,4 +497,21 @@ internal sealed class SessionMenu : GameStyledMenu {
 
     /// <summary>Abre la pantalla como el botón de la pausa (modo de prueba).</summary>
     public void TestOpen() => OpenFromPause();
+
+    /// <summary>Muestra una página (modo de prueba): partida, ajustes, ajustes2, compañeros.</summary>
+    public bool TestPage(string name) {
+        var page = name switch {
+            "partida" => MainPage,
+            "ajustes" => SettingsPage,
+            "ajustes2" => MoreSettingsPage,
+            "compañeros" or "companeros" => PartnersPage,
+            _ => -1
+        };
+        if (page < 0) {
+            return false;
+        }
+
+        ShowPage(page, instant: true);
+        return true;
+    }
 }
