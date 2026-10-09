@@ -18,7 +18,13 @@ internal enum PlayerStatus : byte {
     Cutscene = 2,
 
     /// <summary>Dentro de un sueño.</summary>
-    Dream = 3
+    Dream = 3,
+
+    /// <summary>
+    /// Viajando en ciervo: la sala del viaje (<c>Cinematic_Stag_travel</c>) no es de juego ni de ninguna zona del mapa, así
+    /// que su sala y su zona no dicen nada (el HUD de los demás ponía "en None").
+    /// </summary>
+    StagTravel = 4
 }
 
 /// <summary>
@@ -257,7 +263,7 @@ internal sealed class PartyState {
     private void OnActivity(SessionPlayer from, PacketReader reader) {
         var activity = (PlayerStatus) reader.ReadByte();
         var paused = reader.ReadBool();
-        if (_session == null || !_session.IsHost || activity == PlayerStatus.Downed || activity > PlayerStatus.Dream ||
+        if (_session == null || !_session.IsHost || activity == PlayerStatus.Downed || activity > PlayerStatus.StagTravel ||
             !_members.TryGetValue(from.Id, out var member)) {
             return;
         }
@@ -341,6 +347,7 @@ internal sealed class PartyState {
         PlayerStatus.Downed => "caído",
         PlayerStatus.Cutscene => "en una cinemática",
         PlayerStatus.Dream => "en un sueño",
+        PlayerStatus.StagTravel => "viajando en ciervo",
         _ => "en pie"
     };
 
