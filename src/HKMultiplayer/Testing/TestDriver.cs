@@ -524,6 +524,11 @@ internal sealed class TestDriver : MonoBehaviour {
                 ScreenCapture.CaptureScreenshot(path);
                 Log.Info($"{Tag}captura -> {path}");
                 break;
+            case "burst":
+                // burst <nombre> <cuántas> <segundos entre una y otra>: capturas seguidas (nombre-1, nombre-2...), para
+                // ver un efecto mientras pasa (las órdenes se leen cada medio segundo)
+                StartCoroutine(Burst(args[1], int.Parse(args[2]), ParseFloat(args[3])));
+                break;
             case "fpscap":
                 // fpscap <fps>: limita los FPS (-1 = sin límite)
                 QualitySettings.vSyncCount = 0;
@@ -575,6 +580,49 @@ internal sealed class TestDriver : MonoBehaviour {
                 var ui = UIManager.instance;
                 var root = args.Length > 2 ? (args[2] == "/" ? ui.UICanvas.transform : args[2] == "@pause" ? ui.pauseMenuScreen.transform : ui.UICanvas.transform.Find(args[2])) : ui.mainMenuScreen.transform;
                 Dump(root, 0, args.Length > 1 ? int.Parse(args[1]) : 4);
+                break;
+            case "effects":
+                // Efectos del otro jugador enviados, recibidos y reproducidos
+                Log.Info($"{Tag}{runner.Players.DescribeEffects()}");
+                break;
+            case "tree":
+                // tree <profundidad> <ruta del objeto>: jerarquía de un objeto con sus componentes (p. ej. "Knight")
+                var treeRoot = GameObject.Find(string.Join(" ", args.Skip(2)));
+                if (treeRoot == null) {
+                    Log.Warn($"{Tag}no existe '{string.Join(" ", args.Skip(2))}'");
+                    break;
+                }
+
+                Dump(treeRoot.transform, 0, int.Parse(args[1]));
+                break;
+            case "fsmall":
+                // fsmall <ruta del objeto>: acciones de todas las FSM del objeto y sus hijos, también inactivos. Si no
+                // está en la sala, se busca por nombre entre todo lo cargado (prefabs del pool, como "Fireball Top"):
+                // antes una copia ya creada (sus acciones tienen los valores con los que funciona) que el prefab
+                var fsmName = string.Join(" ", args.Skip(1));
+                var loaded = Resources.FindObjectsOfTypeAll<GameObject>();
+                var fsmRoot = GameObject.Find(fsmName) ??
+                              loaded.FirstOrDefault(g => g.scene.IsValid() && (g.name == fsmName || g.name == fsmName + "(Clone)")) ??
+                              loaded.FirstOrDefault(g => g.name == fsmName);
+                if (fsmRoot == null) {
+                    Log.Warn($"{Tag}no existe '{string.Join(" ", args.Skip(1))}'");
+                    break;
+                }
+
+                foreach (var fsm in fsmRoot.GetComponentsInChildren<PlayMakerFSM>(true)) {
+                    Log.Info($"{Tag}fsmall {fsm.gameObject.name}/{fsm.FsmName} inicio={fsm.Fsm.StartState}");
+                    foreach (var state in fsm.FsmStates) {
+                        var transitions = string.Join(", ", state.Transitions.Select(tr => $"{tr.EventName}->{tr.ToState}"));
+                        Log.Info($"{Tag}fsmall   [{state.Name}] | {transitions}");
+                        foreach (var action in state.Actions) {
+                            var fields = action.GetType().GetFields(System.Reflection.BindingFlags.Public |
+                                                                    System.Reflection.BindingFlags.Instance)
+                                .Select(f => $"{f.Name}={DescribeValue(f.GetValue(action))}");
+                            Log.Info($"{Tag}fsmall     {action.GetType().Name}: {string.Join(" ", fields)}");
+                        }
+                    }
+                }
+
                 break;
             default:
                 Log.Warn($"{Tag}orden desconocida '{args[0]}'");
@@ -632,6 +680,15 @@ internal sealed class TestDriver : MonoBehaviour {
         foreach (Transform child in node) {
             Dump(child, depth + 1, maxDepth);
         }
+    }
+
+    private static IEnumerator Burst(string name, int count, float interval) {
+        for (var i = 1; i <= count; i++) {
+            ScreenCapture.CaptureScreenshot(Path.Combine(Application.persistentDataPath, $"{name}-{i}.png"));
+            yield return new WaitForSecondsRealtime(interval);
+        }
+
+        Log.Info($"{Tag}ráfaga {name} terminada ({count} capturas)");
     }
 
     private static IEnumerator FindMoving(float seconds) {

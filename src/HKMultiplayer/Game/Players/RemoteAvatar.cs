@@ -14,6 +14,7 @@ internal sealed class RemoteAvatar {
     private readonly Transform _spriteTransform;
     private readonly tk2dSprite _sprite;
     private readonly MeshRenderer _renderer;
+    private readonly SpriteFlash _flash;
     private readonly float _scale;
 
     private tk2dSpriteCollectionData _collection;
@@ -38,6 +39,8 @@ internal sealed class RemoteAvatar {
         _sprite = spriteObject.AddComponent<tk2dSprite>();
         _sprite.SetSprite(heroSprite.Collection, heroSprite.spriteId);
         _renderer = spriteObject.GetComponent<MeshRenderer>();
+        // Destellos como los del caballero (al curarse o recibir un golpe)
+        _flash = spriteObject.AddComponent<SpriteFlash>();
         if (heroRenderer != null) {
             // Mismo orden de dibujo que el caballero local (con uno menor quedaría detrás de capas del escenario); un
             // poco más al fondo para que el propio se vea encima (ver Apply)
@@ -98,6 +101,17 @@ internal sealed class RemoteAvatar {
     }
 
     public Vector3 Position => _root.transform.position;
+
+    /// <summary>Lo que se voltea al mirar a un lado: sus efectos van debajo, como en el caballero.</summary>
+    public Transform SpriteTransform => _spriteTransform;
+
+    public bool FacingRight => _facingRight;
+
+    /// <summary>Destello al curarse (como el del caballero).</summary>
+    public void FlashHeal() => _flash.flashFocusHeal();
+
+    /// <summary>Destello al recibir un golpe.</summary>
+    public void FlashHit() => _flash.flashWhiteQuick();
 
     public void Destroy() {
         if (_root != null) {
