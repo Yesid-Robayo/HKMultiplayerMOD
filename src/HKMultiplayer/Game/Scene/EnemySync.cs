@@ -389,7 +389,26 @@ internal sealed class EnemySync {
         public Enemy Enemy;
         public byte Index;
         public bool[] SoundStates;
+
+        /// <summary>
+        /// Por estado, sus efectos que siguen cada frame mientras dura (null si no tiene): partículas con
+        /// <c>everyFrame</c>, salpicaduras continuas, y las cuentas con sus números que esos efectos usan (el humo del
+        /// Falso Caballero al morir sube 5 cada frame).
+        /// </summary>
+        public HutongGames.PlayMaker.FsmStateAction[][] Continuous;
+
+        /// <summary>En el PC que lo mueve: el último estado enviado tenía efectos continuos (al salir hay que avisar).</summary>
+        public bool Running;
     }
+
+    /// <summary>En una marioneta: los efectos continuos del estado en el que está su FSM en el PC que la mueve.</summary>
+    private struct RunningEffect {
+        public Enemy Enemy;
+        public byte Fsm;
+        public HutongGames.PlayMaker.FsmStateAction[] Actions;
+    }
+
+    private readonly List<RunningEffect> _runningEffects = new();
 
     private readonly Dictionary<HutongGames.PlayMaker.Fsm, SoundFsm> _soundFsms = new();
 
@@ -628,6 +647,7 @@ internal sealed class EnemySync {
         _caged.Clear();
         _cagedByPath.Clear();
         _soundFsms.Clear();
+        _runningEffects.Clear();
         _enemyFsms.Clear();
         _pendingHealth.Clear();
         _pendingControl.Clear();
@@ -654,6 +674,7 @@ internal sealed class EnemySync {
             _caged.Clear();
             _cagedByPath.Clear();
             _soundFsms.Clear();
+            _runningEffects.Clear();
             _enemyFsms.Clear();
             _pendingControl.Clear();
             if (hash != _sceneHash) {
@@ -734,6 +755,7 @@ internal sealed class EnemySync {
 
         UpdateReal(isOwner);
         UpdatePuppets();
+        UpdateRunningEffects();
         UpdateWakeGates();
     }
 
@@ -1584,6 +1606,7 @@ internal sealed class EnemySync {
         _enemyFsms[enemy.Fsms[i].Fsm] = (enemy, (byte) i);
         var states = enemy.Fsms[i].FsmStates;
         bool[] soundStates = null;
+        HutongGames.PlayMaker.FsmStateAction[][] continuous = null;
         for (var s = 0; s < states.Length; s++) {
             foreach (var action in states[s].Actions) {
                 if (IsEffectAction(action)) {
@@ -1592,11 +1615,83 @@ internal sealed class EnemySync {
                     break;
                 }
             }
+
+            if (soundStates != null && soundStates[s] && ContinuousActions(states[s]) is { } running) {
+                continuous ??= new HutongGames.PlayMaker.FsmStateAction[states.Length][];
+                continuous[s] = running;
+            }
         }
 
         if (soundStates != null) {
-            _soundFsms[enemy.Fsms[i].Fsm] = new SoundFsm { Enemy = enemy, Index = (byte) i, SoundStates = soundStates };
+            _soundFsms[enemy.Fsms[i].Fsm] = new SoundFsm {
+                Enemy = enemy, Index = (byte) i, SoundStates = soundStates, Continuous = continuous
+            };
         }
+    }
+
+    /// <summary>Efectos que siguen cada frame mientras dura el estado (su <c>OnUpdate</c> solo hace lo que se ve).</summary>
+    private static readonly HashSet<string> ContinuousEffectActions = new() {
+        "SetParticleEmission", "SetParticleEmissionRate", "SetParticleEmissionSpeed", "ActivateGameObject",
+        // Salpicaduras continuas: no hacen nada al entrar, todo en OnUpdate (la muerte del Falso Caballero y del
+        // Campeón Fallido)
+        "SpawnBloodTime", "SpawnRandomObjectsOverTime"
+    };
+
+    /// <summary>
+    /// Cuentas con los números de su FSM que un efecto continuo puede usar (el ritmo del humo sube cada frame). En la
+    /// marioneta su lógica está parada, así que tocar sus números no decide nada; al llegar el siguiente estado se
+    /// ponen otra vez los del PC que la mueve.
+    /// </summary>
+    private static readonly HashSet<string> ContinuousVariableActions = new() {
+        "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatClamp", "FloatOperator", "IntAdd",
+        "IntOperator", "IntClamp", "SetFloatValue", "SetIntValue",
+        // Con tiempo: empieza al entrar (el humo baja a 0 en medio segundo antes de acabar). Solo sin aviso al acabar: en la
+        // marioneta movería su lógica parada
+        "EaseFloat"
+    };
+
+    private static readonly Dictionary<Type, System.Reflection.FieldInfo> EveryFrameFields = new();
+
+    /// <summary>Si la acción sigue cada frame (su campo <c>everyFrame</c>, o las que solo trabajan en OnUpdate).</summary>
+    private static bool RunsEveryFrame(HutongGames.PlayMaker.FsmStateAction action) {
+        var type = action.GetType();
+        if (type.Name is "SpawnBloodTime" or "SpawnRandomObjectsOverTime") {
+            return true;
+        }
+
+        if (action is HutongGames.PlayMaker.Actions.EaseFsmAction ease) {
+            return ease.finishEvent == null;
+        }
+
+        if (!EveryFrameFields.TryGetValue(type, out var field)) {
+            field = type.GetField("everyFrame");
+            EveryFrameFields[type] = field != null && field.FieldType == typeof(bool) ? field : null;
+            field = EveryFrameFields[type];
+        }
+
+        return field != null && (bool) field.GetValue(action);
+    }
+
+    /// <summary>
+    /// Lo que la marioneta repite cada frame en este estado: sus efectos continuos y las cuentas que hacen cada frame (si
+    /// hay alguno). Antes solo se hacía al entrar: el humo del vapor del Falso Caballero al morir salía con el ritmo del
+    /// principio (más flojo) y la salpicadura continua no salía. Se calcula al apuntar el enemigo.
+    /// </summary>
+    private static HutongGames.PlayMaker.FsmStateAction[] ContinuousActions(HutongGames.PlayMaker.FsmState state) {
+        List<HutongGames.PlayMaker.FsmStateAction> found = null;
+        var effects = false;
+        foreach (var action in state.Actions) {
+            var name = action.GetType().Name;
+            var effect = ContinuousEffectActions.Contains(name);
+            if (!action.Enabled || !effect && !ContinuousVariableActions.Contains(name) || !RunsEveryFrame(action)) {
+                continue;
+            }
+
+            effects |= effect;
+            (found ??= new List<HutongGames.PlayMaker.FsmStateAction>()).Add(action);
+        }
+
+        return effects ? found.ToArray() : null;
     }
 
     /// <summary>Acciones visuales que la marioneta también hace (además del sonido): no deciden nada de su lógica.</summary>
@@ -1607,7 +1702,9 @@ internal sealed class EnemySync {
         // lógica enciende y lanza (solo se ven)
         "ActivateAllChildren", "SpawnFromPool",
         // Las salpicaduras al romperse (los barriles que caen en ese combate)
-        "SpawnBlood"
+        "SpawnBlood",
+        // Salpicaduras continuas (solo en OnUpdate: van con los efectos continuos del estado)
+        "SpawnBloodTime", "SpawnRandomObjectsOverTime"
     };
 
     /// <summary>
@@ -1647,6 +1744,9 @@ internal sealed class EnemySync {
         switch (action) {
             case HutongGames.PlayMaker.Actions.SpawnRandomObjects random:
                 return random.gameObject.Value != null && !IsGeo(random.gameObject.Value);
+            case HutongGames.PlayMaker.Actions.SpawnRandomObjectsOverTime overTime:
+                return overTime.gameObject.Value != null && !IsGeo(overTime.gameObject.Value) &&
+                       !IsGameplay(overTime.gameObject.Value);
             case HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPool fling:
                 return fling.gameObject.Value != null && !IsGeo(fling.gameObject.Value);
             case HutongGames.PlayMaker.Actions.CreateObject create:
@@ -1794,7 +1894,16 @@ internal sealed class EnemySync {
         }
 
         var index = Array.IndexOf(fsm.States, state);
-        if (index < 0 || index >= sound.SoundStates.Length || !sound.SoundStates[index] || !OthersInScene()) {
+        if (index < 0 || index >= sound.SoundStates.Length) {
+            return;
+        }
+
+        // Al salir de un estado con efectos continuos también se avisa (aunque el nuevo no tenga efectos): si no, la
+        // marioneta los seguiría haciendo
+        var continuous = sound.Continuous != null && sound.Continuous[index] != null;
+        var stopping = sound.Running && !continuous;
+        sound.Running = continuous;
+        if (!sound.SoundStates[index] && !stopping || !OthersInScene()) {
             return;
         }
 
@@ -1916,6 +2025,9 @@ internal sealed class EnemySync {
 
         var states = enemy.Fsms[fsmIndex].FsmStates;
 
+        // Su FSM cambió de estado allí: los efectos continuos del anterior se acaban
+        StopRunningEffects(enemy, fsmIndex);
+
         // Solo sus efectos (sonido y arena); la lógica de la marioneta sigue parada
         var state = states[stateIndex];
         if (TestMode) {
@@ -1953,6 +2065,75 @@ internal sealed class EnemySync {
                 }
             } catch (Exception e) {
                 Log.Warn($"Efecto de {enemy.Root.name} ({state.Name}, {action.GetType().Name}) no reproducido: {e.Message}");
+            }
+        }
+
+        // Y los que siguen cada frame mientras su FSM esté en ese estado allí (hasta que llegue el siguiente)
+        if (_soundFsms.TryGetValue(enemy.Fsms[fsmIndex].Fsm, out var sound) && sound.Continuous != null &&
+            stateIndex < sound.Continuous.Length && sound.Continuous[stateIndex] is { } continuous) {
+            foreach (var action in continuous) {
+                action.Init(state);
+                action.Active = true;
+                action.Finished = false;
+                // Las que van con tiempo empiezan al entrar (con los números del original al entrar, que ya llegaron)
+                if (action is HutongGames.PlayMaker.Actions.EaseFsmAction) {
+                    try {
+                        action.OnEnter();
+                    } catch (Exception e) {
+                        Log.Warn($"Efecto continuo de {enemy.Root.name} ({state.Name}) no empezado: {e.Message}");
+                    }
+                }
+            }
+
+            _runningEffects.Add(new RunningEffect {
+                Enemy = enemy, Fsm = fsmIndex, Actions = continuous
+            });
+        }
+    }
+
+    private void StopRunningEffects(Enemy enemy, byte fsmIndex) {
+        for (var i = _runningEffects.Count - 1; i >= 0; i--) {
+            if (_runningEffects[i].Enemy == enemy && _runningEffects[i].Fsm == fsmIndex) {
+                _runningEffects.RemoveAt(i);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Los efectos continuos de las marionetas, cada frame como en el PC que las mueve (su <c>OnUpdate</c>): el ritmo
+    /// del humo, las salpicaduras continuas. Se acaban al llegar otro estado de esa FSM, al pasar a moverla este PC o al
+    /// dejar de seguirla (o si su FSM queda suelta).
+    /// </summary>
+    private void UpdateRunningEffects() {
+        if (_runningEffects.Count == 0) {
+            return;
+        }
+
+        for (var i = _runningEffects.Count - 1; i >= 0; i--) {
+            var running = _runningEffects[i];
+            var enemy = running.Enemy;
+            // Su FSM pudo quedar suelta (funciona sola en este PC: ya hace sus efectos)
+            if (!enemy.Puppet || enemy.Root == null || !_byId.TryGetValue(enemy.Id, out var tracked) || tracked != enemy ||
+                enemy.Detached != null && enemy.Detached.Contains(enemy.Fsms[running.Fsm])) {
+                _runningEffects.RemoveAt(i);
+                continue;
+            }
+
+            _replaying = true;
+            try {
+                foreach (var action in running.Actions) {
+                    if (action.Finished ||
+                        action is HutongGames.PlayMaker.Actions.SpawnRandomObjectsOverTime && !ShouldRunEffect(enemy, action)) {
+                        continue;
+                    }
+
+                    action.OnUpdate();
+                }
+            } catch (Exception e) {
+                Log.Warn($"Efecto continuo de {enemy.Root.name} no reproducido: {e.Message}");
+                _runningEffects.RemoveAt(i);
+            } finally {
+                _replaying = false;
             }
         }
     }
