@@ -38,7 +38,10 @@ internal enum EffectKind : byte {
     Fluke = 10,
 
     /// <summary>Un efecto suelto del caballero sacado del pool (dash sombra, aterrizaje fuerte...): cuál, dónde, giro y escala.</summary>
-    Puff = 11
+    Puff = 11,
+
+    /// <summary>Polvo al correr: empieza (1) o para (0).</summary>
+    Run = 12
 }
 
 /// <summary>Amuletos que cambian cómo se ve un efecto (viajan en cada evento, en un byte).</summary>
@@ -48,6 +51,12 @@ internal static class EffectCharms {
     public const byte Fury = 4;
     public const byte ShamanStone = 8;
     public const byte Flukenest = 16;
+
+    /// <summary>
+    /// El último golpe se llevó una máscara azul (<c>PlayerData.damagedBlue</c>): su efecto de daño salta de "Gen" a
+    /// "Blue Effects" antes de la grieta, las partículas y los tajos oscuros, que entonces no salen.
+    /// </summary>
+    public const byte DamagedBlue = 32;
 
     /// <summary>Los del jugador local ahora.</summary>
     public static byte Local() {
@@ -62,6 +71,7 @@ internal static class EffectCharms {
         charms |= data.equippedCharm_6 && data.health == 1 ? Fury : 0;
         charms |= data.equippedCharm_19 ? ShamanStone : 0;
         charms |= data.equippedCharm_11 ? Flukenest : 0;
+        charms |= data.damagedBlue ? DamagedBlue : 0;
         return (byte) charms;
     }
 }
@@ -152,6 +162,8 @@ internal struct EffectEvent {
                 writer.WriteFloat(Angle);
                 break;
             case EffectKind.NailCharge:
+            case EffectKind.Run:
+            case EffectKind.Hit:
                 writer.WriteByte(A);
                 break;
         }
@@ -210,6 +222,8 @@ internal struct EffectEvent {
                 Angle = reader.ReadFloat();
                 break;
             case EffectKind.NailCharge:
+            case EffectKind.Run:
+            case EffectKind.Hit:
                 A = reader.ReadByte();
                 break;
         }
@@ -265,6 +279,9 @@ internal sealed class PlayerEffects {
 
     /// <summary>Carga de las artes del aguijón enviada la última vez (0 nada, 1 cargando, 2 cargada).</summary>
     private byte _chargeStage;
+
+    /// <summary>El polvo al correr del caballero local mientras lo lleva pegado (al soltarlo, paró de correr).</summary>
+    private GameObject _runEffect;
 
     private readonly GameObject[] _pendingObjects = new GameObject[PendingSize];
     private readonly CharmTemplates.SpawnKind[] _pendingKinds = new CharmTemplates.SpawnKind[PendingSize];
@@ -409,6 +426,12 @@ internal sealed class PlayerEffects {
             _localCompanions.Send(_session, _players.LocalSceneHash);
         }
 
+        // Paró de correr: el caballero suelta su polvo (y su FSM deja de emitir)
+        if (_runEffect != null && (!_runEffect.activeInHierarchy || _runEffect.transform.parent != hero.transform)) {
+            _runEffect = null;
+            Send(new EffectEvent { Kind = EffectKind.Run, A = 0 });
+        }
+
         var stage =hero.artChargedEffect != null && hero.artChargedEffect.activeSelf ? (byte) 2 :
             hero.artChargeEffect != null && hero.artChargeEffect.activeSelf ? (byte) 1 : (byte) 0;
         if (stage == _chargeStage) {
@@ -508,6 +531,12 @@ internal sealed class PlayerEffects {
     private void OnPoolSpawn(GameObject prefab, GameObject spawned) {
         _localCompanions.OnPoolSpawn(prefab, spawned);
         var charms = _templates?.Charms;
+        if (charms != null && spawned != null && prefab == charms.RunEffectsPrefab) {
+            // Empieza a correr: lo lleva pegado hasta que para
+            _runEffect = spawned;
+            Send(new EffectEvent { Kind = EffectKind.Run, A = 1 });
+            return;
+        }
         if (charms == null || spawned == null || _pendingCount == PendingSize ||
             !charms.TryGetSpawn(prefab, out var kind, out var index) || !CanSend()) {
             return;
@@ -770,7 +799,8 @@ internal sealed class PlayerEffects {
             orig(self, source, side, amount, hazard);
             var after = data != null ? data.health + data.healthBlue : 0;
             if (after < before && self == HeroController.instance) {
-                _active?.Send(new EffectEvent { Kind = EffectKind.Hit });
+                // Con A = 1 se llevó una máscara azul: sin las partículas del golpe normal
+                _active?.Send(new EffectEvent { Kind = EffectKind.Hit, A = (byte) (data.damagedBlue ? 1 : 0) });
             }
         };
     }

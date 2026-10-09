@@ -30,6 +30,9 @@ internal sealed class PlayerSync {
     private HeroController _hero;
     private tk2dSprite _heroSprite;
     private MeshRenderer _heroRenderer;
+
+    /// <summary>Humo del aura de Defender's Crest del caballero local (su FSM enciende y apaga su emisión).</summary>
+    private ParticleSystem _heroDungAura;
     private HeroSprites _sprites;
     private uint _tick;
     private PlayerSnapshot _lastSent;
@@ -196,6 +199,7 @@ internal sealed class PlayerSync {
             Y = position.y,
             FacingRight = _hero.transform.localScale.x < 0f,
             Visible = _heroRenderer == null || _heroRenderer.enabled,
+            DungAura = _heroDungAura != null && _heroDungAura.gameObject.activeInHierarchy && _heroDungAura.emission.enabled,
             Collection = _sprites.IndexOf(_heroSprite.Collection),
             SpriteId = (ushort) _heroSprite.spriteId
         };
@@ -223,6 +227,7 @@ internal sealed class PlayerSync {
             _hero = hero;
             _heroSprite = hero.GetComponent<tk2dSprite>();
             _heroRenderer = hero.GetComponent<MeshRenderer>();
+            _heroDungAura = hero.transform.Find(CharmTemplates.DungAuraPath + "/Particle 1")?.GetComponent<ParticleSystem>();
             var animator = hero.GetComponent<tk2dSpriteAnimator>();
             if (_sprites == null && animator != null && animator.Library != null) {
                 _sprites = new HeroSprites(animator.Library);

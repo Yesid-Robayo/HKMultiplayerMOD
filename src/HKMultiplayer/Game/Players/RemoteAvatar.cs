@@ -104,7 +104,12 @@ internal sealed class RemoteAvatar {
             _spriteId = state.SpriteId;
             _sprite.SetSprite(collection, state.SpriteId);
         }
+
+        DungAura = state.DungAura;
     }
+
+    /// <summary>Si lleva el aura de Defender's Crest encendida (sus efectos la dibujan).</summary>
+    public bool DungAura { get; private set; }
 
     public Vector3 Position => _root.transform.position;
 

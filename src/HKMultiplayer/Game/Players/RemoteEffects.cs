@@ -86,6 +86,37 @@ internal sealed class RemoteEffects {
     /// <summary>Se está reproduciendo un estado de un grito (sus temblores de cámara se hacen si está cerca).</summary>
     private bool _screaming;
 
+    /// <summary>
+    /// Aura de Defender's Crest: su humo y su zumbido, pegados al avatar. Se encienden y apagan según lo que dice su
+    /// estado (<see cref="RemoteAvatar.DungAura"/>), así que quien entra después en la sala también la ve.
+    /// </summary>
+    private readonly GameObject _dungAura;
+
+    private readonly ParticleSystem _dungAuraParticles;
+    private readonly AudioSource _dungAuraAudio;
+    private bool _dungAuraOn;
+
+    /// <summary>Polvo al correr: pegado al avatar mientras corre; al parar se suelta, deja de emitir y se apaga a los 2 s.</summary>
+    private GameObject _run;
+
+    private Transform _runTransform;
+
+    /// <summary>Sus partículas por suelo, como los hijos de "Run Effects": polvo, pasto, hueso y agua.</summary>
+    private readonly ParticleSystem[] _runParticles = new ParticleSystem[4];
+
+    private bool _running;
+    private float _runOffAt = -1f;
+
+    /// <summary>Lo último que sacó del pool el estado que se reproduce, y en qué variable lo guardaba (para escalarlo).</summary>
+    private GameObject _lastSpawned;
+
+    private string _lastSpawnedVariable;
+
+    private static readonly string[] RunGrounds = { "Dust", "Grass", "Bone", "Wet" };
+
+    /// <summary>Lo que tarda el polvo al correr en apagarse tras parar (la espera de su FSM antes de reciclarse).</summary>
+    private const float RunFade = 2f;
+
     public RemoteEffects(HeroEffectTemplates templates, string playerName, Transform parking) {
         _templates = templates;
         _parking = parking;
@@ -160,6 +191,20 @@ internal sealed class RemoteEffects {
             Companions = new RemoteCompanions(templates.Companions, _loose.transform);
         }
 
+        if (templates.Charms?.DungAura != null) {
+            _dungAura = Object.Instantiate(templates.Charms.DungAura, _root.transform, false);
+            _dungAura.name = templates.Charms.DungAura.name;
+            _dungAuraParticles = _dungAura.GetComponentInChildren<ParticleSystem>(true);
+            _dungAuraAudio = _dungAura.GetComponent<AudioSource>();
+            if (_dungAuraAudio != null) {
+                // Solo cuando lo lleva (si no, sonaría al pegarse la copia al avatar)
+                _dungAuraAudio.playOnAwake = false;
+            }
+
+            SetDungAura(false, force: true);
+            _dungAura.SetActive(true);
+        }
+
         foreach (var art in templates.NailArts) {
             var copy = Resolve(art.HeroObject);
             var animator = Component<tk2dSpriteAnimator>(copy);
@@ -180,7 +225,9 @@ internal sealed class RemoteEffects {
 
     /// <summary>Lo encendido de sus amuletos (modo de prueba).</summary>
     public string DescribeCharms() =>
-        (_charms?.Describe() ?? " sin efectos de amuletos") + $" acompañantes={Companions?.ShownCount ?? 0}";
+        (_charms?.Describe() ?? " sin efectos de amuletos") + $" acompañantes={Companions?.ShownCount ?? 0}" +
+        $" aura={_dungAuraOn} corre={_running}" +
+        (_run != null && _run.activeSelf ? $" polvo en {_runTransform.position}" : string.Empty);
 
     /// <summary>
     /// Algún objeto de la copia se perdió (una FSM lo sacó al mundo y la sala se descargó): hay que crearla de nuevo.
@@ -222,6 +269,8 @@ internal sealed class RemoteEffects {
 
         _avatar = null;
         _audio.Stop();
+        SetDungAura(false, force: true);
+        HideRun();
         HideFireballs();
         _charms?.Hide();
         Companions?.Hide();
@@ -270,6 +319,10 @@ internal sealed class RemoteEffects {
             }
         }
 
+        if (_run != null) {
+            Object.Destroy(_run);
+        }
+
         if (_root != null) {
             Object.Destroy(_root);
         }
@@ -309,8 +362,16 @@ internal sealed class RemoteEffects {
                 case EffectKind.NailCharge:
                     PlayNailCharge(effect.A);
                     break;
+                case EffectKind.Run:
+                    if (effect.A != 0) {
+                        StartRun();
+                    } else {
+                        StopRun();
+                    }
+
+                    break;
                 case EffectKind.Hit:
-                    PlayHit();
+                    PlayHit(effect.A != 0);
                     break;
                 case EffectKind.Beam:
                     _charms?.SpawnBeam(effect.A, _avatar.Position, effect.Angle, effect.Scale);
@@ -339,6 +400,11 @@ internal sealed class RemoteEffects {
             var emission = _dashParticles.emission;
             emission.enabled = false;
             _dashParticles = null;
+        }
+
+        SetDungAura(_avatar != null && _avatar.DungAura, force: false);
+        if (_runOffAt >= 0f && Time.time >= _runOffAt) {
+            HideRun();
         }
 
         foreach (var fireball in _fireballs) {
@@ -374,9 +440,17 @@ internal sealed class RemoteEffects {
 
         var state = states[stateIndex];
         _screaming = state.Name.StartsWith("Scream", StringComparison.Ordinal);
+        _lastSpawned = null;
+        _lastSpawnedVariable = null;
         foreach (var action in state.Actions) {
             if (!action.Enabled) {
                 continue;
+            }
+
+            // Golpe a una máscara azul: allí su lógica salta aquí a "Blue Effects" (que llega después) y no hace el resto
+            if ((charms & EffectCharms.DamagedBlue) != 0 && action is PlayerDataBoolTest { isTrue: not null } test &&
+                test.boolName.Value == "damagedBlue") {
+                break;
             }
 
             try {
@@ -486,7 +560,17 @@ internal sealed class RemoteEffects {
                     Random.Range(a.pitchMin.Value, a.pitchMax.Value), a.volume.Value);
                 break;
             case SpawnObjectFromGlobalPool a:
-                Spawn(a.gameObject.Value, a.position.Value, charms);
+                _lastSpawned = Spawn(a.gameObject.Value, a.position.Value, charms);
+                _lastSpawnedVariable = a.storeObject != null && !a.storeObject.IsNone ? a.storeObject.Name : null;
+                break;
+            case SetScale a:
+                ScaleLastSpawned(a);
+                break;
+            case SpawnBlood a:
+                // La salpicadura (azul al perder una máscara azul): sale del pool del juego, solo se ve
+                GlobalPrefabDefaults.Instance?.SpawnBlood(_root.transform.position + a.position.Value, (short) a.spawnMin.Value,
+                    (short) a.spawnMax.Value, a.speedMin.Value, a.speedMax.Value, a.angleMin.Value, a.angleMax.Value,
+                    a.colorOverride.IsNone ? null : a.colorOverride.Value);
                 break;
             case CreateObject a:
                 Spawn(a.gameObject.Value, a.position.Value, charms);
@@ -540,9 +624,10 @@ internal sealed class RemoteEffects {
         _fsms.Clear();
     }
 
-    private void Spawn(GameObject prefab, Vector3 offset, byte charms) {
+    /// <summary>Lo que saca del pool un estado; devuelve lo creado si es un efecto suelto (para escalarlo después).</summary>
+    private GameObject Spawn(GameObject prefab, Vector3 offset, byte charms) {
         if (prefab == null) {
-            return;
+            return null;
         }
 
         if (prefab == _templates.FireballTop1) {
@@ -552,8 +637,38 @@ internal sealed class RemoteEffects {
         } else if (_templates.Charms != null && prefab == _templates.Charms.RoarWave) {
             _charms?.StartRoarWave(_root.transform.position + offset);
         } else if (_templates.IsVisualSpawn(prefab)) {
-            prefab.Spawn(_root.transform.position + offset);
+            return prefab.Spawn(_root.transform.position + offset);
         }
+
+        return null;
+    }
+
+    /// <summary>
+    /// SetScale sobre lo que acaba de sacar del pool el mismo estado (la variable donde lo guardó): el destello y la
+    /// salpicadura azules al perder una máscara azul salen más grandes.
+    /// </summary>
+    private void ScaleLastSpawned(SetScale action) {
+        var target = action.gameObject;
+        if (_lastSpawned == null || _lastSpawnedVariable == null || target == null ||
+            target.OwnerOption != OwnerDefaultOption.SpecifyGameObject || target.GameObject?.Name != _lastSpawnedVariable) {
+            return;
+        }
+
+        var transform = _lastSpawned.transform;
+        var scale = action.vector.IsNone ? transform.localScale : action.vector.Value;
+        if (!action.x.IsNone) {
+            scale.x = action.x.Value;
+        }
+
+        if (!action.y.IsNone) {
+            scale.y = action.y.Value;
+        }
+
+        if (!action.z.IsNone) {
+            scale.z = action.z.Value;
+        }
+
+        transform.localScale = scale;
     }
 
     /// <summary>Como FlingObjectsFromGlobalPool, solo con objetos visuales (los tajos oscuros del golpe recibido).</summary>
@@ -694,10 +809,111 @@ internal sealed class RemoteEffects {
         }
     }
 
-    /// <summary>Golpe recibido: partículas, sonido y destello del avatar.</summary>
-    private void PlayHit() {
-        foreach (var particles in _templates.HitParticles) {
-            Component<ParticleSystem>(Resolve(particles))?.Play();
+    /// <summary>Enciende o apaga el humo y el zumbido de Defender's Crest (solo al cambiar, salvo <paramref name="force"/>).</summary>
+    private void SetDungAura(bool on, bool force) {
+        if (_dungAura == null || on == _dungAuraOn && !force) {
+            return;
+        }
+
+        _dungAuraOn = on;
+        if (_dungAuraParticles != null) {
+            var emission = _dungAuraParticles.emission;
+            emission.enabled = on;
+            if (on && !_dungAuraParticles.isPlaying) {
+                _dungAuraParticles.Play();
+            }
+        }
+
+        if (_dungAuraAudio != null) {
+            if (on && Audible()) {
+                _dungAuraAudio.Play();
+            } else {
+                _dungAuraAudio.Stop();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Empieza a correr: como "Run Effects", pegado al avatar y con las partículas del suelo de la sala (la misma en los
+    /// dos PCs).
+    /// </summary>
+    private void StartRun() {
+        var template = _templates.Charms?.RunEffects;
+        if (template == null) {
+            return;
+        }
+
+        if (_run == null) {
+            _run = Object.Instantiate(template, _loose.transform, false);
+            _run.name = template.name;
+            _runTransform = _run.transform;
+            for (var i = 0; i < RunGrounds.Length; i++) {
+                _runParticles[i] = _runTransform.Find(RunGrounds[i])?.GetComponent<ParticleSystem>();
+            }
+        }
+
+        _running = true;
+        _runOffAt = -1f;
+        _runTransform.SetParent(_root.transform, false);
+        _runTransform.localPosition = Vector3.zero;
+        _runTransform.localRotation = Quaternion.identity;
+        _runTransform.localScale = template.transform.localScale;
+        _run.SetActive(true);
+
+        // Como su FSM: 0 polvo, 1 pasto, 2 polvo y hueso, 3 y 6 agua, 4 (metal) y los demás polvo
+        var ground = PlayerData.instance != null ? PlayerData.instance.environmentType : 0;
+        for (var i = 0; i < _runParticles.Length; i++) {
+            var particles = _runParticles[i];
+            if (particles == null) {
+                continue;
+            }
+
+            var on = ground switch {
+                1 => i == 1,
+                2 => i is 0 or 2,
+                3 or 6 => i == 3,
+                _ => i == 0
+            };
+            var emission = particles.emission;
+            emission.enabled = on;
+            if (on) {
+                particles.Play();
+            }
+        }
+    }
+
+    /// <summary>Deja de correr: se suelta donde está y deja de emitir (lo que ya salió termina solo).</summary>
+    private void StopRun() {
+        if (!_running || _run == null) {
+            return;
+        }
+
+        _running = false;
+        _runTransform.SetParent(_loose.transform, true);
+        foreach (var particles in _runParticles) {
+            particles?.Stop();
+        }
+
+        _runOffAt = Time.time + RunFade;
+    }
+
+    private void HideRun() {
+        _running = false;
+        _runOffAt = -1f;
+        if (_run == null) {
+            return;
+        }
+
+        _runTransform.SetParent(_loose.transform, false);
+        _run.SetActive(false);
+    }
+
+    /// <summary>Golpe recibido: partículas, sonido y destello del avatar (sin las partículas si se llevó una máscara azul).</summary>
+    private void PlayHit(bool blue) {
+        if (!blue) {
+            foreach (var particles in _templates.HitParticles) {
+                Component<ParticleSystem>(Resolve(particles))?.Play();
+            }
         }
 
         PlaySource(_templates.HeroAudio?.takeHit);

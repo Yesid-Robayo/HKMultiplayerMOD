@@ -99,6 +99,28 @@ internal sealed class CharmTemplates {
         public float GrowTo;
 
         public float GrowTime;
+
+        /// <summary>
+        /// Polvo del salto y del aterrizaje suave: como <see cref="SoftLandEffect"/> y <see cref="JumpEffects"/>, se
+        /// enciende solo el hijo del suelo de la sala (polvo, pasto, hueso o salpicadura). Índices entre sus hijos
+        /// directos (-1 si no tiene).
+        /// </summary>
+        public bool ByGround;
+
+        public int Dust = -1;
+        public int Grass = -1;
+        public int Bone = -1;
+        public int Splash = -1;
+
+        /// <summary>Lo que el salto enciende además con polvo, pasto o hueso: su soplido y la estela.</summary>
+        public int JumpPuff = -1;
+
+        public int Trail = -1;
+
+        /// <summary>Sonido del aterrizaje suave (en seco y en agua).</summary>
+        public AudioClip LandClip;
+
+        public AudioClip WetClip;
     }
 
     /// <summary>
@@ -109,6 +131,20 @@ internal sealed class CharmTemplates {
 
     /// <summary>La onda del grito (Howling Wraiths y Abyss Shriek); se crea tal cual, como hace el caballero.</summary>
     public GameObject RoarWave { get; private set; }
+
+    /// <summary>Hijo del caballero con el aura de Defender's Crest (humo, zumbido y la nube que deja cada 0,75 s).</summary>
+    public const string DungAuraPath = "Charm Effects/Dung";
+
+    /// <summary>Copia solo visual del aura de Defender's Crest (su humo "Particle 1" y su zumbido); puede faltar.</summary>
+    public GameObject DungAura { get; private set; }
+
+    /// <summary>
+    /// Polvo al correr (<c>runEffectPrefab</c>): el caballero lo saca del pool, lo lleva pegado mientras corre y al parar
+    /// lo suelta (su FSM deja de emitir y se recicla a los 2 s). Copia solo visual; puede faltar.
+    /// </summary>
+    public GameObject RunEffects { get; private set; }
+
+    public GameObject RunEffectsPrefab { get; private set; }
 
     public CharmTemplates(HeroEffectTemplates owner, HeroController hero, Transform holder) {
         GameObject[] beams = {
@@ -133,9 +169,15 @@ internal sealed class CharmTemplates {
             _spawns[prefab] = Pack(SpawnKind.Beam, i);
         }
 
+        // La nube que deja el aura de Defender's Crest cada 0,75 s (la saca del pool la FSM de su hijo "Dung")
+        var dung = hero.transform.Find(DungAuraPath);
+        var dungTrail = dung != null
+            ? HeroEffectTemplates.FirstAction<SpawnObjectFromGlobalPoolOverTime>(FSMUtility.LocateFSM(dung.gameObject, "Control"),
+                "Equipped")?.gameObject.Value
+            : null;
         foreach (var prefab in new[] {
                      hero.shadowdashBurstPrefab, hero.shadowdashDownBurstPrefab, hero.shadowRingPrefab, hero.backDashPrefab,
-                     hero.hardLandingEffectPrefab
+                     hero.hardLandingEffectPrefab, hero.softLandingEffectPrefab, hero.jumpEffectPrefab, dungTrail
                  }) {
             // Solo los que salen del pool (algunos campos apuntan a hijos del caballero, que ya se copian)
             if (prefab == null || prefab.scene.IsValid() || _spawns.ContainsKey(prefab)) {
@@ -155,7 +197,17 @@ internal sealed class CharmTemplates {
                 puff.Life = puff.GrowTime;
             }
 
+            PrepareGround(puff, prefab);
             Puffs.Add(puff);
+        }
+
+        if (dung != null) {
+            DungAura = Copy(dung.gameObject, holder);
+        }
+
+        if (hero.runEffectPrefab != null) {
+            RunEffectsPrefab = hero.runEffectPrefab;
+            RunEffects = Copy(hero.runEffectPrefab, holder);
         }
 
         var spells = FSMUtility.LocateFSM(hero.gameObject, "Spell Control");
@@ -246,6 +298,34 @@ internal sealed class CharmTemplates {
 
         return life > 0f ? Mathf.Min(life, 2f) : 1f;
     }
+
+    /// <summary>Hijos por suelo del polvo del salto y del aterrizaje suave (sus scripts se quitan en la copia).</summary>
+    private static void PrepareGround(PuffInfo puff, GameObject prefab) {
+        var land = prefab.GetComponent<SoftLandEffect>();
+        var jump = prefab.GetComponent<JumpEffects>();
+        if (land == null && jump == null) {
+            return;
+        }
+
+        var root = prefab.transform;
+        puff.ByGround = true;
+        puff.Dust = ChildIndex(root, land != null ? land.dustEffects : jump.dustEffects);
+        puff.Grass = ChildIndex(root, land != null ? land.grassEffects : jump.grassEffects);
+        puff.Bone = ChildIndex(root, land != null ? land.boneEffects : jump.boneEffects);
+        puff.Splash = ChildIndex(root, land != null ? land.splash : jump.splash);
+        // Lo que tardan en reciclarse (1 s; 1,4 s en el pasto)
+        puff.Life = 1.4f;
+        if (jump != null) {
+            puff.JumpPuff = ChildIndex(root, jump.jumpPuff);
+            puff.Trail = ChildIndex(root, jump.dustTrail);
+        } else {
+            puff.LandClip = land.softLandClip;
+            puff.WetClip = land.wetLandClip;
+        }
+    }
+
+    private static int ChildIndex(Transform root, GameObject child) =>
+        child != null && child.transform.parent == root ? child.transform.GetSiblingIndex() : -1;
 
     private static CloudInfo PrepareCloud(GameObject prefab, string waitState, Transform holder) {
         if (prefab == null) {
