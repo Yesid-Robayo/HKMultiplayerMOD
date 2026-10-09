@@ -130,12 +130,18 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
                         "Lo tienes en Pausa › Multijugador", 12f);
         }
 
-        session.SetLocalScene(scene);
-        Players.SetLocalScene(scene);
-        SceneObjects.Update(scene);
-        MovingObjects.Update(scene);
-        Breakables.Update(scene);
-        Hazards.Update(scene);
+        // Un fallo en la sincronización de la sala no debe dejar sin enviar los paquetes de este frame (con varios
+        // seguidos el otro extremo cortaría la conexión por tiempo)
+        try {
+            session.SetLocalScene(scene);
+            Players.SetLocalScene(scene);
+            SceneObjects.Update(scene);
+            MovingObjects.Update(scene);
+            Breakables.Update(scene);
+            Hazards.Update(scene);
+        } catch (Exception e) {
+            Log.Error($"Error en la sala: {e}");
+        }
 
         try {
             Players.SendLocalState(Time.unscaledTimeAsDouble);

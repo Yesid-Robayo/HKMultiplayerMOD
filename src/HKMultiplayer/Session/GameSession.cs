@@ -209,14 +209,7 @@ public sealed class GameSession : INetListener, IDisposable {
     /// <see cref="End"/>. Se envía fiable o no y a quien diga su ruta.
     /// </summary>
     public PacketWriter Begin(MessageType type) {
-        // Quien escribía el anterior falló a medias (su error ya se registró): se descarta ese mensaje en lugar de
-        // dejar la partida sin poder enviar nada más
-        if (_writingLocal) {
-            _writingLocal = false;
-            _client?.Connection.CancelMessage();
-            AbandonedMessages++;
-        }
-
+        DiscardAbandoned();
         _writingLocal = true;
         _localType = (byte) type;
         if (_server != null) {
@@ -233,6 +226,23 @@ public sealed class GameSession : INetListener, IDisposable {
 
     /// <summary>Mensajes empezados que se descartaron a medias (su escritor falló).</summary>
     public int AbandonedMessages { get; private set; }
+
+    /// <summary>
+    /// Quien escribía el último mensaje local falló a medias (su error ya se registró): se descarta ese mensaje en lugar
+    /// de dejar la partida sin poder enviar nada más. En el invitado el mensaje se escribe directamente en la conexión,
+    /// así que hay que hacerlo antes de cualquier otro mensaje suyo (también el de cambio de sala): si no, cada uno
+    /// fallaba, no salía ningún paquete y el host lo echaba por tiempo.
+    /// </summary>
+    private void DiscardAbandoned() {
+        if (!_writingLocal) {
+            return;
+        }
+
+        _writingLocal = false;
+        _client?.Connection.CancelMessage();
+        AbandonedMessages++;
+        _log("Se descartó un mensaje a medio escribir (su escritor falló)");
+    }
 
     public void End() {
         if (!_writingLocal) {
@@ -335,6 +345,7 @@ public sealed class GameSession : INetListener, IDisposable {
         }
 
         if (_client.IsConnected) {
+            DiscardAbandoned();
             var writer = _client.Connection.BeginReliable();
             writer.WriteByte((byte) MessageType.EnterScene);
             writer.WriteString(scene);

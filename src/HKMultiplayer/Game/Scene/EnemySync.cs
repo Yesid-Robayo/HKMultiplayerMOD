@@ -112,6 +112,10 @@ internal sealed class EnemySync {
     /// <summary>Distancia al jefe a la que tienen que estar todos para que despierte.</summary>
     private const float WakeRange = 25f;
 
+    /// <summary>Batalla de arena a la que pertenece un enemigo (privado en <see cref="HealthManager"/>).</summary>
+    private static readonly System.Reflection.FieldInfo BattleSceneField = typeof(HealthManager).GetField("battleScene",
+        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
     /// <summary>Cambio de estado pendiente de una FSM (privado en PlayMaker): se anula al retener el despertar.</summary>
     private static readonly System.Reflection.FieldInfo SwitchToStateField = typeof(HutongGames.PlayMaker.Fsm).GetField(
         "switchToState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
@@ -1035,7 +1039,7 @@ internal sealed class EnemySync {
     }
 
     /// <summary>Huella de un objeto por su sala, su nombre y su posición (redondeada a una décima).</summary>
-    private static uint PlacedId(Transform transform) {
+    internal static uint PlacedId(Transform transform) {
         var hash = 2166136261u;
         foreach (var c in transform.gameObject.scene.name) {
             hash = (hash ^ c) * 16777619u;
@@ -1828,11 +1832,19 @@ internal sealed class EnemySync {
     // =====================================================================================================
 
     /// <summary>
+    /// Si el enemigo pertenece a una batalla de arena (el Coliseo, las arenas con Battle Scene): lo despierta la arena,
+    /// que ya espera a que entren todos, no verlo. Oblobble entra volando desde muy arriba y nadie llegaba a estar cerca.
+    /// </summary>
+    private static bool InBattleScene(Enemy enemy) =>
+        enemy.Health != null && BattleSceneField?.GetValue(enemy.Health) as GameObject != null;
+
+    /// <summary>
     /// Apunta en qué estado duerme cada jefe (el de su lógica principal, ya preparada): su primer cambio desde ahí es
     /// despertar.
     /// </summary>
     private void NoteDormant(Enemy enemy) {
-        if (enemy.Awake || enemy.DormantState != null || enemy.Spawned || enemy.Puppet || enemy.Fsms == null ||
+        // Los que crea una jaula de la arena (jefes del Coliseo) los saca la propia arena, con todos ya dentro: no esperan
+        if (enemy.Created || enemy.Awake || enemy.DormantState != null || enemy.Spawned || enemy.Puppet || enemy.Fsms == null ||
             enemy.Health == null || enemy.Health.isDead || enemy.Health.hp < BossHp ||
             Time.unscaledTime - enemy.ScannedAt < PreparationSeconds) {
             return;
@@ -1867,7 +1879,8 @@ internal sealed class EnemySync {
             return false;
         }
 
-        if (fsm.ActiveState == null || fsm.ActiveState.Name != enemy.DormantState || !OthersInScene() || EveryoneNear(enemy)) {
+        if (fsm.ActiveState == null || fsm.ActiveState.Name != enemy.DormantState || !OthersInScene() || EveryoneNear(enemy) ||
+            InBattleScene(enemy)) {
             WakeUp(enemy);
             return false;
         }
@@ -1911,7 +1924,7 @@ internal sealed class EnemySync {
                 continue;
             }
 
-            if (OthersInScene() && !EveryoneNear(enemy)) {
+            if (OthersInScene() && !EveryoneNear(enemy) && !InBattleScene(enemy)) {
                 if (now >= enemy.NextWaitNotice) {
                     enemy.NextWaitNotice = now + 4f;
                     HKMultiplayer.UI.Notice.Show($"Esperando a {MissingNear(enemy)} para empezar el combate", 3.5f);

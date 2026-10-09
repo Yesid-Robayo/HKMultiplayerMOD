@@ -117,12 +117,21 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     desafío pasa a controlarlos, y el combate (jaula, suelo con pinchos, qué señores salen, oleadas, final) avanza
     igual en todos. Lo que mueven con avisos a todos (jaula, suelos, puertas) va igual que ellos, y quien entra a mitad
     del combate se pone al día con su estado. En las copias no se hacen las llamadas al caballero (devolverle el control,
-    girarlo), y el cartel para desafiar se apaga en los demás PCs (si no, se podría desafiar otra vez a mitad del
+    girarlo), salvo la que fija dónde reaparece tras los pinchos (el Coliseo la pone en una plataforma antes de sacarlos;
+    sin ella, el caballero del otro PC reaparecía en la entrada de la sala), y el cartel para desafiar se apaga en los demás PCs (si no, se podría desafiar otra vez a mitad del
     combate y ese caballero se quedaría sin control). Las órdenes de esos controladores a un enemigo no se reenvían:
     ya las da su copia en el PC que lo mueve. Los avisos de una copia a otro objeto con controlador (p. ej. el `SPAWN`
     con 1 s de retraso que la batalla del Coliseo manda a sus jaulas, que llega fuera de la aplicación del estado) no
     toman el control: ya los manda el controlador. Si no, los dos PCs se quitaban las jaulas, alguna no soltaba su
-    enemigo y la oleada esperaba para siempre (`Battle Enemies` no llegaba a 0).
+    enemigo y la oleada esperaba para siempre (`Battle Enemies` no llegaba a 0). El Coliseo tiene más de cien objetos
+    con controlador: si un PC los toma todos a la vez (el host se va y queda el invitado), sus posiciones van en varios
+    mensajes. Antes no cabían en uno, el mensaje quedaba a medio escribir y el invitado no enviaba nada más hasta que el
+    host lo echaba por tiempo. Un mensaje que falla a medias se descarta (también antes del aviso de cambio de sala del
+    invitado y del de desconexión), y un fallo de la sincronización de la sala no impide enviar los paquetes del frame.
+  - El tarro del Grub Mimic (oleada del Coliseo de Plata; lo crea su jaula y no es guardable) se copia como una
+    palanca: quien lo rompe con el aguijón lo rompe en todos y el bicho sale del tarro roto en los dos. Es un golpe, no
+    una zona: no espera a que todos estén cerca. Sus FSM, como las de lo que crean las jaulas en la raíz de la sala, se
+    identifican por su sitio (se llaman igual y tienen el mismo puesto entre hermanos).
   - Encuentros con diálogo antes de un combate (Hornet en los Bordes del Reino; se detectan solos: un objeto que no
     es enemigo, con un diálogo, que después despierta o enciende a un enemigo o cierra la arena): van como los
     controladores de batalla, así que los dos ven el diálogo, con su caballero quieto mientras, y la Hornet que habla
@@ -133,7 +142,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Jefes que se despiertan al ver al caballero (Hornet 1, Guardián de Cristal...): se apunta en qué estado duerme su
     lógica principal y su primer cambio desde ahí es despertar. Si algún jugador de la sala está a más de 25 de él,
     ese cambio se retiene (el mismo aviso) y el jefe es invulnerable mientras: golpearlo no lo despierta ni le quita
-    vida. Despierta en cuanto están todos cerca.
+    vida. Despierta en cuanto están todos cerca. No esperan los de una batalla de arena (su `HealthManager` tiene
+    `battleScene`) ni los que crea una jaula: los saca la arena, que ya espera a que entren todos. Oblobble entra
+    volando desde muy arriba y, si esperaba, se quedaba invulnerable para siempre.
   - Las copias no tocan los datos del jugador (contadores como las larvas llegan una vez, del PC de origen). Los tarros
     de larva se rompen en todos y la larva sale también en los demás.
   - Cofres: abrirlos es del mundo (el otro lo ve abrirse en directo, o ya abierto si entra después), pero lo que
@@ -244,7 +255,9 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
   modo de prueba); probado con 80 ± 20 ms y 5 % de pérdida. `arenas` lista los objetos de la sala que dan órdenes a
   enemigos o los encienden (para ver qué combates necesitan un controlador compartido), `healthlist` todos los objetos
   con vida y su huella, y `die` mata al caballero; cada muerte de enemigo se registra con quién la provocó. `moving <s>` lista lo sólido o
-  dañino que se mueve o gira, `hazards` los peligros animados alineados y `wake <nombre>` enciende un enemigo apagado.
+  dañino que se mueve o gira, `hazards` los peligros animados alineados y `wake <nombre>` enciende un enemigo apagado. `hero` dice por qué el
+  caballero no responde (si acepta órdenes, si cedió el control, reaparición tras pinchos, pausa) y `regain` le
+  devuelve el control. `tp x y` no fija el punto de reaparición (`tp x y respawn` sí).
 - Efectos del otro jugador: `burst <nombre> <n> <segundos>` hace capturas seguidas (las órdenes se leen cada medio
   segundo, así que para ver un efecto en el otro PC su ráfaga empieza antes), `hurt` da un golpe de 1 al caballero,
   `effects` cuenta los enviados, recibidos y reproducidos, y cada efecto reproducido se registra
@@ -270,10 +283,18 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
   cristal (láser), Madre Aspid (crías), Aspid primigenio (disparos), minero (pico), Uumuu (descargas), Coleccionista
   (tarros y sus bichos, cuerpo, embestida), Caballero de la Colmena, Flukemarm (sus moscas) y Rey Mosca (él y sus
   moscas). Mawlek espera a que estén los dos cerca para despertar. El Coliseo de Bronce se pasa entero, con todas sus
-  oleadas y Zote, igual en los dos. Falta por ver en vivo:
-  - Cargador Musgoso atacando.
-  - Que la explosión del Gruzzer volátil dañe a los dos (la explosión sale en los dos; el daño no se ha visto).
-  - Los jefes finales de Plata y Oro del Coliseo (Oblobbles, Domadora de Dioses) con la prueba entera.
+  oleadas y Zote, igual en los dos. Comprobados en vivo (0.15.2):
+  - Cargador Musgoso: sale, embiste y daña a los dos (embestida y golpe agachado), cambia de PC sin cortar el combate
+    y al morir queda vencido en los dos.
+  - Gruzzer volátil: su cadáver explota al caer (`CorpseGoopExplode`, 1,7 s después de tocar el suelo) con
+    `Gas Explosion M`, que sí daña al caballero en el juego base; en coop daña a los dos (2 de daño a cada uno), lo
+    mate quien lo mate.
+  - Coliseo de Plata entero con la prueba sin atajos: todas las oleadas y Oblobbles iguales en los dos hasta el final.
+    La oleada del Grub Mimic espera a que alguien rompa su tarro con el aguijón (en la prueba lo hace el invitado); se
+    rompe en los dos y la oleada sigue.
+  - Shielded Fool, Sturdy Fool y Winged Fool dañan a los dos, también desde la marioneta.
+  Falta por ver en vivo:
+  - El Coliseo de Oro entero (Domadora de Dioses) con la prueba sin atajos.
   - Una espera en "WaveCheck 5" del Coliseo de Bronce en la prueba automática: un minero que sale de debajo de la tierra
     cuando el caballero se acerca, y en la prueba los caballeros no se mueven (jugando no debería pasar).
   Grimm, los jefes de sueño, Hollow Knight y la Radiancia, y el sonido del minero en el Coliseo, pasan a M5.

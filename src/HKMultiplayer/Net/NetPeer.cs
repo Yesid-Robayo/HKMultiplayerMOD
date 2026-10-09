@@ -177,6 +177,8 @@ public abstract class NetPeer : IDisposable {
         }
 
         if (notify) {
+            // Un mensaje que quedó a medio escribir (su escritor falló) ya no se enviará: no debe impedir el aviso
+            connection.CancelMessage();
             for (var i = 0; i < 3; i++) {
                 var writer = connection.BeginUnreliable();
                 writer.WriteByte(ControlMessage.Disconnect);

@@ -561,6 +561,22 @@ internal sealed class TestDriver : MonoBehaviour {
             case "status":
                 Log.Info(Tag + "status " + DescribeStatus());
                 break;
+            case "hero":
+                // Por qué el caballero no responde: control, estados y pausa
+                Log.Info($"{Tag}hero acceptingInput={hero.acceptingInput} controlReqlinquished={hero.controlReqlinquished} " +
+                         $"dead={hero.cState.dead} transitioning={hero.cState.transitioning} hazardDeath={hero.cState.hazardDeath} " +
+                         $"hazardRespawning={hero.cState.hazardRespawning} recoiling={hero.cState.recoiling} " +
+                         $"invulnerable={hero.cState.invulnerable} focusing={hero.cState.focusing} " +
+                         $"isPaused={GameManager.instance.isPaused} gameState={GameManager.instance.gameState} " +
+                         $"timeScale={Time.timeScale} heroState={hero.hero_state} " +
+                         $"anim={hero.GetComponent<tk2dSpriteAnimator>()?.CurrentClip?.name}");
+                break;
+            case "regain":
+                // Devuelve el control al caballero (para desatascar una prueba)
+                hero.RegainControl();
+                hero.AcceptInput();
+                hero.StartAnimationControl();
+                break;
             case "shot":
                 var path = Path.Combine(Application.persistentDataPath, args[1] + ".png");
                 ScreenCapture.CaptureScreenshot(path);

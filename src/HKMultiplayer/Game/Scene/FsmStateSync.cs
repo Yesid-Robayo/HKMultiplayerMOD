@@ -54,6 +54,12 @@ internal sealed class FsmStateSync {
     /// <summary>Tiempo en un estado para considerar el objeto quieto (o de reposo, para las palancas).</summary>
     private const float StillSeconds = 1f;
 
+    /// <summary>
+    /// Posiciones por mensaje (12 bytes cada una). El Coliseo tiene más de cien objetos con controlador: cuando un PC
+    /// los toma todos a la vez no caben en un mensaje y van en varios.
+    /// </summary>
+    private const int PositionsPerMessage = 64;
+
     /// <summary>Partes del nombre de los objetos con golpe propio (palancas, interruptores).</summary>
     private static readonly string[] SwitchNames = { "Lever", "lever", "Switch", "switch", "Button" };
 
@@ -513,12 +519,17 @@ internal sealed class FsmStateSync {
             item.LastSentX = position.x;
             item.LastSentY = position.y;
             item.LastSentTick = tick;
-            if (writer == null) {
+            if (writer == null || count == PositionsPerMessage) {
+                if (writer != null) {
+                    FinishPositions(writer, countPosition, count);
+                }
+
                 writer = _session.Begin(Positions);
                 writer.WriteUShort(_sceneHash);
                 writer.WriteUInt(tick);
                 countPosition = writer.Position;
                 writer.WriteByte(0);
+                count = 0;
             }
 
             writer.WriteUInt(item.Id);
@@ -528,12 +539,16 @@ internal sealed class FsmStateSync {
         }
 
         if (writer != null) {
-            var end = writer.Position;
-            writer.Seek(countPosition);
-            writer.WriteByte((byte) count);
-            writer.Seek(end);
-            _session.End();
+            FinishPositions(writer, countPosition, count);
         }
+    }
+
+    private void FinishPositions(PacketWriter writer, int countPosition, int count) {
+        var end = writer.Position;
+        writer.Seek(countPosition);
+        writer.WriteByte((byte) count);
+        writer.Seek(end);
+        _session.End();
     }
 
     private void OnPositions(SessionPlayer from, PacketReader reader) {
@@ -564,7 +579,7 @@ internal sealed class FsmStateSync {
                 continue;
             }
 
-            var id = ScenePaths.Hash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode();
+            var id = FsmId(fsm);
             if (_byId.ContainsKey(id) || _byFsm.ContainsKey(fsm.Fsm)) {
                 continue;
             }
@@ -633,7 +648,7 @@ internal sealed class FsmStateSync {
                 continue;
             }
 
-            var id = ScenePaths.Hash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode();
+            var id = FsmId(fsm);
             if (_byId.ContainsKey(id)) {
                 continue;
             }
@@ -738,6 +753,10 @@ internal sealed class FsmStateSync {
         }
 
         var name = fsm.gameObject.name;
+        if (IsMimicBottle(fsm)) {
+            return true;
+        }
+
         foreach (var part in SwitchNames) {
             if (name.Contains(part)) {
                 return true;
@@ -745,6 +764,24 @@ internal sealed class FsmStateSync {
         }
 
         return persistent != null && fsm.FsmVariables.FindFsmBool("Activated") != null || IsBreakableTemplate(fsm);
+    }
+
+    /// <summary>
+    /// Tarro de una larva falsa (la oleada del Grub Mimic del Coliseo de Plata): se rompe con el aguijón de quien lo
+    /// golpea y suelta al enemigo. El del Coliseo lo crea su jaula y no es guardable, así que no entra como los demás
+    /// tarros: sin copiar su cadena, en los otros PCs el tarro seguía entero con el enemigo ya fuera.
+    /// </summary>
+    private static bool IsMimicBottle(PlayMakerFSM fsm) =>
+        fsm.FsmName == "Bottle Control" && fsm.gameObject.name.StartsWith("Grub Mimic Bottle", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Identificador de la FSM igual en todos los PCs: por su ruta en la sala. Los clonados en la raíz (lo que crean las
+    /// jaulas del Coliseo) se llaman igual y tienen el mismo puesto entre hermanos: van por su sitio, como los enemigos.
+    /// </summary>
+    private static uint FsmId(PlayMakerFSM fsm) {
+        var transform = fsm.transform;
+        var cloned = transform.parent == null && transform.name.EndsWith("(Clone)", StringComparison.Ordinal);
+        return (cloned ? EnemySync.PlacedId(transform) : ScenePaths.Hash(transform)) ^ (uint) fsm.FsmName.GetHashCode();
     }
 
     /// <summary>
@@ -948,6 +985,12 @@ internal sealed class FsmStateSync {
             return false;
         }
 
+        // El punto de reaparición tras los pinchos (el Coliseo lo pone en una plataforma antes de sacarlos) es para el
+        // caballero de cada PC: si no, el de la copia reaparecía en la entrada de la sala
+        if (action is HutongGames.PlayMaker.Actions.CallMethodProper { methodName.Value: "SetHazardRespawn" }) {
+            return false;
+        }
+
         var target = action switch {
             HutongGames.PlayMaker.Actions.CallMethodProper call => action.Fsm.GetOwnerDefaultTarget(call.gameObject),
             HutongGames.PlayMaker.Actions.SendMessage message => action.Fsm.GetOwnerDefaultTarget(message.gameObject),
@@ -1146,7 +1189,8 @@ internal sealed class FsmStateSync {
             return fsmEvent.Name == item.PendingStart;
         }
 
-        if (fsmEvent.Name == "FINISHED" || fsmEvent.Name == ConvoFinish ||
+        // El tarro del Grub Mimic se rompe con un golpe, no es una zona: no espera a nadie
+        if (fsmEvent.Name == "FINISHED" || fsmEvent.Name == ConvoFinish || IsMimicBottle(item.Fsm) ||
             !(item.Encounter || item.CopyTransitions && item.Fsm.FsmVariables.FindFsmBool("Activated") != null)) {
             return false;
         }
