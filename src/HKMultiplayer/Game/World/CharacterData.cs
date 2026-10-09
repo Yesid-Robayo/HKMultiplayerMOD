@@ -50,6 +50,10 @@ internal static class CharacterData {
             "vesselFragments", "vesselFragmentCollected", "vesselFragmentMax", "vesselFragStagNest",
             // Aguijón y artes del aguijón
             "nailDamage", "nailSmithUpgrades", "honedNail", "nailsmithCliff",
+            // Lo que pasa con el Forjaguijones tras la última mejora (perdonarlo o matarlo, y luego en la cabaña de Sheo):
+            // las mejoras son de cada uno, así que también él. Si fuera del mundo, en cuanto uno lo perdonaba se iba y el
+            // otro se quedaba sin sus mejoras
+            "nailsmithSpared", "nailsmithKilled", "nailsmithKillSpeech", "nailsmithSheo", "nailsmithConvoArt",
             "hasNailArt", "hasCyclone", "hasDashSlash", "hasUpwardSlash", "hasAllNailArts",
             // Esencia y recompensas del sueño
             "dreamOrbs", "dreamOrbsSpent", "dreamReward5b", "completedRGDreamPlant", "mothDeparted",

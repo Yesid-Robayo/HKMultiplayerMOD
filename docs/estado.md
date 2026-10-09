@@ -38,6 +38,54 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
    - Barra de vida del jefe: el nombre debe salir **en el idioma del juego** (español), no el interno en inglés.
    - Después: el resto de jefes de sueño, Grimm, Rey de las Pesadillas, Hollow Knight, Radiancia y las skins.
 
+## Misiones de NPC (9 de octubre, tarde; copias B/C, rama `worktree-agent-a8f25163372f2f05e`)
+
+Sobre 0.19.0, sin subir versión ni juntar. Pregunta del usuario: "¿qué pasa con las misiones, por ejemplo la de la
+seta?". El avance de una misión es del mundo y se comparte, pero el personaje en la sala es de cada PC y el juego solo
+mira el dato al cargar la sala.
+
+Reproducido con Mr. Mushroom (Fungus2_18, `mrMushroomState` 1, los dos con Spore Shroom): B le habla (sube a 2 al
+empezar la conversación, en `Conversation Control/Convo`), en B se va y en C sigue ahí; C lo despierta, le habla y la
+misión sube a 3 (se salta el sitio 2) y C lee el texto del sitio siguiente.
+
+Arreglo general (detalle en [arquitectura.md](arquitectura.md), "Personajes de misión"):
+- `QuestNpcSync` (nuevo): cuando llega de otro PC un cambio de un dato del mundo, las FSM de la sala que lo miran al
+  empezar (de personajes, o que solo enseñan o esconden algo) vuelven a empezar con el valor nuevo, y los objetos con
+  `DeactivateIfPlayerdataTrue`/`False`/`ActivateIfPlayerdataTrue` se encienden o apagan. Se espera a que el caballero
+  local tenga control. Si los dos hablan a la vez con su copia del personaje, la segunda conversación no vuelve a
+  avanzar el número que el otro avanzó mientras tanto y lo lee como estaba al empezarla.
+- `FsmStateSync`: los objetos de misión que se golpean con el aguijón y cambian un dato del mundo copian su cadena como
+  una palanca (Zote en Nido Profundo, el farol de la Pesadilla); un golpe local desde el reposo cuenta aunque acabe de
+  llegar la cadena de otro PC.
+- `CharacterData`: lo que pasa con el Forjaguijones tras la última mejora es de cada personaje.
+- Órdenes de prueba: `questnpcs`, `fsmuses <texto>` y `pressat <hora ms UTC> <botón>`.
+
+| Misión | Resultado | Cómo se comprobó |
+|---|---|---|
+| Mr. Mushroom (7 sitios, `mrMushroomState`) | **Arreglado** | En vivo (capturas del mismo momento): B habla y en C desaparece en ese momento; C ya no puede hablarle; queda en 2. Los dos a la vez (C y B medio segundo después, `pressat`): los dos hablan, cada uno lee el texto del sitio 1, en B sale "ya lo avanzó otro jugador" y queda en 2. |
+| Quirrel (Templo del Huevo Negro y demás sitios) | **Arreglado** | En vivo: B en el templo con Quirrel; C entra en Crossroads_06 (`quirrelLeftEggTemple`) y en B Quirrel se va. Sus conversaciones ponen el número de su diálogo (no hay doble avance). Los demás sitios usan el mismo patrón (`FSM`/`Check` con un sí/no); no probados uno a uno. |
+| Zote: rescate en Nido Profundo | **Arreglado** | En vivo: B corta la telaraña con el aguijón; Zote cae en los dos, `zoteRescuedDeepnest` en los dos y C habla con su Zote. |
+| Zote: rescate del Rey Vengamosca y Coliseo | Pendiente de probar | El rescate depende del combate (`Giant Buzzer`, enemigo compartido) y su Zote cuelga del jefe: no se vuelve a comprobar. El Coliseo ya va con controlador (`Colosseum Cage Zote`). |
+| Bretta (rescate y Bocasucia) | **Arreglado** (rescate) | En vivo: B habla con Bretta en Fungus2_23 y en C desaparece (`brettaRescued`). En Bocasucia la casa (`bretta_house/Check Opened`) se abre igual al llegar el dato; no probado en vivo. |
+| Cloth | OK por análisis, sin probar | Mismo patrón que Bretta (`Destroy`/`Check` con `clothEncounteredQueensGarden`, `savedCloth`, `clothKilled`). Su ayuda en el combate del Señor Traidor no se probó. |
+| Tiso | OK por análisis, sin probar | Mismo patrón (`Tiso Bench NPC/FSM` con `tisoEncounteredBench`/`Town`). En el PC de quien habla sigue hasta volver a entrar; en el otro se va enseguida. |
+| Grimm y la Compañía: llamas | OK (ya iba) | En vivo: Grimmkin muerto por C, `flamesCollected` sube 1 en los dos (la `Spawn Control` ya copiaba su cadena sin repetir el `IncrementPlayerDataInt`). |
+| Grimm y la Compañía: farol | **Arreglado** | En vivo: B lo hace aparecer (Sycophant) y en C aparece; golpes de los dos seguidos lo encienden en los dos a la vez (`nightmareLanternLit`, `troupeInTown`). Antes cada PC contaba solo sus golpes. El destierro (segunda tanda de golpes) va por la misma cadena; no probado. |
+| Myla | OK por análisis | Va con `DeactivateIfPlayerdataTrue`/`False` (`hasSuperDash`, `mageLordDefeated`): si cambia con los dos en su sala, la Myla que canta se apaga; la Myla infectada (enemigo) sale al volver a entrar. |
+| Hornet en la Ciudad (fuente) | OK | En vivo: B ve su escena (cinemática y diálogo) y al acabar (`hornetFountainEncounter`) en C se apaga el encuentro. Una vez, con los dos haciendo la escena a la vez, C se quedó sin control al acabar (con `regain` siguió); no se repitió con C solo ni con C mirando. |
+| "El Leñador" | Sin identificar | No hay ningún personaje con ese nombre en los textos del juego (`langget`). Se revisó el Forjaguijones (`Titles/NAILSMITH_MAIN`): **arreglado**, lo que pasa con él tras la última mejora es de cada personaje (antes, si uno lo perdonaba, el otro no podía elegir). |
+| Menderbug | OK por análisis, sin probar | El cartel de Cruces Olvidados es un rompible que ya copia su cadena (`menderSignBroken`, `menderState` se ponen, no se suman); el Menderbug es un enemigo compartido. Sale al azar al cargar la sala. |
+| Vidente (esencia) | OK por diseño | `dreamOrbs` y `dreamRewardN` son del personaje: cada uno recibe sus recompensas. Lo que abre (puerta del Claro, Aguijón onírico despertado, Portal de sueños) es del mundo y se comparte. |
+| Padre de las Larvas | OK por diseño | `grubsCollected` es del mundo, `grubRewards` del personaje: cada uno cobra sus recompensas. Las larvas de su sala van con `DeactivateIfPlayerdataTrue` (`fatGrubKing`). |
+
+Notas:
+- En el PC de quien habla, el personaje hace lo del juego (Bretta o Tiso siguen hasta volver a entrar); en el otro se
+  va al llegar el dato, como si se cargara la sala.
+- Si el dato hace aparecer a alguien que se destruyó al cargar la sala (otro sitio de Mr. Mushroom en la sala de este
+  jugador), no aparece hasta volver a entrar.
+- Ojo al probar: `goscene Fungus2_18 left1` a veces deja al caballero entrando sin terminar (en el aire, sin control); con
+  `right1` no pasa.
+
 ## Jefes de M5 (9 de octubre, mañana; copias F/G)
 
 Comprobado en vivo con capturas de los dos PCs (detalle en [arquitectura.md](arquitectura.md), Pendientes → M5):

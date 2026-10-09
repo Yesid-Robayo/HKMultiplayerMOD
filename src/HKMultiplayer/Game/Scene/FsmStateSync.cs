@@ -792,7 +792,7 @@ internal sealed class FsmStateSync {
         }
 
         var name = fsm.gameObject.name;
-        if (IsMimicBottle(fsm) || IsHollowKnightChain(fsm) || IsStagBell(fsm)) {
+        if (IsMimicBottle(fsm) || IsHollowKnightChain(fsm) || IsStagBell(fsm) || IsStruckQuestObject(fsm)) {
             return true;
         }
 
@@ -819,6 +819,50 @@ internal sealed class FsmStateSync {
     /// </summary>
     private static bool IsStagBell(PlayMakerFSM fsm) =>
         fsm.FsmName == "Bell Control" && fsm.transform.parent != null && fsm.transform.parent.name == "Station Bell";
+
+    /// <summary>
+    /// Objetos de misión que se golpean con el aguijón y cambian un dato del mundo: Zote atrapado en la telaraña de
+    /// Nido Profundo (al cortarla se descuelga y se puede hablar con él) o el farol de la Pesadilla (cada aguijonazo lo
+    /// aviva y al sexto se enciende y llega la Compañía de Grimm; encendido, otra tanda lo destruye). Se copia su cadena
+    /// como la de una palanca: si no, el otro jugador seguía viendo a Zote colgado, o el farol contaba solo los golpes de
+    /// cada PC (repartidos entre los dos, no se encendía en ninguno) y no lo veía encenderse.
+    /// </summary>
+    private static bool IsStruckQuestObject(PlayMakerFSM fsm) {
+        if (EnemySync.IsEnemyObject(fsm.transform)) {
+            return false;
+        }
+
+        bool struck = false, setsWorld = false;
+        foreach (var state in fsm.FsmStates) {
+            foreach (var action in state.Actions) {
+                switch (action) {
+                    case HutongGames.PlayMaker.Actions.Trigger2dEvent trigger:
+                        struck |= trigger.collideTag?.Value == "Nail Attack" && trigger.sendEvent != null &&
+                                  Array.Exists(state.Transitions, t => t.EventName == trigger.sendEvent.Name);
+                        break;
+                    case HutongGames.PlayMaker.Actions.SetPlayerDataBool set:
+                        setsWorld |= IsWorldField(set.boolName?.Value);
+                        break;
+                    case HutongGames.PlayMaker.Actions.SetPlayerDataInt set:
+                        setsWorld |= IsWorldField(set.intName?.Value);
+                        break;
+                    case HutongGames.PlayMaker.Actions.IncrementPlayerDataInt increment:
+                        setsWorld |= IsWorldField(increment.intName?.Value);
+                        break;
+                }
+            }
+        }
+
+        if (struck && setsWorld) {
+            Log.Info($"{fsm.gameObject.name}/{fsm.FsmName}: objeto de misión que se golpea (se copia su cadena)");
+        }
+
+        return struck && setsWorld;
+    }
+
+    /// <summary>Un dato de la partida del mundo (no del personaje): su cambio llega a todos por el progreso compartido.</summary>
+    private static bool IsWorldField(string name) =>
+        !string.IsNullOrEmpty(name) && !World.CharacterData.IsCharacterField(name);
 
     /// <summary>
     /// Cadenas que sujetan al Hollow Knight: cada una aguanta unos golpes de aguijón del caballero local y, rota, avisa a
@@ -1780,8 +1824,9 @@ internal sealed class FsmStateSync {
         if (ApplyingSavedState) {
             // Puesto como ya activado por lo que llegó de otro PC: no es un golpe de aquí
             item.LocalChain = false;
-        } else if (now < item.RemoteChainUntil) {
-            // Cadena que llegó de otro PC: no se devuelve
+        } else if (now < item.RemoteChainUntil && (_executing || from == null || from != item.RestState)) {
+            // Cadena que llegó de otro PC: no se devuelve. Un golpe de este jugador desde el reposo sí cuenta aunque acabe
+            // de llegar la cadena de otro: el farol de la Compañía se enciende con golpes seguidos de los dos
         } else if (from != null && from == item.RestState) {
             item.LocalChain = true;
             send = true;

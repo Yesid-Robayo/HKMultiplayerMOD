@@ -83,6 +83,13 @@ internal sealed class SharedProgress {
 
     private static SharedProgress _hooked;
 
+    /// <summary>
+    /// Se puso un dato del mundo (sí/no o número) con lo que llegó de otro PC, ya en la partida, con el valor que tenía
+    /// antes (los sí/no, 0 o 1): los personajes de misión de la sala que lo miran vuelven a comprobarlo
+    /// (<see cref="QuestNpcSync"/>).
+    /// </summary>
+    public Action<string, int> RemoteFieldChanged;
+
     static SharedProgress() {
         MessageRoutes.Register(WorldChange, Route.Server, reliable: true);
         var fields = typeof(PlayerData).GetFields(BindingFlags.Public | BindingFlags.Instance)
@@ -442,16 +449,26 @@ internal sealed class SharedProgress {
             switch (change.Kind) {
                 case Kind.Bool:
                     var flag = change.Value != 0;
+                    var wasSet = BoolGetters[change.Index](playerData);
                     BoolSetters[change.Index](playerData, flag);
                     if (_bools.Length > change.Index) {
                         _bools[change.Index] = flag;
                     }
 
+                    if (wasSet != flag) {
+                        RemoteFieldChanged?.Invoke(BoolFields[change.Index].Name, wasSet ? 1 : 0);
+                    }
+
                     break;
                 case Kind.Int:
+                    var previous = IntGetters[change.Index](playerData);
                     IntSetters[change.Index](playerData, change.Value);
                     if (_ints.Length > change.Index) {
                         _ints[change.Index] = change.Value;
+                    }
+
+                    if (previous != change.Value) {
+                        RemoteFieldChanged?.Invoke(IntFields[change.Index].Name, previous);
                     }
 
                     break;
