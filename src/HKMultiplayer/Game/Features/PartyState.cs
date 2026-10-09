@@ -30,6 +30,11 @@ internal sealed class PartyState {
     /// <summary>Estado de todos (host → todos).</summary>
     public const MessageType PartyStatus = (MessageType) 74;
 
+    /// <summary>
+    /// Qué hace el jugador cuando no está caído: en pie, viendo una cinemática compartida o en un sueño (jugador → host).
+    /// </summary>
+    public const MessageType ActivityReport = (MessageType) 91;
+
     /// <summary>Lo que se sabe de un jugador.</summary>
     public sealed class Member {
         public ushort Id;
@@ -48,6 +53,12 @@ internal sealed class PartyState {
 
         /// <summary>Caído: el compañero en pie al que sigue su cámara.</summary>
         public ushort Partner;
+
+        /// <summary>
+        /// Lo último que informó el jugador de sí mismo (en pie, en cinemática o en sueño). Es su estado mientras no está
+        /// caído: al revivir dentro de un sueño vuelve a "en sueño", no a "en pie".
+        /// </summary>
+        public PlayerStatus Activity;
     }
 
     private static PartyState _current;
@@ -58,21 +69,31 @@ internal sealed class PartyState {
     private readonly List<Member> _list = new();
 
     private readonly MessageHandler _onStatus;
+    private readonly MessageHandler _onActivity;
     private GameSession _session;
+
+    /// <summary>Lo último que el jugador local informó de sí mismo (se envía solo al cambiar).</summary>
+    private PlayerStatus _reportedActivity;
 
     /// <summary>Cambió el estado de un jugador (jugador y estado anterior).</summary>
     public event Action<Member, PlayerStatus> StatusChanged;
 
     static PartyState() {
         MessageRoutes.Register(PartyStatus, Route.Server, reliable: true);
+        MessageRoutes.Register(ActivityReport, Route.Server, reliable: true);
     }
 
     public PartyState() {
         _onStatus = OnStatus;
+        _onActivity = OnActivity;
     }
 
     /// <summary>Estado de la partida en curso (null sin partida).</summary>
     public static PartyState Current => _current;
+
+    /// <summary>Estado del jugador (en pie si no se conoce).</summary>
+    public static PlayerStatus StatusOf(ushort id) =>
+        _current != null && _current._members.TryGetValue(id, out var member) ? member.Status : PlayerStatus.Standing;
 
     /// <summary>Si el jugador está caído.</summary>
     public static bool IsDown(ushort id) =>
@@ -90,7 +111,9 @@ internal sealed class PartyState {
         _current = this;
         _members.Clear();
         _list.Clear();
+        _reportedActivity = PlayerStatus.Standing;
         session.On(PartyStatus, _onStatus);
+        session.On(ActivityReport, _onActivity);
         session.PlayerJoined += OnPlayerJoined;
         session.PlayerLeft += OnPlayerLeft;
         session.Connected += OnConnected;
@@ -102,6 +125,7 @@ internal sealed class PartyState {
     public void Detach() {
         if (_session != null) {
             _session.On(PartyStatus, null);
+            _session.On(ActivityReport, null);
             _session.PlayerJoined -= OnPlayerJoined;
             _session.PlayerLeft -= OnPlayerLeft;
             _session.Connected -= OnConnected;
@@ -165,6 +189,11 @@ internal sealed class PartyState {
             return;
         }
 
+        // Quien deja de estar caído vuelve a lo que estaba haciendo (p. ej. revivido dentro de un sueño)
+        if (status == PlayerStatus.Standing) {
+            status = member.Activity;
+        }
+
         var previous = member.Status;
         member.Status = status;
         member.BodyScene = status == PlayerStatus.Downed ? bodyScene ?? string.Empty : string.Empty;
@@ -185,6 +214,35 @@ internal sealed class PartyState {
         member.Partner = partner;
         Broadcast();
         StatusChanged?.Invoke(member, member.Status);
+    }
+
+    /// <summary>
+    /// Lo que hace el jugador local cuando no está caído (en pie, en cinemática o en sueño). Barato: llamar cada frame;
+    /// solo se envía al host cuando cambia.
+    /// </summary>
+    public void ReportLocal(PlayerStatus activity) {
+        if (_session == null || !_session.CanSend || activity == _reportedActivity || activity == PlayerStatus.Downed) {
+            return;
+        }
+
+        _reportedActivity = activity;
+        var writer = _session.Begin(ActivityReport);
+        writer.WriteByte((byte) activity);
+        _session.End();
+    }
+
+    private void OnActivity(SessionPlayer from, PacketReader reader) {
+        var activity = (PlayerStatus) reader.ReadByte();
+        if (_session == null || !_session.IsHost || activity == PlayerStatus.Downed || activity > PlayerStatus.Dream ||
+            !_members.TryGetValue(from.Id, out var member)) {
+            return;
+        }
+
+        member.Activity = activity;
+        // Un caído sigue caído: lo que hace cuenta al levantarse
+        if (member.Status != PlayerStatus.Downed && member.Status != activity) {
+            SetStatus(from.Id, activity);
+        }
     }
 
     private void Broadcast() {

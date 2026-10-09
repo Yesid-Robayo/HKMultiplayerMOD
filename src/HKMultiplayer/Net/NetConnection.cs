@@ -58,8 +58,23 @@ public sealed class NetConnection : ReliableReceiver.ISink {
     private readonly byte[] _messageScratch = new byte[NetConstants.MaxMessageSize];
     private int _writing; // 0 = nada, 1 = fiable, 2 = no fiable
 
-    // Transferencias grandes salientes y entrantes
+    /// <summary>
+    /// Ritmo de las transferencias grandes de baja prioridad (skins): unos 0,5 MB/s, para que no retrasen golpes ni
+    /// eventos.
+    /// </summary>
+    public const int LowPriorityBytesPerSecond = 512 * 1024;
+
+    /// <summary>
+    /// Trozos de baja prioridad que se dejan sin confirmar a la vez como mucho. El canal fiable es ordenado: un evento que
+    /// sale después de un trozo espera a que ese trozo llegue, así que se dejan pocos por delante.
+    /// </summary>
+    private const int LowPriorityMaxInFlight = 48;
+
+    // Transferencias grandes salientes y entrantes (las de baja prioridad, en su propia cola y a su ritmo)
     private readonly Queue<LargeOutgoing> _largeOut = new();
+    private readonly Queue<LargeOutgoing> _largeLow = new();
+    private double _lowBudget;
+    private double _lowBudgetAt = -1;
     private ushort _nextLargeId;
     private readonly Dictionary<ushort, LargeIncoming> _largeIn = new();
 
@@ -166,14 +181,21 @@ public sealed class NetConnection : ReliableReceiver.ISink {
     /// Envía datos grandes (partida al unirse, skins...) troceados por el canal fiable. El receptor los recibe enteros en
     /// <see cref="INetListener.OnLargeMessage"/> con el mismo <paramref name="kind"/>. Se copian: el array es del llamador.
     /// </summary>
-    public void SendLarge(byte kind, byte[] data, int length) {
+    public void SendLarge(byte kind, byte[] data, int length) => SendLarge(kind, data, length, false);
+
+    /// <summary>
+    /// Como <see cref="SendLarge(byte, byte[], int)"/>; con <paramref name="lowPriority"/> va en segundo plano: solo
+    /// cuando no hay otra transferencia grande pendiente, a <see cref="LowPriorityBytesPerSecond"/> como mucho y con
+    /// pocos trozos por delante de los mensajes normales (una skin no retrasa golpes ni eventos).
+    /// </summary>
+    public void SendLarge(byte kind, byte[] data, int length, bool lowPriority) {
         if (length > MaxLargeTransfer) {
             throw new ArgumentException("Transferencia demasiado grande");
         }
 
         var copy = new byte[length];
         System.Buffer.BlockCopy(data, 0, copy, 0, length);
-        _largeOut.Enqueue(new LargeOutgoing { Id = _nextLargeId++, Kind = kind, Data = copy });
+        (lowPriority ? _largeLow : _largeOut).Enqueue(new LargeOutgoing { Id = _nextLargeId++, Kind = kind, Data = copy });
     }
 
     /// <summary>Bytes de transferencias grandes que faltan por enviar (para mostrar progreso).</summary>
@@ -181,6 +203,10 @@ public sealed class NetConnection : ReliableReceiver.ISink {
         get {
             var total = 0;
             foreach (var transfer in _largeOut) {
+                total += transfer.Data.Length - transfer.Offset;
+            }
+
+            foreach (var transfer in _largeLow) {
                 total += transfer.Data.Length - transfer.Offset;
             }
 
@@ -198,25 +224,53 @@ public sealed class NetConnection : ReliableReceiver.ISink {
     /// <summary>Retraso de reenvío de los mensajes fiables según la latencia.</summary>
     private double ResendDelay => System.Math.Max(0.05, _smoothedRtt * 1.5);
 
-    /// <summary>Encola trozos de transferencias grandes mientras quede sitio en la ventana fiable.</summary>
-    private void FeedLargeTransfers() {
+    /// <summary>
+    /// Encola trozos de transferencias grandes mientras quede sitio en la ventana fiable. Las de baja prioridad, solo sin
+    /// otras pendientes, con el presupuesto de bytes que da su ritmo y con pocos mensajes sin confirmar.
+    /// </summary>
+    private void FeedLargeTransfers(double now) {
         while (_largeOut.Count > 0 && _reliableSender.FreeSlots > 64) {
-            var transfer = _largeOut.Peek();
-            var chunk = System.Math.Min(LargeChunkData, transfer.Data.Length - transfer.Offset);
-            var buffer = _messagePool.Rent();
-            _messageWriter.Reset(buffer, 0, buffer.Length);
-            _messageWriter.WriteByte(ControlMessage.LargeChunk);
-            _messageWriter.WriteUShort(transfer.Id);
-            _messageWriter.WriteByte(transfer.Kind);
-            _messageWriter.WriteUInt((uint) transfer.Data.Length);
-            _messageWriter.WriteUInt((uint) transfer.Offset);
-            _messageWriter.WriteBytes(transfer.Data, transfer.Offset, chunk);
-            _reliableSender.Enqueue(buffer, _messageWriter.Length);
-            transfer.Offset += chunk;
-            if (transfer.Offset >= transfer.Data.Length) {
-                _largeOut.Dequeue();
-            }
+            EnqueueChunk(_largeOut);
         }
+
+        if (_largeLow.Count == 0) {
+            _lowBudgetAt = -1;
+            return;
+        }
+
+        if (_lowBudgetAt < 0) {
+            _lowBudgetAt = now;
+        }
+
+        // Presupuesto acumulado como mucho para una décima de segundo (sin ráfagas tras una pausa)
+        _lowBudget = System.Math.Min(_lowBudget + (now - _lowBudgetAt) * LowPriorityBytesPerSecond,
+            LowPriorityBytesPerSecond / 10.0);
+        _lowBudgetAt = now;
+        while (_largeOut.Count == 0 && _largeLow.Count > 0 && _lowBudget >= LargeChunkData &&
+               _reliableSender.InFlight < LowPriorityMaxInFlight) {
+            _lowBudget -= EnqueueChunk(_largeLow);
+        }
+    }
+
+    /// <summary>Encola el siguiente trozo de la primera transferencia de la cola. Devuelve los bytes de datos.</summary>
+    private int EnqueueChunk(Queue<LargeOutgoing> queue) {
+        var transfer = queue.Peek();
+        var chunk = System.Math.Min(LargeChunkData, transfer.Data.Length - transfer.Offset);
+        var buffer = _messagePool.Rent();
+        _messageWriter.Reset(buffer, 0, buffer.Length);
+        _messageWriter.WriteByte(ControlMessage.LargeChunk);
+        _messageWriter.WriteUShort(transfer.Id);
+        _messageWriter.WriteByte(transfer.Kind);
+        _messageWriter.WriteUInt((uint) transfer.Data.Length);
+        _messageWriter.WriteUInt((uint) transfer.Offset);
+        _messageWriter.WriteBytes(transfer.Data, transfer.Offset, chunk);
+        _reliableSender.Enqueue(buffer, _messageWriter.Length);
+        transfer.Offset += chunk;
+        if (transfer.Offset >= transfer.Data.Length) {
+            queue.Dequeue();
+        }
+
+        return chunk;
     }
 
     /// <summary>Envía los paquetes de este tick: al menos uno (acuses y latido) y más si hay mensajes pendientes.</summary>
@@ -225,7 +279,7 @@ public sealed class NetConnection : ReliableReceiver.ISink {
             return;
         }
 
-        FeedLargeTransfers();
+        FeedLargeTransfers(now);
         var nextUnreliable = 0;
         for (var packet = 0; packet < NetConstants.MaxPacketsPerTick; packet++) {
             var sequence = _localSequence++;
@@ -254,7 +308,7 @@ public sealed class NetConnection : ReliableReceiver.ISink {
                 break;
             }
 
-            FeedLargeTransfers();
+            FeedLargeTransfers(now);
         }
 
         _unreliableCount = 0;
@@ -448,12 +502,14 @@ public sealed class NetConnection : ReliableReceiver.ISink {
     }
 
     /// <summary>Si hay algo pendiente de enviar fuera del tick normal.</summary>
-    internal bool HasPendingReliable(double now) => _reliableSender.HasDue(now, ResendDelay) || _largeOut.Count > 0;
+    internal bool HasPendingReliable(double now) =>
+        _reliableSender.HasDue(now, ResendDelay) || _largeOut.Count > 0 || _largeLow.Count > 0;
 
     internal void Release() {
         _reliableSender.Clear();
         _reliableReceiver.Clear();
         _largeOut.Clear();
+        _largeLow.Clear();
         _largeIn.Clear();
     }
 

@@ -22,4 +22,10 @@ public sealed class GlobalSettings {
     /// sirve para que el host sepa qué personaje es el tuyo al volver a unirte.
     /// </summary>
     public string PlayerKey { get; set; } = string.Empty;
+
+    /// <summary>Skin propia: nombre de su carpeta (vacío = el caballero normal).</summary>
+    public string SkinName { get; set; } = string.Empty;
+
+    /// <summary>Si en este PC se ven las skins de los demás (si no, se les ve con el caballero normal).</summary>
+    public bool ShowOthersSkins { get; set; } = true;
 }

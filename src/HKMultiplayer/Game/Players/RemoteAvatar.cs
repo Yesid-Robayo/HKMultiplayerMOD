@@ -121,6 +121,12 @@ internal sealed class RemoteAvatar {
     /// <summary>Lo que se voltea al mirar a un lado: sus efectos van debajo, como en el caballero.</summary>
     public Transform SpriteTransform => _spriteTransform;
 
+    /// <summary>Lo que dibuja el cuerpo (su skin se pone aquí).</summary>
+    public MeshRenderer Renderer => _renderer;
+
+    /// <summary>Sprite del cuerpo (su colección dice qué hoja de la skin le toca).</summary>
+    public tk2dSprite Sprite => _sprite;
+
     public bool FacingRight => _facingRight;
 
     /// <summary>Destello al curarse (como el del caballero).</summary>
