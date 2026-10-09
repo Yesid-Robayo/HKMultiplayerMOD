@@ -394,7 +394,7 @@ run_route() {
 # Resultado global de una ruta a partir de su archivo: FALLO > NOCONC > OK. Una ruta que no llegó al final (el
 # intérprete se cortó) es FALLO aunque lo comprobado hasta ahí fuera bien
 route_verdict() {
-  if grep -q '^FALLO' "$1" || ! grep -q '| fin | fin |' "$1"; then echo FALLO
+  if grep -q '^FALLO' "$1" || ! grep -qE '\| +fin \| fin \|' "$1"; then echo FALLO
   elif grep -q '^NOCONC' "$1"; then echo NOCONC
   else echo OK
   fi
