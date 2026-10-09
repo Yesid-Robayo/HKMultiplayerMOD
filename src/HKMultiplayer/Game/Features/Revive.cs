@@ -106,6 +106,18 @@ internal sealed class Revive {
     /// <summary>La próxima muerte es de verdad (no se cae).</summary>
     private static bool _allowRealDeath;
 
+    /// <summary>Fracción de máscara pendiente del multiplicador de daño recibido (se suma al golpe siguiente).</summary>
+    private static float _damageCarry;
+
+    /// <summary>Dentro de un golpe al caballero escalado por el mod.</summary>
+    private static bool _scaledHit;
+
+    /// <summary>El golpe en curso llegó a quitar vida (el juego llamó a TakeHealth).</summary>
+    private static bool _hitLanded;
+
+    /// <summary>El golpe en curso quedó en 0 con el multiplicador: se recibe sin quitar vida.</summary>
+    private static bool _absorbHit;
+
     private readonly MessageHandler _onDowned;
     private readonly MessageHandler _onRequest;
     private readonly MessageHandler _onRevived;
@@ -200,6 +212,9 @@ internal sealed class Revive {
 
     /// <summary>Si el jugador local está caído.</summary>
     public bool IsDowned => _downed;
+
+    /// <summary>En un viaje de sala del mod (el caído detrás de su compañero, recargar la sala).</summary>
+    public bool IsTraveling => _travelTarget != null;
 
     /// <summary>Si el jugador local está junto a un cuerpo que puede revivir (su Focus es para revivir, no cura).</summary>
     public bool NearBody => !_downed && _target != 0;
@@ -310,10 +325,39 @@ internal sealed class Revive {
             active._lastHazardType = hazard;
             var pd = PlayerData.instance;
             var before = pd != null ? pd.health + pd.healthBlue : 0;
-            orig(self, source, side, ScaleDamage(amount, hazard), hazard);
-            if (pd != null && pd.health + pd.healthBlue < before) {
+            var scaled = ScaleDamage(amount, hazard, out var carry);
+
+            // Un golpe que con el multiplicador queda en 0 se recibe igual (retroceso e invulnerabilidad, si no el enemigo
+            // volvería a golpear en el frame siguiente), pero sin quitar vida: TakeHealth se salta
+            _scaledHit = true;
+            _hitLanded = false;
+            _absorbHit = scaled == 0;
+            try {
+                orig(self, source, side, scaled == 0 ? 1 : scaled, hazard);
+            } finally {
+                _scaledHit = false;
+                _absorbHit = false;
+            }
+
+            // Lo que sobra del redondeo solo cuenta si el golpe llegó (con invulnerabilidad el juego lo ignora)
+            if (_hitLanded) {
+                _damageCarry = carry;
+            }
+
+            if (_hitLanded || pd != null && pd.health + pd.healthBlue < before) {
                 active.OnHurt();
             }
+        };
+
+        On.PlayerData.TakeHealth += (orig, self, amount) => {
+            if (_scaledHit) {
+                _hitLanded = true;
+                if (_absorbHit) {
+                    return;
+                }
+            }
+
+            orig(self, amount);
         };
 
         // Junto a un cuerpo, mantener Focus es para revivir: no cura
@@ -348,14 +392,22 @@ internal sealed class Revive {
         };
     }
 
-    /// <summary>Daño que recibe el caballero local según el host (pinchos, ácido y pozos no cambian).</summary>
-    private static int ScaleDamage(int damage, int hazardType) {
+    /// <summary>
+    /// Daño que recibe el caballero local según el host (pinchos, ácido y pozos no cambian). Lo que no llega a una máscara
+    /// se acumula para el golpe siguiente: con 0,5× los golpes de 1 quitan una máscara cada dos (antes, redondeando, todos
+    /// quitaban una y el ajuste no hacía nada); con 1,5×, uno quita 1 y el siguiente 2. Puede devolver 0.
+    /// </summary>
+    private static int ScaleDamage(int damage, int hazardType, out float carry) {
         var multiplier = HostSettings.Current.DamageTaken;
+        carry = _damageCarry;
         if (damage <= 0 || hazardType > 1 || Mathf.Approximately(multiplier, 1f)) {
             return damage;
         }
 
-        return Math.Max(1, Mathf.RoundToInt(damage * multiplier));
+        var exact = damage * multiplier + _damageCarry;
+        var whole = Mathf.FloorToInt(exact + 0.001f);
+        carry = Mathf.Max(0f, exact - whole);
+        return whole;
     }
 
     private IEnumerator OnHeroDie(On.HeroController.orig_Die orig, HeroController hero) {
@@ -1330,7 +1382,7 @@ internal sealed class Revive {
         }
 
         // El alma se cobra al empezar: si no, Focus la gastaría curando y revivir saldría gratis
-        var cost = HostSettings.Current.ReviveSoul;
+        var cost = ReviveCost();
         if (_reservedSoul == 0 && cost > 0) {
             if (PlayerData.instance.MPCharge < cost) {
                 _notEnoughSoul = true;
@@ -1357,6 +1409,16 @@ internal sealed class Revive {
         _session.End();
         _cooldownUntil = Time.unscaledTime + 1f;
         ResetProgress();
+    }
+
+    /// <summary>
+    /// Alma que cuesta revivir: la del host, pero nunca más de la que cabe en el orbe ahora. Con la sombra sin recuperar el
+    /// orbe se queda en 66: con "99" nadie podía revivir a nadie hasta recuperarla.
+    /// </summary>
+    private static int ReviveCost() {
+        var cost = HostSettings.Current.ReviveSoul;
+        var pd = PlayerData.instance;
+        return pd != null && pd.maxMP > 0 ? Math.Min(cost, pd.maxMP) : cost;
     }
 
     /// <summary>Envía a la sala cuánto lleva (10 veces por segundo, y una vez al soltar).</summary>
@@ -1532,7 +1594,7 @@ internal sealed class Revive {
             var kind = promptKey >> 32;
             var target = _party.Get((ushort) (promptKey & 0xFFFF))?.Name ?? "?";
             _promptText.text = kind switch {
-                2 => $"Necesitas {HostSettings.Current.ReviveSoul} de alma para revivir a {target}",
+                2 => $"Necesitas {ReviveCost()} de alma para revivir a {target}",
                 3 => $"{_party.Get((ushort) ((promptKey >> 16) & 0xFFFF))?.Name ?? "?"} está reviviendo a {target}",
                 _ => $"Mantén Focus para revivir a {target}"
             };

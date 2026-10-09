@@ -56,7 +56,13 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     public Features.BossBar BossBar { get; } = new();
 
+    /// <summary>Barras de vida sobre los enemigos heridos (si el host las activa).</summary>
+    public Features.EnemyBars EnemyBars { get; } = new();
+
     public Features.PartyActions Actions { get; } = new();
+
+    /// <summary>"Ir con ..." del panel: aparecer junto a un compañero.</summary>
+    public Features.PartnerTravel Travel { get; } = new();
 
     /// <summary>Finales, créditos y Mr. Mushroom a la vez para todos.</summary>
     public Features.SharedCutscenes Cutscenes { get; } = new();
@@ -119,6 +125,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Features.Revive.InstallHooks();
         Features.ShadeSync.InstallHooks();
         Features.BossBar.InstallHooks();
+        Features.EnemyBars.InstallHooks();
         Features.Difficulty.Install();
         Features.SharedCutscenes.InstallHooks();
         Features.BossPresentation.InstallHooks();
@@ -159,6 +166,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         if (Session != null) {
             Features.HostSettings.Current.Update();
             Actions.Update();
+            Travel.Update();
         }
     }
 
@@ -207,6 +215,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Shades.Update(scene);
             Hud.Update(scene);
             BossBar.Update(scene);
+            EnemyBars.Update(scene);
             Skins.LateUpdate(scene);
             Cutscenes.Update();
             Presentations.Update();
@@ -433,7 +442,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Dreams.Detach();
         Presentations.Detach();
         Cutscenes.Detach();
+        Travel.Detach();
         Actions.Detach();
+        EnemyBars.Detach();
         BossBar.Detach();
         Hud.Detach();
         Shades.Detach();
@@ -468,10 +479,12 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Shades.Attach(session);
         Hud.Attach(session, Party, Vitals, Players, Revive);
         BossBar.Attach();
+        EnemyBars.Attach();
         Actions.Attach(session, Revive);
         Cutscenes.Attach(session, Revive);
         Presentations.Attach(session, Revive);
         Dreams.Attach(session, Revive);
+        Travel.Attach(session, Party, Revive, Dreams, Cutscenes);
         Grimmchild.Attach(session);
         Skins.Attach(session, Players);
         session.Connected += () => SetStatus($"Conectado como jugador {session.LocalId}");
@@ -493,11 +506,15 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         };
         session.PlayerJoined += player => {
             Log.Info($"{player.Name} se unió a la partida");
-            Notice.Show($"{player.Name} se unió a la partida");
+            if (Features.HostSettings.Current.ShowNotices) {
+                Notice.Show($"{player.Name} se unió a la partida");
+            }
         };
         session.PlayerLeft += player => {
             Log.Info($"{player.Name} salió de la partida");
-            Notice.Show($"{player.Name} salió de la partida");
+            if (Features.HostSettings.Current.ShowNotices) {
+                Notice.Show($"{player.Name} salió de la partida");
+            }
         };
     }
 

@@ -177,6 +177,26 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         }
     }
 
+    /// <summary>
+    /// Activa o desactiva un botón y lo deja ver: desactivado, su texto queda apagado (el botón del juego no cambia de
+    /// aspecto por sí solo y parecía que se podía pulsar).
+    /// </summary>
+    protected static void SetButtonEnabled(MenuButton button, bool enabled) {
+        if (button.interactable != enabled) {
+            button.interactable = enabled;
+        }
+
+        var label = button.GetComponentInChildren<Text>(true);
+        if (label != null) {
+            var color = label.color;
+            var alpha = enabled ? 1f : 0.35f;
+            if (!Mathf.Approximately(color.a, alpha)) {
+                color.a = alpha;
+                label.color = color;
+            }
+        }
+    }
+
     protected Text AddText(GameObject parent, string text, int size, bool title = false) {
         var textObject = new GameObject("Text", typeof(RectTransform), typeof(Text), typeof(LayoutElement));
         textObject.transform.SetParent(parent.transform, false);
