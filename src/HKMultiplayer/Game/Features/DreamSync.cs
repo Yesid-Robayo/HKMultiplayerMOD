@@ -490,8 +490,12 @@ internal sealed class DreamSync {
         return text.ToString();
     }
 
-    /// <summary>Modo de prueba: hace que la primera entrada de la sala reciba el golpe del aguijón onírico.</summary>
-    public bool TestDreamHit() {
+    /// <summary>
+    /// Modo de prueba: hace que la primera entrada de la sala reciba el golpe del aguijón onírico. Con
+    /// <paramref name="activate"/>, si no hay ninguna encendida, enciende la primera (como hace el juego con la de la
+    /// Radiancia al vencer al Hollow Knight con el Corazón del Vacío); el golpe se da con otra orden pasado un segundo.
+    /// </summary>
+    public bool TestDreamHit(bool activate) {
         foreach (var entry in _entries) {
             if (entry.Fsm != null && entry.Fsm.gameObject.activeInHierarchy) {
                 entry.Fsm.SendEvent("DREAM HIT");
@@ -499,6 +503,15 @@ internal sealed class DreamSync {
             }
         }
 
-        return false;
+        if (!activate || _entries.Count == 0 || _entries[0].Fsm == null) {
+            return false;
+        }
+
+        for (var t = _entries[0].Fsm.transform; t != null; t = t.parent) {
+            t.gameObject.SetActive(true);
+        }
+
+        Log.Info($"Entrada encendida: {_entries[0].Fsm.gameObject.name}");
+        return true;
     }
 }

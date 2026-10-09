@@ -689,8 +689,9 @@ internal sealed class TestDriver : MonoBehaviour {
                 Log.Info($"{Tag}sueños {runner.Dreams.Describe()}");
                 break;
             case "dreamhit":
-                // Como golpear con el aguijón onírico la entrada a un sueño de la sala
-                Log.Info($"{Tag}golpe onírico: {(runner.Dreams.TestDreamHit() ? "sí" : "no hay entrada")}");
+                // dreamhit [encender]: como golpear con el aguijón onírico la entrada a un sueño de la sala; con
+                // "encender", si ninguna está encendida se enciende la primera (luego otro dreamhit la golpea)
+                Log.Info($"{Tag}golpe onírico: {(runner.Dreams.TestDreamHit(args.Length > 1) ? "sí" : "no hay entrada")}");
                 break;
             case "presentation":
                 // Presentación de jefe: si este PC avisó, quién tiene quieto al caballero local
