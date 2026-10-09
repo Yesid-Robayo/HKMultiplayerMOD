@@ -35,6 +35,9 @@ internal sealed class TestDriver : MonoBehaviour {
     private static float _burstOnGap;
     private static TestDriver _burstOnInstance;
 
+    /// <summary>Viaje sin puerta de la orden warp.</summary>
+    private static readonly HKMultiplayer.Game.Features.SceneTravel Warp = new();
+
     private string _commandFile;
     private int _processedLines;
     private float _nextPoll;
@@ -94,6 +97,7 @@ internal sealed class TestDriver : MonoBehaviour {
     }
 
     private void Update() {
+        Warp.Update();
         if (Time.unscaledTime < _nextPoll) {
             return;
         }
@@ -575,8 +579,9 @@ internal sealed class TestDriver : MonoBehaviour {
                 _god = args.Length < 2 || args[1] != "no";
                 break;
             case "hurt":
-                // hurt: el caballero recibe un golpe de 1 (para ver el efecto del golpe en el otro PC)
-                hero.TakeDamage(hero.gameObject, GlobalEnums.CollisionSide.left, 1, 1);
+                // hurt [daño] [tipo]: el caballero recibe un golpe (por defecto de 1, de enemigo); tipo 2 = pinchos, 3 = ácido
+                hero.TakeDamage(hero.gameObject, GlobalEnums.CollisionSide.left, args.Length > 1 ? int.Parse(args[1]) : 1,
+                    args.Length > 2 ? int.Parse(args[2]) : 1);
                 break;
             case "tp":
                 // tp <x> <y> [respawn]: con "respawn", si pisa pinchos vuelve aquí y no a la entrada de la sala. Solo en
@@ -622,6 +627,14 @@ internal sealed class TestDriver : MonoBehaviour {
                 var path = Path.Combine(Application.persistentDataPath, args[1] + ".png");
                 ScreenCapture.CaptureScreenshot(path);
                 Log.Info($"{Tag}captura -> {path}");
+                break;
+            case "scenetrace":
+                // scenetrace <segundos>: sala, cambio de sala y posición del caballero cada 0,2 s
+                StartCoroutine(TraceScenes(ParseFloat(args[1])));
+                break;
+            case "invulwatch":
+                // invulwatch <segundos>: registra cuándo empieza y acaba la invulnerabilidad (p. ej. al revivir)
+                StartCoroutine(WatchInvulnerable(ParseFloat(args[1])));
                 break;
             case "burst":
                 // burst <nombre> <cuántas> <segundos entre una y otra>: capturas seguidas (nombre-1, nombre-2...), para
@@ -707,6 +720,29 @@ internal sealed class TestDriver : MonoBehaviour {
             case "party":
                 // Estado de revivir: caído, cuerpo, viaje, progreso y estado de cada jugador
                 Log.Info($"{Tag}revivir {runner.Revive.Describe()}");
+                break;
+            case "goto":
+                // goto <nombre>|#<id>: "Ir con ..." como desde el panel (se hace al jugar, sin pausa). Con #<id> se pide
+                // aunque ese jugador ya no esté (como un panel que aún lo mostraba)
+                var goToName = string.Join(" ", args.Skip(1));
+                var goToId = goToName.StartsWith("#") ? ushort.Parse(goToName.Substring(1))
+                    : runner.Party.Members.FirstOrDefault(m => m.Name == goToName)?.Id ?? 0;
+                var goToError = goToId == 0 ? $"no hay nadie llamado '{goToName}'" : runner.Travel.Request(goToId);
+                Log.Info($"{Tag}ir con {goToName}: {goToError ?? "aceptado"}");
+                break;
+            case "warp":
+                // warp <sala> <x> <y>: viaja a esa sala y punto sin puerta (como "Ir con ..."), p. ej. a un sueño
+                if (!Warp.Begin(args[1], new Vector3(ParseFloat(args[2]), ParseFloat(args[3]), 0f))) {
+                    Log.Warn($"{Tag}ahora no se puede viajar");
+                }
+
+                break;
+            case "travel":
+                // Estado de "Ir con ...": lo pedido, el viaje y el último suelo pisado (lo que se responde)
+                Log.Info($"{Tag}ir con {runner.Travel.Describe()}");
+                break;
+            case "enemybars":
+                Log.Info($"{Tag}barras de enemigos {runner.EnemyBars.Describe()}");
                 break;
             case "partystate":
                 // Estado de cada jugador según el host (en pie, caído, en cinemática, en sueño)
@@ -1071,7 +1107,8 @@ internal sealed class TestDriver : MonoBehaviour {
             return text.ToString();
         }
 
-        text.Append($"sesión={(session.IsHost ? "host" : "cliente")} activa={session.IsActive} id={session.LocalId} ");
+        text.Append($"sesión={(session.IsHost ? "host" : "cliente")} activa={session.IsActive} id={session.LocalId} " +
+                    $"dueño={session.OwnerOf(gm?.sceneName)} ");
         text.Append($"rtt={session.Rtt * 1000:0}ms visibles={runner.Players.VisibleCount} jugadores=[");
         text.Append(string.Join(", ", session.Players.Select(p =>
             $"{p.Id}:{p.Name}@{(p.Scene.Length > 0 ? p.Scene : "-")}{(p.IsLocal ? "*" : "")}")));
@@ -1148,6 +1185,45 @@ internal sealed class TestDriver : MonoBehaviour {
 
             return spawned;
         };
+    }
+
+    /// <summary>Registra la sala activa, si se está cambiando de sala y la posición del caballero cada 0,2 s (orden scenetrace).</summary>
+    private static IEnumerator TraceScenes(float seconds) {
+        var start = Time.unscaledTime;
+        var next = 0f;
+        var lastScene = string.Empty;
+        while (Time.unscaledTime - start < seconds) {
+            var gm = GameManager.instance;
+            var hero = HeroController.instance;
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            if (scene != lastScene || Time.unscaledTime >= next) {
+                next = Time.unscaledTime + 0.2f;
+                lastScene = scene;
+                var p = hero != null ? hero.transform.position : Vector3.zero;
+                Log.Info($"{Tag}traza {Time.unscaledTime - start:0.00} s sala={scene} cambiando={gm?.IsInSceneTransition} " +
+                         $"estado={gm?.gameState} pos=({p.x:0.0},{p.y:0.0}) transitioning={hero?.cState.transitioning}");
+            }
+
+            yield return null;
+        }
+    }
+
+    /// <summary>Registra cuándo el caballero se vuelve invulnerable y cuándo deja de serlo (orden invulwatch).</summary>
+    private static IEnumerator WatchInvulnerable(float seconds) {
+        var start = Time.time;
+        var last = false;
+        while (Time.time - start < seconds) {
+            var hero = HeroController.instance;
+            var now = hero != null && hero.cState.invulnerable;
+            if (now != last) {
+                last = now;
+                Log.Info($"{Tag}invulnerable={now} a los {Time.time - start:0.00} s");
+            }
+
+            yield return null;
+        }
+
+        Log.Info($"{Tag}fin de invulwatch");
     }
 
     private static IEnumerator Burst(string name, int count, float interval) {

@@ -16,7 +16,7 @@ namespace HKMultiplayer.UI;
 /// <summary>
 /// "Multijugador" en el menú de pausa (solo durante una partida multijugador). Páginas: Partida (código, IP oculta hasta
 /// pedirla, jugadores con su ping y cerrar o salir), Ajustes de la partida (los decide el host; los invitados los ven sin
-/// poder cambiarlos) y Compañeros (vida de cada uno, dar geo, desatascarse y recargar la sala). El botón es una copia del
+/// poder cambiarlos) y Compañeros (vida de cada uno, dar geo, ir con él, desatascarse y recargar la sala). El botón es una copia del
 /// de "Opciones" de la pausa y la pantalla tiene el mismo estilo que el resto de menús.
 /// </summary>
 internal sealed class SessionMenu : GameStyledMenu {
@@ -29,8 +29,11 @@ internal sealed class SessionMenu : GameStyledMenu {
     private const int PartnersPage = 4;
     private const int SkinPage = 5;
 
-    /// <summary>Ajustes de la primera página (dificultad y revivir); el resto va en la segunda.</summary>
-    private const int FirstPageOptions = 8;
+    /// <summary>
+    /// Ajustes de la primera página (dificultad y revivir: 10); el resto (pantalla y permisos: 9) va en la segunda. Así
+    /// las dos tienen casi las mismas filas (con 8 y 11 la segunda quedaba apretada).
+    /// </summary>
+    private const int FirstPageOptions = 10;
 
     private const int MaxPartnerRows = 3;
 
@@ -61,6 +64,8 @@ internal sealed class SessionMenu : GameStyledMenu {
     private Text _moreSettingsNote;
     private readonly Text[] _partnerTexts = new Text[MaxPartnerRows];
     private readonly MenuButton[] _partnerButtons = new MenuButton[MaxPartnerRows];
+    private readonly MenuButton[] _goToButtons = new MenuButton[MaxPartnerRows];
+    private readonly GameObject[] _partnerRows = new GameObject[MaxPartnerRows];
     private readonly ushort[] _partnerIds = new ushort[MaxPartnerRows];
     private Text _partnersMessage;
     private Text _ownGeo;
@@ -283,7 +288,7 @@ internal sealed class SessionMenu : GameStyledMenu {
         AddButton(second, "Ajustes anteriores", () => ShowPage(SettingsPage), 36);
     }
 
-    /// <summary>Compañeros: su vida y alma, dar geo, desatascarse y recargar la sala.</summary>
+    /// <summary>Compañeros: su vida y alma, dar geo, ir con él, desatascarse y recargar la sala.</summary>
     private void BuildPartnersPage() {
         var page = NewPage(PartnersPage);
         _ownGeo = AddText(page, string.Empty, 34);
@@ -291,7 +296,9 @@ internal sealed class SessionMenu : GameStyledMenu {
         for (var i = 0; i < MaxPartnerRows; i++) {
             var row = i;
             _partnerTexts[i] = AddText(page, string.Empty, 32);
-            _partnerButtons[i] = AddButton(page, "Dar geo", () => GiveGeo(row), 34);
+            _partnerRows[i] = AddRow(page, $"Compañero {i + 1}", 84, 10);
+            _partnerButtons[i] = AddButton(_partnerRows[i], "Dar geo", () => GiveGeo(row), 34, 520);
+            _goToButtons[i] = AddButton(_partnerRows[i], "Ir con", () => GoTo(row), 34, 520);
         }
 
         AddSpace(page, 6);
@@ -314,6 +321,9 @@ internal sealed class SessionMenu : GameStyledMenu {
         Refresh();
     }
 
+    /// <summary>Ir junto a ese compañero al quitar la pausa (si el host lo permite).</summary>
+    private void GoTo(int row) => Resume(MultiplayerRunner.Instance.Travel.Request(_partnerIds[row]));
+
     /// <summary>Si la acción se aceptó, vuelve al juego (se hace al quitar la pausa); si no, dice por qué.</summary>
     private void Resume(string error) {
         if (error != null) {
@@ -330,12 +340,23 @@ internal sealed class SessionMenu : GameStyledMenu {
         yield return ui.StartCoroutine(ui.HideMenu(Screen));
         ui.UIGoToPauseMenu();
         Busy = false;
-        // Quitar la pausa como con Esc (la acción se hace al volver a jugar)
+        // Quitar la pausa como con Esc (la acción se hace al volver a jugar). Mientras el menú de pausa termina de
+        // aparecer, el juego ignora quitar la pausa (ignoreUnpause): con una espera fija de 0,3 s a veces no había
+        // terminado y la partida se quedaba en pausa sin hacer la acción
         yield return new WaitForSecondsRealtime(0.3f);
+        var until = Time.unscaledTime + 3f;
+        while (Time.unscaledTime < until && IgnoreUnpauseField?.GetValue(ui) is true) {
+            yield return null;
+        }
+
         if (GameManager.instance != null && GameManager.instance.isPaused) {
             ui.TogglePauseGame();
         }
     }
+
+    /// <summary>Si el juego ignora ahora quitar la pausa (privado en UIManager).</summary>
+    private static readonly System.Reflection.FieldInfo IgnoreUnpauseField = typeof(UIManager).GetField("ignoreUnpause",
+        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
     // =====================================================================================================
     // Navegación
@@ -499,15 +520,23 @@ internal sealed class SessionMenu : GameStyledMenu {
                         text.Append($" (+{entry.Blue} azules)");
                     }
 
-                    text.Append($"  ·  {entry.Soul} de alma  ·  {Zones.Name(entry.Zone)}");
+                    // Dónde está: en una cinemática la zona es "ninguna" (salía "None"); en un sueño, se dice así
+                    text.Append($"  ·  {entry.Soul} de alma  ·  ");
+                    text.Append(member.Status switch {
+                        PlayerStatus.Cutscene => "viendo una cinemática",
+                        PlayerStatus.Dream => "en un sueño",
+                        _ => entry.Zone == (byte) MapZone.NONE ? "cambiando de sala" : Zones.Name(entry.Zone)
+                    });
                 }
 
                 _partnerIds[row] = member.Id;
                 _partnerTexts[row].text = text.ToString();
                 _partnerTexts[row].gameObject.SetActive(true);
-                _partnerButtons[row].gameObject.SetActive(true);
+                _partnerRows[row].SetActive(true);
                 SetButtonText(_partnerButtons[row], $"Dar geo a {member.Name}");
-                _partnerButtons[row].interactable = HostSettings.Current.AllowGeoGifts;
+                SetButtonEnabled(_partnerButtons[row], HostSettings.Current.AllowGeoGifts);
+                SetButtonText(_goToButtons[row], $"Ir con {member.Name}");
+                SetButtonEnabled(_goToButtons[row], HostSettings.Current.AllowPartnerTravel);
                 row++;
             }
         }
@@ -515,7 +544,7 @@ internal sealed class SessionMenu : GameStyledMenu {
         for (var i = row; i < MaxPartnerRows; i++) {
             _partnerTexts[i].gameObject.SetActive(i == 0);
             _partnerTexts[i].text = i == 0 ? "No hay compañeros conectados" : string.Empty;
-            _partnerButtons[i].gameObject.SetActive(false);
+            _partnerRows[i].SetActive(false);
         }
     }
 

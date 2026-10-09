@@ -8,7 +8,7 @@ Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más)
 sigue: [docs/estado.md](docs/estado.md). El diseño detallado está en
 [docs/arquitectura.md](docs/arquitectura.md).
 
-**Versión actual: 0.18.9** · Hitos M1 a M6 terminados (ver [Estado](#estado)).
+**Versión actual: 0.19.0** · Hitos M1 a M6 terminados (ver [Estado](#estado)).
 
 ---
 
@@ -68,7 +68,9 @@ Se ven y se oyen las acciones del compañero con los mismos efectos del juego, a
 - **HUD del compañero** arriba a la derecha: su nombre, sus máscaras (llenas, vacías y azules, igual que su HUD), un
   orbe con su alma y si está caído o en otra zona. Sus máscaras salen sobre su cabeza unos segundos al cambiarle la
   vida, y hay flechas en el borde de la pantalla hacia el compañero y los cuerpos que no se ven.
-- **Barra del jefe** abajo, con su nombre en el idioma del juego (el título con el que el juego lo presenta).
+- **Barra del jefe** abajo, con su nombre en el idioma del juego (el título con el que el juego lo presenta). Los
+  avisos suben por encima de ella para no taparla.
+- **Barras de enemigos** (si el host las activa; vienen apagadas): una barra pequeña sobre cada enemigo herido.
 - **Cinemáticas compartidas**: los finales, los créditos y Mr. Mushroom se ven a la vez aunque el compañero esté en
   otra sala. Se saltan cuando todos pulsan saltar ("Esperando a X para saltar 1/2"; el host puede elegir que baste
   con uno). Tras el final, todos vuelven a su banco y la partida sigue.
@@ -83,11 +85,21 @@ Se ven y se oyen las acciones del compañero con los mismos efectos del juego, a
   efectos; el HUD con la skin lo ve su dueño. Se envían por la red del mod en segundo plano (unos 0,5 MB/s, sin
   retrasar golpes); se puede desactivar ver las de los demás.
 - **Ajustes de la partida** que decide el host (*Pausa › Multijugador › Ajustes de la partida*), guardados en cada
-  mundo; los invitados los ven sin poder cambiarlos: vida de los jefes (1,5× por defecto) y de los enemigos, solo con
-  el compañero en la sala, daño recibido, revivir (sí/no, tiempo, alma, máscaras, invulnerabilidad, en el banco),
-  nombres, vida del compañero, flechas, avisos, barra del jefe, regalar geo y cómo se saltan las cinemáticas.
-- **Compañeros** (*Pausa › Multijugador › Compañeros*): la vida y el alma de cada uno, **dar geo**, **desatascarse** (al
-  último suelo seguro) y **recargar la sala**.
+  mundo; los invitados los reciben al momento (también al unirse tarde) y los ven sin poder cambiarlos. Dos páginas:
+  *dificultad y revivir* (vida de los jefes, 1,5× por defecto, y de los enemigos, solo con el compañero en la sala,
+  daño recibido sin contar pinchos ni ácido; revivir sí/no, tiempo, alma, máscaras, invulnerabilidad, en el banco) y
+  *pantalla y permisos* (nombres, vida del compañero, flechas, avisos, barra del jefe, barras de enemigos, regalar geo,
+  permitir ir con un compañero y cómo se saltan las cinemáticas). La vida extra y el daño recibido llevan la cuenta de
+  lo que sobra del redondeo: 1,5× es 1,5× en la suma de los golpes (con 0,5× los golpes de una máscara quitan una cada
+  dos). El alma para revivir nunca pasa de la que cabe en el orbe (con la sombra sin recuperar, 66).
+- **Compañeros** (*Pausa › Multijugador › Compañeros*): la vida y el alma de cada uno y dónde está, **dar geo**,
+  **ir con él**, **desatascarse** (al último suelo seguro) y **recargar la sala**. Lo que el host no permite sale
+  apagado.
+- **Ir con un compañero** (para desatascarse; el host puede desactivarlo): al quitar la pausa apareces a su lado, en el
+  último suelo que pisó (no en el aire si estaba saltando). Si está en otra sala o en otra zona, viajas a ella. Tu punto
+  de reaparición tras pinchos pasa a ser ese sitio. No se puede si el compañero está caído, en un sueño, en una
+  cinemática, cambiando de sala o en otro mundo, ni si tú estás caído, en un sueño, cambiando de sala, sentado en un
+  banco o sin control; el aviso dice por qué.
 
 ### Mundo compartido
 
@@ -238,7 +250,7 @@ lista completa de pendientes está al final de la arquitectura.
 | `src/HKMultiplayer/Session/` | Sesión: host y unirse, jugadores, salas y dueño de cada sala, reparto de mensajes. |
 | `src/HKMultiplayer/Game/Players/` | Estado de los jugadores, interpolación, avatares del compañero y efectos de sus acciones. |
 | `src/HKMultiplayer/Game/World/` | Mundos coop, guardado, personajes de los invitados y progreso compartido. |
-| `src/HKMultiplayer/Game/Features/` | Funciones del coop: estado de cada jugador, ajustes del host, revivir, sombras, HUD del compañero, barra del jefe, regalar geo. |
+| `src/HKMultiplayer/Game/Features/` | Funciones del coop: estado de cada jugador, ajustes del host, revivir, sombras, HUD del compañero, barra del jefe y barras de enemigos, regalar geo, ir con un compañero. |
 | `src/HKMultiplayer/Game/Scene/` | Objetos de sala, rompibles, ascensores y rejas, controladores de batalla, enemigos y jefes, peligros animados. |
 | `src/HKMultiplayer/UI/` | Menús, avisos y el lienzo del HUD del coop. |
 | `src/HKMultiplayer/Testing/` | Modo de prueba: órdenes por archivo para probar con dos copias del juego. |

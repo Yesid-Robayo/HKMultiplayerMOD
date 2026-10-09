@@ -86,6 +86,9 @@ internal sealed class SharedCutscenes {
     /// <summary>Mientras es true, la llamada a SkipCutscene es la que ordenó el host y se deja pasar.</summary>
     private bool _skipApproved;
 
+    /// <summary>La orden de saltar llegó durante el voto (el del host completa la votación en el sitio).</summary>
+    private bool _skipIssued;
+
     /// <summary>Se llegó a la cinemática llevado por otro: al terminar vuelve a donde estaba.</summary>
     private bool _pulled;
 
@@ -216,14 +219,21 @@ internal sealed class SharedCutscenes {
         _hooked = true;
         On.GameManager.SkipCutscene += (orig, self) => {
             var active = _active;
+            // (la llamada de la orden del host vuelve a pasar por aquí: esa no borra la marca)
+            if (active != null && !active._skipApproved) {
+                active._skipIssued = false;
+            }
+
             if (active == null || active.AllowSkip()) {
                 orig(self);
                 return;
             }
 
             // El juego marca "saltando" antes de llamar y solo lo desmarca al saltar de verdad: si se quedara marcado ya
-            // no aceptaría más pulsaciones en esta ni en las siguientes cinemáticas
-            if (self.inputHandler != null) {
+            // no aceptaría más pulsaciones en esta ni en las siguientes cinemáticas. Pero en el host su propio voto
+            // puede completar la votación aquí mismo (el mensaje al servidor se procesa en el sitio) y el salto ya
+            // empezó: quitarle la marca lo cortaba y el host se quedaba en la cinemática mientras los demás seguían
+            if (self.inputHandler != null && !active._skipIssued) {
                 self.inputHandler.skippingCutscene = false;
             }
         };
@@ -507,6 +517,7 @@ internal sealed class SharedCutscenes {
         }
 
         _skipApproved = true;
+        _skipIssued = true;
         try {
             gm.SkipCutscene();
         } finally {

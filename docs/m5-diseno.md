@@ -60,10 +60,27 @@ recomendadas de la propuesta. La referencia es la 0.7.3 del mod (`HollowKnightCo
   sala), Skin.
 - Por defecto: vida de jefes 1,5× (elegido) solo con el compañero en la sala; enemigos 1×; daño recibido 1×. Revivir
   activado, 2 s, 33 de alma, 1 máscara, 2 s de invulnerabilidad, revivir en el banco sí. Pantalla: nombres, vida del
-  compañero, flechas, avisos y barra de jefe sí; barras de enemigos no. Regalar geo sí. Saltar cinemáticas por votación.
+  compañero, flechas, avisos y barra de jefe sí; barras de enemigos no. Regalar geo sí. Ir con un compañero sí (pedido
+  después de M5). Saltar cinemáticas por votación.
+- Valores de cada ajuste: vida de jefes 1×, 1,25×, 1,5×, 2×, 2,5× y 3×; vida de enemigos 1×, 1,25×, 1,5× y 2×; daño
+  recibido 0,5×, 1×, 1,5× y 2×; tiempo para revivir 1, 2, 3 y 5 s; alma 0, 33, 66 y 99 (como mucho la que cabe en el
+  orbe); máscaras 1, 2, 3 y todas; invulnerabilidad 1, 2, 3 y 5 s; saltar cinemáticas por votación o en cuanto salta
+  cualquiera. Panel en dos páginas: dificultad y revivir (10) y pantalla y permisos (9).
+- "Avisos" apaga los de lo que hacen los demás (se unió, salió, cayó, sombra recuperada, regalo, Grimmchild, skin); los
+  que responden a lo que hace uno salen siempre.
+- Comprobado en el juego con dos copias (0.18.9 + cambios): cada valor de cada ajuste, que se guarda en el mundo y se
+  lee al reabrirlo, que el invitado lo recibe al momento y al unirse tarde, y que no puede cambiarlo.
 - La vida extra se hace dividiendo el daño en `HealthManager.TakeDamage` en el PC que mueve al enemigo (no subiendo su
-  vida: las fases de los jefes dependen de ella). El daño recibido se escala en `HeroController.TakeDamage` sin tocar
-  pinchos ni ácido.
+  vida: las fases de los jefes dependen de ella), llevando lo que sobra del redondeo a los golpes siguientes. El daño
+  recibido se escala en `HeroController.TakeDamage` sin tocar pinchos ni ácido, también con lo que sobra.
+
+### Ir con un compañero (pedido después de M5)
+
+- En *Compañeros*, "Ir con &lt;nombre&gt;" junto a "Dar geo". Al quitar la pausa el caballero aparece a su lado, en el
+  último suelo que pisó; en otra sala o zona, viaja a ella sin puerta. La reaparición tras pinchos pasa a ese sitio.
+- No se puede con el compañero caído, en un sueño, en una cinemática, cambiando de sala o en otro mundo
+  (desconectado: ya no sale en la lista), ni estando uno caído, en un sueño, cambiando de sala, sentado en un banco o
+  sin control. Ajuste del host "Permitir ir con un compañero", activado por defecto.
 
 ## 6. Sueños compartidos y jefes
 
