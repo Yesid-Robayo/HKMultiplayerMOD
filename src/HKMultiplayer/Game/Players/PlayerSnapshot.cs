@@ -25,6 +25,9 @@ internal struct PlayerSnapshot {
     /// </summary>
     public bool DungAura;
 
+    /// <summary>Invulnerable tras un golpe o al revivir: su sprite parpadea (como <see cref="InvulnerablePulse"/>).</summary>
+    public bool Invulnerable;
+
     /// <summary>Sprite que se ve: colección (<see cref="HeroSprites"/>) e id dentro de ella.</summary>
     public byte Collection;
 
@@ -42,6 +45,7 @@ internal struct PlayerSnapshot {
     private const byte FacingRightFlag = 1;
     private const byte VisibleFlag = 2;
     private const byte DungAuraFlag = 4;
+    private const byte InvulnerableFlag = 8;
 
     /// <summary>Tamaño en bytes.</summary>
     public const int Size = 4 + 2 + 4 + 4 + 1 + 1 + 2;
@@ -52,7 +56,7 @@ internal struct PlayerSnapshot {
         writer.WriteFloat(X);
         writer.WriteFloat(Y);
         writer.WriteByte((byte) ((FacingRight ? FacingRightFlag : 0) | (Visible ? VisibleFlag : 0) |
-                                 (DungAura ? DungAuraFlag : 0)));
+                                 (DungAura ? DungAuraFlag : 0) | (Invulnerable ? InvulnerableFlag : 0)));
         writer.WriteByte(Collection);
         writer.WriteUShort(SpriteId);
     }
@@ -66,6 +70,7 @@ internal struct PlayerSnapshot {
         FacingRight = (flags & FacingRightFlag) != 0;
         Visible = (flags & VisibleFlag) != 0;
         DungAura = (flags & DungAuraFlag) != 0;
+        Invulnerable = (flags & InvulnerableFlag) != 0;
         Collection = reader.ReadByte();
         SpriteId = reader.ReadUShort();
     }
@@ -73,7 +78,7 @@ internal struct PlayerSnapshot {
     /// <summary>Si dibujarían lo mismo (para no repetir estados de un jugador quieto).</summary>
     public bool SameLook(in PlayerSnapshot other) =>
         X == other.X && Y == other.Y && FacingRight == other.FacingRight && Visible == other.Visible &&
-        DungAura == other.DungAura &&
+        DungAura == other.DungAura && Invulnerable == other.Invulnerable &&
         Collection == other.Collection && SpriteId == other.SpriteId && SceneHash == other.SceneHash;
 
     /// <summary>Huella de 16 bits del nombre de una sala (FNV-1a).</summary>

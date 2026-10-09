@@ -27,6 +27,15 @@ internal sealed class RemoteAvatar {
     private bool _facingRight;
     private bool _visible = true;
 
+    /// <summary>Parpadeo de invulnerabilidad, como <see cref="InvulnerablePulse"/> del caballero: color y ritmo los suyos.</summary>
+    private readonly Color _normalColor = Color.white;
+
+    private readonly Color _invulnerableColor = new(1f, 1f, 1f, 0.5f);
+    private readonly float _pulseDuration = 0.3f;
+    private bool _pulsing;
+    private bool _pulseReverse;
+    private float _pulseTime;
+
     public RemoteAvatar(string name, HeroController hero, Font font) {
         _root = new GameObject($"Jugador remoto {name}");
         Object.DontDestroyOnLoad(_root);
@@ -43,6 +52,13 @@ internal sealed class RemoteAvatar {
         _spriteTransform.localScale = new Vector3(_scale, Mathf.Abs(heroTransform.localScale.y), 1f);
         _sprite = spriteObject.AddComponent<tk2dSprite>();
         _sprite.SetSprite(heroSprite.Collection, heroSprite.spriteId);
+        var pulse = hero.GetComponent<InvulnerablePulse>();
+        if (pulse != null && pulse.pulseDuration > 0f) {
+            _invulnerableColor = pulse.invulColor;
+            _pulseDuration = pulse.pulseDuration;
+        }
+
+        _normalColor = _sprite.color;
         _renderer = spriteObject.GetComponent<MeshRenderer>();
         // Destellos como los del caballero (al curarse o recibir un golpe)
         _flash = spriteObject.AddComponent<SpriteFlash>();
@@ -106,6 +122,36 @@ internal sealed class RemoteAvatar {
         }
 
         DungAura = state.DungAura;
+        UpdatePulse(state.Invulnerable);
+    }
+
+    /// <summary>Va y vuelve entre su color y el de invulnerable mientras lo es; al acabar, su color de siempre.</summary>
+    private void UpdatePulse(bool invulnerable) {
+        if (!invulnerable) {
+            if (_pulsing) {
+                _pulsing = false;
+                _sprite.color = _normalColor;
+            }
+
+            return;
+        }
+
+        if (!_pulsing) {
+            _pulsing = true;
+            _pulseReverse = false;
+            _pulseTime = 0f;
+        }
+
+        _pulseTime += _pulseReverse ? -Time.deltaTime : Time.deltaTime;
+        if (_pulseTime > _pulseDuration) {
+            _pulseTime = _pulseDuration;
+            _pulseReverse = true;
+        } else if (_pulseTime < 0f) {
+            _pulseTime = 0f;
+            _pulseReverse = false;
+        }
+
+        _sprite.color = Color.Lerp(_normalColor, _invulnerableColor, _pulseTime / _pulseDuration);
     }
 
     /// <summary>Si lleva el aura de Defender's Crest encendida (sus efectos la dibujan).</summary>
