@@ -36,9 +36,13 @@ recomendadas de la propuesta. La referencia es la 0.7.3 del mod (`HollowKnightCo
 
 ## 3. HUD del compañero
 
-- Mini-HUD bajo tu HUD (arriba a la izquierda, estilo del juego): nombre, máscaras (también azules), orbe de alma
-  pequeño y estado (caído / en otra zona con su nombre).
-- Sus máscaras sobre su cabeza unos segundos cuando le cambia la vida. Flechas en el borde de la pantalla.
+- Mini-HUD en la esquina superior derecha (cambiado por el usuario: debajo del HUD propio parecía parte de él y sus
+  máscaras eran puntos ilegibles). Alineado a la derecha y separado del borde como el HUD propio: el nombre arriba con
+  la fuente del juego, debajo sus máscaras con los sprites reales de `HUD Cln` a unos 2/3 del tamaño de las propias
+  (también azules), un orbe de alma pequeño a la izquierda de las máscaras y el estado (caído / en otra zona con su
+  nombre). Con varios compañeros, uno debajo de otro.
+- Sus máscaras sobre su cabeza unos segundos cuando le cambia la vida, legibles (aprox. la mitad del tamaño de las del
+  HUD) y por encima de su nombre. Flechas en el borde de la pantalla.
 - Barras: solo la del jefe (abajo, con su nombre). El compañero en el mapa queda para después de M5.
 - Mensaje `Vitals` (al cambiar, máximo 4 por segundo, fiable); el host da el último a quien entra. Sprites de `HUD Cln`.
 
