@@ -37,6 +37,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     public Scene.FsmStateSync MovingObjects { get; } = new();
 
+    /// <summary>Personajes de misión: se van o cambian también aquí cuando otro avanza su misión.</summary>
+    public QuestNpcSync QuestNpcs { get; } = new();
+
     public Scene.BreakableSync Breakables { get; } = new();
 
     public Scene.HazardSync Hazards { get; } = new();
@@ -120,6 +123,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             _lastLoadedScene = scene;
         };
         CoopSaves.Install();
+        Progress.RemoteFieldChanged = QuestNpcs.OnRemoteChange;
         // Ganchos de las funciones del coop ya al cargar el mod (después, el juego ya podría haber compilado lo que los
         // llama con el método enganchado copiado dentro)
         Features.Revive.InstallHooks();
@@ -198,6 +202,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Players.SetLocalScene(scene);
             SceneObjects.Update(scene);
             MovingObjects.Update(scene);
+            QuestNpcs.Update(scene);
             Breakables.Update(scene);
             Hazards.Update(scene);
         } catch (Exception e) {
@@ -452,6 +457,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         SceneObjects.Detach();
         Enemies.Detach();
         MovingObjects.Detach();
+        QuestNpcs.Detach();
         Breakables.Detach();
         Hazards.Detach();
     }
@@ -465,6 +471,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         SceneObjects.Attach(session);
         Enemies.Attach(session, Players);
         MovingObjects.Attach(session, Players);
+        QuestNpcs.Attach();
         Breakables.Attach(session);
         Hazards.Attach(session);
         Features.HostSettings.Current.Attach(session);

@@ -792,7 +792,7 @@ internal sealed class FsmStateSync {
         }
 
         var name = fsm.gameObject.name;
-        if (IsMimicBottle(fsm) || IsHollowKnightChain(fsm) || IsStagBell(fsm)) {
+        if (IsMimicBottle(fsm) || IsHollowKnightChain(fsm) || IsStagBell(fsm) || IsNightmareLantern(fsm)) {
             return true;
         }
 
@@ -819,6 +819,15 @@ internal sealed class FsmStateSync {
     /// </summary>
     private static bool IsStagBell(PlayMakerFSM fsm) =>
         fsm.FsmName == "Bell Control" && fsm.transform.parent != null && fsm.transform.parent.name == "Station Bell";
+
+    /// <summary>
+    /// Farol de la Pesadilla (Riscos Aulladores): cada aguijonazo del caballero local lo aviva un poco y al sexto se
+    /// enciende (llega la Compañía de Grimm); encendido, otra tanda de golpes lo destruye (destierro). Se copia su cadena
+    /// como la de una palanca: si no, cada PC contaba solo los golpes de su jugador y, repartidos entre los dos, no se
+    /// encendía en ninguno; y quien no lo golpeaba no lo veía encenderse.
+    /// </summary>
+    private static bool IsNightmareLantern(PlayMakerFSM fsm) =>
+        fsm.FsmName == "grimm_brazier" && fsm.gameObject.name == "grimm_brazier";
 
     /// <summary>
     /// Cadenas que sujetan al Hollow Knight: cada una aguanta unos golpes de aguijón del caballero local y, rota, avisa a
@@ -1780,8 +1789,9 @@ internal sealed class FsmStateSync {
         if (ApplyingSavedState) {
             // Puesto como ya activado por lo que llegó de otro PC: no es un golpe de aquí
             item.LocalChain = false;
-        } else if (now < item.RemoteChainUntil) {
-            // Cadena que llegó de otro PC: no se devuelve
+        } else if (now < item.RemoteChainUntil && (_executing || from == null || from != item.RestState)) {
+            // Cadena que llegó de otro PC: no se devuelve. Un golpe de este jugador desde el reposo sí cuenta aunque acabe
+            // de llegar la cadena de otro: el farol de la Compañía se enciende con golpes seguidos de los dos
         } else if (from != null && from == item.RestState) {
             item.LocalChain = true;
             send = true;

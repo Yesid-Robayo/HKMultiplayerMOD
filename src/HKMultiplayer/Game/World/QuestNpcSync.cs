@@ -1,0 +1,497 @@
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using HKMultiplayer.Util;
+using HutongGames.PlayMaker;
+using UnityEngine;
+
+namespace HKMultiplayer.Game.World;
+
+/// <summary>
+/// Personajes de misión que aparecen en varios sitios, cambian o se van al hablarles (Mr. Mushroom, Quirrel, Zote,
+/// Bretta...). El avance de su misión es un dato del mundo y llega al otro PC por el progreso compartido, pero el
+/// personaje en la sala es de cada PC: el juego solo mira ese dato al cargar la sala. Aquí:
+/// <list type="bullet">
+/// <item>Cuando llega de otro PC un cambio de un dato del mundo, las FSM de la sala que lo miran al empezar (su comprobación
+/// al cargar la sala: "¿estoy en este sitio?", "¿ya me rescataron?") vuelven a empezar con el valor nuevo, como si se
+/// cargara la sala. El personaje desaparece o cambia también en este PC. Si este jugador está en una conversación o
+/// una cinemática (su caballero sin control), se espera a que acabe.</item>
+/// <item>Una misión no avanza dos veces por la misma conversación: si los dos hablan a la vez con su copia del personaje
+/// y el otro avanza la misión mientras este jugador habla, la lógica de su personaje no cambia otra vez ese número del
+/// mundo, y lo lee con el valor que tenía al empezar la conversación (dice lo mismo que le dijo al otro). Si no, la
+/// misión avanzaba dos pasos y se saltaba un sitio.</item>
+/// </list>
+/// El diálogo sigue siendo de cada uno: cada jugador lee su texto.
+/// </summary>
+internal sealed class QuestNpcSync {
+    /// <summary>Estados como mucho que se recorren desde el inicio de una FSM buscando su comprobación.</summary>
+    private const int MaxStartStates = 24;
+
+    private static QuestNpcSync _active;
+    private static bool _hooked;
+
+    private string _scene = string.Empty;
+
+    /// <summary>Por dato del mundo, las FSM de la sala que lo miran al empezar.</summary>
+    private readonly Dictionary<string, List<PlayMakerFSM>> _startReaders = new();
+
+    /// <summary>Datos del mundo que cambiaron en otro PC desde que se cargó esta sala, y cuándo (el último cambio).</summary>
+    private readonly Dictionary<string, float> _remoteChangedAt = new();
+
+    /// <summary>Cuándo empezó la conversación (o cinemática) de este jugador: su caballero perdió el control (-1: con control).</summary>
+    private float _conversationStart = -1f;
+
+    /// <summary>Valor que tenían los números del mundo que cambiaron en otro PC durante la conversación de este jugador.</summary>
+    private readonly Dictionary<string, int> _beforeRemote = new();
+
+    /// <summary>Datos cambiados en otro PC cuyas FSM aún hay que volver a comprobar (se espera a que haya control).</summary>
+    private readonly List<string> _pending = new();
+
+    /// <summary>Campos de texto de cada tipo de acción que lee datos de la partida (se calculan una vez por tipo).</summary>
+    private static readonly Dictionary<Type, FieldInfo[]> ReadFields = new();
+
+    public void Attach() {
+        _active = this;
+        InstallHooks();
+        Clear();
+    }
+
+    public void Detach() {
+        if (_active == this) {
+            _active = null;
+        }
+
+        Clear();
+    }
+
+    private void Clear() {
+        _scene = string.Empty;
+        _startReaders.Clear();
+        _remoteChangedAt.Clear();
+        _pending.Clear();
+        _conversationStart = -1f;
+        _beforeRemote.Clear();
+    }
+
+    // =====================================================================================================
+    // Cambios del mundo llegados de otro PC
+    // =====================================================================================================
+
+    /// <summary>
+    /// El progreso compartido acaba de poner un dato del mundo con lo que llegó de otro PC (<paramref name="before"/>: el
+    /// valor que tenía; en los sí/no, 0 o 1).
+    /// </summary>
+    public void OnRemoteChange(string field, int before) {
+        if (_scene.Length == 0) {
+            return;
+        }
+
+        _remoteChangedAt[field] = Time.unscaledTime;
+        if (_conversationStart >= 0f && !_beforeRemote.ContainsKey(field)) {
+            _beforeRemote[field] = before;
+        }
+
+        if (_startReaders.ContainsKey(field) && !_pending.Contains(field)) {
+            _pending.Add(field);
+        }
+    }
+
+    /// <summary>Llamar cada frame con la sala actual (vacía fuera de una sala de juego).</summary>
+    public void Update(string scene) {
+        if (scene != _scene) {
+            Clear();
+            _scene = scene;
+            if (scene.Length > 0) {
+                Scan();
+            }
+
+            return;
+        }
+
+        // La conversación de este jugador empieza cuando su caballero pierde el control y acaba cuando lo recupera
+        var hero = HeroController.instance;
+        if (hero != null && hero.controlReqlinquished) {
+            if (_conversationStart < 0f) {
+                _conversationStart = Time.unscaledTime;
+            }
+        } else if (_conversationStart >= 0f) {
+            _conversationStart = -1f;
+            _beforeRemote.Clear();
+        }
+
+        if (_pending.Count == 0 || !CanRecheck()) {
+            return;
+        }
+
+        foreach (var field in _pending) {
+            Recheck(field);
+        }
+
+        _pending.Clear();
+    }
+
+    /// <summary>
+    /// Solo con el caballero con control: en una conversación o cinemática de este jugador su personaje no se toca (se
+    /// quedaría sin control a mitad del diálogo).
+    /// </summary>
+    private static bool CanRecheck() {
+        var hero = HeroController.instance;
+        var gm = GameManager.instance;
+        return hero != null && gm != null && !hero.controlReqlinquished && !gm.IsInSceneTransition;
+    }
+
+    /// <summary>
+    /// Las FSM que miran el dato al empezar vuelven a su estado inicial, como al cargar la sala: con el valor nuevo se van
+    /// (Mr. Mushroom se destruye si ya no es su sitio), se apagan o cambian.
+    /// </summary>
+    private void Recheck(string field) {
+        if (!_startReaders.TryGetValue(field, out var fsms)) {
+            return;
+        }
+
+        foreach (var fsm in fsms) {
+            if (fsm == null || !fsm.enabled || !fsm.gameObject.activeInHierarchy || fsm.Fsm == null) {
+                continue;
+            }
+
+            var start = fsm.Fsm.StartState;
+            Log.Info($"{fsm.gameObject.name}/{fsm.FsmName}: {field} cambió en otro PC, se comprueba otra vez como al " +
+                     $"cargar la sala ({fsm.ActiveStateName} → {start})");
+            var inner = fsm.Fsm;
+            Scene.FsmStateSync.ApplyingSavedState = true;
+            FsmExecutionStack.PushFsm(inner);
+            try {
+                inner.SetState(start);
+                inner.UpdateStateChanges();
+            } catch (Exception e) {
+                Log.Warn($"{fsm.gameObject.name}/{fsm.FsmName}: no se pudo volver a comprobar: {e.Message}");
+            } finally {
+                FsmExecutionStack.PopFsm();
+                Scene.FsmStateSync.ApplyingSavedState = false;
+            }
+        }
+    }
+
+    // =====================================================================================================
+    // Qué FSM miran cada dato al empezar
+    // =====================================================================================================
+
+    private void Scan() {
+        var hero = HeroController.instance;
+        var reads = new List<string>();
+        foreach (var fsm in UnityEngine.Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include,
+                     FindObjectsSortMode.None)) {
+            if (fsm.Fsm == null || fsm.gameObject.scene.buildIndex < 0 ||
+                hero != null && fsm.transform.IsChildOf(hero.transform) ||
+                Scene.EnemySync.IsEnemyObject(fsm.transform) || Scene.FsmStateSync.IsSharedController(fsm.Fsm) ||
+                Scene.FsmStateSync.CopiesChain(fsm, out _, out _)) {
+                // Lo que ya va igual en todos (enemigos, controladores, palancas y lo que copia su cadena) llega de allí
+                continue;
+            }
+
+            reads.Clear();
+            var onlyShows = ReadStart(fsm, reads);
+            if (reads.Count == 0 || !onlyShows && !IsNpc(fsm)) {
+                continue;
+            }
+
+            foreach (var field in reads) {
+                // Solo los datos del mundo: los del personaje no llegan de otro PC
+                if (CharacterData.IsCharacterField(field)) {
+                    continue;
+                }
+
+                if (!_startReaders.TryGetValue(field, out var list)) {
+                    _startReaders[field] = list = new List<PlayMakerFSM>();
+                }
+
+                if (!list.Contains(fsm)) {
+                    list.Add(fsm);
+                }
+            }
+        }
+    }
+
+    /// <summary>FSM de un personaje con el que se habla: el suyo, el de algo suyo o el que lo enciende.</summary>
+    private static readonly string[] NpcFsms = { "npc_control", "Conversation Control" };
+
+    /// <summary>
+    /// Si la FSM es de un personaje (su objeto, uno de sus hijos o su padre directo tienen la FSM de hablar): se vuelve a
+    /// comprobar haga lo que haga al empezar.
+    /// </summary>
+    private static bool IsNpc(PlayMakerFSM fsm) {
+        foreach (var other in fsm.GetComponentsInChildren<PlayMakerFSM>(true)) {
+            if (Array.IndexOf(NpcFsms, other.FsmName) >= 0) {
+                return true;
+            }
+        }
+
+        var parent = fsm.transform.parent;
+        if (parent == null) {
+            return false;
+        }
+
+        foreach (var other in parent.GetComponents<PlayMakerFSM>()) {
+            if (Array.IndexOf(NpcFsms, other.FsmName) >= 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Acciones que no se repiten al volver a empezar una FSM que no es de un personaje: crean o sueltan objetos, cambian
+    /// datos de la partida, avisan a otros objetos, suenan, mueven la cámara o al caballero, guardan o cambian de sala.
+    /// Las arenas y puertas que miran datos del mundo al empezar los tienen (volver a empezarlas a mitad de un combate o de
+    /// su apertura lo repetiría); el farol de la Compañía o una tienda que aparece, no: solo se enseñan o se esconden.
+    /// </summary>
+    private static readonly string[] NotOnRecheck = {
+        "Spawn", "Create", "Instantiate", "SetPlayerData", "IncrementPlayerData", "DecrementPlayerData", "PlayerDataIntAdd",
+        "SendEvent", "SendMessage", "Broadcast", "CallMethod", "Audio", "Music", "Camera", "Hero", "Relinquish",
+        "Scene", "Battle", "Save", "Fsm"
+    };
+
+    /// <summary>
+    /// Datos de la partida que la FSM lee al empezar: en los estados a los que llega sola desde el inicial (con
+    /// "FINISHED" o con lo que deciden sus propias acciones), hasta un estado que espera al caballero (una zona, un botón).
+    /// Devuelve si en ese camino solo se enseña, esconde o anima (nada de <see cref="NotOnRecheck"/>).
+    /// </summary>
+    private static bool ReadStart(PlayMakerFSM fsm, List<string> reads) {
+        var start = fsm.Fsm.GetState(fsm.Fsm.StartState);
+        if (start == null) {
+            return false;
+        }
+
+        var onlyShows = true;
+        var visited = new HashSet<FsmState> { start };
+        var queue = new Queue<FsmState>();
+        queue.Enqueue(start);
+        while (queue.Count > 0 && visited.Count <= MaxStartStates) {
+            var state = queue.Dequeue();
+            var waits = false;
+            foreach (var action in state.Actions) {
+                if (action == null) {
+                    continue;
+                }
+
+                var type = action.GetType().Name;
+                waits |= type.StartsWith("Trigger", StringComparison.Ordinal) ||
+                         type.StartsWith("ListenFor", StringComparison.Ordinal) ||
+                         type.StartsWith("CheckCollision", StringComparison.Ordinal) ||
+                         type.StartsWith("CheckAlertRange", StringComparison.Ordinal);
+                foreach (var part in NotOnRecheck) {
+                    if (type.IndexOf(part, StringComparison.Ordinal) >= 0) {
+                        onlyShows = false;
+                        break;
+                    }
+                }
+
+                foreach (var field in PlayerDataReads(action)) {
+                    reads.Add(field);
+                }
+            }
+
+            if (waits) {
+                continue;
+            }
+
+            foreach (var transition in state.Transitions) {
+                var next = fsm.Fsm.GetState(transition.ToState);
+                if (next == null || visited.Contains(next) ||
+                    transition.EventName != "FINISHED" && !FiresEvent(state, transition.EventName)) {
+                    continue;
+                }
+
+                visited.Add(next);
+                queue.Enqueue(next);
+            }
+        }
+
+        return onlyShows;
+    }
+
+    /// <summary>Si alguna acción del estado decide ese evento (p. ej. el "DESTROY" de una comparación).</summary>
+    private static bool FiresEvent(FsmState state, string eventName) {
+        foreach (var action in state.Actions) {
+            if (action == null) {
+                continue;
+            }
+
+            foreach (var field in action.GetType().GetFields(BindingFlags.Public | BindingFlags.Instance)) {
+                if (field.FieldType == typeof(FsmEvent) && field.GetValue(action) is FsmEvent fsmEvent &&
+                    fsmEvent.Name == eventName) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Nombres de datos de la partida que lee una acción (las que comparan o leen, no las que cambian).</summary>
+    private static IEnumerable<string> PlayerDataReads(FsmStateAction action) {
+        var fields = ReadFieldsOf(action.GetType());
+        foreach (var field in fields) {
+            switch (field.GetValue(action)) {
+                case FsmString { Value: { Length: > 0 } name }:
+                    yield return name;
+                    break;
+                case string { Length: > 0 } plain:
+                    yield return plain;
+                    break;
+                case FsmString[] names:
+                    foreach (var item in names) {
+                        if (item?.Value is { Length: > 0 } value) {
+                            yield return value;
+                        }
+                    }
+
+                    break;
+            }
+        }
+    }
+
+    private static FieldInfo[] ReadFieldsOf(Type type) {
+        if (ReadFields.TryGetValue(type, out var fields)) {
+            return fields;
+        }
+
+        var name = type.Name;
+        var reads = name.Contains("PlayerData") && !name.StartsWith("Set", StringComparison.Ordinal) &&
+                    !name.StartsWith("Increment", StringComparison.Ordinal) &&
+                    !name.StartsWith("Decrement", StringComparison.Ordinal) && !name.EndsWith("Add", StringComparison.Ordinal);
+        fields = reads
+            ? Array.FindAll(type.GetFields(BindingFlags.Public | BindingFlags.Instance),
+                f => f.FieldType == typeof(FsmString) || f.FieldType == typeof(string) || f.FieldType == typeof(FsmString[]))
+            : Array.Empty<FieldInfo>();
+        ReadFields[type] = fields;
+        return fields;
+    }
+
+    // =====================================================================================================
+    // La misma conversación no avanza la misión dos veces
+    // =====================================================================================================
+
+    private static void InstallHooks() {
+        if (_hooked) {
+            return;
+        }
+
+        _hooked = true;
+        On.PlayerData.IncrementInt += (orig, self, name) => {
+            if (_active == null || !_active.AlreadyAdvanced(name)) {
+                orig(self, name);
+            }
+        };
+        On.PlayerData.DecrementInt += (orig, self, name) => {
+            if (_active == null || !_active.AlreadyAdvanced(name)) {
+                orig(self, name);
+            }
+        };
+        On.PlayerData.IntAdd += (orig, self, name, amount) => {
+            if (_active == null || amount == 0 || !_active.AlreadyAdvanced(name)) {
+                orig(self, name, amount);
+            }
+        };
+        On.PlayerData.SetInt += (orig, self, name, value) => {
+            // Poner el mismo valor no avanza nada
+            if (_active == null || !_active.ChangedDuringConversation(name) || self.GetIntInternal(name) == value ||
+                !_active.AlreadyAdvanced(name)) {
+                orig(self, name, value);
+            }
+        };
+        On.PlayerData.GetInt += (orig, self, name) =>
+            _active != null && _active.StaleRead(name, out var before) ? before : orig(self, name);
+    }
+
+    /// <summary>
+    /// La conversación de este jugador con su copia del personaje lee el número como estaba al empezarla, antes del avance
+    /// que hizo el otro jugador mientras tanto: así dice lo mismo que le dijo al otro (Mr. Mushroom, la pista de su
+    /// siguiente sitio y no la del sitio de después).
+    /// </summary>
+    private bool StaleRead(string field, out int before) {
+        before = 0;
+        if (_beforeRemote.Count == 0 || field == null || !_beforeRemote.TryGetValue(field, out before)) {
+            return false;
+        }
+
+        var fsm = FsmExecutionStack.ExecutingFsm;
+        return HeroController.instance is { controlReqlinquished: true } && fsm?.Owner != null && Concerns(fsm, field);
+    }
+
+    /// <summary>
+    /// Si un cambio de un número del mundo que hace ahora la lógica de un personaje ya lo hizo otro jugador: este jugador
+    /// está en una conversación (sin control), el número cambió en otro PC después de que empezara y lo mira la FSM que lo
+    /// cambia (o una del mismo personaje al empezar). Es la misma conversación con su copia del personaje, que ya avanzó
+    /// la misión allí. Un cambio de otro PC de antes de la conversación no cuenta: hablar otra vez con un personaje que se
+    /// queda (los preceptos de Zote) sigue avanzando.
+    /// </summary>
+    private bool AlreadyAdvanced(string field) {
+        if (!ChangedDuringConversation(field)) {
+            return false;
+        }
+
+        var fsm = FsmExecutionStack.ExecutingFsm;
+        if (fsm?.Owner == null || !Concerns(fsm, field)) {
+            return false;
+        }
+
+        Log.Info($"{fsm.GameObjectName}/{fsm.Name}: {field} ya lo avanzó otro jugador mientras este hablaba; no se " +
+                 "avanza otra vez");
+        return true;
+    }
+
+    /// <summary>Si el dato cambió en otro PC durante la conversación de este jugador (sin control).</summary>
+    private bool ChangedDuringConversation(string field) =>
+        _conversationStart >= 0f && field != null && _remoteChangedAt.TryGetValue(field, out var at) &&
+        at >= _conversationStart && HeroController.instance is { controlReqlinquished: true };
+
+    /// <summary>Si la FSM lee el dato en algún estado, o lo mira al empezar otra FSM del mismo objeto.</summary>
+    private bool Concerns(Fsm fsm, string field) {
+        foreach (var state in fsm.States) {
+            foreach (var action in state.Actions) {
+                if (action == null) {
+                    continue;
+                }
+
+                foreach (var name in PlayerDataReads(action)) {
+                    if (name == field) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        if (!_startReaders.TryGetValue(field, out var fsms)) {
+            return false;
+        }
+
+        var owner = fsm.GameObject;
+        foreach (var reader in fsms) {
+            if (reader != null && reader.gameObject == owner) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // =====================================================================================================
+    // Modo de prueba
+    // =====================================================================================================
+
+    public IEnumerable<string> Describe() {
+        foreach (var pair in _startReaders) {
+            var names = new List<string>();
+            foreach (var fsm in pair.Value) {
+                if (fsm != null) {
+                    names.Add($"{fsm.gameObject.name}/{fsm.FsmName}:{fsm.ActiveStateName}");
+                }
+            }
+
+            yield return $"{pair.Key}{(_remoteChangedAt.ContainsKey(pair.Key) ? " (cambió en otro PC)" : "")} -> " +
+                         string.Join(", ", names);
+        }
+    }
+}

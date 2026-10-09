@@ -599,6 +599,11 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "pressat":
+                // pressat <hora en ms desde 1970 (UTC)> <botón> [segundos]: pulsa a esa hora del reloj del PC (dos copias a
+                // la vez, o una justo después de la otra, sin depender de cuándo lee cada una sus órdenes)
+                StartCoroutine(PressAt(long.Parse(args[1]), args[2], args.Length > 3 ? ParseFloat(args[3]) : 0.12f));
+                break;
             case "slashes":
                 // slashes <cuántos> <segundos entre uno y otro> [up|down]: ráfaga de aguijonazos seguidos (las órdenes se
                 // leen cada medio segundo: varios "press attack" seguidos serían uno solo), con arriba o abajo pulsado
@@ -1084,6 +1089,32 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "questnpcs":
+                // questnpcs: datos del mundo que miran al empezar las FSM de la sala (se vuelven a comprobar si cambian
+                // en otro PC)
+                foreach (var line in runner.QuestNpcs.Describe()) {
+                    Log.Info($"{Tag}misión {line}");
+                }
+
+                break;
+            case "fsmuses":
+                // fsmuses <texto>: FSM de la sala (también inactivas) con alguna acción que nombra ese texto (p. ej. un
+                // dato de la partida como "mrMushroomState"), con su estado actual y los estados donde sale
+                var usesText = string.Join(" ", args.Skip(1));
+                foreach (var fsm in Resources.FindObjectsOfTypeAll<PlayMakerFSM>()) {
+                    if (!fsm.gameObject.scene.IsValid() || fsm.Fsm == null) {
+                        continue;
+                    }
+
+                    var states = fsm.FsmStates.Where(s => s.Actions.Any(a => ActionMentions(a, usesText)))
+                        .Select(s => s.Name).ToArray();
+                    if (states.Length > 0) {
+                        Log.Info($"{Tag}usa {PathOf(fsm.transform)}/{fsm.FsmName} " +
+                                 $"activo={fsm.gameObject.activeInHierarchy} estado={fsm.ActiveStateName} en=[{string.Join(",", states)}]");
+                    }
+                }
+
+                break;
             default:
                 Log.Warn($"{Tag}orden desconocida '{args[0]}'");
                 break;
@@ -1235,6 +1266,15 @@ internal sealed class TestDriver : MonoBehaviour {
         Log.Info($"{Tag}ráfaga {name} terminada ({count} capturas)");
     }
 
+    private static IEnumerator PressAt(long epochMs, string button, float seconds) {
+        while (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() < epochMs) {
+            yield return null;
+        }
+
+        Log.Info($"{Tag}pulsa {button} a las {epochMs}");
+        InputSimulator.Press(button, seconds);
+    }
+
     private static IEnumerator Slashes(int count, float interval, string direction) {
         if (direction != null) {
             InputSimulator.Press(direction, count * (interval + 0.08f) + 0.1f);
@@ -1345,6 +1385,33 @@ internal sealed class TestDriver : MonoBehaviour {
     }
 
     private static float ParseFloat(string value) => float.Parse(value, CultureInfo.InvariantCulture);
+
+    /// <summary>Ruta del objeto en la sala (padres separados por "/").</summary>
+    private static string PathOf(Transform transform) {
+        var path = transform.name;
+        for (var t = transform.parent; t != null; t = t.parent) {
+            path = t.name + "/" + path;
+        }
+
+        return path;
+    }
+
+    /// <summary>Si algún parámetro de texto de la acción (nombre de dato, evento, variable) contiene el texto.</summary>
+    private static bool ActionMentions(HutongGames.PlayMaker.FsmStateAction action, string text) {
+        foreach (var field in action.GetType().GetFields(System.Reflection.BindingFlags.Public |
+                                                         System.Reflection.BindingFlags.Instance)) {
+            var value = field.GetValue(action) switch {
+                string plain => plain,
+                HutongGames.PlayMaker.FsmString fsmString => fsmString.Value,
+                _ => null
+            };
+            if (value != null && value.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>Valor legible de un parámetro de acción: las variables con nombre se muestran por su nombre.</summary>
     private static string DescribeValue(object value) {
