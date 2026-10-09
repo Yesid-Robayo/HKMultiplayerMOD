@@ -30,3 +30,6 @@ __pycache__/
 
 # Worktrees y datos locales de los agentes
 .claude/
+
+# Skins de prueba (de otros autores): solo en local
+skins/
