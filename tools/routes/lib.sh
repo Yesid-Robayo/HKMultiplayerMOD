@@ -169,6 +169,10 @@ setup_pair() {
   send "$host" "hostworld $HK_ROUTE_WORLD Host $port $HK_ROUTE_CODE"
   local deadline=$((SECONDS + 150))
   until log_since "$host" 0 | grep -aq "Progreso compartido activo"; do
+    if log_since "$host" 0 | grep -aq "No se crea el mundo: ya hay"; then
+      echo "par $n: el host ya tiene el máximo de mundos coop; aparta uno de $(_data_dir "$host")/HKMultiplayer/Mundos" >&2
+      return 1
+    fi
     [ $SECONDS -ge $deadline ] && { echo "par $n: el host no entró en su mundo" >&2; return 1; }
     send "$host" "skip"; sleep 3
   done
