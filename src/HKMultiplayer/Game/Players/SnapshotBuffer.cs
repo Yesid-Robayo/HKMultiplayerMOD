@@ -59,6 +59,13 @@ internal sealed class SnapshotBuffer {
     /// <summary>Diagnóstico: veces que el reloj de dibujo saltó.</summary>
     public int Snaps { get; private set; }
 
+    /// <summary>El último estado recibido (el más reciente, sin el retraso de dibujo).</summary>
+    /// <returns>false si aún no hay estados.</returns>
+    public bool TryGetNewest(out PlayerSnapshot newest) {
+        newest = _count > 0 ? _items[_count - 1] : default;
+        return _count > 0;
+    }
+
     public void Clear() {
         _count = 0;
         _hasClock = false;

@@ -564,6 +564,11 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "slashes":
+                // slashes <cuántos> <segundos entre uno y otro> [up|down]: ráfaga de aguijonazos seguidos (las órdenes se
+                // leen cada medio segundo: varios "press attack" seguidos serían uno solo), con arriba o abajo pulsado
+                StartCoroutine(Slashes(int.Parse(args[1]), ParseFloat(args[2]), args.Length > 3 ? args[3] : null));
+                break;
             case "status":
                 Log.Info(Tag + "status " + DescribeStatus());
                 break;
@@ -887,6 +892,17 @@ internal sealed class TestDriver : MonoBehaviour {
         }
 
         Log.Info($"{Tag}ráfaga {name} terminada ({count} capturas)");
+    }
+
+    private static IEnumerator Slashes(int count, float interval, string direction) {
+        if (direction != null) {
+            InputSimulator.Press(direction, count * (interval + 0.08f) + 0.1f);
+        }
+
+        for (var i = 0; i < count; i++) {
+            InputSimulator.Press("attack", 0.06f);
+            yield return new WaitForSecondsRealtime(interval + 0.06f);
+        }
     }
 
     private static IEnumerator FindMoving(float seconds) {

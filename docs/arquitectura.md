@@ -194,6 +194,18 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     de otra, como el "Hero Saver" de los Mage Blob, que no salen con el caballero donde aparecerían): al pasar a
     mover el enemigo se vuelven a poner según el caballero de ese PC. Lo que llega del anterior es su caballero; si
     no, el Mage Blob heredaba "dentro", aquí nunca llegaba la salida y la oleada esperaba para siempre.
+  - Al pasar a mover un enemigo, queda como lo tenía el PC que lo movía: encendido o apagado, si se dibuja, si choca,
+    si es invencible y cuánto daña (va en lo que envía al soltarlo; si no llega, lo último que se supo de él). La
+    marioneta copia todo eso con el retraso de dibujo y la lógica del enemigo solo lo cambia en ciertos estados: la
+    jaula del Coliseo enciende su enemigo en cada PC al abrirse y justo después la marioneta lo volvía a apagar con un
+    estado de antes de salir. Si el caballero de ese PC estaba junto a la jaula y lo retomaba en ese momento, quedaba
+    apagado y vivo en los dos PCs (el centinela volador de la oleada 44 de Oro) y la oleada no acababa. Igual con la
+    caja del Electric Mage, que solo se enciende al despertar: retomado justo entonces, nadie podía golpearlo. Y si allí
+    su lógica ya lo había soltado de su padre (los Mage del Coliseo cuelgan de su oleada hasta despertar y luego se
+    teletransportan con posiciones locales), aquí también se suelta: si no, se teletransportaba fuera de la arena.
+  - En las pruebas del Coliseo (`Room_Colosseum_*`) ningún enemigo queda muerto hasta el banco, tampoco los de la
+    sala (los Mage de las oleadas): cada prueba empieza de cero, y al repetirla sin descansar la oleada 46 de Oro
+    esperaba a un Mage que el host daba por muerto.
   - Piezas que se mueven aparte (hijos con animación o que dañan, como la aguja de Hornet): posición, profundidad,
     giro, escala, si están activas y si se dibujan, si su caja de daño está encendida, cuánto dañan y animación vienen
     del PC que mueve el enemigo. También las de fuera del enemigo que apuntan las variables de sus FSM (el rayo del
@@ -309,7 +321,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   dañino que se mueve o gira, `hazards` los peligros animados alineados y `wake <nombre>` enciende un enemigo apagado. `hero` dice por qué el
   caballero no responde (si acepta órdenes, si cedió el control, reaparición tras pinchos, pausa) y `regain` le
   devuelve el control. `tp x y` no fija el punto de reaparición (`tp x y respawn` sí). `enemies` marca también los
-  enemigos ocultos (sin dibujarse) y sin caja de colisión.
+  enemigos ocultos (sin dibujarse) y sin caja de colisión. Si algo apaga un enemigo vivo, el registro dice
+  "apagado vivo" con la FSM que lo hizo y la pila de llamadas. `slashes <n> <s> [up|down]` da una ráfaga de
+  aguijonazos seguidos (varios `press attack` en la misma lectura de órdenes serían uno solo).
 - Funciones del coop: `settings` (ajustes que rigen), `party` (revivir y estado de cada jugador), `vitals`, `shades`,
   `killshade` (mata la copia de la sombra de un compañero), `bossbar`, `focus <s>` (Focus simulado), `tpbody`, `heal`
   (vida llena por la vía del juego: `pdset maxHealth` no redibuja el HUD del juego y el mini-HUD lo mostraría distinto),

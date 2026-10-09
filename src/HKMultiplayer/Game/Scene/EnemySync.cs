@@ -159,7 +159,7 @@ internal sealed class EnemySync {
     /// <summary>Componentes que siguen activos en una marioneta (dibujo, daño al tocar, vida y efectos).</summary>
     private static readonly string[] KeepOnPuppet = {
         "HealthManager", "tk2d", "DamageHero", "SpriteFlash", "EnemyDeathEffects", "EnemyHitEffects",
-        "InfectedEnemyEffects", "ExtraDamageable", "EnemyDreamnailReaction", "NonBouncer"
+        "InfectedEnemyEffects", "ExtraDamageable", "EnemyDreamnailReaction", "NonBouncer", "DisableWatch"
     };
 
     private sealed class Enemy {
@@ -295,6 +295,18 @@ internal sealed class EnemySync {
         public Vector2 Velocity;
         public float Gravity;
         public RigidbodyType2D BodyType;
+
+        /// <summary>Si estaba encendido en el PC que lo movía.</summary>
+        public bool Active;
+
+        /// <summary>Si se dibujaba, si chocaba y si era invencible (y desde dónde), como en su estado continuo.</summary>
+        public byte Look;
+
+        /// <summary>Cuánto dañaba al tocarlo.</summary>
+        public byte Damage;
+
+        /// <summary>Si su lógica ya lo había soltado de su padre en la sala (los Mage del Coliseo al despertar).</summary>
+        public bool Detached;
     }
 
     /// <summary>A qué apunta una variable de objeto, de forma que otro PC encuentre su equivalente.</summary>
@@ -692,7 +704,7 @@ internal sealed class EnemySync {
                 enemy.ReportedDead = true;
                 enemy.DiedAt = Time.unscaledTime;
                 _healthOut.Add((enemy.Id, HealthKind.Died, 0));
-                if (!enemy.Spawned && !enemy.Created) {
+                if (!enemy.Spawned && !enemy.Created && !RepeatsEveryVisit(_scene)) {
                     _killedOut.Add(enemy.Id);
                 }
             } else if (enemy.Health.hp != enemy.LastHp || snapshot) {
@@ -887,6 +899,13 @@ internal sealed class EnemySync {
             _session.End();
         }
     }
+
+    /// <summary>
+    /// Salas cuyo combate empieza de cero cada vez que se entra (las pruebas del Coliseo): sus enemigos no quedan muertos
+    /// hasta el banco. Si no, al repetir una prueba sin descansar, los Mage de las oleadas (son de la sala, no de una
+    /// jaula) no aparecían y la oleada 46 de Oro esperaba para siempre a uno que el host daba por muerto.
+    /// </summary>
+    private static bool RepeatsEveryVisit(string scene) => scene.StartsWith("Room_Colosseum_", StringComparison.Ordinal);
 
     private void RememberDead(string scene, List<uint> ids) {
         if (!_deadByScene.TryGetValue(scene, out var dead)) {
@@ -1122,6 +1141,7 @@ internal sealed class EnemySync {
         _enemies.Add(enemy);
         _byId[id] = enemy;
         _byHealth[health] = enemy;
+        WatchDisable(enemy);
         RegisterFsms(enemy);
         if (_pendingHealth.TryGetValue(id, out var pending)) {
             ApplyHealth(enemy, pending.Kind, pending.Hp);
@@ -1740,6 +1760,13 @@ internal sealed class EnemySync {
                     : body.bodyType));
             }
 
+            // Si está encendido, si se dibuja, si choca, si es invencible y cuánto daña (la marioneta del que lo recibe
+            // los copia con retraso), y si su lógica ya lo soltó de su padre (ver MatchPrevious)
+            writer.WriteBool(enemy.Root != null && enemy.Root.activeSelf);
+            var now = enemy.Root != null ? Capture(enemy, 0) : default;
+            writer.WriteByte(now.Extra);
+            writer.WriteByte(now.Damage);
+            writer.WriteBool(enemy.Root != null && enemy.Transform.parent == null);
             _session.End();
         }
     }
@@ -1783,6 +1810,10 @@ internal sealed class EnemySync {
             bodyType = (RigidbodyType2D) reader.ReadByte();
         }
 
+        var active = reader.ReadBool();
+        var look = reader.ReadByte();
+        var damage = reader.ReadByte();
+        var detached = reader.ReadBool();
         if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var enemy) || !enemy.Puppet || index >= count) {
             return;
         }
@@ -1794,7 +1825,7 @@ internal sealed class EnemySync {
 
         enemy.Handover[index] = new HandoverFsm {
             State = state, Ints = ints, Floats = floats, Bools = bools, Objects = objects, HasBody = hasBody, Velocity = velocity, Gravity = gravity,
-            BodyType = bodyType
+            BodyType = bodyType, Active = active, Look = look, Damage = damage, Detached = detached
         };
         if (index == count - 1) {
             enemy.HandoverReady = true;
@@ -1815,11 +1846,12 @@ internal sealed class EnemySync {
     }
 
     private void TakeOverUnguarded(Enemy enemy) {
-        SetPuppet(enemy, false);
-        enemy.SendFull = true;
         var handover = enemy.Handover;
         enemy.Handover = null;
         enemy.HandoverReady = false;
+        MatchPrevious(enemy, handover);
+        SetPuppet(enemy, false);
+        enemy.SendFull = true;
         if (enemy.Body != null) {
             enemy.Body.velocity = Vector2.zero;
         }
@@ -1883,6 +1915,72 @@ internal sealed class EnemySync {
         RefreshZoneFlags(enemy);
         var first = handover.Length > 0 && enemy.Fsms.Length > 0 && enemy.Fsms[0] != null ? enemy.Fsms[0].ActiveStateName : "-";
         Log.Info($"{enemy.Root.name}: lo mueve este PC, sigue desde {first}");
+    }
+
+    /// <summary>
+    /// Al retomarlo, como lo tenía el PC que lo movía: encendido o apagado, si se dibuja, si choca, si es invencible,
+    /// cuánto daña y si cuelga de su padre (abajo). La marioneta copia todo eso (salvo el padre) de lo que llega, con el
+    /// retraso de dibujo, y la lógica del enemigo solo lo cambia al pasar por ciertos estados. El enemigo de una jaula
+    /// del Coliseo lo enciende en cada PC su jaula al abrirse y justo después la marioneta lo volvía a apagar con un
+    /// estado de antes de salir; si este PC lo retomaba en ese momento (el caballero de aquí estaba junto a la jaula), se
+    /// quedaba apagado como enemigo real: nadie lo volvía a encender, el otro PC copiaba "apagado" y la oleada esperaba
+    /// para siempre a un enemigo vivo e invisible. Igual con su caja: el Electric Mage solo la enciende al despertar, y
+    /// retomado justo entonces se quedaba sin ella (imposible de golpear).
+    /// Se hace antes de devolverle su lógica (al encenderlo con ella parada sigue donde estaba, no empieza de nuevo).
+    /// </summary>
+    private static void MatchPrevious(Enemy enemy, HandoverFsm[] handover) {
+        if (enemy.Root == null) {
+            return;
+        }
+
+        bool active;
+        byte look, damage;
+        var data = handover != null ? Array.Find(handover, entry => entry != null) : null;
+        if (data != null) {
+            active = data.Active;
+            look = data.Look;
+            damage = data.Damage;
+        } else if (enemy.Buffer.TryGetNewest(out var newest)) {
+            // Sin cómo iba (el anterior ya no está o tardó): lo último que se supo de él
+            active = newest.Visible;
+            look = newest.Extra;
+            damage = newest.Damage;
+        } else {
+            return;
+        }
+
+        if (enemy.Root.activeSelf != active) {
+            Log.Info($"{enemy.Root.name}: al retomarlo se {(active ? "enciende" : "apaga")} como lo tenía el otro PC");
+            enemy.Root.SetActive(active);
+        }
+
+        var shown = (look & ShownFlag) != 0;
+        if (enemy.Renderer != null && enemy.Renderer.enabled != shown) {
+            enemy.Renderer.enabled = shown;
+        }
+
+        var solid = (look & SolidFlag) != 0;
+        if (enemy.Collider != null && enemy.Collider.enabled != solid) {
+            Log.Info($"{enemy.Root.name}: al retomarlo {(solid ? "recupera" : "pierde")} su caja como la tenía el otro PC");
+            enemy.Collider.enabled = solid;
+        }
+
+        if (enemy.Health != null) {
+            enemy.Health.IsInvincible = (look & InvincibleFlag) != 0;
+            enemy.Health.InvincibleFromDirection = look >> 4;
+        }
+
+        if (enemy.Damage != null) {
+            enemy.Damage.damageDealt = damage;
+        }
+
+        // Los Mage del Coliseo cuelgan de su oleada hasta despertar, que los suelta; luego se teletransportan con
+        // posiciones locales. Retomado tras despertar en otro PC, aquí seguía colgado y se teletransportaba lejos de la
+        // arena (detrás de la pared, donde nadie lo alcanzaba: la oleada 46 de Oro esperaba para siempre)
+        if (data != null && data.Detached && enemy.Transform.parent != null) {
+            Log.Info($"{enemy.Root.name}: al retomarlo se suelta de {enemy.Transform.parent.name} como en el otro PC");
+            enemy.Transform.SetParent(null, true);
+        }
     }
 
     /// <summary>
@@ -3724,6 +3822,45 @@ internal sealed class EnemySync {
         }
 
         return count;
+    }
+
+    /// <summary>Modo de prueba: avisa en el registro si alguien apaga el enemigo estando vivo, y desde dónde.</summary>
+    private static void WatchDisable(Enemy enemy) {
+        if (!TestMode || enemy.Root == null) {
+            return;
+        }
+
+        // Puede que ya lo vigilara con otro identificador (lo creó su jaula antes de repasar la sala)
+        var watch = enemy.Root.GetComponent<DisableWatch>() ?? enemy.Root.AddComponent<DisableWatch>();
+        watch.Health = enemy.Health;
+        watch.Id = enemy.Id;
+    }
+
+    /// <summary>Registra quién apaga un enemigo vivo (modo de prueba).</summary>
+    internal sealed class DisableWatch : MonoBehaviour {
+        public HealthManager Health;
+        public uint Id;
+
+        private void OnDisable() {
+            // Si sigue activo es que solo se apagó este componente; al descargar la sala se apaga todo
+            if (Health == null || Health.isDead || gameObject.activeSelf || !gameObject.scene.isLoaded) {
+                return;
+            }
+
+            var sync = _active;
+            var enemy = sync != null && sync._byId.TryGetValue(Id, out var found) ? found : null;
+            var caller = string.Join(" < ", Array.ConvertAll(new System.Diagnostics.StackTrace().GetFrames() ??
+                                                             Array.Empty<System.Diagnostics.StackFrame>(),
+                frame => $"{frame.GetMethod()?.DeclaringType?.Name}.{frame.GetMethod()?.Name}"));
+            Log.Info($"[TEST] apagado vivo {name} id={Id:x8} hp={Health.hp} " +
+                     $"{(enemy == null ? "sin seguir" : enemy.Puppet ? "marioneta" : "real")} " +
+                     $"pos=({transform.position.x:0.00},{transform.position.y:0.00}) fsm={DescribeExecuting()} por {caller}");
+        }
+
+        private static string DescribeExecuting() {
+            var fsm = HutongGames.PlayMaker.FsmExecutionStack.ExecutingFsm;
+            return fsm == null ? "-" : $"{fsm.GameObjectName}/{fsm.Name}/{fsm.ActiveStateName}";
+        }
     }
 
     /// <summary>Lleva a este jugador junto al primer enemigo con ese nombre.</summary>
