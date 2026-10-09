@@ -3535,8 +3535,15 @@ internal sealed class EnemySync {
     /// Se siguen como sus piezas, identificados por esa variable porque su sitio en la sala puede no coincidir.
     /// </summary>
     private static void CollectExternalParts(Enemy enemy) {
+        // Ya destruido (lo creado en combate, o la sala que se descarga): leer su escena lanzaba NullReferenceException
+        // en GameObject.get_scene. Sus FSM sueltas (piezas que su lógica sacó de él, satélites) pueden seguir vivas
+        if (enemy.Fsms == null || enemy.Root == null) {
+            return;
+        }
+
         List<Part> external = null;
         var hero = HeroController.instance;
+        var enemyScene = enemy.Root.scene;
         for (var f = 0; f < enemy.Fsms.Length && f < 256; f++) {
             var fsm = enemy.Fsms[f];
             if (fsm == null) {
@@ -3553,7 +3560,7 @@ internal sealed class EnemySync {
             var variables = fsm.FsmVariables.GameObjectVariables;
             for (var v = 0; v < variables.Length && v < 0xFFFF; v++) {
                 var target = variables[v].Value;
-                if (target == null || !SameRoom(target.scene, enemy.Root.scene) || target.transform.IsChildOf(enemy.Transform) ||
+                if (target == null || !SameRoom(target.scene, enemyScene) || target.transform.IsChildOf(enemy.Transform) ||
                     IsEnemyObject(target.transform) ||
                     hero != null && target.transform.IsChildOf(hero.transform)) {
                     continue;
@@ -3643,9 +3650,10 @@ internal sealed class EnemySync {
 
         var hero = HeroController.instance;
         List<(uint Path, PlayMakerFSM Fsm)> found = null;
+        var enemyScene = enemy.Root.scene;
         foreach (var fsm in PlayMakerFSM.FsmList) {
             var owner = fsm != null ? fsm.gameObject : null;
-            if (owner == null || !SameRoom(owner.scene, enemy.Root.scene) || _enemyFsms.ContainsKey(fsm.Fsm) ||
+            if (owner == null || !SameRoom(owner.scene, enemyScene) || _enemyFsms.ContainsKey(fsm.Fsm) ||
                 owner.transform.IsChildOf(enemy.Transform) || IsEnemyObject(owner.transform) ||
                 hero != null && owner.transform.IsChildOf(hero.transform) ||
                 // Las trampas que dispara con un aviso a todos; o lo que, avisado por él, crea cosas que dañan (cada PC
