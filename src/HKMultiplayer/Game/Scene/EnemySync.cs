@@ -67,6 +67,9 @@ internal sealed class EnemySync {
     /// <summary>Lo más a menudo que se reenvía el mismo aviso a un mismo enemigo (hay zonas que avisan cada frame).</summary>
     private const float EventForwardInterval = 0.25f;
 
+    /// <summary>Aviso con el que el HealthManager dice a la lógica de un enemigo que su vida llegó a cero.</summary>
+    private const string ZeroHpEvent = "ZERO HP";
+
     /// <summary>Piezas que se mueven aparte (hijos con animación o que dañan) (dueño → sala, no fiable).</summary>
     public const MessageType EnemyParts = (MessageType) 68;
 
@@ -218,6 +221,9 @@ internal sealed class EnemySync {
         public bool Awake;
         public HutongGames.PlayMaker.FsmState HeldWake;
         public bool WaitingWake;
+
+        /// <summary>Si su arena espera a todos (<see cref="ArenaWaits"/>): 0 sin mirar aún, 1 sí, -1 no.</summary>
+        public sbyte ArenaWaits;
         public bool WasInvincible;
         public float NextWaitNotice;
 
@@ -234,6 +240,15 @@ internal sealed class EnemySync {
 
         /// <summary>FSM paradas en la marioneta y si antes reiniciaban al reactivarse (se pausan, no se reinician).</summary>
         public readonly List<(PlayMakerFSM Fsm, bool Restart)> PausedFsms = new();
+
+        /// <summary>
+        /// FSM de piezas que se soltaron de la marioneta al morir (el cadáver del Hollow Knight): ya funcionan solas en este
+        /// PC y no siguen los efectos del original. Null si ninguna.
+        /// </summary>
+        public List<PlayMakerFSM> Detached;
+
+        /// <summary>Su lógica recibió y atendió ZERO HP en este PC (su muerte va por ella, no por HealthManager.Die).</summary>
+        public bool ZeroHp;
         public RigidbodyType2D BodyType;
         public readonly SnapshotBuffer Buffer = new();
 
@@ -1046,6 +1061,13 @@ internal sealed class EnemySync {
                         continue;
                     }
 
+                    // Un objeto con dos HealthManager (la segunda fase del Tirano de Almas del sueño lleva el suyo
+                    // repetido, el segundo invulnerable) es un solo enemigo: el primero. Si no, salían dos enemigos con
+                    // el mismo objeto y en la marioneta cada uno lo ponía en su sitio (saltaba entre dos posiciones)
+                    if (health.GetComponent<HealthManager>() != health) {
+                        continue;
+                    }
+
                     // Los clonados en la raíz de la sala (los de las jaulas del Coliseo) se llaman igual y Unity les da a
                     // todos el mismo puesto entre hermanos: se distinguen por dónde están al cargarla, igual en todos
                     var cloned = health.transform.parent == null && health.name.EndsWith("(Clone)", StringComparison.Ordinal);
@@ -1390,6 +1412,99 @@ internal sealed class EnemySync {
     private static bool IsGeo(GameObject prefab) => prefab.name.StartsWith("Geo", StringComparison.Ordinal);
 
     /// <summary>
+    /// La lógica del enemigo suelta una pieza suya (la deja sin padre): el Hollow Knight al morir suelta su cadáver, que
+    /// sigue solo en la sala (cae, humea y es donde el caballero absorbe el vacío para el final). En la marioneta su
+    /// lógica estaba parada y el cadáver se apagaba con el enemigo: en ese PC no aparecía y nadie podía acabar. Aquí se
+    /// suelta igual y sus FSM dejan de ser de la marioneta (funcionan solas, como en el PC que lo movía).
+    /// </summary>
+    private void DetachPart(Enemy enemy, HutongGames.PlayMaker.Actions.SetParent action) {
+        var part = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
+
+        // La variable con la pieza la llena su preparación, que en la marioneta no se hizo; y en el original ya está
+        // suelta cuando se envía el efecto, así que no llega como suya. Lo que se suelta al morir es su cadáver: se busca
+        // entre sus hijos y se apunta en la variable (la acción siguiente lo enciende)
+        var variable = action.gameObject?.GameObject;
+        if (part == null && variable != null && !string.IsNullOrEmpty(variable.Name)) {
+            foreach (var child in enemy.Transform.GetComponentsInChildren<Transform>(true)) {
+                if (child != enemy.Transform && child.name.IndexOf("Corpse", StringComparison.Ordinal) >= 0 &&
+                    child.GetComponent<PlayMakerFSM>() != null) {
+                    part = child.gameObject;
+                    variable.Value = part;
+                    break;
+                }
+            }
+        }
+
+        if (part == null || action.parent.Value != null || part == enemy.Root || !part.transform.IsChildOf(enemy.Transform)) {
+            if (TestMode) {
+                Log.Info($"[TEST] {enemy.Root.name}: no se suelta {(part != null ? part.name : "(nada)")} " +
+                         $"padre nuevo={(action.parent.Value != null ? action.parent.Value.name : "-")}");
+            }
+
+            return;
+        }
+
+        part.transform.SetParent(null, true);
+        foreach (var fsm in part.GetComponentsInChildren<PlayMakerFSM>(true)) {
+            if (!enemy.Disabled.Remove(fsm)) {
+                continue;
+            }
+
+            var paused = enemy.PausedFsms.FindIndex(entry => entry.Fsm == fsm);
+            if (paused >= 0) {
+                fsm.Fsm.RestartOnEnable = enemy.PausedFsms[paused].Restart;
+                enemy.PausedFsms.RemoveAt(paused);
+            }
+
+            _enemyFsms.Remove(fsm.Fsm);
+            _soundFsms.Remove(fsm.Fsm);
+            (enemy.Detached ??= new List<PlayMakerFSM>()).Add(fsm);
+            fsm.enabled = true;
+        }
+
+        Log.Info($"{enemy.Root.name}: suelta {part.name} como en el PC que lo movía");
+    }
+
+    /// <summary>
+    /// Aviso a todos que manda un jefe ya muerto en el PC que lo mueve: ya no es su lógica de combate sino lo que sigue en la
+    /// sala tras vencerlo (Grimm manda GRIMM DEFEATED para que aparezca el Grimm que se inclina y habla). En la marioneta
+    /// su lógica está parada y ese aviso no salía, así que en este PC no pasaba nada tras el combate.
+    /// </summary>
+    private static bool IsDeathBroadcast(HutongGames.PlayMaker.FsmStateAction action, out string eventName) {
+        eventName = null;
+        if (action is not HutongGames.PlayMaker.Actions.SendEventByName send ||
+            send.eventTarget.target != HutongGames.PlayMaker.FsmEventTarget.EventTarget.BroadcastAll) {
+            return false;
+        }
+
+        eventName = send.sendEvent?.Value;
+        return !string.IsNullOrEmpty(eventName);
+    }
+
+    /// <summary>
+    /// El aviso del jefe muerto a las FSM activas de la sala, como el aviso a todos del juego, salvo a las del propio
+    /// enemigo (su lógica está parada en la marioneta) y a las del caballero.
+    /// </summary>
+    private static void BroadcastFromDead(Enemy enemy, string eventName) {
+        var hero = HeroController.instance;
+        var receivers = new List<PlayMakerFSM>();
+        foreach (var fsm in PlayMakerFSM.FsmList) {
+            if (fsm == null || !fsm.enabled || !fsm.gameObject.activeInHierarchy ||
+                enemy.Transform != null && fsm.transform.IsChildOf(enemy.Transform) ||
+                hero != null && fsm.transform.IsChildOf(hero.transform)) {
+                continue;
+            }
+
+            receivers.Add(fsm);
+        }
+
+        Log.Info($"{enemy.Root.name} (muerto en el PC que lo movía) avisa a la sala: {eventName}");
+        foreach (var fsm in receivers) {
+            fsm.SendEvent(eventName);
+        }
+    }
+
+    /// <summary>
     /// Una FSM entró en un estado: si es de un enemigo real de este PC y tiene efectos (sonido, arena), los demás los ven
     /// y oyen. No lo que pasa al prepararse ni al retomarlo (ya lo hizo cada PC, o no toca repetirlo).
     /// </summary>
@@ -1452,6 +1567,11 @@ internal sealed class EnemySync {
             }
         }
 
+        // Si ya murió aquí: sus avisos a todos son entonces para la sala (en la marioneta no se sabe). Solo muerto de
+        // verdad (o con su muerte en marcha por ZERO HP): el Hollow Knight pasa por vida negativa entre fases y sus avisos
+        // de entonces son de su combate
+        var health = sound.Enemy.Health;
+        writer.WriteBool(sound.Enemy.ZeroHp || health != null && health.isDead);
         _session.End();
     }
 
@@ -1504,7 +1624,12 @@ internal sealed class EnemySync {
             }
         }
 
+        var deadThere = reader.ReadBool();
         if (!valid) {
+            return;
+        }
+
+        if (enemy.Detached != null && enemy.Detached.Contains(enemy.Fsms[fsmIndex])) {
             return;
         }
 
@@ -1517,12 +1642,23 @@ internal sealed class EnemySync {
         }
 
         foreach (var action in state.Actions) {
-            if (!action.Enabled || !IsEffectAction(action)) {
+            var detach = action as HutongGames.PlayMaker.Actions.SetParent;
+            if (!action.Enabled || !IsEffectAction(action) && detach == null) {
                 continue;
             }
 
             try {
                 action.Init(state);
+                if (detach != null) {
+                    DetachPart(enemy, detach);
+                    continue;
+                }
+
+                if (deadThere && IsDeathBroadcast(action, out var deathEvent)) {
+                    BroadcastFromDead(enemy, deathEvent);
+                    continue;
+                }
+
                 if (!ShouldRunEffect(enemy, action)) {
                     continue;
                 }
@@ -2059,8 +2195,35 @@ internal sealed class EnemySync {
     /// Si el enemigo pertenece a una batalla de arena (el Coliseo, las arenas con Battle Scene): lo despierta la arena,
     /// que ya espera a que entren todos, no verlo. Oblobble entra volando desde muy arriba y nadie llegaba a estar cerca.
     /// </summary>
-    private static bool InBattleScene(Enemy enemy) =>
-        enemy.Health != null && BattleSceneField?.GetValue(enemy.Health) as GameObject != null;
+    private static bool InBattleScene(Enemy enemy) {
+        if (enemy.ArenaWaits == 0) {
+            var arena = enemy.Health != null ? BattleSceneField?.GetValue(enemy.Health) as GameObject : null;
+            enemy.ArenaWaits = (sbyte) (arena != null && ArenaWaits(arena) ? 1 : -1);
+        }
+
+        return enemy.ArenaWaits > 0;
+    }
+
+    /// <summary>
+    /// Si la arena del enemigo es la que empieza el combate esperando a todos: es una zona que pisa el caballero (su
+    /// espera es la de <see cref="FsmStateSync"/>) o la lleva un controlador compartido (el Coliseo). La de Mawlek no:
+    /// no tiene zona propia (solo las de la cámara, que no empiezan nada), la empieza el propio Mawlek al ver al
+    /// caballero, y con ella Mawlek despertaba sin esperar al otro.
+    /// </summary>
+    private static bool ArenaWaits(GameObject arena) {
+        var zone = arena.GetComponent<Collider2D>();
+        if (zone != null && zone.isTrigger && arena.GetComponent<PlayMakerFSM>() != null) {
+            return true;
+        }
+
+        foreach (var fsm in arena.GetComponentsInParent<PlayMakerFSM>(true)) {
+            if (FsmStateSync.IsSharedController(fsm.Fsm)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Apunta en qué estado duerme cada jefe (el de su lógica principal, ya preparada): su primer cambio desde ahí es
@@ -2104,7 +2267,7 @@ internal sealed class EnemySync {
         }
 
         if (fsm.ActiveState == null || fsm.ActiveState.Name != enemy.DormantState || !OthersInScene() || EveryoneNear(enemy) ||
-            InBattleScene(enemy)) {
+            InBattleScene(enemy) || !LocalNear(enemy)) {
             WakeUp(enemy);
             return false;
         }
@@ -2170,6 +2333,16 @@ internal sealed class EnemySync {
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Si el caballero de este PC está cerca del jefe. Si no lo está, el jefe no despierta por verlo (lo despierta otra
+    /// cosa: la presentación de la Radiancia la empieza su cartel y ella espera muy arriba de la arena): no se retiene,
+    /// porque nadie llegaría nunca a estar cerca.
+    /// </summary>
+    private static bool LocalNear(Enemy enemy) {
+        var hero = HeroController.instance;
+        return hero != null && ((Vector2) (hero.transform.position - enemy.Transform.position)).sqrMagnitude <= WakeRange * WakeRange;
     }
 
     private bool EveryoneNear(Enemy enemy) {
@@ -2572,6 +2745,63 @@ internal sealed class EnemySync {
         writer.WriteByte(fsmIndex);
         writer.WriteString(eventName);
         _session.End();
+    }
+
+    /// <summary>
+    /// Un objeto de la sala de este PC mandó un aviso a todos. La lógica de las marionetas está parada y no lo oye: si
+    /// alguna lo esperaba en su estado de ahora, se reenvía al PC que mueve ese enemigo, como los avisos directos. Así
+    /// la zona de abajo del Tirano de Almas (PHASE 2) empieza su segunda fase aunque quien la mueve siga arriba; antes la
+    /// fase solo empezaba si caía en ella el caballero del PC que la movía.
+    /// </summary>
+    private void ForwardBroadcast(HutongGames.PlayMaker.Actions.SendEventByName send) {
+        if (_session == null || !_session.CanSend || _replaying || _playingFx || _spawningCopy ||
+            FsmStateSync.IsApplyingRemote || send.eventTarget?.target != HutongGames.PlayMaker.FsmEventTarget.EventTarget.BroadcastAll) {
+            return;
+        }
+
+        // Los de un enemigo son de su lógica y los de un controlador compartido pasan en todos los PCs
+        var sender = send.Fsm;
+        var eventName = send.sendEvent?.Value;
+        if (sender == null || string.IsNullOrEmpty(eventName) || _enemyFsms.ContainsKey(sender) ||
+            FsmStateSync.IsSharedController(sender)) {
+            return;
+        }
+
+        foreach (var enemy in _enemies) {
+            if (!enemy.Puppet || enemy.Fsms == null || enemy.Health != null && enemy.Health.isDead) {
+                continue;
+            }
+
+            for (var i = 0; i < enemy.Fsms.Length && i <= byte.MaxValue; i++) {
+                var fsm = enemy.Fsms[i];
+                if (fsm != null && !fsm.enabled && Handles(fsm.Fsm, eventName)) {
+                    Log.Info($"{enemy.Root.name}/{fsm.FsmName}: {eventName} de {sender.GameObjectName}, al PC que lo mueve");
+                    ForwardEvent(enemy, (byte) i, eventName);
+                }
+            }
+        }
+    }
+
+    /// <summary>Si el evento cambia el estado de la FSM desde donde está (transición del estado o global).</summary>
+    private static bool Handles(HutongGames.PlayMaker.Fsm fsm, string eventName) {
+        foreach (var transition in fsm.GlobalTransitions) {
+            if (transition.EventName == eventName) {
+                return true;
+            }
+        }
+
+        var state = fsm.ActiveState;
+        if (state == null) {
+            return false;
+        }
+
+        foreach (var transition in state.Transitions) {
+            if (transition.EventName == eventName) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void OnEnemyEvent(SessionPlayer from, PacketReader reader) {
@@ -3597,6 +3827,10 @@ internal sealed class EnemySync {
             }
 
             sync.SendHit(enemy, hit);
+            if (hit.AttackType == AttackTypes.Nail) {
+                sync.ForwardNailTriggers(enemy, self.gameObject);
+            }
+
             if (self.hp > 0) {
                 // Efectos del golpe y alma para quien golpea, sin quitar vida aquí (la quita el dueño)
                 HitWithoutDamage(self, hit, orig);
@@ -3635,6 +3869,13 @@ internal sealed class EnemySync {
 
         // Los avisos de fuera a la lógica de una marioneta (parada aquí) van al PC que la mueve
         On.HutongGames.PlayMaker.Fsm.ProcessEvent += (orig, self, fsmEvent, eventData) => {
+            // La vida de un jefe real llegó a cero y su lógica lo atiende (la muerte de Grimm va por ZERO HP, sin
+            // HealthManager.Die): desde ahí sus avisos a todos son los de después de vencerlo
+            if (fsmEvent?.Name == ZeroHpEvent && _active != null && _active._enemyFsms.TryGetValue(self, out var dying) &&
+                !dying.Enemy.Puppet && Handles(self, ZeroHpEvent)) {
+                dying.Enemy.ZeroHp = true;
+            }
+
             orig(self, fsmEvent, eventData);
             var sync = _active;
             if (sync?._session == null || fsmEvent == null || _replaying || _playingFx || _spawningCopy ||
@@ -3650,6 +3891,12 @@ internal sealed class EnemySync {
             }
 
             sync.ForwardEvent(target.Enemy, target.Index, fsmEvent.Name);
+        };
+
+        // Los avisos a todos de la sala no llegan a la lógica de una marioneta (parada, fuera de la lista de FSM activas)
+        On.HutongGames.PlayMaker.Actions.SendEventByName.OnEnter += (orig, self) => {
+            orig(self);
+            _active?.ForwardBroadcast(self);
         };
 
         // Al empezar a cambiar de sala (aún dentro de la anterior): los enemigos que movía este PC, a los demás
@@ -3687,6 +3934,34 @@ internal sealed class EnemySync {
                 orig(self);
             }
         };
+    }
+
+    /// <summary>
+    /// Un aguijonazo de este jugador a una marioneta: si su lógica (parada aquí) esperaba en su estado de ahora un
+    /// aguijonazo en su caja (una acción Trigger2dEvent con la etiqueta "Nail Attack"), su aviso va al PC que la mueve.
+    /// El golpe final de la Radiancia (FINAL HIT) es así: sin esto solo podía darlo quien la movía.
+    /// </summary>
+    private void ForwardNailTriggers(Enemy enemy, GameObject struck) {
+        if (enemy.Fsms == null) {
+            return;
+        }
+
+        for (var i = 0; i < enemy.Fsms.Length && i <= byte.MaxValue; i++) {
+            var fsm = enemy.Fsms[i];
+            var state = fsm != null && !fsm.enabled && fsm.gameObject == struck ? fsm.Fsm.ActiveState : null;
+            if (state == null) {
+                continue;
+            }
+
+            foreach (var action in state.Actions) {
+                if (action is HutongGames.PlayMaker.Actions.Trigger2dEvent trigger &&
+                    trigger.trigger != PlayMakerUnity2d.Trigger2DType.OnTriggerExit2D &&
+                    trigger.collideTag?.Value == "Nail Attack" && !string.IsNullOrEmpty(trigger.sendEvent?.Name)) {
+                    Log.Info($"{enemy.Root.name}/{fsm.FsmName}: {trigger.sendEvent.Name} por un aguijonazo de este PC, al PC que lo mueve");
+                    ForwardEvent(enemy, (byte) i, trigger.sendEvent.Name);
+                }
+            }
+        }
     }
 
     private void SendHit(Enemy enemy, HitInstance hit) {
@@ -3753,7 +4028,10 @@ internal sealed class EnemySync {
             }
 
             var p = enemy.Transform.position;
-            yield return $"jefe {enemy.Root.name} hp={enemy.Health.hp} pos=({p.x:0.0},{p.y:0.0}) {(enemy.Puppet ? "marioneta" : "real")}";
+            var arena = BattleSceneField?.GetValue(enemy.Health) as GameObject;
+            yield return $"jefe {enemy.Root.name} hp={enemy.Health.hp} pos=({p.x:0.0},{p.y:0.0}) {(enemy.Puppet ? "marioneta" : "real")}" +
+                         $" arena={(arena != null ? arena.name : "-")} dormido={enemy.DormantState ?? "-"} despierto={enemy.Awake}" +
+                         $" esperando={enemy.WaitingWake}";
             foreach (var fsm in enemy.Fsms) {
                 if (fsm == null) {
                     continue;

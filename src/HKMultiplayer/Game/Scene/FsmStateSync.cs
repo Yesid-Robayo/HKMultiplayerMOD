@@ -97,7 +97,9 @@ internal sealed class FsmStateSync {
         ("Colosseum Manager", "Battle Control"),
         ("Colosseum Cage", "Spawn"),
         ("Colosseum Cage Zote", "Control"),
-        ("Hornet Outskirts Battle Encounter", "Encounter")
+        ("Hornet Outskirts Battle Encounter", "Encounter"),
+        // La Radiancia: la desafía uno en su cartel y su presentación (y la Radiancia, que enciende) va en todos
+        ("Boss Control", "Control")
     };
 
     /// <summary>
@@ -753,7 +755,7 @@ internal sealed class FsmStateSync {
         }
 
         var name = fsm.gameObject.name;
-        if (IsMimicBottle(fsm) || IsStagBell(fsm)) {
+        if (IsMimicBottle(fsm) || IsHollowKnightChain(fsm) || IsStagBell(fsm)) {
             return true;
         }
 
@@ -780,6 +782,14 @@ internal sealed class FsmStateSync {
     /// </summary>
     private static bool IsStagBell(PlayMakerFSM fsm) =>
         fsm.FsmName == "Bell Control" && fsm.transform.parent != null && fsm.transform.parent.name == "Station Bell";
+
+    /// <summary>
+    /// Cadenas que sujetan al Hollow Knight: cada una aguanta unos golpes de aguijón del caballero local y, rota, avisa a
+    /// "Boss Control", que empieza el combate cuando están rotas todas. Se copia su cadena como la de una palanca: si no,
+    /// cada PC contaba solo los golpes de su jugador y, repartidas entre los dos, el combate no empezaba en ninguno.
+    /// </summary>
+    private static bool IsHollowKnightChain(PlayMakerFSM fsm) =>
+        fsm.FsmName == "Control" && fsm.gameObject.name.StartsWith("hollow_knight_chain_base", StringComparison.Ordinal);
 
     /// <summary>
     /// Identificador de la FSM igual en todos los PCs: por su ruta en la sala. Los clonados en la raíz (lo que crean las
@@ -974,12 +984,35 @@ internal sealed class FsmStateSync {
             }
 
             foreach (var action in fsmState.Actions) {
-                if (action.Enabled && (PlayerDataActions.Contains(action.GetType().Name) || !item.Encounter && TouchesHero(action))) {
+                if (action.Enabled && (PlayerDataActions.Contains(action.GetType().Name) && !SetsOwnField(item, action) ||
+                                       !item.Encounter && TouchesHero(action))) {
                     action.Enabled = false;
                     DisabledActions.Add(action);
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// En un encuentro con diálogo, lo que pone un dato propio de cada jugador (no llega por el progreso compartido) se
+    /// hace también en la copia: "metGrimm" al conocer a Grimm, el amuleto que da, o la invulnerabilidad y la pausa
+    /// desactivada durante la presentación. Si no, quien lo veía desde la copia seguía sin haberlo conocido y la
+    /// siguiente vez su Grimm empezaba por el primer encuentro mientras el del otro empezaba el combate. Solo los que
+    /// ponen un valor: sumar o restar se haría dos veces si el dato también fuera compartido.
+    /// </summary>
+    private static bool SetsOwnField(Tracked item, FsmStateAction action) {
+        if (!item.Encounter) {
+            return false;
+        }
+
+        var field = action switch {
+            HutongGames.PlayMaker.Actions.SetPlayerDataBool set => set.boolName?.Value,
+            HutongGames.PlayMaker.Actions.SetPlayerDataInt set => set.intName?.Value,
+            HutongGames.PlayMaker.Actions.SetPlayerDataFloat set => set.floatName?.Value,
+            HutongGames.PlayMaker.Actions.SetPlayerDataString set => set.stringName?.Value,
+            _ => null
+        };
+        return !string.IsNullOrEmpty(field) && World.CharacterData.IsCharacterField(field);
     }
 
     /// <summary>
@@ -1044,6 +1077,14 @@ internal sealed class FsmStateSync {
                 !IsController(item)) {
                 TakeControl(item, $"{fsmEvent.Name}: su caballero empieza el encuentro");
                 return true;
+            }
+
+            // Ya empezado en otro PC, lo que le manden aquí otros objetos (el Grimmchild de este jugador que llega a
+            // Grimm con ABSORB END) no lo hace avanzar ni le quita el control a quien lo lleva: su siguiente estado llega
+            // de allí. Si no, cuando el Grimmchild de la copia llegaba antes, los dos PCs se quitaban el control a la vez
+            // y el encuentro se quedaba en "Call Child" en los dos
+            if (sender != null && sender != fsm && fsmEvent.Name != "FINISHED" && !IsController(item)) {
+                return false;
             }
         }
 
@@ -1206,7 +1247,8 @@ internal sealed class FsmStateSync {
 
         // El aviso de una zona no lleva remitente; y solo cuenta si empieza algo desde su reposo
         var sender = eventData?.SentByFsm ?? Fsm.EventData?.SentByFsm;
-        if (sender != null && sender != fsm || !Handles(fsm, fsmEvent.Name) || !EnemySync.BossInRoom) {
+        if (sender != null && sender != fsm || !Handles(fsm, fsmEvent.Name) || !FromZone(fsm, fsmEvent.Name) ||
+            !EnemySync.BossInRoom) {
             return false;
         }
 
@@ -1218,6 +1260,26 @@ internal sealed class FsmStateSync {
         item.PendingStart = fsmEvent.Name;
         Log.Info($"{item.Fsm.gameObject.name}: el combate espera a que entren todos");
         return true;
+    }
+
+    /// <summary>
+    /// Si el aviso es el de la zona (un Trigger2dEvent del estado de ahora lo manda al entrar el caballero). Los demás
+    /// avisos propios ya empezado el encuentro no se retienen: el LAND con el que Grimm sigue cuando el caballero toca el
+    /// suelo se retenía si el otro aún no estaba del todo dentro, con los dos caballeros ya quietos, y no seguía nunca.
+    /// </summary>
+    private static bool FromZone(Fsm fsm, string eventName) {
+        var state = fsm.ActiveState;
+        if (state == null) {
+            return false;
+        }
+
+        foreach (var action in state.Actions) {
+            if (action is HutongGames.PlayMaker.Actions.Trigger2dEvent trigger && trigger.sendEvent?.Name == eventName) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Si los caballeros de todos los jugadores de la sala están dentro de la zona del combate.</summary>

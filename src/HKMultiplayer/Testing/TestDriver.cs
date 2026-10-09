@@ -762,6 +762,20 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "listeners":
+                // listeners <evento>: FSM de la sala (también inactivas) que cambian de estado con ese aviso, con su estado
+                var heard = string.Join(" ", args.Skip(1));
+                foreach (var fsm in FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+                    var where = fsm.FsmGlobalTransitions.Any(t => t.EventName == heard)
+                        ? "global"
+                        : fsm.FsmStates.FirstOrDefault(s => s.Transitions.Any(t => t.EventName == heard))?.Name;
+                    if (where != null) {
+                        Log.Info($"{Tag}escucha {fsm.gameObject.name}/{fsm.FsmName} [{where}] actual={fsm.ActiveStateName} " +
+                                 $"activo={fsm.gameObject.activeInHierarchy}");
+                    }
+                }
+
+                break;
             case "langget":
                 // langget <hoja> <clave>: texto del juego en su idioma (p. ej. "Titles FALSE_KNIGHT_MAIN")
                 Log.Info($"{Tag}texto {args[1]}/{args[2]}=" + (TeamCherry.Localization.Language.Has(args[2], args[1])
