@@ -135,7 +135,9 @@ internal sealed class TestDriver : MonoBehaviour {
                 break;
             case "sdset":
                 // sdset <sala> <id>: marca un objeto de sala como activado (como al romper una pared)
-                SceneData.instance.SaveMyState(new PersistentBoolData { sceneName = args[1], id = args[2], activated = true });
+                SceneData.instance.SaveMyState(new PersistentBoolData {
+                    sceneName = args[1], id = string.Join(" ", args.Skip(2)), activated = true
+                });
                 break;
             case "sdclear":
                 // sdclear <sala> <id>: vuelve a dejar sin activar un objeto de sala (p. ej. revivir un jefe para probarlo)
@@ -297,7 +299,8 @@ internal sealed class TestDriver : MonoBehaviour {
                     var components = string.Join(",", found.GetComponents<Component>().Select(c => c.GetType().Name));
                     var fsms = string.Join(",", found.GetComponents<PlayMakerFSM>().Select(f => f.FsmName + ":" + f.ActiveStateName));
                     Log.Info($"{Tag}obj {found.name} padre={(found.parent != null ? found.parent.name : "-")}{(found.gameObject.activeInHierarchy ? "" : " (inactivo)")} [{components}] fsm=[{fsms}] " +
-                             $"pos=({found.position.x:0.0},{found.position.y:0.0})");
+                             $"pos=({found.position.x:0.0},{found.position.y:0.0})" +
+                             (found.GetComponent<Collider2D>() is { } box ? $" caja={box.bounds.min:F1}-{box.bounds.max:F1}" : string.Empty));
                 }
 
                 break;
@@ -681,6 +684,18 @@ internal sealed class TestDriver : MonoBehaviour {
                 // Cinemática compartida en curso, votos, quién fue llevado y (en el host) quién ve cada una
                 Log.Info($"{Tag}cinemáticas {runner.Cutscenes.Describe()}");
                 break;
+            case "dreams":
+                // Sueños: si está en uno y las entradas a sueños de la sala con su estado
+                Log.Info($"{Tag}sueños {runner.Dreams.Describe()}");
+                break;
+            case "dreamhit":
+                // Como golpear con el aguijón onírico la entrada a un sueño de la sala
+                Log.Info($"{Tag}golpe onírico: {(runner.Dreams.TestDreamHit() ? "sí" : "no hay entrada")}");
+                break;
+            case "presentation":
+                // Presentación de jefe: si este PC avisó, quién tiene quieto al caballero local
+                Log.Info($"{Tag}presentación {runner.Presentations.Describe()}");
+                break;
             case "cinematic":
                 // Reproductores de vídeo de la escena: si su vídeo va, dónde se dibuja y cómo está el fundido de la cámara
                 var flagsAll = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
@@ -698,6 +713,29 @@ internal sealed class TestDriver : MonoBehaviour {
                 Log.Info($"{Tag}cámara pos={cams?.mainCamera?.transform.position} fundido={cams?.cameraFadeFSM?.ActiveStateName} " +
                          $"hud={cams?.hudCamera?.isActiveAndEnabled} estado={GameManager.instance.gameState} " +
                          $"ui={UIManager.instance?.uiState} omitir={GameManager.instance.inputHandler.skipMode}");
+                break;
+            case "langget":
+                // langget <hoja> <clave>: texto del juego en su idioma (p. ej. "Titles FALSE_KNIGHT_MAIN")
+                Log.Info($"{Tag}texto {args[1]}/{args[2]}=" + (TeamCherry.Localization.Language.Has(args[2], args[1])
+                    ? TeamCherry.Localization.Language.Get(args[2], args[1]) : "(no existe)"));
+                break;
+            case "covers":
+                // Lo que se dibuja delante de la cámara y la tapa (grande, sobre su centro): máscaras de zonas ocultas...
+                var view = GameCameras.instance.mainCamera.transform.position;
+                foreach (var drawn in FindObjectsByType<Renderer>(FindObjectsSortMode.None)) {
+                    var area = drawn.bounds;
+                    if (!drawn.enabled || area.size.x < 4f || area.size.y < 3f || view.x < area.min.x || view.x > area.max.x ||
+                        view.y < area.min.y || view.y > area.max.y) {
+                        continue;
+                    }
+
+                    var fsms = string.Join(",", drawn.GetComponents<PlayMakerFSM>().Select(f => f.FsmName + ":" + f.ActiveStateName));
+                    Log.Info($"{Tag}tapa {drawn.name} padre={(drawn.transform.parent != null ? drawn.transform.parent.name : "-")} " +
+                             $"tipo={drawn.GetType().Name} z={drawn.transform.position.z:0.0} caja={area.min:F1}-{area.max:F1} " +
+                             $"color={(drawn is SpriteRenderer sprite ? sprite.color.ToString() : "-")} fsm=[{fsms}] " +
+                             $"comp=[{string.Join(",", drawn.GetComponents<Component>().Select(c => c.GetType().Name))}]");
+                }
+
                 break;
             case "transitions":
                 // FSM de la sala con un cambio de sala (BeginSceneTransition): a qué sala, por qué puerta y cómo se ve

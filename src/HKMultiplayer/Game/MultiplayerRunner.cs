@@ -61,6 +61,15 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Finales, créditos y Mr. Mushroom a la vez para todos.</summary>
     public Features.SharedCutscenes Cutscenes { get; } = new();
 
+    /// <summary>Presentaciones de jefe: los dos caballeros quietos a la vez.</summary>
+    public Features.BossPresentation Presentations { get; } = new();
+
+    /// <summary>Sueños compartidos: entrar y salir con los compañeros de la sala.</summary>
+    public Features.DreamSync Dreams { get; } = new();
+
+    /// <summary>Grimmchild para todos si uno lo recibe.</summary>
+    public Features.GrimmchildGift Grimmchild { get; } = new();
+
     /// <summary>El jugador salió de un mundo ajeno: al llegar al menú se deja la partida.</summary>
     private bool _leaveOnMenu;
 
@@ -109,6 +118,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Features.BossBar.InstallHooks();
         Features.Difficulty.Install();
         Features.SharedCutscenes.InstallHooks();
+        Features.BossPresentation.InstallHooks();
+        Features.DreamSync.InstallHooks();
         CoopSaves.ExitedWorld += () => {
             // El host salió de su mundo (los personajes ya se recogieron al volver al menú): la partida se cierra
             if (_leaveOnMenu || Session is { IsHost: true }) {
@@ -186,7 +197,11 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Hud.Update(scene);
             BossBar.Update(scene);
             Cutscenes.Update();
-            Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene : Features.PlayerStatus.Standing);
+            Presentations.Update();
+            Dreams.Update(scene);
+            Grimmchild.Update(scene);
+            Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene
+                : Dreams.InDream ? Features.PlayerStatus.Dream : Features.PlayerStatus.Standing);
         } catch (Exception e) {
             Log.Error($"Error en la partida: {e}");
         }
@@ -394,6 +409,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     /// <summary>Cada capa deja la partida (las funciones del coop primero: usan las demás).</summary>
     private void DetachAll() {
+        Grimmchild.Detach();
+        Dreams.Detach();
+        Presentations.Detach();
         Cutscenes.Detach();
         Actions.Detach();
         BossBar.Detach();
@@ -432,6 +450,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         BossBar.Attach();
         Actions.Attach(session, Revive);
         Cutscenes.Attach(session, Revive);
+        Presentations.Attach(session, Revive);
+        Dreams.Attach(session, Revive);
+        Grimmchild.Attach(session);
         session.Connected += () => SetStatus($"Conectado como jugador {session.LocalId}");
         session.Disconnected += reason => {
             // Al salir uno mismo (Leave) la sesión ya no es la actual: nada que avisar
