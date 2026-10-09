@@ -190,7 +190,10 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     `Activated`, sin componente rompible ni guardable, como el letrero de la bajada a Cruces Olvidados): se copia su
     cadena como la de una palanca. Los rompibles con componente (`Breakable`, `BreakableObject`, `BreakablePole`,
     `BreakablePoleSimple`, `BreakableInfectedVine`, `VinePlatformCut`, `GlobControl`, `GrassCut`) son todos los tipos
-    del juego y van por `BreakableSync`.
+    del juego y van por `BreakableSync`. Salvo los del pool del juego (guardados en él o sacados de él, como las gotas
+    `Orange Glob` de los Bordes del Reino, que vuelven solas al pool): su ruta no es la misma en cada PC ni de una vez a
+    otra, así que romper una aquí rompía otra distinta (o ninguna) en el otro PC. Son decoración y cada PC tiene las
+    suyas.
   - Quien entra en una sala recibe del dueño lo ya activado (puertas, palancas, paredes), los golpes de cada piedra de
     geo y los rompibles rotos (también los de FSM propia: `SceneObjectSync` los sigue con un id por su ruta en la sala,
     `fsm:...`, y quien entra los pone en su estado de "ya roto", sin animación). Lo que se pone así no cuenta como un
@@ -204,6 +207,14 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     el original, salvo un disparo: si su copia choca (con el caballero de ese PC o una pared), el original también.
   - Lo creado en combate se numera con el jugador que lo creó: cada PC cuenta por su cuenta y dos podían dar el mismo
     número (se pisaban y quedaba una copia huérfana y quieta).
+  - Enemigos de jaula (las crías `Hiveling Spawner` de la Colmena, plantilla de los Hatcher: su FSM tiene la variable
+    `Cage` y sale de la jaula con `SPAWN`): esperan fuera de la vista en su jaula y al morir vuelven a ella con la vida
+    repuesta; el `Zombie Hive` saca uno cualquiera (`GetRandomChild`). No son enemigos de la sala: los saca solo el PC
+    que mueve al que los suelta (`SendEventByName` con `SPAWN` desde un enemigo real), que lo sigue como algo creado en
+    combate (`EnemyRelease`, con la ruta del enemigo dentro de su jaula al cargar la sala). Los demás sacan ese mismo de
+    su jaula (sale, se suelta de ella y se para como marioneta). La marioneta del que los suelta no repite ese `SPAWN`.
+    Al morir, el original vuelve a su jaula y desaparece en todos; la copia muere a la vez y vuelve a la suya. Antes
+    cada PC tenía vivos unos distintos.
   - Cadáveres: tras morir, el PC donde murió de verdad sigue enviando la posición de su cadáver unos segundos (sale
     despedido con física, y algunos explotan, como el Gruzzer volátil): cae y explota en el mismo sitio en todos.
   - Nombre del jefe al despertar: la marioneta hace también lo que le dice al título de zona qué nombre poner.

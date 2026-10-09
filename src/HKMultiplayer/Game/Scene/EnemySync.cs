@@ -79,6 +79,18 @@ internal sealed class EnemySync {
     /// <summary>El bicho que soltó un tarro original del Coleccionista: los demás crean una copia que lo sigue.</summary>
     public const MessageType EnemyJar = (MessageType) 71;
 
+    /// <summary>
+    /// La lógica de un enemigo real sacó de su jaula un enemigo de la sala que vuelve a ella al morir (las crías de la
+    /// Colmena que suelta el Zombie Hive): los demás sacan el mismo de su jaula como copia que lo sigue.
+    /// </summary>
+    public const MessageType EnemyRelease = (MessageType) 98;
+
+    /// <summary>Aviso con el que un enemigo de jaula sale de ella (la plantilla de las crías de los Hatcher).</summary>
+    private const string CageReleaseEvent = "SPAWN";
+
+    /// <summary>Variable de la FSM de un enemigo de jaula con la jaula a la que vuelve al morir.</summary>
+    private const string CageVariable = "Cage";
+
     private const int MaxLinked = 64;
 
     /// <summary>Tras encontrar un enemigo, cuándo buscar los objetos que enciende (su lógica ya los tiene apuntados).</summary>
@@ -201,6 +213,12 @@ internal sealed class EnemySync {
 
         public bool Pooled;
 
+        /// <summary>Enemigo de jaula fuera de ella (null si no lo es): al volver a su jaula desaparece como lo creado.</summary>
+        public CagedEnemy Caged;
+
+        /// <summary>Ya se le vio fuera de su jaula (antes de eso, estar en su estado de reposo no es haber vuelto).</summary>
+        public bool LeftCage;
+
         /// <summary>
         /// Creado por un objeto de la sala, al cargarla o durante la partida (las jaulas del Coliseo): no queda muerto
         /// para siempre.
@@ -265,6 +283,25 @@ internal sealed class EnemySync {
         public uint LastSentTick;
         public tk2dSpriteAnimationClip LastClip;
         public ushort LastClipIndex;
+    }
+
+    /// <summary>
+    /// Enemigo de la sala que espera en una jaula fuera de la vista y vuelve a ella al morir (las crías de la Colmena: su
+    /// FSM tiene la variable "Cage" y sale con "SPAWN"). No es un enemigo de la sala más: lo saca la lógica de otro
+    /// enemigo, que solo funciona en el PC que lo mueve, así que se sigue como lo creado en combate.
+    /// </summary>
+    private sealed class CagedEnemy {
+        public HealthManager Health;
+        public PlayMakerFSM Fsm;
+
+        /// <summary>Su jaula al cargar la sala (null si no tenía padre).</summary>
+        public Transform Cage;
+
+        /// <summary>El estado en el que espera en la jaula (el que sale con "SPAWN").</summary>
+        public string RestState;
+
+        /// <summary>Su ruta en la sala al cargarla, dentro de la jaula: igual en todos los PCs.</summary>
+        public uint Path;
     }
 
     /// <summary>Pieza de un enemigo y lo último enviado de ella.</summary>
@@ -373,6 +410,11 @@ internal sealed class EnemySync {
     private const float PreparationSeconds = 1.5f;
 
     private readonly List<Enemy> _enemies = new();
+
+    /// <summary>Enemigos de jaula de la sala (estén dentro o fuera), por su HealthManager y por su ruta al cargarla.</summary>
+    private readonly Dictionary<HealthManager, CagedEnemy> _caged = new();
+
+    private readonly Dictionary<uint, CagedEnemy> _cagedByPath = new();
     private readonly Dictionary<uint, Enemy> _byId = new();
     private readonly Dictionary<HealthManager, Enemy> _byHealth = new();
     private readonly Dictionary<uint, (HealthKind Kind, int Hp)> _pendingHealth = new();
@@ -408,6 +450,7 @@ internal sealed class EnemySync {
     private readonly MessageHandler _onParts;
     private readonly MessageHandler _onLinked;
     private readonly MessageHandler _onJar;
+    private readonly MessageHandler _onRelease;
 
     /// <summary>Alguien entró en la sala: le llegan los objetos encendidos y apagados de los enemigos que mueve este PC.</summary>
     private bool _sendLinkedSnapshot;
@@ -456,6 +499,7 @@ internal sealed class EnemySync {
         MessageRoutes.Register(EnemyParts, Route.SameScene, reliable: false);
         MessageRoutes.Register(EnemyLinked, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyJar, Route.SameScene, reliable: true);
+        MessageRoutes.Register(EnemyRelease, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyKilled, Route.Server, reliable: true);
         MessageRoutes.Register(Rested, Route.Server, reliable: true);
     }
@@ -474,6 +518,7 @@ internal sealed class EnemySync {
         _onParts = OnParts;
         _onLinked = OnLinked;
         _onJar = OnJar;
+        _onRelease = OnRelease;
         _onPlayerScene = OnPlayerScene;
         _onKilled = OnKilled;
         _onRested = (from, _) => {
@@ -498,6 +543,7 @@ internal sealed class EnemySync {
         session.On(EnemyParts, _onParts);
         session.On(EnemyLinked, _onLinked);
         session.On(EnemyJar, _onJar);
+        session.On(EnemyRelease, _onRelease);
         session.On(EnemyKilled, _onKilled);
         session.On(Rested, _onRested);
         session.PlayerSceneChanged += _onPlayerScene;
@@ -522,6 +568,7 @@ internal sealed class EnemySync {
             _session.On(EnemyParts, null);
             _session.On(EnemyLinked, null);
             _session.On(EnemyJar, null);
+            _session.On(EnemyRelease, null);
             _session.On(EnemyKilled, null);
             _session.On(Rested, null);
             _session.PlayerSceneChanged -= _onPlayerScene;
@@ -545,6 +592,8 @@ internal sealed class EnemySync {
         _enemies.Clear();
         _byId.Clear();
         _byHealth.Clear();
+        _caged.Clear();
+        _cagedByPath.Clear();
         _soundFsms.Clear();
         _enemyFsms.Clear();
         _pendingHealth.Clear();
@@ -568,6 +617,8 @@ internal sealed class EnemySync {
             _enemies.Clear();
             _byId.Clear();
             _byHealth.Clear();
+            _caged.Clear();
+            _cagedByPath.Clear();
             _soundFsms.Clear();
             _enemyFsms.Clear();
             _pendingControl.Clear();
@@ -678,7 +729,7 @@ internal sealed class EnemySync {
             // Lo creado en combate que ya no está (vuelto al pool o destruido): desaparece también en los demás. Si era
             // una copia, solo aquí: el original lo quita quien lo mueve (una copia puede acabar sola, como el tarro del
             // Coleccionista al llegar abajo, y borraría el original antes de que soltara su bicho)
-            if (enemy.Spawned && (enemy.Root == null || !enemy.Root.activeInHierarchy)) {
+            if (enemy.Spawned && (enemy.Root == null || !enemy.Root.activeInHierarchy || BackInCage(enemy))) {
                 // Salvo un disparo: si su copia chocó (con el caballero de este PC o con una pared), en los demás también
                 // se acaba ahí, en vez de seguir y atravesar a este jugador
                 if (!enemy.Puppet || enemy.Root != null && enemy.Root.GetComponent<EnemyBullet>() != null) {
@@ -1068,6 +1119,11 @@ internal sealed class EnemySync {
                         continue;
                     }
 
+                    // Los de jaula (las crías de la Colmena) no son de la sala: los saca la lógica de otro enemigo
+                    if (TryCage(health)) {
+                        continue;
+                    }
+
                     // Los clonados en la raíz de la sala (los de las jaulas del Coliseo) se llaman igual y Unity les da a
                     // todos el mismo puesto entre hermanos: se distinguen por dónde están al cargarla, igual en todos
                     var cloned = health.transform.parent == null && health.name.EndsWith("(Clone)", StringComparison.Ordinal);
@@ -1277,6 +1333,175 @@ internal sealed class EnemySync {
         return null;
     }
 
+    // =====================================================================================================
+    // Enemigos de jaula (las crías de la Colmena)
+    // =====================================================================================================
+
+    /// <summary>
+    /// Si es un enemigo de jaula (su FSM tiene la variable "Cage" y un estado que sale con "SPAWN"), se apunta y no se
+    /// sigue como enemigo de la sala. Al morir no muere: vuelve a su jaula con la vida repuesta, y el que los suelta (el
+    /// Zombie Hive) saca uno cualquiera. Como enemigos de la sala, cada PC tenía vivos unos distintos.
+    /// </summary>
+    private bool TryCage(HealthManager health) {
+        if (_caged.ContainsKey(health)) {
+            return true;
+        }
+
+        foreach (var fsm in health.GetComponents<PlayMakerFSM>()) {
+            if (fsm.FsmVariables.FindFsmGameObject(CageVariable) == null) {
+                continue;
+            }
+
+            string rest = null;
+            foreach (var state in fsm.FsmStates) {
+                foreach (var transition in state.Transitions) {
+                    if (transition.EventName == CageReleaseEvent) {
+                        rest = state.Name;
+                    }
+                }
+            }
+
+            if (rest == null) {
+                continue;
+            }
+
+            var caged = new CagedEnemy {
+                Health = health, Fsm = fsm, Cage = health.transform.parent, RestState = rest,
+                Path = ScenePaths.Hash(health.transform)
+            };
+            _caged[health] = caged;
+            if (!_cagedByPath.ContainsKey(caged.Path)) {
+                _cagedByPath[caged.Path] = caged;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>El enemigo de jaula que este aviso saca de ella, si lo manda un enemigo real de este PC (si no, null).</summary>
+    private CagedEnemy ReleaseTarget(HutongGames.PlayMaker.Actions.SendEventByName send) {
+        if (_session == null || _caged.Count == 0 || _replaying || _playingFx || _spawningCopy ||
+            send.sendEvent?.Value != CageReleaseEvent || !_enemyFsms.TryGetValue(send.Fsm, out var sender) ||
+            sender.Enemy.Puppet) {
+            return null;
+        }
+
+        var target = send.eventTarget;
+        if (target == null || target.target != HutongGames.PlayMaker.FsmEventTarget.EventTarget.GameObject &&
+            target.target != HutongGames.PlayMaker.FsmEventTarget.EventTarget.GameObjectFSM) {
+            return null;
+        }
+
+        var receiver = send.Fsm.GetOwnerDefaultTarget(target.gameObject);
+        var health = receiver != null ? receiver.GetComponent<HealthManager>() : null;
+        return health != null && _caged.TryGetValue(health, out var caged) && !_byHealth.ContainsKey(health) ? caged : null;
+    }
+
+    /// <summary>
+    /// Un enemigo real de este PC sacó uno de su jaula: este PC lo mueve hasta que vuelve a ella (muere) y los demás sacan
+    /// el mismo de la suya como copia que lo sigue.
+    /// </summary>
+    private void OnReleased(CagedEnemy caged) {
+        if (caged.Health == null || _byHealth.ContainsKey(caged.Health)) {
+            return;
+        }
+
+        var id = NextSpawnedId();
+        var enemy = Track(caged.Health.gameObject, id, pooled: false, puppet: false, _session.LocalId);
+        enemy.Caged = caged;
+        if (TestMode) {
+            Log.Info($"[TEST] sale de su jaula {caged.Health.name} id={id:x8}");
+        }
+
+        if (!_session.CanSend || !OthersInScene()) {
+            return;
+        }
+
+        var writer = _session.Begin(EnemyRelease);
+        writer.WriteUShort(_sceneHash);
+        writer.WriteUInt(id);
+        writer.WriteUInt(caged.Path);
+        writer.WriteInt(caged.Health.hp);
+        _session.End();
+    }
+
+    /// <summary>Otro PC sacó un enemigo de su jaula: aquí sale el mismo, como copia parada que sigue al original.</summary>
+    private void OnRelease(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        var path = reader.ReadUInt();
+        var hp = reader.ReadInt();
+        if (sceneHash != _sceneHash || (id & SpawnedIdFlag) == 0 || _byId.ContainsKey(id) ||
+            !_cagedByPath.TryGetValue(path, out var caged) || caged.Health == null) {
+            return;
+        }
+
+        if (_byHealth.TryGetValue(caged.Health, out var previous)) {
+            // Lo movía este PC (los dos lo sacaron a la vez): se queda el de aquí
+            if (!previous.Puppet || !previous.Spawned) {
+                return;
+            }
+
+            // Una copia anterior cuya vuelta a la jaula aún no había llegado
+            RemoveSpawned(previous);
+        }
+
+        // Sale como en el PC de origen (deja la jaula y su lógica pasa a perseguir) y enseguida se para como marioneta
+        _spawningCopy = true;
+        try {
+            if (caged.Fsm != null) {
+                caged.Fsm.SendEvent(CageReleaseEvent);
+            }
+        } finally {
+            _spawningCopy = false;
+        }
+
+        caged.Health.transform.SetParent(null, true);
+        caged.Health.hp = hp;
+        Track(caged.Health.gameObject, id, pooled: false, puppet: true, from.Id).Caged = caged;
+    }
+
+    /// <summary>Un enemigo de jaula que mueve este PC volvió a ella (murió y su lógica lo devolvió).</summary>
+    private static bool BackInCage(Enemy enemy) {
+        var caged = enemy.Caged;
+        if (caged == null || enemy.Puppet || enemy.Root == null) {
+            return false;
+        }
+
+        var resting = caged.Fsm != null && caged.Fsm.ActiveStateName == caged.RestState;
+        var inCage = caged.Cage != null ? enemy.Transform.parent == caged.Cage && resting : resting;
+        if (!inCage) {
+            enemy.LeftCage = true;
+            return false;
+        }
+
+        return enemy.LeftCage;
+    }
+
+    /// <summary>La copia de un enemigo de jaula vuelve a ella en reposo (su original ya volvió o ya no hay quien lo mueva).</summary>
+    private static void ReturnToCage(CagedEnemy caged) {
+        if (caged.Health == null) {
+            return;
+        }
+
+        var transform = caged.Health.transform;
+        if (caged.Cage != null && transform.parent != caged.Cage) {
+            transform.SetParent(caged.Cage, true);
+            transform.localPosition = new Vector3(0f, 0f, transform.localPosition.z);
+        }
+
+        caged.Health.SetIsDead(false);
+        if (caged.Health.GetComponent<Rigidbody2D>() is { } body) {
+            body.velocity = Vector2.zero;
+        }
+
+        if (caged.Fsm != null && caged.Fsm.ActiveStateName != caged.RestState) {
+            caged.Fsm.SetState(caged.RestState);
+        }
+    }
+
     /// <summary>Distancia del tarro a la que aparece su bicho.</summary>
     private const float JarReach = 4f;
 
@@ -1399,6 +1624,12 @@ internal sealed class EnemySync {
                         break;
                     default:
                         return false;
+                }
+
+                // Sacar de su jaula a un enemigo de jaula: lo hace solo el PC que mueve al que lo saca (llega como copia)
+                if (receiver != null && _active != null && receiver.GetComponent<HealthManager>() is { } released &&
+                    _active._caged.ContainsKey(released)) {
+                    return false;
                 }
 
                 var hero = HeroController.instance;
@@ -2692,7 +2923,9 @@ internal sealed class EnemySync {
         }
 
         SetPuppet(enemy, false);
-        if (enemy.Pooled) {
+        if (enemy.Caged != null) {
+            ReturnToCage(enemy.Caged);
+        } else if (enemy.Pooled) {
             enemy.Root.Recycle();
         } else {
             UnityEngine.Object.Destroy(enemy.Root);
@@ -3895,8 +4128,13 @@ internal sealed class EnemySync {
 
         // Los avisos a todos de la sala no llegan a la lógica de una marioneta (parada, fuera de la lista de FSM activas)
         On.HutongGames.PlayMaker.Actions.SendEventByName.OnEnter += (orig, self) => {
+            // A quién saca de su jaula, antes de que salga (al salir deja la jaula)
+            var released = _active?.ReleaseTarget(self);
             orig(self);
             _active?.ForwardBroadcast(self);
+            if (released != null) {
+                _active?.OnReleased(released);
+            }
         };
 
         // Al empezar a cambiar de sala (aún dentro de la anterior): los enemigos que movía este PC, a los demás

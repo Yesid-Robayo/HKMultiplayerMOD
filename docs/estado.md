@@ -5,7 +5,7 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
 
 ## Versión y ramas
 
-- Rama principal `main`: **0.18.4**. M1 a M4 hechos; M5 juntado (primera y segunda parte) y sus jefes comprobados en
+- Rama principal `main`: **0.18.5**. M1 a M4 hechos; M5 juntado (primera y segunda parte) y sus jefes comprobados en
   vivo (ver abajo); amuletos y acompañantes del compañero en 0.18.0.
 - Ramas de agentes (en `.claude/worktrees/`, cada una con su rama `worktree-agent-...`):
   - `worktree-agent-a3fca8e41ebb6684d`: **M6, paquete para jugadores** (sobre 0.18.4, sin subir versión ni juntar).
@@ -82,12 +82,13 @@ enemigos vivos u objetos sin activar en un mundo ya recorrido. Los FALLO que que
   veces no sale (tiempo de las pulsaciones con varias copias abiertas). Ya lleva un segundo intento.
 - **kingdoms-edge, `enemies-sync` en Hive_01**: los `Hiveling Spawner` son enemigos de un pool: al morir vuelven a su
   jaula (`Death` → `Inert`, `SetHP 5`, `SetIsDead false`) y la colmena de cada PC los vuelve a sacar por su cuenta
-  (`SPAWN`). `EnemySync` los trata como enemigos normales, así que cada PC tiene vivos unos distintos. **Pendiente**:
-  tratarlos como lo creado en combate (que los saque solo quien mueve la colmena).
+  (`SPAWN`). `EnemySync` los trata como enemigos normales, así que cada PC tiene vivos unos distintos. **Arreglado en
+  0.18.5** (ver "Pendientes de la prueba final" abajo).
 - **kingdoms-edge, `breakables-sync` en Deepnest_East_01** (intermitente): las gotas `Orange Glob(Clone)` las crea cada
-  PC por su cuenta con ids distintos; si el invitado rompe alguna, el host no la tiene. Estético. **Pendiente**.
+  PC por su cuenta con ids distintos; si el invitado rompe alguna, el host no la tiene. Estético. **Arreglado en
+  0.18.5**.
 - **kingdoms-edge, `objects-sync` "Break Floor 1"** (pasada 3): el suelo que se rompe bajo los dos; el invitado cae a
-  Hive_03_c. La ruta ya lo prueba al final de la sala; queda revisar si en el host se rompe (no se pudo repetir).
+  Hive_03_c. **Era de la ruta** (0.18.5): al caminar a la izquierda de la puerta el invitado pisa ese suelo y cae.
 
 ### Pruebas extra (B/C, 0.18.0 con los arreglos; las marcadas con * repetidas en 0.18.3)
 
@@ -145,6 +146,28 @@ estético, en el PC del caído su etiqueta "† Nombre" se pisa con el nombre de
 
 Nota: la copia F tenía ya 4 mundos y la ruta no podía crear el suyo; `M3Jefes2` se apartó (sin borrar) a
 `LocalLow/Team Cherry/HollowKnightF/HKMultiplayer/Mundos-apartados/`.
+
+## Pendientes de la prueba final (9 de octubre, mediodía; `main`, copias D/E y F/G)
+
+- **Crías de la Colmena (`Hiveling Spawner`, Hive_01)**, 0.18.5. Causa: son enemigos de jaula (esperan en `Hatcher
+  Cage (1)`, fuera de la vista; al morir vuelven a ella con la vida repuesta) y los saca el `Zombie Hive` con
+  `GetRandomChild` + `SPAWN`. Como enemigos de la sala, `hitall` mataba también a los de la jaula, cada PC los sacaba
+  por su cuenta (al moverlo o al repetir su marioneta el `SPAWN`) y quedaban vivos unos distintos. Arreglo
+  (`EnemySync`: `TryCage`, `ReleaseTarget`, `OnReleased`, `OnRelease`, `BackInCage`, `ReturnToCage`, y
+  `ShouldRunEffect`): ya no son enemigos de la sala; solo el PC que mueve al `Zombie Hive` los saca y los sigue como lo
+  creado en combate (`EnemyRelease`, 98), los demás sacan el mismo de su jaula como copia, y al volver a la jaula
+  desaparece en todos. Comprobado a mano (D/E): sale en el PC que mueve la colmena, copia en el otro con el mismo id;
+  un golpe de aguijón del otro PC lo mata y vuelve a la jaula en los dos; `hitall` deja los mismos vivos (0) en los
+  dos. `kingdoms-edge` 3 veces seguidas sin FALLO (solo el NOCONC de Hornet, que no empieza con `hitall`).
+- **Rompible de esa ruta y gotas `Orange Glob(Clone)` (Deepnest_East_01)**, 0.18.5. Dos causas: las gotas son del pool
+  del juego (están en `GlobalPool` y vuelven solas con `AutoRecycleSelf`), así que su id por ruta no señala la misma
+  gota en cada PC; y la ruta hacía caminar al invitado a la izquierda de la puerta, sobre `Break Floor 1` (la entrada a
+  la Colmena), que se rompe al pisarlo: caía a Hive_03_c y fallaban `breakables-sync`, `enemies-sync` y
+  `objects-sync`. Arreglo: `BreakableSync.IsPoolObject` (lo del pool no se sigue: decoración de cada PC) y la ruta ya
+  no mueve al invitado en esa sala (`partner-moves` se prueba en otras).
+- Sin explicar: en dos pasadas con dos lanzadores de rutas a la vez sobre el mismo par (una tarea anterior no se
+  había parado) salió en el invitado un `NullReferenceException` en `GameObject.get_scene` ("Error en la partida") y un
+  `scene-data-sync` distinto en Hive_01. No se repitió en las pasadas limpias.
 
 ## M6: paquete e instalador (9 de octubre, mañana; copias H/I)
 

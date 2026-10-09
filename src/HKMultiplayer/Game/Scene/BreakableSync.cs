@@ -282,6 +282,10 @@ internal sealed class BreakableSync {
             foreach (var found in UnityEngine.Object.FindObjectsByType(kind.Type, FindObjectsInactive.Include,
                          FindObjectsSortMode.None)) {
                 var component = (MonoBehaviour) found;
+                if (IsPoolObject(component.gameObject)) {
+                    continue;
+                }
+
                 // Un componente derivado (p. ej. de Breakable) se apunta una sola vez, con el primer tipo que encaje
                 var id = ScenePaths.Hash(component.transform) ^ (uint) kind.Type.Name.GetHashCode();
                 if (_byId.ContainsKey(id) || IsTrackedObject(component)) {
@@ -297,6 +301,16 @@ internal sealed class BreakableSync {
             }
         }
     }
+
+    /// <summary>
+    /// Del pool del juego (guardado en él o sacado de él): las gotas "Orange Glob" de los Bordes del Reino las saca cada
+    /// PC por su cuenta y vuelven solas al pool (<c>AutoRecycleSelf</c>). Su ruta no es la misma en todos los PCs (ni es
+    /// la misma gota de una vez a otra): si se seguían, romper una aquí rompía en el otro PC otra distinta o ninguna.
+    /// Son solo decoración, así que cada PC tiene las suyas.
+    /// </summary>
+    private static bool IsPoolObject(GameObject gameObject) =>
+        ObjectPool.IsSpawned(gameObject) || gameObject.GetComponentInParent<ObjectPool>(true) != null ||
+        gameObject.GetComponent<AutoRecycleSelf>() != null;
 
     private bool IsTrackedObject(MonoBehaviour component) {
         foreach (var item in _tracked) {
