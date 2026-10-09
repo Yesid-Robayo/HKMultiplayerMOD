@@ -224,13 +224,56 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 - **Menú principal → Multijugador**: copia de los menús del juego (botón de "Iniciar partida", pantalla de "Extras").
   Nombre y puerto; hostear (mundos coop, borrar con confirmación, nuevo) y unirse (dirección y código).
 - **Pausa → Multijugador** (solo en partida multijugador): mundo, código, IP oculta hasta pedirla, jugadores con su
-  ping y cerrar o salir de la partida.
+  ping y cerrar o salir de la partida. Páginas *Ajustes de la partida* (dos, con filas "Opción < valor >" copiadas de
+  las opciones del juego: `GameStyledMenu.AddOption`, que el invitado ve sin poder cambiar) y *Compañeros* (vida y alma
+  de cada uno, dar geo, desatascarse y recargar la sala).
 - Avisos en pantalla con la letra del juego (código al abrir la partida, quién entra o sale).
 
 ### Funciones del coop (`Game/Features/`)
 
-Revivir, sombras compartidas, skins, panel de pausa, barras de vida, cinemáticas compartidas, estalactitas, rejas de
-arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas anteriores.
+Diseño aprobado en [m5-diseno.md](m5-diseno.md). Cada función es una clase con `Attach`/`Detach` que engancha
+`MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
+juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
+mensajes nuevos van del 73 al 86. La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
+juego (16:9; con otra proporción el juego deja franjas) y escala con su alto como el HUD del juego; las piezas se crean
+una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
+
+- **Estado de cada jugador** (`PartyState`, mensaje 74): en pie, caído, en cinemática o en sueño. Lo decide el host y
+  lo reparte entero al cambiar y a quien entra. Un caído no cuenta para repartir enemigos (`EnemySync.AssignControllers`:
+  los suyos pasan enseguida a quien sigue en pie), ni para las esperas de los combates de jefe (`MissingNear`,
+  `EveryoneInside`), ni para los diálogos (`AllConvoDone`), y su avatar no se dibuja.
+- **Ajustes del host** (`HostSettings`, mensaje 73 con versión de formato): dificultad (vida de jefes 1,5× por defecto,
+  solo con el compañero en la sala; enemigos; daño recibido), revivir (sí/no, tiempo, alma, máscaras,
+  invulnerabilidad, en el banco), pantalla (nombres, vida del compañero, flechas, avisos, barra del jefe) y regalar geo.
+  Se guardan en `settings.json` de cada mundo y se envían al cambiar y a quien entra. La vida extra se hace dividiendo
+  el daño en `HealthManager.TakeDamage` en el PC que mueve al enemigo (`Difficulty`; las marionetas reciben los golpes
+  con multiplicador 0); un jefe es lo que tiene `unlockBossScene`. El daño recibido se escala en
+  `HeroController.TakeDamage`, salvo pinchos, ácido y pozos.
+- **Revivir** (`Revive`, mensajes 75 a 80): `HeroController.Die` se sustituye por la caída si hay alguien en pie (en un
+  sueño, solo si está en el mismo; en los Panteones, nunca). El caído envía `Downed` (sala y suelo bajo él); el host
+  le asigna el compañero en pie al que seguir. El caballero del caído se oculta (sin colisión, sin gravedad,
+  invencible, sin control; se reaplica cada frame) y, tras la animación de muerte, se pega al avatar del compañero, con
+  las zonas de cámara emuladas; si el compañero cambia de sala, viaja detrás de él sin puerta de entrada (como la 0.7.3).
+  Su cuerpo (`DownedBody`: animación "Death" y luego "Prostrate", con "† Nombre") se ve en su sala. Junto a él, Focus
+  cobra el alma al empezar (se devuelve si se suelta o te golpean), no cura (`CanFocus`) y al completarse se pide
+  `ReviveRequest`; el host lo valida (en pie y en la sala del cuerpo) y responde `Revived` (cuerpo y vida). El progreso
+  va a la sala con `ReviveProgress` (no fiable): el caído lee "X te está reviviendo". `BenchRest` al sentarse revive a
+  los caídos en ese banco con toda la vida; si no queda nadie en pie, `Wipe`: cada caído vuelve a su cuerpo y muere de
+  verdad. Al guardar estando caído no se guardan la invencibilidad ni la vida a 0.
+- **HUD del compañero** (`Vitals`, mensaje 81; `PartnerHud`): vida, vida máxima, azules, alma y zona de la sala de cada
+  uno, al cambiar y como mucho 4 por segundo; el host guarda las últimas y se las da a quien entra. Mini-HUD arriba a la
+  derecha, espejo exacto del HUD del compañero (sprites de `HUD Cln`: la llena `appear_v020004`, la vacía
+  `health_backboard` y la azul `idle0000`, a escala entre sí por sus vértices de tk2d y girados si tk2d los guarda
+  girados), con su orbe de alma y su estado; sus máscaras sobre su cabeza 3 s al cambiarle la vida y flechas en el borde.
+- **Barra del jefe** (`BossBar`): los jefes se apuntan al encenderse (`HealthManager.OnEnable`), con el nombre de su
+  entrada del diario; la vida máxima es la mayor vista.
+- **Sombras** (`ShadeSync`, mensajes 82 a 84): cada uno informa de la suya al host, que la reenvía y la da a quien entra.
+  En cada PC se crea una copia (`hollowShadeObject` con su lógica, sin "Dreamnail Kill"; su nombre empieza por
+  "Hollow Shade" para que `EnemySync` no la comparta) que lee los datos del dueño (`GetPlayerDataInt`/`String`). Su
+  muerte no va por la vía normal: avisa al host, que acepta el primer aviso y pide al dueño que mate la suya (si no está
+  en su sala, se crea un momento junto a él).
+- **Compañeros** (`PartyActions`, mensajes 85 y 86): regalo de geo validado por el host (o devuelto), desatascarse y
+  recargar la sala al quitar la pausa.
 
 ## Pruebas
 
@@ -245,6 +288,13 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
   enemigos o los encienden (para ver qué combates necesitan un controlador compartido), `healthlist` todos los objetos
   con vida y su huella, y `die` mata al caballero; cada muerte de enemigo se registra con quién la provocó. `moving <s>` lista lo sólido o
   dañino que se mueve o gira, `hazards` los peligros animados alineados y `wake <nombre>` enciende un enemigo apagado.
+- Funciones del coop: `settings` (ajustes que rigen), `party` (revivir y estado de cada jugador), `vitals`, `shades`,
+  `killshade` (mata la copia de la sombra de un compañero), `bossbar`, `focus <s>` (Focus simulado), `tpbody`, `heal`
+  (vida llena por la vía del juego: `pdset maxHealth` no redibuja el HUD del juego y el mini-HUD lo mostraría distinto),
+  `soul <n>`, `mppage <partida|ajustes|ajustes2|compañeros>`, `mpoption <etiqueta>|<pasos>`, `mpoptions`,
+  `spriteof <objeto>`, `sprites <colección>|<texto>`, `collections <texto>`, `hudsprite`, `hudrot` y `clips <texto>`.
+  `fsmdump` muestra también las variables de objeto y cada efecto que reproduce una marioneta se registra
+  ("efecto de enemigo ...").
 - Efectos del otro jugador: `burst <nombre> <n> <segundos>` hace capturas seguidas (las órdenes se leen cada medio
   segundo, así que para ver un efecto en el otro PC su ráfaga empieza antes), `hurt` da un golpe de 1 al caballero,
   `effects` cuenta los enviados, recibidos y reproducidos, y cada efecto reproducido se registra
@@ -276,20 +326,28 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
   - Los jefes finales de Plata y Oro del Coliseo (Oblobbles, Domadora de Dioses) con la prueba entera.
   - Una espera en "WaveCheck 5" del Coliseo de Bronce en la prueba automática: un minero que sale de debajo de la tierra
     cuando el caballero se acerca, y en la prueba los caballeros no se mueven (jugando no debería pasar).
-  Grimm, los jefes de sueño, Hollow Knight y la Radiancia, y el sonido del minero en el Coliseo, pasan a M5.
+  Grimm, los jefes de sueño, Hollow Knight y la Radiancia pasan a M5. El sonido del minero del Coliseo ya suena en el
+  PC que no lo mueve (comprobado en M5: tajo, lanzamiento del pico y voz al morir).
 - **M4** (hecho): sin reproducir aún, porque no salen de una FSM de acciones del caballero o crean objetos con daño:
   los rayos de Grubberfly's Elegy, las moscas de Flukenest (y su versión con Defender's Crest), las nubes de Spore
   Shroom y Defender's Crest al curarse, Thorns of Agony, Sharp Shadow (su golpe; el sonido sí), la onda en pantalla de
   los gritos, la muerte del compañero (su animación ya se ve en su sprite, sin la cabeza ni el aguijón que salen
   despedidos), los aterrizajes fuertes y el destello parpadeante de invulnerabilidad.
-- **M5**: revivir, sombras compartidas, barras de vida y HUD del compañero, cinemáticas compartidas, skins y ajustes
-  del host en el panel (la 0.7 los tenía en `HollowKnightCoop/src/HollowKnightCoop/Coop`). Jefes que se dejan para
-  entonces, porque dependen de cinemáticas o de entrar juntos:
+- **M5**: hecha la primera parte (estado de cada jugador, ajustes del host y panel, HUD del compañero y barra del jefe,
+  revivir y sombras), probada en vivo con dos copias. Queda la segunda: cinemáticas compartidas, sueños compartidos y sus
+  jefes y skins. De la primera parte:
+  - El estado "en cinemática" y "en sueño" de `PartyState` existe pero aún no lo pone nadie (llega con la segunda parte).
+  - Caer en un sueño solo se permite con el compañero en el mismo sueño; "si caen los dos, despiertan los dos" sale de
+    la muerte normal del juego en un sueño, sin probar (hacen falta los sueños compartidos).
+  - Sin barras de vida de enemigos normales (el diseño solo pide la del jefe) ni opción "Saltar cinemáticas" en los
+    ajustes (llega con las cinemáticas). La página "Skin" del panel llega con las skins.
+  - No probado en vivo: revivir con 3 o más jugadores y el revivido parpadeando (la invulnerabilidad se pone con el
+    `StartInvulnerable` del juego).
+  Jefes que dependen de cinemáticas o de entrar juntos:
   - **Grimm y el Rey de las Pesadillas**: antes hay que completar la misión de la Compañía (llamas, farol).
   - **Jefes de sueño** (Campeón Fallido, Tirano de Almas, Kin Perdido, Zote el Poderoso, guerreros soñadores): se
     entra con el aguijón onírico y cada jugador entraría por su cuenta; hay que llevar a los dos al sueño.
   - **Hollow Knight y la Radiancia**: cinemáticas de entrada y final.
-  - Pendiente menor: en el Coliseo, una acción de sonido del minero no suena en el PC que no lo mueve.
 - **M6**: `tools/package.sh` aún usa los nombres del mod anterior (`HollowKnightCoop`).
 - **Pasto y telas al paso del compañero** (solo estético, baja prioridad): hoy se sincroniza el corte, pero no el
   balanceo cuando el otro caballero pasa por encima. Sin red: en cada PC, cada pocos frames, buscar el pasto

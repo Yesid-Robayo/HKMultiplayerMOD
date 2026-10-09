@@ -25,7 +25,8 @@ Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más)
   Al volver a unirte, recuperas tu personaje. Si el host cierra la partida o el juego, primero recoge los personajes
   de los invitados.
 - **Avisos** en pantalla: código de la partida, quién entra y sale, desconexiones y esperas de combate.
-- **Panel en pausa** (*Pausa › Multijugador*): jugadores conectados, código, IP y cerrar la partida.
+- **Panel en pausa** (*Pausa › Multijugador*): jugadores conectados, código, IP y cerrar la partida; *Ajustes de la
+  partida* y *Compañeros* (ver [Funciones del coop](#funciones-del-coop)).
 
 ### Jugadores
 
@@ -49,6 +50,27 @@ Se ven y se oyen las acciones del compañero con los mismos efectos del juego, a
   (partículas, destello y sonido).
 - Son solo visuales: no dañan, no rompen nada, no gastan alma ni tocan a tu caballero; el daño real ya va por los
   golpes de cada uno.
+
+### Funciones del coop
+
+- **Revivir**: al morir con un compañero en pie no se muere, se cae. El cuerpo queda tendido con "† Nombre" y la cámara
+  del caído sigue a su compañero, también entre salas ("Caído — X puede revivirte"). El compañero recibe "X cayó en
+  &lt;zona&gt;" y una flecha hacia el cuerpo; junto a él, **manteniendo Focus 2 s** (sin curarse) y gastando 33 de alma,
+  lo revive con 1 máscara y 2 s de invulnerabilidad. Un golpe al que revive corta el progreso. Si el compañero se sienta
+  en un banco, los caídos reviven a su lado con toda la vida. Si caen todos, cada uno muere de forma normal. Un caído no
+  se queda con enemigos ni hace esperar a los jefes.
+- **Sombras compartidas**: cada uno ve la sombra del compañero (con su lógica y sus datos) y puede matarla; el dueño
+  recupera su geo y su alma aunque esté en otra sala ("Recuperaste tu sombra gracias a X").
+- **HUD del compañero** arriba a la derecha: su nombre, sus máscaras (llenas, vacías y azules, igual que su HUD), un
+  orbe con su alma y si está caído o en otra zona. Sus máscaras salen sobre su cabeza unos segundos al cambiarle la
+  vida, y hay flechas en el borde de la pantalla hacia el compañero y los cuerpos que no se ven.
+- **Barra del jefe** abajo, con su nombre.
+- **Ajustes de la partida** que decide el host (*Pausa › Multijugador › Ajustes de la partida*), guardados en cada
+  mundo; los invitados los ven sin poder cambiarlos: vida de los jefes (1,5× por defecto) y de los enemigos, solo con
+  el compañero en la sala, daño recibido, revivir (sí/no, tiempo, alma, máscaras, invulnerabilidad, en el banco),
+  nombres, vida del compañero, flechas, avisos, barra del jefe y regalar geo.
+- **Compañeros** (*Pausa › Multijugador › Compañeros*): la vida y el alma de cada uno, **dar geo**, **desatascarse** (al
+  último suelo seguro) y **recargar la sala**.
 
 ### Mundo compartido
 
@@ -102,7 +124,7 @@ Se ven y se oyen las acciones del compañero con los mismos efectos del juego, a
 | **PlayMaker** | Lectura y control de las máquinas de estados (FSM) del juego: lógica de enemigos, jefes, ascensores, rejas, palancas, arenas, diálogos. |
 | **BouncyCastle.Cryptography** (MIT) | Cifrado: intercambio de claves X25519, derivación HKDF-SHA256 con el código de la partida y ChaCha20-Poly1305 en cada paquete. |
 | **Newtonsoft.Json** (del juego) | Personajes de los invitados y datos de los mundos coop. |
-| **Unity UI** | Menús con el estilo del juego (menú *Multijugador*, panel en pausa) y avisos en pantalla. |
+| **Unity UI** | Menús con el estilo del juego (menú *Multijugador*, panel en pausa con opciones "Opción < valor >"), avisos en pantalla y HUD del compañero (con los sprites del HUD del juego). |
 
 - **Red propia sobre UDP**: un solo socket, canales fiable (eventos, en orden y sin duplicados) y no fiable (estado
   continuo), transferencias grandes troceadas (el mundo al unirse), latido y desconexión limpia. Sin memoria nueva por
@@ -142,11 +164,11 @@ El paquete para jugadores incluye la Modding API, el mod y un instalador:
 | M2 | Mundo compartido (progreso, objetos persistentes, unirse) | Hecho |
 | M3 | Enemigos, jefes y objetos de sala | Hecho |
 | M4 | Efectos del otro jugador (tajos, hechizos, dash, curación) | Hecho |
-| M5 | Revivir, sombras compartidas, barras de vida, cinemáticas compartidas, skins, ajustes del host | Pendiente |
+| M5 | Revivir, sombras compartidas, HUD del compañero y barra del jefe, ajustes del host, cinemáticas compartidas, sueños, skins | En curso: hecha la primera parte (hasta las sombras) |
 | M6 | Instalador y paquete con el nombre nuevo | Pendiente |
 
-Para M5 quedan también Grimm, los jefes de sueño, Hollow Knight y la Radiancia (dependen de cinemáticas o de entrar
-juntos a un sueño). La lista completa de pendientes está al final de la arquitectura.
+De M5 quedan las cinemáticas compartidas, los sueños compartidos y sus jefes (Grimm, jefes de sueño, Rey de las
+Pesadillas, Hollow Knight y la Radiancia) y las skins. La lista completa de pendientes está al final de la arquitectura.
 
 ---
 
@@ -160,8 +182,9 @@ juntos a un sueño). La lista completa de pendientes está al final de la arquit
 | `src/HKMultiplayer/Session/` | Sesión: host y unirse, jugadores, salas y dueño de cada sala, reparto de mensajes. |
 | `src/HKMultiplayer/Game/Players/` | Estado de los jugadores, interpolación, avatares del compañero y efectos de sus acciones. |
 | `src/HKMultiplayer/Game/World/` | Mundos coop, guardado, personajes de los invitados y progreso compartido. |
+| `src/HKMultiplayer/Game/Features/` | Funciones del coop: estado de cada jugador, ajustes del host, revivir, sombras, HUD del compañero, barra del jefe, regalar geo. |
 | `src/HKMultiplayer/Game/Scene/` | Objetos de sala, rompibles, ascensores y rejas, controladores de batalla, enemigos y jefes, peligros animados. |
-| `src/HKMultiplayer/UI/` | Menús y avisos. |
+| `src/HKMultiplayer/UI/` | Menús, avisos y el lienzo del HUD del coop. |
 | `src/HKMultiplayer/Testing/` | Modo de prueba: órdenes por archivo para probar con dos copias del juego. |
 | `tests/` | Pruebas del transporte fuera del juego y rutas de prueba del coop (`tests/routes/`). |
 | `tools/` | Compilar e instalar (`test-cycle.sh`), pruebas con dos copias (`mp-test-lib.sh`), rutas automáticas (`run-routes.sh`), paquete e instalador. |
