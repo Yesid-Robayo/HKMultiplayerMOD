@@ -171,8 +171,36 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     Guardián de Cristal normal y enfurecido y Señores Mantis (despiertan, atacan al jugador que no es dueño de la sala y siguen el
     combate al cambiar de PC; el rayo y las torretas del Guardián se ven igual en los dos), escupidores y zombis. El
     contador del diario (`killsMegaBeamMiner`, que la sala del enfurecido usa para darlo por vencido) baja una sola vez.
-- **Efectos del otro jugador**: eventos (ataque, hechizo, dash, curación...) que el receptor reproduce con los prefabs
-  del propio héroe. Son solo visuales: el daño real va por los golpes directos.
+- **Efectos del otro jugador** (`Game/Players/PlayerEffects`, `RemoteEffects`, `HeroEffectTemplates`): cuando el
+  caballero local hace algo que se ve, se envía un `PlayerEvent` pequeño (fiable, a la sala) y cada compañero lo
+  reproduce sobre el avatar de quien lo hizo con los efectos de **su propio** caballero. Son solo visuales: el daño
+  real ya va por los golpes directos.
+  - **Copia solo visual**: al cargar la partida se copian las carpetas de efectos del caballero (`Attacks`, `Effects`,
+    `Spells`, `Focus Effects`, `Sounds`, `Dream Effects`) y se les quita todo lo que juega: colisiones, cuerpos, scripts
+    y las FSM de daño o de colisión (`damages_enemy`, `Control Collider`...). Quedan sprites, animaciones, partículas,
+    sonidos y las FSM que solo animan su objeto (aparecer, desvanecerse, apagarse). Cada compañero tiene una copia de
+    esas plantillas pegada bajo el sprite de su avatar (que se voltea como el caballero), y lo que en el caballero
+    apuntaba a él (su escala, dónde sonar) apunta a la copia. La copia dura toda la partida: al cambiar de sala se
+    aparca apagada y como al crearla, y se pega al avatar nuevo (crearla cuesta; si una FSM sacó un objeto al mundo y
+    la sala se descargó, se rehace).
+  - **Estados de las FSM de acciones** (`Spell Control`, `Nail Arts`, `Superdash`, `Dream Nail`): un gancho a
+    `Fsm.SwitchState` envía (FSM, estado) cuando el caballero entra en un estado con efectos (se calcula una vez por
+    estado). El receptor lee las acciones del **mismo estado en su caballero** y las hace sobre la copia: activar,
+    animar, emitir partículas, sonar, parar, y los avisos a las FSM visuales de los efectos (`PLAY`, `UP`, `DOWN`...).
+    Lo que va al propio caballero (su animación, mostrarlo) ya llega en su estado; la cámara, la velocidad y los avisos
+    al caballero no se hacen. Así cada hechizo, Crystal Heart, la curación o el aguijón onírico salen igual que en el
+    juego sin reescribirlos uno a uno, y con la temporización real (cada estado llega cuando pasa).
+  - **Lo que hace el código del caballero** y no una FSM tiene su método: tajos (gancho a `NailSlash.StartSlash`, con
+    tamaño y animación según Mark of Pride, Longnail y furia), dash y Shade Dash (`HeroDash`, con dónde puso su ráfaga),
+    doble salto, salto de pared, carga de las artes (se mira cada frame) y golpes recibidos (`TakeDamage`, con destello
+    del avatar).
+  - **Bolas de fuego**: lo que lanza `Spell Control` crea la bola real con daño, así que se reproduce aparte: el
+    objeto que la lanza sin su lógica (estallido y partículas), y una copia visual del proyectil que vuela recta a su
+    velocidad hasta chocar con el terreno (rayo contra sus capas) o deshacerse. La de Flukenest no se reproduce.
+  - **Al mismo tiempo que la animación**: cada evento lleva el tick del remitente (el mismo reloj que su estado) y
+    espera en una cola fija hasta que el avatar, que se dibuja un poco en el pasado, llega a ese tick (como mucho medio
+    segundo). Sin memoria nueva por evento; la memoria creada mientras el compañero ataca es la del juego.
+  - Los amuletos que cambian cómo se ve (Mark of Pride, Longnail, furia, Shaman Stone, Flukenest) viajan en un byte.
 
 ### Interfaz (`UI/`)
 
@@ -200,6 +228,11 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
   enemigos o los encienden (para ver qué combates necesitan un controlador compartido), `healthlist` todos los objetos
   con vida y su huella, y `die` mata al caballero; cada muerte de enemigo se registra con quién la provocó. `moving <s>` lista lo sólido o
   dañino que se mueve o gira, `hazards` los peligros animados alineados y `wake <nombre>` enciende un enemigo apagado.
+- Efectos del otro jugador: `burst <nombre> <n> <segundos>` hace capturas seguidas (las órdenes se leen cada medio
+  segundo, así que para ver un efecto en el otro PC su ráfaga empieza antes), `hurt` da un golpe de 1 al caballero,
+  `effects` cuenta los enviados, recibidos y reproducidos, y cada efecto reproducido se registra
+  ("efecto Slash de ..."). `tree <profundidad> <objeto>` y `fsmall <objeto>` muestran la jerarquía y todas las FSM de
+  un objeto (también inactivo o del pool, como `Fireball Top`). Ruta: `tests/routes/effects.route`.
 
 ## Hitos
 
@@ -221,7 +254,11 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
   Cristal (cristales), bichos de cristal (láser), Madre Aspid (crías), Aspid primigenio (disparos), minero (pico) y
   Gruzzer volátil (explosión), Uumuu (descargas) y Coleccionista (tarros y sus bichos, cuerpo, embestida). Sin probar
   en vivo: Grimm (necesita la Compañía) y los jefes de sueño (se entra con el aguijón onírico).
-- **M4**: efectos del otro jugador (tajos, hechizos, dash, curación). `PlayerEvent` está reservado y sin usar.
+- **M4** (hecho): sin reproducir aún, porque no salen de una FSM de acciones del caballero o crean objetos con daño:
+  los rayos de Grubberfly's Elegy, las moscas de Flukenest (y su versión con Defender's Crest), las nubes de Spore
+  Shroom y Defender's Crest al curarse, Thorns of Agony, Sharp Shadow (su golpe; el sonido sí), la onda en pantalla de
+  los gritos, la muerte del compañero (su animación ya se ve en su sprite, sin la cabeza ni el aguijón que salen
+  despedidos), los aterrizajes fuertes y el destello parpadeante de invulnerabilidad.
 - **M5**: revivir, sombras compartidas, barras de vida y HUD del compañero, cinemáticas compartidas, skins y ajustes
   del host en el panel (la 0.7 los tenía en `HollowKnightCoop/src/HollowKnightCoop/Coop`). Jefes que se dejan para
   entonces, porque dependen de cinemáticas o de entrar juntos:

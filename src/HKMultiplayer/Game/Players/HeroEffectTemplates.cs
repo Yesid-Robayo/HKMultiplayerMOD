@@ -344,9 +344,13 @@ internal sealed class HeroEffectTemplates {
         };
     }
 
-    /// <summary>Bola de fuego solo visual: proyectil y estallido al lanzarla, sonido, velocidad y dónde sale.</summary>
+    /// <summary>
+    /// Bola de fuego solo visual: lo que sale junto al caballero al lanzarla (el objeto que la lanza, con su estallido y
+    /// partículas), el estallido aparte de Vengeful Spirit, el proyectil, sonido, velocidad y dónde sale.
+    /// </summary>
     internal sealed class FireballInfo {
         public GameObject Projectile;
+        public GameObject Cast;
         public GameObject Blast;
         public AudioClip Sound;
         public float Speed;
@@ -391,25 +395,19 @@ internal sealed class HeroEffectTemplates {
         info.Projectile.name = prefab.name;
         Strip(info.Projectile, keepFsms: false);
 
-        // Estallido al lanzarla: el que crea al lado (Vengeful Spirit, con tamaño 2) o el que lleva dentro (Shade Soul)
-        GameObject blast;
+        // Lo que la lanza, sin su lógica: su estallido y sus partículas junto al caballero
+        info.Cast = Object.Instantiate(top, _holder.transform, false);
+        info.Cast.name = top.name;
+        Strip(info.Cast, keepFsms: false);
+
+        // Vengeful Spirit crea además otro estallido al lado (con tamaño 2)
         var create = FirstAction<CreateObject>(cast, "Cast Right");
-        if (create?.gameObject?.Value != null) {
-            blast = create.gameObject.Value;
+        var blast = create?.gameObject?.Value;
+        if (blast != null) {
             info.BlastOffset = create.position != null && !create.position.IsNone
                 ? new Vector2(Mathf.Abs(create.position.Value.x), create.position.Value.y)
                 : blastOffset;
             info.BlastScale = new Vector3(2f, 2f, 1f);
-        } else {
-            var inner = top.transform.Find("Fireball Blast");
-            blast = inner != null ? inner.gameObject : null;
-            if (inner != null) {
-                info.BlastOffset = new Vector2(Mathf.Abs(inner.localPosition.x), inner.localPosition.y);
-                info.BlastScale = inner.localScale;
-            }
-        }
-
-        if (blast != null) {
             info.Blast = Object.Instantiate(blast, _holder.transform, false);
             info.Blast.name = blast.name;
             Strip(info.Blast, keepFsms: false);

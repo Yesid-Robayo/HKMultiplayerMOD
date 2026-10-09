@@ -506,6 +506,10 @@ internal sealed class TestDriver : MonoBehaviour {
                 PlayerData.instance.SetInt("health", 1);
                 hero.TakeDamage(hero.gameObject, GlobalEnums.CollisionSide.top, 99, 1);
                 break;
+            case "hurt":
+                // hurt: el caballero recibe un golpe de 1 (para ver el efecto del golpe en el otro PC)
+                hero.TakeDamage(hero.gameObject, GlobalEnums.CollisionSide.left, 1, 1);
+                break;
             case "tp":
                 hero.transform.position = new Vector3(ParseFloat(args[1]), ParseFloat(args[2]), hero.transform.position.z);
                 break;

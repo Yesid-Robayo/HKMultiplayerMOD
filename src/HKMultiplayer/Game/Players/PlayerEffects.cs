@@ -302,11 +302,6 @@ internal sealed class PlayerEffects {
         effect.Write(writer);
         _session.End();
         Sent++;
-        if (TestDriver.IsEnabled()) {
-            var hero = HeroController.instance;
-            Log.Info($"[TEST] efecto enviado {effect.Kind} {effect.A}/{effect.B} estado={hero?.hero_state} " +
-                     $"escena={GameManager.instance?.sceneName} tick={effect.Tick}\n{Environment.StackTrace}");
-        }
     }
 
     /// <summary>

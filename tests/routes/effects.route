@@ -1,0 +1,64 @@
+title Efectos del otro jugador: tajos, hechizos, dash, curación
+# El invitado hace cada acción y el host debe reproducir su efecto sobre el avatar (lo registra el modo de prueba:
+# "efecto <tipo> de <jugador>"). Para verlo además en pantalla: la orden "burst" hace capturas seguidas.
+# Las habilidades se dan con pdset (las de movimiento y hechizos son del mundo: las tienen los dos).
+
+room Crossroads_01 top1
+guest tp 56 11.8
+host tp 50 11.8
+wait 1
+guest press left 0.05
+wait 1
+
+# Tajos (de lado y hacia arriba)
+guest press attack 0.1
+expect-log host efecto Slash de
+guest press up 0.5
+guest press attack 0.1
+wait 1
+
+# Dash y doble salto
+guest pdset hasDash true
+guest pdset hasDoubleJump true
+guest press dash 0.1
+expect-log host efecto Dash de
+guest press jump 0.4
+wait 0.6
+guest press jump 0.3
+expect-log host efecto DoubleJump de
+
+# Hechizos: bola de fuego, grito y caída (cada uno es un estado de Spell Control)
+guest pdset fireballLevel 1
+guest pdset screamLevel 1
+guest pdset quakeLevel 1
+guest pdset MPCharge 99
+guest press cast 0.1
+expect-log host efecto FsmState de
+guest pdset MPCharge 99
+guest press up 0.6
+guest press cast 0.1
+wait 1.5
+guest pdset MPCharge 99
+guest press down 0.6
+guest press cast 0.1
+wait 2
+
+# Artes del aguijón: cargar (efecto de carga) y soltar (Great Slash)
+guest pdset hasNailArt true
+guest pdset hasDashSlash true
+guest press attack 1.8
+expect-log host efecto NailCharge de
+wait 2
+
+# Curación y golpe recibido
+guest pdset health 3
+guest pdset MPCharge 99
+guest press cast 2.5
+wait 3
+guest hurt
+expect-log host efecto Hit de
+
+# Tras cambiar de sala los efectos se vuelven a pegar al avatar nuevo
+room Crossroads_03 left1
+guest press attack 0.1
+wait 1

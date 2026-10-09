@@ -67,6 +67,7 @@ internal sealed class RemoteEffects {
     private readonly List<PlayMakerFSM> _fsms = new();
     private readonly Fireball[] _fireballs = new Fireball[FireballsPerLevel * 2];
     private readonly GameObject[] _blasts = new GameObject[2];
+    private readonly CastCopy[] _casts = new CastCopy[2];
 
     private RemoteAvatar _avatar;
     private ParticleSystem _dashParticles;
@@ -232,6 +233,12 @@ internal sealed class RemoteEffects {
             }
         }
 
+        foreach (var cast in _casts) {
+            if (cast?.Object != null) {
+                Object.Destroy(cast.Object);
+            }
+        }
+
         if (_root != null) {
             Object.Destroy(_root);
         }
@@ -287,6 +294,12 @@ internal sealed class RemoteEffects {
         foreach (var fireball in _fireballs) {
             if (fireball is { Active: true }) {
                 UpdateFireball(fireball, deltaTime);
+            }
+        }
+
+        foreach (var cast in _casts) {
+            if (cast?.Object != null && cast.Object.activeSelf && Time.time >= cast.Until) {
+                cast.Object.SetActive(false);
             }
         }
     }
@@ -614,6 +627,18 @@ internal sealed class RemoteEffects {
         public float Life;
     }
 
+    /// <summary>Lo que sale junto al caballero al lanzar una bola de fuego (estallido, partículas, luz).</summary>
+    private sealed class CastCopy {
+        public GameObject Object;
+        public Transform[] Nodes;
+        public bool[] ActiveAtStart;
+        public tk2dSpriteAnimator[] Animators;
+        public float Until;
+    }
+
+    /// <summary>Tiempo que se deja encendido lo que sale al lanzarla (sus animaciones acaban antes).</summary>
+    private const float CastSeconds = 1.5f;
+
     /// <summary>
     /// Vengeful Spirit (nivel 0) o Shade Soul (1): el estallido al lanzarla, el sonido y la bola, que vuela recta hasta
     /// chocar con una pared o deshacerse. La de Flukenest (moscas) no se reproduce.
@@ -630,6 +655,7 @@ internal sealed class RemoteEffects {
             _audio.PlayOneShot(info.Sound);
         }
 
+        PlayCast(level, info, origin, direction);
         if (info.Blast != null) {
             var blast = _blasts[level];
             if (blast == null) {
@@ -676,6 +702,44 @@ internal sealed class RemoteEffects {
         }
     }
 
+    private void PlayCast(int level, HeroEffectTemplates.FireballInfo info, Vector3 origin, float direction) {
+        if (info.Cast == null) {
+            return;
+        }
+
+        var cast = _casts[level];
+        if (cast == null) {
+            var copy = Object.Instantiate(info.Cast, _parking, false);
+            copy.SetActive(false);
+            var nodes = copy.GetComponentsInChildren<Transform>(true);
+            cast = _casts[level] = new CastCopy {
+                Object = copy,
+                Nodes = nodes,
+                ActiveAtStart = new bool[nodes.Length],
+                Animators = copy.GetComponentsInChildren<tk2dSpriteAnimator>(true)
+            };
+            for (var i = 0; i < nodes.Length; i++) {
+                cast.ActiveAtStart[i] = nodes[i].gameObject.activeSelf;
+            }
+        }
+
+        // Como al lanzarla: en el caballero y girado hacia donde mira; lo que se apagó solo vuelve a estar
+        var scale = info.Cast.transform.localScale;
+        cast.Object.transform.position = origin;
+        cast.Object.transform.localScale = new Vector3(direction * Mathf.Abs(scale.x), scale.y, scale.z);
+        cast.Object.SetActive(false);
+        for (var i = 1; i < cast.Nodes.Length; i++) {
+            cast.Nodes[i].gameObject.SetActive(cast.ActiveAtStart[i]);
+        }
+
+        cast.Object.SetActive(true);
+        foreach (var animator in cast.Animators) {
+            animator.PlayFromFrame(0);
+        }
+
+        cast.Until = Time.time + CastSeconds;
+    }
+
     private Fireball FreeFireball(int level, HeroEffectTemplates.FireballInfo info) {
         for (var i = level * FireballsPerLevel; i < (level + 1) * FireballsPerLevel; i++) {
             var fireball = _fireballs[i];
@@ -688,8 +752,9 @@ internal sealed class RemoteEffects {
                     Transform = copy.transform,
                     Renderer = copy.GetComponent<MeshRenderer>(),
                     Animator = animator,
-                    FlyClip = animator != null ? animator.GetClipByName("Ball") ?? animator.DefaultClip : null,
-                    EndClip = animator != null ? animator.GetClipByName("Ball End") : null,
+                    // La suya (la de Shade Soul es otra); al deshacerse, la de Vengeful Spirit tiene animación
+                    FlyClip = animator != null ? animator.DefaultClip : null,
+                    EndClip = animator != null && level == 0 ? animator.GetClipByName("Ball End") : null,
                     WallImpact = copy.transform.Find("Wall Impact")?.gameObject
                 };
             }
@@ -760,6 +825,12 @@ internal sealed class RemoteEffects {
         foreach (var blast in _blasts) {
             if (blast != null) {
                 blast.SetActive(false);
+            }
+        }
+
+        foreach (var cast in _casts) {
+            if (cast?.Object != null) {
+                cast.Object.SetActive(false);
             }
         }
     }
