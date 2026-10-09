@@ -27,3 +27,6 @@ dist/
 ModLog.txt
 __pycache__/
 *.pyc
+
+# Worktrees y datos locales de los agentes
+.claude/

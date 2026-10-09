@@ -49,7 +49,20 @@ internal sealed class TestDriver : MonoBehaviour {
                 Log.Info($"{Tag}muere {self.name} hp={self.hp} por {caller}");
             }
 
+            // En arenas: si el enemigo tenía su batalla apuntada y cómo cambia su contador de enemigos
+            var flags = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic |
+                        System.Reflection.BindingFlags.Instance;
+            var battle = typeof(HealthManager).GetField("battleScene", flags)?.GetValue(self) as GameObject;
+            var notified = typeof(HealthManager).GetField("notifiedBattleScene", flags)?.GetValue(self);
+            var killedTo = (typeof(HealthManager).GetField("sendKilledTo", flags)?.GetValue(self) as GameObject) ??
+                           typeof(HealthManager).GetField("sendKilledToObject", flags)?.GetValue(self) as GameObject;
+            var counter = battle != null ? FSMUtility.LocateFSM(battle, "Battle Control")?.FsmVariables.GetFsmInt("Battle Enemies") : null;
+            var before = counter?.Value;
             orig(self, direction, attackType, ignoreEvasion);
+            if (battle != null || killedTo != null) {
+                Log.Info($"{Tag}arena {self.name}: batalla={(battle != null ? battle.name : "-")} avisado={notified} " +
+                         $"contador {before}→{counter?.Value} avisa a={(killedTo != null ? killedTo.name : "-")}");
+            }
         };
 
         // Las órdenes de una ejecución anterior no se repiten
@@ -229,6 +242,14 @@ internal sealed class TestDriver : MonoBehaviour {
                 var eventArgs = string.Join(" ", args.Skip(1)).Split('|');
                 if (!runner.MovingObjects.TestSendEvent(eventArgs[0], eventArgs[1])) {
                     Log.Warn($"{Tag}no hay objeto móvil '{eventArgs[0]}'");
+                }
+
+                break;
+            case "fsmgo":
+                // fsmgo <inicio del nombre>[/<fsm>]|<estado>: como fsmevent, pero pone ese estado (saltar oleadas del Coliseo)
+                var goArgs = string.Join(" ", args.Skip(1)).Split('|');
+                if (!runner.MovingObjects.TestSetState(goArgs[0], goArgs[1])) {
+                    Log.Warn($"{Tag}no hay objeto móvil '{goArgs[0]}'");
                 }
 
                 break;
@@ -519,6 +540,8 @@ internal sealed class TestDriver : MonoBehaviour {
                 break;
             case "tp":
                 hero.transform.position = new Vector3(ParseFloat(args[1]), ParseFloat(args[2]), hero.transform.position.z);
+                // Si pisa pinchos, vuelve aquí y no a la entrada de la sala (no ha pasado andando por ningún punto seguro)
+                hero.SetHazardRespawn(hero.transform.position, hero.cState.facingRight);
                 break;
             case "press":
                 // press <botón> [segundos]: botones de HeroActions (left, right, up, down, jump, attack, dash...)

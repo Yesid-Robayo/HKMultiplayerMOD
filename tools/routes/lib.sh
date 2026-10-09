@@ -13,6 +13,7 @@ HK_TEMPLATE="B"                      # copia de la que se toman el nombre de pro
 HK_ROUTE_CODE="PRBA-TEST"
 HK_ROUTE_WORLD="Ruta"
 HK_ROUTE_BASE_PORT="${HK_ROUTE_BASE_PORT:-27100}"
+HK_ROUTE_HEALTH="${HK_ROUTE_HEALTH:-50}"   # máscaras de los dos en cada sala de una ruta (que no mueran sin querer)
 
 # Letras de cada par (host, invitado). Una sola letra: el nombre de producto parcheado debe medir lo mismo que el original.
 HK_PAIR_HOSTS=(D F H J)

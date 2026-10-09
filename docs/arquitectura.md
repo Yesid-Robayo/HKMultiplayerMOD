@@ -119,7 +119,10 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     del combate se pone al día con su estado. En las copias no se hacen las llamadas al caballero (devolverle el control,
     girarlo), y el cartel para desafiar se apaga en los demás PCs (si no, se podría desafiar otra vez a mitad del
     combate y ese caballero se quedaría sin control). Las órdenes de esos controladores a un enemigo no se reenvían:
-    ya las da su copia en el PC que lo mueve.
+    ya las da su copia en el PC que lo mueve. Los avisos de una copia a otro objeto con controlador (p. ej. el `SPAWN`
+    con 1 s de retraso que la batalla del Coliseo manda a sus jaulas, que llega fuera de la aplicación del estado) no
+    toman el control: ya los manda el controlador. Si no, los dos PCs se quitaban las jaulas, alguna no soltaba su
+    enemigo y la oleada esperaba para siempre (`Battle Enemies` no llegaba a 0).
   - Encuentros con diálogo antes de un combate (Hornet en los Bordes del Reino; se detectan solos: un objeto que no
     es enemigo, con un diálogo, que después despierta o enciende a un enemigo o cierra la arena): van como los
     controladores de batalla, así que los dos ven el diálogo, con su caballero quieto mientras, y la Hornet que habla
@@ -231,12 +234,15 @@ arena, regalos de geo, autoguardado y reconexión: se reescriben sobre las capas
 - **M3**: revisadas con `arenas` las salas de los jefes del juego base (sin sueños ni Panteones): solo los Mantis y el
   Coliseo necesitaban controlador compartido; Señor Traidor, Caballero de la Colmena, Nosk y los Caballeros Vigía usan
   un `Battle Scene` que ya se copia por cadena. Probados con los dos dañados: Cazador de Cristal (cristales), bichos de
-  cristal (láser), Madre Aspid (crías), Aspid primigenio (disparos), minero (pico), Uumuu (descargas) y Coleccionista
-  (tarros y sus bichos, cuerpo, embestida). Falta por ver en vivo:
-  - Caballero de la Colmena, Flukemarm, Cargador Musgoso y Rey Mosca atacando (solo se vio que mueren en los dos).
+  cristal (láser), Madre Aspid (crías), Aspid primigenio (disparos), minero (pico), Uumuu (descargas), Coleccionista
+  (tarros y sus bichos, cuerpo, embestida), Caballero de la Colmena, Flukemarm (sus moscas) y Rey Mosca (él y sus
+  moscas). Mawlek espera a que estén los dos cerca para despertar. El Coliseo de Bronce se pasa entero, con todas sus
+  oleadas y Zote, igual en los dos. Falta por ver en vivo:
+  - Cargador Musgoso atacando.
   - Que la explosión del Gruzzer volátil dañe a los dos (la explosión sale en los dos; el daño no se ha visto).
-  - La espera para despertar de Mawlek (en el mundo de prueba ya estaba muerto).
-  - Los jefes finales del Coliseo (Oblobbles, Domadora de Dioses, Zote).
+  - Los jefes finales de Plata y Oro del Coliseo (Oblobbles, Domadora de Dioses) con la prueba entera.
+  - Una espera en "WaveCheck 5" del Coliseo de Bronce en la prueba automática: un minero que sale de debajo de la tierra
+    cuando el caballero se acerca, y en la prueba los caballeros no se mueven (jugando no debería pasar).
   Grimm, los jefes de sueño, Hollow Knight y la Radiancia, y el sonido del minero en el Coliseo, pasan a M5.
 - **M4**: efectos del otro jugador (tajos, hechizos, dash, curación). `PlayerEvent` está reservado y sin usar.
 - **M5**: revivir, sombras compartidas, barras de vida y HUD del compañero, cinemáticas compartidas, skins y ajustes

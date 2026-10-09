@@ -1012,6 +1012,13 @@ internal sealed class FsmStateSync {
             return false;
         }
 
+        // Aviso de una copia que sigue los estados de otro PC (p. ej. el SPAWN con retraso que la batalla del Coliseo
+        // manda a sus jaulas, que llega fuera de la aplicación del estado): el controlador ya lo manda allí. Si se
+        // tomara el control aquí, los dos PCs se quitaban las jaulas y alguna no soltaba su enemigo (la oleada no acababa)
+        if (source != null && !source.CopyTransitions && !IsController(source)) {
+            return false;
+        }
+
         fsmEvent = CheckLiftDirection(item, fsmEvent, sender);
 
         // El caballero de este jugador no va subido pero el de otro sí: lo mueve el PC de quien va encima (aquí el
@@ -1732,6 +1739,32 @@ internal sealed class FsmStateSync {
                 _executing = true;
                 try {
                     item.Fsm.SendEvent(eventName);
+                } finally {
+                    _executing = false;
+                }
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Este PC toma el control del objeto y pone su FSM en ese estado, que se copia a los demás como cualquier otro
+    /// (modo de prueba: saltar oleadas del Coliseo hasta su jefe final).
+    /// </summary>
+    public bool TestSetState(string namePrefix, string stateName) {
+        var slash = namePrefix.IndexOf('/');
+        var fsmName = slash >= 0 ? namePrefix.Substring(slash + 1) : null;
+        namePrefix = slash >= 0 ? namePrefix.Substring(0, slash) : namePrefix;
+        foreach (var item in _tracked) {
+            if (item.Fsm != null && item.Fsm.gameObject.name.StartsWith(namePrefix, StringComparison.Ordinal) &&
+                (fsmName == null || item.Fsm.FsmName == fsmName)) {
+                TakeControl(item, "prueba");
+                _executing = true;
+                try {
+                    item.Fsm.SetState(stateName);
                 } finally {
                     _executing = false;
                 }

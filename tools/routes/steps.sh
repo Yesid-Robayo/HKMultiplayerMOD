@@ -68,6 +68,11 @@ step_room() {
     return
   fi
 
+  # Mucha vida: la ruta deja a los caballeros quietos entre enemigos y uno nuevo tiene 5 máscaras. Si muere, reaparece
+  # en su banco y lo que se comprueba después ya no es de esta sala (sus enemigos parecen no haber muerto en el otro)
+  send "$_R_HOST" "pdset maxHealth $HK_ROUTE_HEALTH"; send "$_R_HOST" "pdset health $HK_ROUTE_HEALTH"
+  send "$_R_GUEST" "pdset maxHealth $HK_ROUTE_HEALTH"; send "$_R_GUEST" "pdset health $HK_ROUTE_HEALTH"
+
   # Tiempo para que el dueño de la sala reparta su estado y aparezcan los avatares
   sleep 5
   hs="$(status_of "$_R_HOST")"; gs="$(status_of "$_R_GUEST")"
@@ -181,8 +186,19 @@ _alive_enemies() {
     | sed -E 's/.*\[TEST\] enemigo (.*) id=([0-9a-f]+).*/\2 \1/' | sort
 }
 
+# Los dos siguen en la sala de la ruta (si uno murió, reapareció en otra)
+_both_in_room() {
+  [ "$(status_field "$(status_of "$_R_HOST")" scene)" = "$_R_ROOM" ] &&
+    [ "$(status_field "$(status_of "$_R_GUEST")" scene)" = "$_R_ROOM" ]
+}
+
 step_enemies_sync() {
   local who="${1:-guest}" hit h g
+  if ! _both_in_room; then
+    _result NOCONC "enemies-sync" "uno de los dos ya no está en $_R_ROOM (¿murió?)"
+    return
+  fi
+
   hit="$(query "$(_who "$who")" "hitall 9999" | grep -aoE 'golpeados [0-9]+' | grep -oE '[0-9]+$')"
   if [ "${hit:-0}" -eq 0 ]; then
     _result NOCONC "enemies-sync" "no hay enemigos vivos en la sala"
@@ -190,6 +206,11 @@ step_enemies_sync() {
   fi
 
   sleep 2; send "$(_who "$who")" "hitall 9999"; sleep 5
+  if ! _both_in_room; then
+    _result NOCONC "enemies-sync" "$who golpeó $hit, pero uno de los dos ya no está en $_R_ROOM (¿murió?)"
+    return
+  fi
+
   h="$(_alive_enemies "$_R_HOST")"; g="$(_alive_enemies "$_R_GUEST")"
   if [ "$h" = "$g" ]; then
     _result OK "enemies-sync" "$who golpeó $hit; vivos en los dos: $(echo "$h" | grep -c .)"

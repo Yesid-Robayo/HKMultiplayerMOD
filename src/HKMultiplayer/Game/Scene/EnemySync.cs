@@ -191,7 +191,10 @@ internal sealed class EnemySync {
 
         public bool Pooled;
 
-        /// <summary>Creado durante la partida por un objeto de la sala (las jaulas del Coliseo): no queda muerto para siempre.</summary>
+        /// <summary>
+        /// Creado por un objeto de la sala, al cargarla o durante la partida (las jaulas del Coliseo): no queda muerto
+        /// para siempre.
+        /// </summary>
         public bool Created;
 
         /// <summary>Quién lo mueve (0: el dueño de la sala) y quién lo movía antes del último cambio.</summary>
@@ -339,6 +342,13 @@ internal sealed class EnemySync {
     private readonly Dictionary<uint, Enemy> _byId = new();
     private readonly Dictionary<HealthManager, Enemy> _byHealth = new();
     private readonly Dictionary<uint, (HealthKind Kind, int Hp)> _pendingHealth = new();
+
+    /// <summary>
+    /// Quién mueve enemigos que aquí aún no existen: los que crea una jaula del Coliseo se crean en cada PC cuando su
+    /// jaula llega a ese estado, y el aviso del dueño de la sala puede llegar antes. Perderlo dejaba el enemigo como
+    /// marioneta en los dos PCs (quieto e imposible de matar: la oleada no acababa).
+    /// </summary>
+    private readonly Dictionary<uint, ushort> _pendingControl = new();
     private readonly List<(uint Id, HealthKind Kind, int Hp)> _healthOut = new();
     private readonly List<uint> _killedOut = new();
 
@@ -504,6 +514,7 @@ internal sealed class EnemySync {
         _soundFsms.Clear();
         _enemyFsms.Clear();
         _pendingHealth.Clear();
+        _pendingControl.Clear();
         _scene = string.Empty;
         _sceneHash = 0;
     }
@@ -525,6 +536,7 @@ internal sealed class EnemySync {
             _byHealth.Clear();
             _soundFsms.Clear();
             _enemyFsms.Clear();
+            _pendingControl.Clear();
             if (hash != _sceneHash) {
                 _pendingHealth.Clear();
             }
@@ -1004,9 +1016,8 @@ internal sealed class EnemySync {
 
                     // Los clonados en la raíz de la sala (los de las jaulas del Coliseo) se llaman igual y Unity les da a
                     // todos el mismo puesto entre hermanos: se distinguen por dónde están al cargarla, igual en todos
-                    var id = health.transform.parent == null && health.name.EndsWith("(Clone)", StringComparison.Ordinal)
-                        ? PlacedId(health.transform)
-                        : ScenePaths.Hash(health.transform);
+                    var cloned = health.transform.parent == null && health.name.EndsWith("(Clone)", StringComparison.Ordinal);
+                    var id = cloned ? PlacedId(health.transform) : ScenePaths.Hash(health.transform);
                     if (_byId.ContainsKey(id)) {
                         id = PlacedId(health.transform) ^ 0x5bd1e995u;
                         if (_byId.ContainsKey(id)) {
@@ -1014,7 +1025,10 @@ internal sealed class EnemySync {
                         }
                     }
 
-                    AddEnemy(health, id);
+                    // Los crea la sala al cargarse (las jaulas del Coliseo preparan así los de cada oleada): como los que
+                    // crea durante la partida, no quedan muertos para siempre. Si no, al repetir una prueba sin pasar por
+                    // un banco la oleada esperaba a enemigos que el host daba por muertos y el Coliseo no avanzaba
+                    AddEnemy(health, id).Created = cloned;
                 }
             }
         }
@@ -1057,6 +1071,11 @@ internal sealed class EnemySync {
         RegisterFsms(enemy);
         if (_pendingHealth.TryGetValue(id, out var pending)) {
             ApplyHealth(enemy, pending.Kind, pending.Hp);
+        }
+
+        if (_pendingControl.TryGetValue(id, out var controller)) {
+            _pendingControl.Remove(id);
+            ApplyControl(enemy, controller);
         }
 
         return enemy;
@@ -1540,8 +1559,16 @@ internal sealed class EnemySync {
             var id = reader.ReadUInt();
             var controller = reader.ReadUShort();
             // Solo lo decide el dueño de la sala
-            if (sceneHash == _sceneHash && from.Id == _session.OwnerOf(_scene) && _byId.TryGetValue(id, out var enemy) &&
-                !enemy.Spawned) {
+            if (sceneHash != _sceneHash || from.Id != _session.OwnerOf(_scene)) {
+                continue;
+            }
+
+            if (!_byId.TryGetValue(id, out var enemy)) {
+                // Aún no creado aquí: se aplica al crearse
+                if (_pendingControl.Count < 256) {
+                    _pendingControl[id] = controller;
+                }
+            } else if (!enemy.Spawned) {
                 ApplyControl(enemy, controller);
             }
         }
