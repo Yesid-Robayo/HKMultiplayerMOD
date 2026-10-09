@@ -119,7 +119,10 @@ internal sealed class PlayerSync {
 
     /// <summary>Efectos enviados, recibidos y reproducidos (modo de prueba).</summary>
     public string DescribeEffects() => $"efectos enviados={_effects.Sent} recibidos={_effects.Received} reproducidos={_effects.Played} " +
+                                       $"descartados={_effects.Discarded} esperando={_effects.Waiting} " +
                                        $"amuletos: {_effects.DescribeCharms()}";
+
+    public void ResetEffectCounters() => _effects.ResetCounters();
 
     /// <summary>Primer jugador remoto dibujado en la sala (0 si ninguno).</summary>
     public ushort FirstVisibleId() {

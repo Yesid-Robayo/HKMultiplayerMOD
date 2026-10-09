@@ -6,7 +6,7 @@
     <PropertyGroup>
         <AssemblyName>HKMultiplayer</AssemblyName>
         <RootNamespace>HKMultiplayer</RootNamespace>
-        <AssemblyVersion>0.18.7.0</AssemblyVersion>
+        <AssemblyVersion>0.18.8.0</AssemblyVersion>
         <TargetFramework>net472</TargetFramework>
         <LangVersion>latest</LangVersion>
         <Nullable>disable</Nullable>

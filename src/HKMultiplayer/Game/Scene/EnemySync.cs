@@ -398,6 +398,26 @@ internal sealed class EnemySync {
 
     private uint _spawnCounter;
 
+    /// <summary>Lo que crearon los enemigos de este PC y aún no se envió (se envía con su tamaño y giro finales).</summary>
+    private const int MaxPendingSpawns = 32;
+
+    private struct PendingSpawn {
+        public GameObject Object;
+        public uint CreatorId;
+        public byte FsmIndex;
+        public ushort StateIndex;
+        public byte ActionIndex;
+        public uint Id;
+    }
+
+    private readonly PendingSpawn[] _pendingSpawns = new PendingSpawn[MaxPendingSpawns];
+    private int _pendingSpawnCount;
+
+    /// <summary>FSM de lo creado cuyos números viajan con ello (las primeras).</summary>
+    private const int MaxSpawnFsms = 4;
+
+    private readonly List<PlayMakerFSM> _spawnFsms = new();
+
     /// <summary>Se está creando aquí la copia de algo que creó un enemigo en otro PC (no se vuelve a avisar).</summary>
     private static bool _spawningCopy;
 
@@ -591,7 +611,16 @@ internal sealed class EnemySync {
         Clear();
     }
 
+    private void ClearPendingSpawns() {
+        for (var i = 0; i < _pendingSpawnCount; i++) {
+            _pendingSpawns[i].Object = null;
+        }
+
+        _pendingSpawnCount = 0;
+    }
+
     private void Clear() {
+        ClearPendingSpawns();
         RemoveSpawnedCopies();
         _enemies.Clear();
         _byId.Clear();
@@ -617,6 +646,7 @@ internal sealed class EnemySync {
 
         if (scene != _scene) {
             var hash = PlayerSnapshot.HashScene(scene);
+            ClearPendingSpawns();
             RemoveSpawnedCopies();
             _enemies.Clear();
             _byId.Clear();
@@ -651,6 +681,7 @@ internal sealed class EnemySync {
             return;
         }
 
+        FlushSpawns();
         if (_rescanAt > 0f && Time.unscaledTime >= _rescanAt) {
             _rescanAt = 0f;
             Scan();
@@ -1571,7 +1602,12 @@ internal sealed class EnemySync {
     /// <summary>Acciones visuales que la marioneta también hace (además del sonido): no deciden nada de su lógica.</summary>
     private static readonly HashSet<string> EffectActions = new() {
         "ActivateGameObject", "PlayParticleEmitter", "StopParticleEmitter", "SetParticleEmission", "SetParticleEmissionRate",
-        "SetParticleEmissionSpeed", "SpawnRandomObjects", "FlingObjectsFromGlobalPool", "SendEventByName", "CreateObject"
+        "SetParticleEmissionSpeed", "SpawnRandomObjects", "FlingObjectsFromGlobalPool", "SendEventByName", "CreateObject",
+        // Los escombros que caen del techo al empezar el combate del Falso Caballero: piedras de su propio pool, que su
+        // lógica enciende y lanza (solo se ven)
+        "ActivateAllChildren", "SpawnFromPool",
+        // Las salpicaduras al romperse (los barriles que caen en ese combate)
+        "SpawnBlood"
     };
 
     /// <summary>
@@ -1633,6 +1669,12 @@ internal sealed class EnemySync {
                 // Sacar de su jaula a un enemigo de jaula: lo hace solo el PC que mueve al que lo saca (llega como copia)
                 if (receiver != null && _active != null && receiver.GetComponent<HealthManager>() is { } released &&
                     _active._caged.ContainsKey(released)) {
+                    return false;
+                }
+
+                // Lo que va con el enemigo (el invocador de barriles) solo funciona en el PC que lo mueve; lo que crea
+                // llega como copia
+                if (IsSatellite(enemy, receiver)) {
                     return false;
                 }
 
@@ -1744,8 +1786,10 @@ internal sealed class EnemySync {
     /// y oyen. No lo que pasa al prepararse ni al retomarlo (ya lo hizo cada PC, o no toca repetirlo).
     /// </summary>
     private void OnFsmState(HutongGames.PlayMaker.Fsm fsm, HutongGames.PlayMaker.FsmState state) {
+        // Lo creado en combate no se prepara en cada PC (su copia está parada desde que sale): todo lo suyo cuenta. Los
+        // barriles del Falso Caballero se rompen antes de 1,5 s y en el otro PC desaparecían sin romperse
         if (_takingOver || !_soundFsms.TryGetValue(fsm, out var sound) || sound.Enemy.Puppet || !_session.CanSend ||
-            Time.unscaledTime - sound.Enemy.ScannedAt < PreparationSeconds) {
+            !sound.Enemy.Spawned && Time.unscaledTime - sound.Enemy.ScannedAt < PreparationSeconds) {
             return;
         }
 
@@ -1754,6 +1798,8 @@ internal sealed class EnemySync {
             return;
         }
 
+        // Lo creado antes llega antes que los efectos de este estado (que pueden actuar sobre ello), como en el original
+        FlushSpawns();
         var writer = _session.Begin(EnemySound);
         writer.WriteUShort(_sceneHash);
         writer.WriteUInt(sound.Enemy.Id);
@@ -2751,7 +2797,7 @@ internal sealed class EnemySync {
         // Lo que crea al prepararse (cadáveres, piezas propias) ya lo crea cada PC por su cuenta; y lo solo visual hecho
         // con CreateObject suele quedarse como pieza escondida del enemigo, no es un efecto que se acabe solo
         var gameplay = IsGameplay(spawned);
-        if (Time.unscaledTime - creator.Enemy.ScannedAt < PreparationSeconds || !pooled && !gameplay) {
+        if (!creator.Enemy.Spawned && Time.unscaledTime - creator.Enemy.ScannedAt < PreparationSeconds || !pooled && !gameplay) {
             return;
         }
 
@@ -2768,20 +2814,145 @@ internal sealed class EnemySync {
             Track(spawned, id, pooled, puppet: false, _session.LocalId);
         }
 
-        var transform = spawned.transform;
-        var position = transform.position;
-        var writer = _session.Begin(EnemySpawn);
-        writer.WriteUShort(_sceneHash);
-        writer.WriteUInt(creator.Enemy.Id);
-        writer.WriteByte(creator.Index);
-        writer.WriteUShort((ushort) stateIndex);
-        writer.WriteByte((byte) actionIndex);
-        writer.WriteUInt(id);
-        writer.WriteFloat(position.x);
-        writer.WriteFloat(position.y);
-        writer.WriteFloat(transform.eulerAngles.z);
-        writer.WriteBool(transform.localScale.x < 0f);
-        _session.End();
+        // Se envía al acabar el estado (o el frame): las acciones siguientes de su estado le ponen tamaño, giro o
+        // dirección (la onda del Falso Caballero sale a 2,5; su golpe grande, a 2)
+        if (_pendingSpawnCount == MaxPendingSpawns) {
+            FlushSpawns();
+        }
+
+        _pendingSpawns[_pendingSpawnCount++] = new PendingSpawn {
+            Object = spawned, CreatorId = creator.Enemy.Id, FsmIndex = creator.Index, StateIndex = (ushort) stateIndex,
+            ActionIndex = (byte) actionIndex, Id = id
+        };
+    }
+
+    /// <summary>
+    /// Envía lo creado que espera, como está ahora: posición, giro entero (el polvo y los chorros del juego son partículas
+    /// giradas en X para salir hacia arriba; con solo el giro en Z salían hacia la cámara, quietos y estirados) y tamaño.
+    /// </summary>
+    private void FlushSpawns() {
+        var count = _pendingSpawnCount;
+        _pendingSpawnCount = 0;
+        for (var i = 0; i < count; i++) {
+            ref var pending = ref _pendingSpawns[i];
+            var spawned = pending.Object;
+            pending.Object = null;
+            if (_session == null || !_session.CanSend) {
+                continue;
+            }
+
+            // Ya se acabó (un efecto de un frame) y no es de juego: no hace falta copiarlo
+            if (spawned == null || pending.Id == 0 && !spawned.activeInHierarchy) {
+                continue;
+            }
+
+            var transform = spawned.transform;
+            var position = transform.position;
+            var angles = transform.eulerAngles;
+            var scale = transform.localScale;
+            var writer = _session.Begin(EnemySpawn);
+            writer.WriteUShort(_sceneHash);
+            writer.WriteUInt(pending.CreatorId);
+            writer.WriteByte(pending.FsmIndex);
+            writer.WriteUShort(pending.StateIndex);
+            writer.WriteByte(pending.ActionIndex);
+            writer.WriteUInt(pending.Id);
+            writer.WriteFloat(position.x);
+            writer.WriteFloat(position.y);
+            writer.WriteFloat(angles.x);
+            writer.WriteFloat(angles.y);
+            writer.WriteFloat(angles.z);
+            writer.WriteFloat(scale.x);
+            writer.WriteFloat(scale.y);
+            WriteSpawnVariables(writer, spawned);
+            _session.End();
+            if (TestMode) {
+                Log.Info($"[TEST] creado {spawned.name} en ({position.x:0.0},{position.y:0.0}) giro={angles} " +
+                         $"escala=({scale.x:0.00},{scale.y:0.00}) {DescribeSpawnFsms(spawned)}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Los números de las FSM de lo creado, como se los dejó quien lo creó (la onda del Falso Caballero recibe su
+    /// velocidad y su dirección con SetFsmFloat y SetFsmBool justo después de salir del pool). Lo solo visual corre solo
+    /// en cada PC con su lógica: sin ellos, la copia se quedaba quieta echando chorros que dañaban en otro sitio y no se
+    /// acababa nunca.
+    /// </summary>
+    private void WriteSpawnVariables(PacketWriter writer, GameObject spawned) {
+        spawned.GetComponents(_spawnFsms);
+        var fsmCount = Math.Min(_spawnFsms.Count, MaxSpawnFsms);
+        writer.WriteByte((byte) fsmCount);
+        for (var f = 0; f < fsmCount; f++) {
+            var variables = _spawnFsms[f].FsmVariables;
+            var floats = variables.FloatVariables;
+            var floatCount = Math.Min(floats.Length, MaxEffectVars);
+            writer.WriteByte((byte) floatCount);
+            for (var i = 0; i < floatCount; i++) {
+                writer.WriteFloat(floats[i].Value);
+            }
+
+            var ints = variables.IntVariables;
+            var intCount = Math.Min(ints.Length, MaxEffectVars);
+            writer.WriteByte((byte) intCount);
+            for (var i = 0; i < intCount; i++) {
+                writer.WriteInt(ints[i].Value);
+            }
+
+            var bools = variables.BoolVariables;
+            var boolCount = Math.Min(bools.Length, MaxEffectVars);
+            writer.WriteByte((byte) boolCount);
+            for (var i = 0; i < boolCount; i++) {
+                writer.WriteBool(bools[i].Value);
+            }
+        }
+
+        _spawnFsms.Clear();
+    }
+
+    /// <summary>Lo mismo en la copia, antes de que su lógica empiece (empieza en el frame siguiente, como en el original).</summary>
+    private void ReadSpawnVariables(PacketReader reader, GameObject copy) {
+        copy.GetComponents(_spawnFsms);
+        var fsmCount = reader.ReadByte();
+        for (var f = 0; f < fsmCount; f++) {
+            var variables = f < _spawnFsms.Count ? _spawnFsms[f].FsmVariables : null;
+            var floatCount = reader.ReadByte();
+            for (var i = 0; i < floatCount; i++) {
+                var value = reader.ReadFloat();
+                if (variables != null && i < variables.FloatVariables.Length) {
+                    variables.FloatVariables[i].Value = value;
+                }
+            }
+
+            var intCount = reader.ReadByte();
+            for (var i = 0; i < intCount; i++) {
+                var value = reader.ReadInt();
+                if (variables != null && i < variables.IntVariables.Length) {
+                    variables.IntVariables[i].Value = value;
+                }
+            }
+
+            var boolCount = reader.ReadByte();
+            for (var i = 0; i < boolCount; i++) {
+                var value = reader.ReadBool();
+                if (variables != null && i < variables.BoolVariables.Length) {
+                    variables.BoolVariables[i].Value = value;
+                }
+            }
+        }
+
+        _spawnFsms.Clear();
+    }
+
+    /// <summary>Estado y algunos números de las FSM de lo creado (modo de prueba).</summary>
+    private string DescribeSpawnFsms(GameObject spawned) {
+        var text = string.Empty;
+        foreach (var fsm in spawned.GetComponents<PlayMakerFSM>()) {
+            var speed = fsm.FsmVariables.FindFsmFloat("Speed");
+            text += $"[{fsm.FsmName}:{fsm.ActiveStateName}{(speed != null ? $" Speed={speed.Value:0.##}" : string.Empty)}]";
+        }
+
+        return text;
     }
 
     /// <summary>Si lo creado cuenta para el juego: hace daño al tocarlo o se le puede golpear.</summary>
@@ -2828,8 +2999,9 @@ internal sealed class EnemySync {
         var actionIndex = reader.ReadByte();
         var id = reader.ReadUInt();
         var position = new Vector3(reader.ReadFloat(), reader.ReadFloat(), 0f);
-        var rotation = reader.ReadFloat();
-        var facingRight = reader.ReadBool();
+        var rotation = Quaternion.Euler(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
+        var scaleX = reader.ReadFloat();
+        var scaleY = reader.ReadFloat();
         if (sceneHash != _sceneHash || !_byId.TryGetValue(creatorId, out var creator) || !creator.Puppet ||
             creator.Fsms == null || fsmIndex >= creator.Fsms.Length || creator.Fsms[fsmIndex] == null ||
             id != 0 && (id & SpawnedIdFlag) == 0) {
@@ -2873,9 +3045,7 @@ internal sealed class EnemySync {
         GameObject copy;
         _spawningCopy = true;
         try {
-            copy = pooled
-                ? prefab.Spawn(position, Quaternion.Euler(0f, 0f, rotation))
-                : UnityEngine.Object.Instantiate(prefab, position, Quaternion.Euler(0f, 0f, rotation));
+            copy = pooled ? prefab.Spawn(position, rotation) : UnityEngine.Object.Instantiate(prefab, position, rotation);
         } finally {
             _spawningCopy = false;
         }
@@ -2890,10 +3060,13 @@ internal sealed class EnemySync {
             store.Value = copy;
         }
 
-        var scale = copy.transform.localScale;
-        if ((scale.x < 0f) != facingRight) {
-            scale.x = -scale.x;
-            copy.transform.localScale = scale;
+        // El tamaño del original: el pool reutiliza objetos con el tamaño que les puso su último uso, y quien lo crea a
+        // veces lo cambia después (la onda del Falso Caballero, a 2,5)
+        copy.transform.localScale = new Vector3(scaleX, scaleY, copy.transform.localScale.z);
+        ReadSpawnVariables(reader, copy);
+        if (TestMode) {
+            Log.Info($"[TEST] copia de {prefab.name} de {creator.Root.name} en ({position.x:0.0},{position.y:0.0}) " +
+                     $"giro={copy.transform.eulerAngles} escala=({scaleX:0.00},{scaleY:0.00}) {DescribeSpawnFsms(copy)}");
         }
 
         // La copia de un tarro del Coleccionista va vacía: su bicho lo suelta el original y llega como copia
@@ -2960,10 +3133,19 @@ internal sealed class EnemySync {
         } else {
             UnityEngine.Object.Destroy(enemy.Root);
         }
+
+        if (TestMode) {
+            Log.Info($"[TEST] copia quitada {enemy.Root.name} {enemy.Id:x8} activa={enemy.Root.activeSelf}");
+        }
     }
 
     /// <summary>Deja de seguir un objeto creado en combate.</summary>
     private void Forget(Enemy enemy) {
+        if (TestMode && enemy.Spawned) {
+            Log.Info($"[TEST] deja de seguir {(enemy.Root != null ? enemy.Root.name : "-")} {enemy.Id:x8} " +
+                     $"marioneta={enemy.Puppet} activa={(enemy.Root != null && enemy.Root.activeInHierarchy)}");
+        }
+
         _enemies.Remove(enemy);
         _byId.Remove(enemy.Id);
         if (enemy.Health != null) {
@@ -3242,6 +3424,7 @@ internal sealed class EnemySync {
         }
 
         HashSet<string> events = null;
+        HashSet<GameObject> direct = null;
         foreach (var fsm in enemy.Fsms) {
             if (fsm == null) {
                 continue;
@@ -3249,16 +3432,31 @@ internal sealed class EnemySync {
 
             foreach (var state in fsm.FsmStates) {
                 foreach (var action in state.Actions) {
-                    if (action is HutongGames.PlayMaker.Actions.SendEventByName send &&
-                        send.eventTarget.target == HutongGames.PlayMaker.FsmEventTarget.EventTarget.BroadcastAll &&
-                        !string.IsNullOrEmpty(send.sendEvent?.Value)) {
-                        (events ??= new HashSet<string>()).Add(send.sendEvent.Value);
+                    if (action is not HutongGames.PlayMaker.Actions.SendEventByName send ||
+                        string.IsNullOrEmpty(send.sendEvent?.Value)) {
+                        continue;
+                    }
+
+                    switch (send.eventTarget.target) {
+                        case HutongGames.PlayMaker.FsmEventTarget.EventTarget.BroadcastAll:
+                            (events ??= new HashSet<string>()).Add(send.sendEvent.Value);
+                            break;
+                        case HutongGames.PlayMaker.FsmEventTarget.EventTarget.GameObject:
+                        case HutongGames.PlayMaker.FsmEventTarget.EventTarget.GameObjectFSM:
+                            // Un objeto de la sala al que avisa directamente (el que hace caer los barriles del Falso
+                            // Caballero: SUMMON)
+                            var receiver = fsm.Fsm.GetOwnerDefaultTarget(send.eventTarget.gameObject);
+                            if (receiver != null && receiver != enemy.Root) {
+                                (direct ??= new HashSet<GameObject>()).Add(receiver);
+                            }
+
+                            break;
                     }
                 }
             }
         }
 
-        if (events == null) {
+        if (events == null && direct == null) {
             return;
         }
 
@@ -3269,7 +3467,10 @@ internal sealed class EnemySync {
             if (owner == null || !SameRoom(owner.scene, enemy.Root.scene) || _enemyFsms.ContainsKey(fsm.Fsm) ||
                 owner.transform.IsChildOf(enemy.Transform) || IsEnemyObject(owner.transform) ||
                 hero != null && owner.transform.IsChildOf(hero.transform) ||
-                owner.GetComponentInChildren<DamageHero>(true) == null || !Listens(fsm, events) ||
+                // Las trampas que dispara con un aviso a todos; o lo que, avisado por él, crea cosas que dañan (cada PC
+                // las crearía al azar en otro sitio: los barriles caían distintos en cada uno)
+                !(owner.GetComponentInChildren<DamageHero>(true) != null && events != null && Listens(fsm, events) ||
+                  direct != null && direct.Contains(owner) && SpawnsGameplay(fsm)) ||
                 // No los controladores de combate (el del Coliseo contiene enemigos; ya los lleva un PC para todos)
                 owner.GetComponentsInChildren<HealthManager>(true).Length > 0 || FsmStateSync.IsSharedController(fsm.Fsm)) {
                 continue;
@@ -3308,6 +3509,39 @@ internal sealed class EnemySync {
         }
 
         Log.Info($"{enemy.Root.name}: {count} trampas de la sala van con él");
+    }
+
+    /// <summary>Si la FSM crea algo que daña o tiene vida (con el pool del juego o creándolo).</summary>
+    private static bool SpawnsGameplay(PlayMakerFSM fsm) {
+        foreach (var state in fsm.FsmStates) {
+            foreach (var action in state.Actions) {
+                var prefab = action switch {
+                    HutongGames.PlayMaker.Actions.SpawnObjectFromGlobalPool spawn => spawn.gameObject?.Value,
+                    HutongGames.PlayMaker.Actions.CreateObject create => create.gameObject?.Value,
+                    _ => null
+                };
+                if (prefab != null && IsGameplay(prefab)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Si el objeto es una trampa o un invocador que va con el enemigo (su lógica solo corre en el PC que lo mueve).</summary>
+    private static bool IsSatellite(Enemy enemy, GameObject target) {
+        if (enemy.FirstSatellite <= 0 || enemy.SatellitesReleased || target == null) {
+            return false;
+        }
+
+        for (var i = enemy.FirstSatellite; i < enemy.Fsms.Length; i++) {
+            if (enemy.Fsms[i] != null && enemy.Fsms[i].gameObject == target) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
