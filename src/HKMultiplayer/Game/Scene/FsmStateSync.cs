@@ -753,7 +753,7 @@ internal sealed class FsmStateSync {
         }
 
         var name = fsm.gameObject.name;
-        if (IsMimicBottle(fsm)) {
+        if (IsMimicBottle(fsm) || IsStagBell(fsm)) {
             return true;
         }
 
@@ -773,6 +773,13 @@ internal sealed class FsmStateSync {
     /// </summary>
     private static bool IsMimicBottle(PlayMakerFSM fsm) =>
         fsm.FsmName == "Bottle Control" && fsm.gameObject.name.StartsWith("Grub Mimic Bottle", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Campana de una estación del ciervo: al tocarla avisa a toda la sala ("STAG BELL RUNG") y el ciervo llega. Sin
+    /// copiar su cadena, el ciervo solo llegaba en el PC de quien la tocaba y el otro no lo veía ni podía subirse.
+    /// </summary>
+    private static bool IsStagBell(PlayMakerFSM fsm) =>
+        fsm.FsmName == "Bell Control" && fsm.transform.parent != null && fsm.transform.parent.name == "Station Bell";
 
     /// <summary>
     /// Identificador de la FSM igual en todos los PCs: por su ruta en la sala. Los clonados en la raíz (lo que crean las
