@@ -146,6 +146,8 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     saca al Grimm que se inclina y habla). Solo muerto de verdad: el Hollow Knight pasa por vida negativa entre fases.
     Lo que su lógica suelta de sí al morir (`SetParent` sin padre: el cadáver del Hollow Knight) se suelta también en la
     marioneta y sus FSM pasan a funcionar solas en ese PC (allí es donde se absorbe el vacío para el final).
+    Las FSM de daño (`damages_enemy`, `damages_hero`) no se siguen: solo pasan el golpe al objeto que tocan y su
+    `Send Event` se enviaba en cada contacto (los barriles del Falso Caballero, unos 257 por minuto) sin hacer nada.
   - Los efectos que su lógica repite cada frame mientras dura el estado también siguen en la marioneta
     (`EnemySync.UpdateRunningEffects`): partículas con `everyFrame`, salpicaduras continuas (`SpawnBloodTime`,
     `SpawnRandomObjectsOverTime`) y, si el estado tiene alguno, las cuentas con sus números que usan (`FloatAdd`,
@@ -452,7 +454,10 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   sueño, solo si está en el mismo; en los Panteones, nunca). El caído envía `Downed` (sala y suelo bajo él); el host
   le asigna el compañero en pie al que seguir. El caballero del caído se oculta (sin colisión, sin gravedad,
   invencible, sin control; se reaplica cada frame) y, tras la animación de muerte, se pega al avatar del compañero, con
-  las zonas de cámara emuladas; si el compañero cambia de sala, viaja detrás de él sin puerta de entrada (como la 0.7.3).
+  las zonas de cámara emuladas; si el compañero cambia de sala, viaja detrás de él y entra por la misma puerta que él
+  (la de esta sala hacia esa sala más cercana a donde se le vio por última vez). Los viajes a un punto (volver al
+  cuerpo, "Recargar sala") entran por `dreamGate` como `SceneTravel`. Antes todos entraban sin puerta: el juego ponía
+  al caballero en la primera puerta de la sala y en algunas salía por ella (sala de Madre Gruz → `Crossroads_50`).
   Su cuerpo (`DownedBody`: animación "Death" y luego "Prostrate", con "† Nombre") se ve en su sala; con un compañero
   encima (el que lo revive), el "† Nombre" sube por encima del nombre de este para no pisarse. Junto a él, Focus
   cobra el alma al empezar (se devuelve si se suelta o te golpean), no cura (`CanFocus`) y al completarse se pide

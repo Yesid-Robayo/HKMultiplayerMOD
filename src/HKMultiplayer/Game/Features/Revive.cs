@@ -152,6 +152,16 @@ internal sealed class Revive {
     private Vector3? _arrivalPosition;
     private float _travelStartedAt = -100f;
 
+    /// <summary>Punto de la Puerta de los sueños del jugador, cambiado durante un viaje a un punto (se repone al acabar).</summary>
+    private bool _dreamGateSaved;
+
+    private float _dreamGateX;
+    private float _dreamGateY;
+
+    // Último sitio en que se vio al compañero en la sala del caído: por qué puerta se fue
+    private string _partnerSeenScene = string.Empty;
+    private Vector3 _partnerSeenAt;
+
     // Zonas de cámara emuladas mientras se sigue al compañero (el caído no tiene colisión)
     private int _cameraAreasScene = -1;
     private CameraLockArea[] _cameraAreas;
@@ -825,6 +835,7 @@ internal sealed class Revive {
         _arrival = Arrival.None;
         _travelTarget = null;
         _arrivalPosition = null;
+        RestoreDreamGate();
         if (!_downed) {
             return;
         }
@@ -1020,6 +1031,8 @@ internal sealed class Revive {
 
         var partnerScene = partner.Player.Scene;
         if (partnerScene == current && _players.TryGetAvatarPosition(partner.Id, out var position)) {
+            _partnerSeenScene = current;
+            _partnerSeenAt = position;
             hero.transform.position = new Vector3(position.x, position.y, hero.transform.position.z);
             UpdateSpectatorCamera(hero);
             return;
@@ -1127,20 +1140,41 @@ internal sealed class Revive {
 
     // ---- Viajes de sala ----
 
-    /// <summary>Cambia de sala sin puerta de entrada: el juego no coloca al caballero, se coloca al llegar.</summary>
+    /// <summary>
+    /// Cambia de sala. Con punto, se entra como con la Puerta de los sueños (el juego coloca al caballero en
+    /// <c>dreamGateX/Y</c>, cambiado un momento por el punto), igual que <see cref="SceneTravel"/>. Sin punto (detrás del
+    /// compañero), por la puerta por la que se fue el compañero. Sin puerta de entrada el juego ponía al caballero en la
+    /// primera puerta de la sala y en algunas salía por ella a otra sala antes de colocarlo.
+    /// </summary>
     private void TeleportToScene(string scene, Vector3? position) {
         var gm = GameManager.instance;
         if (gm == null || string.IsNullOrEmpty(scene)) {
             return;
         }
 
-        Log.Info($"Viajando a {scene}");
+        var entry = string.Empty;
+        var pd = PlayerData.instance;
+        if (position.HasValue && pd != null) {
+            if (!_dreamGateSaved) {
+                _dreamGateX = pd.GetFloat("dreamGateX");
+                _dreamGateY = pd.GetFloat("dreamGateY");
+                _dreamGateSaved = true;
+            }
+
+            pd.SetFloat("dreamGateX", position.Value.x);
+            pd.SetFloat("dreamGateY", position.Value.y);
+            entry = SceneTravel.DreamGateEntry;
+        } else if (!position.HasValue) {
+            entry = GateTowards(scene);
+        }
+
+        Log.Info($"Viajando a {scene} (entrada {(entry.Length > 0 ? entry : "cualquiera")})");
         _travelStartedAt = Time.unscaledTime;
         _travelTarget = scene;
         _arrivalPosition = position;
         gm.BeginSceneTransition(new GameManager.SceneLoadInfo {
             SceneName = scene,
-            EntryGateName = string.Empty,
+            EntryGateName = entry,
             EntryDelay = 0f,
             PreventCameraFadeOut = false,
             WaitForSceneTransitionCameraFade = true,
@@ -1161,6 +1195,7 @@ internal sealed class Revive {
             if (gm != null && !gm.IsInSceneTransition && Time.unscaledTime - _travelStartedAt > TravelTimeout) {
                 Log.Warn($"El viaje a {_travelTarget} no terminó: se reintenta");
                 _travelTarget = null;
+                RestoreDreamGate();
                 return false;
             }
 
@@ -1168,6 +1203,7 @@ internal sealed class Revive {
         }
 
         _travelTarget = null;
+        RestoreDreamGate();
         if (_arrivalPosition.HasValue) {
             hero.transform.position = _arrivalPosition.Value;
         }
@@ -1200,6 +1236,44 @@ internal sealed class Revive {
         }
 
         return false;
+    }
+
+    /// <summary>Repone el punto de la Puerta de los sueños del jugador.</summary>
+    private void RestoreDreamGate() {
+        if (!_dreamGateSaved) {
+            return;
+        }
+
+        _dreamGateSaved = false;
+        var pd = PlayerData.instance;
+        if (pd != null) {
+            pd.SetFloat("dreamGateX", _dreamGateX);
+            pd.SetFloat("dreamGateY", _dreamGateY);
+        }
+    }
+
+    /// <summary>
+    /// Entrada de <paramref name="scene"/> por la que llegó el compañero: la de la puerta de esta sala hacia esa sala más
+    /// cercana a donde se le vio por última vez. Vacía si no hay ninguna (el juego elige una).
+    /// </summary>
+    private string GateTowards(string scene) {
+        var current = UnitySceneManager.GetActiveScene().name;
+        var seen = _partnerSeenScene == current;
+        string best = string.Empty;
+        var bestDistance = float.MaxValue;
+        foreach (var gate in UnityEngine.Object.FindObjectsOfType<TransitionPoint>()) {
+            if (gate == null || gate.targetScene != scene || string.IsNullOrEmpty(gate.entryPoint)) {
+                continue;
+            }
+
+            var distance = seen ? ((Vector2) (gate.transform.position - _partnerSeenAt)).sqrMagnitude : 0f;
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = gate.entryPoint;
+            }
+        }
+
+        return best;
     }
 
     /// <summary>Recarga la sala actual en el mismo punto (panel: "Recargar sala"). False si ahora no se puede.</summary>

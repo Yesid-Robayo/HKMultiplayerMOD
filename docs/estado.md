@@ -1,42 +1,26 @@
-# Estado del trabajo (9 de octubre de 2026, de madrugada)
+# Estado del trabajo (9 de octubre de 2026, tarde)
 
-Dónde se quedó el trabajo y qué sigue. El diseño general está en [arquitectura.md](arquitectura.md); lo que el usuario
+Dónde está el trabajo y qué queda. El diseño general está en [arquitectura.md](arquitectura.md); lo que el usuario
 aprobó para M5, en [m5-diseno.md](m5-diseno.md).
 
-## Versión y ramas
+## Versión
 
-- Rama principal `main`: **0.18.9**. M1 a M4 hechos; M5 juntado (primera y segunda parte) y sus jefes comprobados en
-  vivo (ver abajo); amuletos y acompañantes del compañero en 0.18.0.
-- Ramas de agentes (en `.claude/worktrees/`, cada una con su rama `worktree-agent-...`):
-  - `worktree-agent-a3fca8e41ebb6684d`: **M6, paquete para jugadores** (sobre 0.18.4, sin subir versión ni juntar).
-    Ver "M6: paquete e instalador" abajo.
-  - `worktree-agent-a8e869211b55a23d1`: **M5, segunda parte, en curso** (cinemáticas, sueños y jefes, skins). Lleva
-    un commit (`78cd576`, cinemáticas) y cambios sin commit (`DreamSync.cs`, `BossPresentation.cs`,
-    `GrimmchildGift.cs`). Hay que revisarla, terminarla y juntarla.
-  - `worktree-agent-a18beb099b6ea4290` (M4) y `worktree-agent-a23c959e3a8f6d80f` (M5, primera parte): ya juntadas en
-    `main`; se pueden borrar (`git worktree remove`).
-- En `main` puede haber cambios sin commit en `EnemySync.cs` del agente del Coliseo de Oro (ver abajo): revisar con
-  `git diff` antes de tocar nada.
+- `main`: **0.20.2**, solo commits locales (no se sube nada sin que lo pida el usuario). M1 a M6 hechos y juntados;
+  no quedan ramas de agentes. Paquete para jugadores: `bash tools/package.sh` → `out/package/HKMultiplayer-<ver>.zip`.
+- Última pasada de las 16 rutas (0.20.1): 0 FALLO.
 
-## Lo que estaba en marcha al cortar
+## Detalles menores (0.20.2; copias B/C, pruebas solo de lo cambiado)
 
-1. **Coliseo de Oro: un enemigo se apaga vivo** (agente en las copias F/G). La batalla se quedó en "Wave 45" con
-   `Battle Enemies=1`: las 113 muertes coinciden en los dos PCs, pero un `Colosseum_Flying_Sentry(Clone)` (id
-   `7febe6d1`) quedó desactivado con la vida entera en el suelo de la arena, movido por el invitado. Algo lo apaga en
-   los dos sin matarlo. Encontrar quién (registro de "enemigo vivo desactivado" con la pila), arreglarlo y pasar Oro
-   entero hasta la Domadora de Dioses (`Lancer` + `Lobster`) y End igual en los dos.
-2. **M5, segunda parte** (agente en las copias B/C). Fallos que vio el usuario y están pendientes de arreglar:
-   - Cinemática del final: el compañero llevado ve la pantalla **en negro** (el vídeo no arranca); el host la ve.
-   - Sueños:
-     - Al caer al vacío en un sueño, el "Dream Fall Catcher" se toma como presentación de jefe y **deja quieto al
-       compañero**. Solo las presentaciones de jefes de verdad deben inmovilizar a los demás.
-     - Una caída (o muerte) de uno **saca a los dos** del sueño. Según el diseño, salen los dos solo al ganar.
-     - **Vuelta del sueño mal**: el compañero llevado vuelve a `Dream_Nailcollection` (no se le pone
-       `dreamReturnScene` ni la puerta/posición antes de entrar); el que muere no vuelve a donde entró; el host
-       apareció dentro de la pared en Crossroads_10 (36.4, 48.4); y a veces se queda la **pantalla en blanco** al salir.
-       Comprobar las tres salidas (muerte, caída, victoria) para quien entra y para el llevado.
-   - Barra de vida del jefe: el nombre debe salir **en el idioma del juego** (español), no el interno en inglés.
-   - Después: el resto de jefes de sueño, Grimm, Rey de las Pesadillas, Hollow Knight, Radiancia y las skins.
+| Qué | Arreglo | Comprobado |
+|---|---|---|
+| "Recargar sala" y el caído viajaban sin puerta de entrada (el juego los ponía en la primera puerta y en algunas salas salían por ella) | Los viajes a un punto entran por `dreamGate` (como `SceneTravel`); el caído que sigue a su compañero entra por la misma puerta que él | En vivo: recargar en la sala de Madre Gruz deja a C en el mismo punto; C caído sigue a B a `Crossroads_50` por `left1` y se queda; al caer B, C vuelve a su cuerpo en `Crossroads_04`, muere de verdad y los dos aparecen en su banco |
+| `damages_enemy/Send Event` de los barriles (unos 257 mensajes por minuto sin efecto) | Las FSM de daño (`damages_enemy`, `damages_hero`) no se siguen como efectos de la marioneta | Por código (solo deja de enviar algo que el otro PC no usaba) |
+| Myla infectada solo aparecía al volver a entrar | Lo que un `DeactivateIfPlayerdata*` apagó al cargar la sala se vuelve a encender si el dato cambia en otro PC (los enemigos solo se encienden, nunca se apagan) | En vivo (ver Misiones: Myla) |
+| Fuente de Hornet: el invitado se quedó una vez sin control | Durante la conversación, los sí/no cambiados en otro PC se leen como al empezarla (antes solo los números) | Por análisis: no se pudo repetir el fallo original |
+| Combate del Rey Vengamosca (Zote) | — | En vivo: el mismo jefe en los dos, pasa a moverlo el PC cercano, muere en los dos y `killedBigBuzzer` en los dos |
+
+Se deja como está: la marioneta se dibuja unas centésimas en el pasado (para moverse suave aunque la red varíe); en
+lo que cae rápido (barriles) se nota un poco. Adelantarla haría que atravesara el suelo y diera saltos.
 
 ## Misiones de NPC (9 de octubre, tarde; copias B/C, rama `worktree-agent-a8f25163372f2f05e`)
 
@@ -65,14 +49,14 @@ Arreglo general (detalle en [arquitectura.md](arquitectura.md), "Personajes de m
 | Mr. Mushroom (7 sitios, `mrMushroomState`) | **Arreglado** | En vivo (capturas del mismo momento): B habla y en C desaparece en ese momento; C ya no puede hablarle; queda en 2. Los dos a la vez (C y B medio segundo después, `pressat`): los dos hablan, cada uno lee el texto del sitio 1, en B sale "ya lo avanzó otro jugador" y queda en 2. |
 | Quirrel (Templo del Huevo Negro y demás sitios) | **Arreglado** | En vivo: B en el templo con Quirrel; C entra en Crossroads_06 (`quirrelLeftEggTemple`) y en B Quirrel se va. Sus conversaciones ponen el número de su diálogo (no hay doble avance). Los demás sitios usan el mismo patrón (`FSM`/`Check` con un sí/no); no probados uno a uno. |
 | Zote: rescate en Nido Profundo | **Arreglado** | En vivo: B corta la telaraña con el aguijón; Zote cae en los dos, `zoteRescuedDeepnest` en los dos y C habla con su Zote. |
-| Zote: rescate del Rey Vengamosca y Coliseo | Pendiente de probar | El rescate depende del combate (`Giant Buzzer`, enemigo compartido) y su Zote cuelga del jefe: no se vuelve a comprobar. El Coliseo ya va con controlador (`Colosseum Cage Zote`). |
+| Zote: rescate del Rey Vengamosca y Coliseo | Combate OK | En vivo (0.20.2): el jefe es el mismo en los dos, pasa a moverlo el PC cercano y muere en los dos (`killedBigBuzzer` en los dos). La conversación con Zote después y el Coliseo no se probaron. |
 | Bretta (rescate y Bocasucia) | **Arreglado** (rescate) | En vivo: B habla con Bretta en Fungus2_23 y en C desaparece (`brettaRescued`). En Bocasucia la casa (`bretta_house/Check Opened`) se abre igual al llegar el dato; no probado en vivo. |
 | Cloth | OK por análisis, sin probar | Mismo patrón que Bretta (`Destroy`/`Check` con `clothEncounteredQueensGarden`, `savedCloth`, `clothKilled`). Su ayuda en el combate del Señor Traidor no se probó. |
 | Tiso | OK por análisis, sin probar | Mismo patrón (`Tiso Bench NPC/FSM` con `tisoEncounteredBench`/`Town`). En el PC de quien habla sigue hasta volver a entrar; en el otro se va enseguida. |
 | Grimm y la Compañía: llamas | OK (ya iba) | En vivo: Grimmkin muerto por C, `flamesCollected` sube 1 en los dos (la `Spawn Control` ya copiaba su cadena sin repetir el `IncrementPlayerDataInt`). |
 | Grimm y la Compañía: farol | **Arreglado** | En vivo: B lo hace aparecer (Sycophant) y en C aparece; golpes de los dos seguidos lo encienden en los dos a la vez (`nightmareLanternLit`, `troupeInTown`). Antes cada PC contaba solo sus golpes. El destierro (segunda tanda de golpes) va por la misma cadena; no probado. |
-| Myla | OK por análisis | Va con `DeactivateIfPlayerdataTrue`/`False` (`hasSuperDash`, `mageLordDefeated`): si cambia con los dos en su sala, la Myla que canta se apaga; la Myla infectada (enemigo) sale al volver a entrar. |
-| Hornet en la Ciudad (fuente) | OK | En vivo: B ve su escena (cinemática y diálogo) y al acabar (`hornetFountainEncounter`) en C se apaga el encuentro. Una vez, con los dos haciendo la escena a la vez, C se quedó sin control al acabar (con `regain` siguió); no se repitió con C solo ni con C mirando. |
+| Myla | **Arreglado** | Va con `DeactivateIfPlayerdataTrue`/`False` (`hasSuperDash`, `mageLordDefeated`). En vivo (0.20.2): C consigue el dato y en B, que está en su sala, la Myla que canta se apaga y aparece la infectada (antes solo al volver a entrar: su `DeactivateIfPlayerdataFalse` solo apaga); C la ve igual, en el mismo sitio, movida por B. |
+| Hornet en la Ciudad (fuente) | OK | En vivo: B ve su escena (cinemática y diálogo) y al acabar (`hornetFountainEncounter`) en C se apaga el encuentro. Una vez, con los dos haciendo la escena a la vez, C se quedó sin control al acabar (con `regain` siguió); no se repitió con C solo ni con C mirando. Causa probable, arreglada en 0.20.2: a mitad de su escena C leía `hornetFountainEncounter` ya puesto por B y tomaba la rama de después; ahora durante la conversación los sí/no se leen como al empezarla (igual que los números). |
 | "El Leñador" | Sin identificar | No hay ningún personaje con ese nombre en los textos del juego (`langget`). Se revisó el Forjaguijones (`Titles/NAILSMITH_MAIN`): **arreglado**, lo que pasa con él tras la última mejora es de cada personaje (antes, si uno lo perdonaba, el otro no podía elegir). |
 | Menderbug | OK por análisis, sin probar | El cartel de Cruces Olvidados es un rompible que ya copia su cadena (`menderSignBroken`, `menderState` se ponen, no se suman); el Menderbug es un enemigo compartido. Sale al azar al cargar la sala. |
 | Vidente (esencia) | OK por diseño | `dreamOrbs` y `dreamRewardN` son del personaje: cada uno recibe sus recompensas. Lo que abre (puerta del Claro, Aguijón onírico despertado, Portal de sueños) es del mundo y se comparte. |
@@ -308,34 +292,26 @@ README):
   hay una `Assembly-CSharp.dll` sin la Modding API: la copia "limpia" de la prueba usa otra versión parcheada
   (`Assembly-CSharp.dll.v`) como original.
 
-## Pendiente después
+## Pendiente
 
-- **M3**:
-  - Comprobar en vivo que `RefreshZoneFlags` desatasca el Mage Blob de la oleada 23 de Oro.
-  - Coliseo de Bronce: espera en "WaveCheck 5" en la prueba automática (minero escondido; los caballeros no se
-    mueven). Jugando no debería pasar.
-- **M4**: `tests/routes/effects.route` pasada sobre 0.18.3 (el doble salto falla a veces en la ruta, no a mano).
-- **M5**: terminar la segunda parte, juntarla, subir a 0.17.0 y repasar todo M5 en vivo (revivir, sombras, HUD,
-  ajustes, sueños, cinemáticas, skins).
-- **Amuletos del compañero (pedido del usuario)**: hecho en la rama del agente de amuletos (sobre `merge-m5`, sin
-  juntar): Grubberfly, Flukenest (y con Defender's Crest), nubes al curarse, Thorns of Agony, efecto del golpe recibido,
-  onda de los gritos, ráfagas del dash sombra y acompañantes (crías, tejedoras, Grimmchild), comprobados con capturas
-  en los dos PCs, también Sharp Shadow y los acompañantes atacando a un enemigo.
-- **Cinemáticas**: saltarlas solo cuando le dan los dos (voto 1/2, 2/2), sin bloquearse si uno se va.
-- **Pruebas extra para sincronizar al 100 %**: hechas (ver "Pruebas de sincronización al 100 %" arriba, con lo que
-  queda pendiente). Lo que se pidió: las dos a la vez entrando y saliendo de salas por
-  puertas distintas; bancos (sentarse uno con el otro en combate); viaje en ciervo y ascensores con los dos; tiendas y
-  NPC (cada uno lo suyo); recoger objetos individuales y geo; muerte, sombra y reaparición tras pinchos; entrar tarde
-  a una sala con combate, jefe o palanca a medias; salir y volver a unirse en mitad de un combate; red mala
-  (`netsim` con retraso y pérdida) en un jefe y en el Coliseo; el host en pausa; tres pasadas de las rutas seguidas
-  para ver fallos intermitentes.
-- **Pruebas finales**: agentes que pasen todas las rutas (`bash tools/run-routes.sh --pairs 2`) sobre la versión
-  completa, con el PC sin otros juegos abiertos (la memoria va justa: cada copia ~1,1 GB; Edge y Discord ocupan mucho).
-- **M6**: hecho en la rama `worktree-agent-a3fca8e41ebb6684d` (ver arriba); falta juntarlo y probarlo en otro PC.
+Sin probar (no se tocó el código; nada indica que falle):
+- La conversación con Zote tras el combate del Rey Vengamosca (mismo patrón que el rescate de Nido Profundo, que sí
+  se probó) y Zote en el Coliseo.
+- Los jefes de sueño aparte del Campeón Fallido y del Falso Caballero; que las puertas del sueño se abran a la vez al
+  ganar.
+- Volver de una cinemática que acaba en una sala de juego (va por `SceneTravel`, ya probado con "Ir con ...").
+- La entrada a la Radiancia por el camino del juego (una vez se trabó la escena de Hornet atando al Hollow Knight).
+- Cloth, Tiso y Menderbug (por análisis).
+
+Solo en una sesión real de dos PCs: matar a un jefe con red mala, revivir con 3 o más jugadores e instalar desde el
+zip en un juego sin mods y jugar por internet.
+
+Limitación conocida: si un dato cambiado en otro PC hace aparecer a alguien que el juego destruyó al cargar la sala
+(otro sitio de Mr. Mushroom), no aparece hasta volver a entrar (lo destruido no se puede recuperar).
 
 ## Cómo se trabaja (recordatorio)
 
-- Copias del juego: B/C (agente M5), D/E (rutas automáticas), F/G (pruebas de M3/Coliseo), H/I (prueba del
+- Copias del juego: B/C (pruebas sueltas), D/E (rutas automáticas), F/G (pruebas de M3/Coliseo), H/I (prueba del
   instalador; `installer-test.sh` las rehace desde cero). Cada agente instala solo
   en las suyas (`bash tools/test-cycle.sh --only "f g"`, `HK_INSTANCES_DIR` desde un worktree) y cierra solo las suyas
   (`stop_all F G`). Puertos: 26950 (B/C), 27100+ (rutas), 27300 (F/G).

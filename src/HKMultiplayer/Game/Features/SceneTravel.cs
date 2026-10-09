@@ -41,7 +41,7 @@ internal sealed class SceneTravel {
     private float _dreamGateY;
 
     /// <summary>Nombre de entrada con el que el juego coloca al caballero en <c>dreamGateX/Y</c>.</summary>
-    private const string DreamGateEntry = "dreamGate";
+    public const string DreamGateEntry = "dreamGate";
 
     /// <summary>Si hay un viaje en curso.</summary>
     public bool Active => _target != null;

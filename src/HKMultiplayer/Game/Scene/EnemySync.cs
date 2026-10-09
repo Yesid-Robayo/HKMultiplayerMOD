@@ -1617,6 +1617,13 @@ internal sealed class EnemySync {
 
     private void RegisterFsm(Enemy enemy, int i) {
         _enemyFsms[enemy.Fsms[i].Fsm] = (enemy, (byte) i);
+
+        // Las FSM de daño solo avisan de un golpe al objeto tocado (no se ve nada): sus avisos se enviaban en cada
+        // contacto (los barriles del Falso Caballero, cientos por minuto) y la marioneta no hacía nada con ellos
+        if (DamageFsms.Contains(enemy.Fsms[i].FsmName)) {
+            return;
+        }
+
         var states = enemy.Fsms[i].FsmStates;
         bool[] soundStates = null;
         HutongGames.PlayMaker.FsmStateAction[][] continuous = null;
@@ -1641,6 +1648,9 @@ internal sealed class EnemySync {
             };
         }
     }
+
+    /// <summary>FSM que solo pasan un golpe al objeto que tocan: sin efectos que copiar en la marioneta.</summary>
+    private static readonly HashSet<string> DamageFsms = new() { "damages_enemy", "damages_hero" };
 
     /// <summary>Efectos que siguen cada frame mientras dura el estado (su <c>OnUpdate</c> solo hace lo que se ve).</summary>
     private static readonly HashSet<string> ContinuousEffectActions = new() {

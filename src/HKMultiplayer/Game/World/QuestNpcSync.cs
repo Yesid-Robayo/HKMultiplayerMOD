@@ -54,6 +54,13 @@ internal sealed class QuestNpcSync {
     /// <summary>Datos cambiados en otro PC cuyas FSM aún hay que volver a comprobar (se espera a que haya control).</summary>
     private readonly List<string> _pending = new();
 
+    /// <summary>
+    /// Componentes <c>DeactivateIfPlayerdata*</c> que apagaron su objeto al encenderse (al cargar la sala): solo esos se
+    /// vuelven a encender si el dato cambia. Se apuntan antes de que esta clase vea la sala nueva, así que no se vacía al
+    /// cambiar de sala (los de salas descargadas se quitan al buscar los de la nueva).
+    /// </summary>
+    private static readonly HashSet<MonoBehaviour> TurnedOffAtLoad = new();
+
     /// <summary>Campos de texto de cada tipo de acción que lee datos de la partida (se calculan una vez por tipo).</summary>
     private static readonly Dictionary<Type, FieldInfo[]> ReadFields = new();
 
@@ -193,10 +200,13 @@ internal sealed class QuestNpcSync {
                 continue;
             }
 
+            // Lo que el componente apagó al cargar la sala vuelve si con el valor nuevo no lo apagaría (la Myla
+            // infectada, apagada sin el Corazón de Cristal); lo que estaba apagado por otra cosa no se toca
+            var wasOff = TurnedOffAtLoad.Contains(toggle);
             var target = toggle switch {
-                DeactivateIfPlayerdataTrue => value ? false : (bool?) null,
-                DeactivateIfPlayerdataFalse => value ? null : false,
-                ActivateIfPlayerdataTrue => value ? true : null,
+                DeactivateIfPlayerdataTrue => value ? false : wasOff ? true : null,
+                DeactivateIfPlayerdataFalse => value ? wasOff ? true : null : false,
+                ActivateIfPlayerdataTrue => value ? true : (bool?) null,
                 _ => null
             };
             var go = toggle.gameObject;
@@ -204,7 +214,14 @@ internal sealed class QuestNpcSync {
                 continue;
             }
 
+            // Los enemigos solo se encienden (la Myla infectada al conseguir el Corazón de Cristal): su muerte va por la
+            // sincronización de enemigos y apagarlo aquí cortaría la del jefe que acaba de morir en el otro PC
+            if (!target.Value && Scene.EnemySync.IsEnemyObject(toggle.transform)) {
+                continue;
+            }
+
             Log.Info($"{go.name}: {field} cambió en otro PC, se {(target.Value ? "enciende" : "apaga")} como al cargar la sala");
+            TurnedOffAtLoad.Remove(toggle);
             go.SetActive(target.Value);
         }
     }
@@ -251,6 +268,7 @@ internal sealed class QuestNpcSync {
     }
 
     private void ScanToggles() {
+        TurnedOffAtLoad.RemoveWhere(toggle => toggle == null);
         foreach (var toggle in UnityEngine.Object.FindObjectsByType<DeactivateIfPlayerdataTrue>(FindObjectsInactive.Include,
                      FindObjectsSortMode.None)) {
             AddToggle(toggle.boolName, toggle);
@@ -268,10 +286,8 @@ internal sealed class QuestNpcSync {
     }
 
     private void AddToggle(string field, MonoBehaviour toggle) {
-        // Los enemigos no: su muerte va por la sincronización de enemigos (apagarlo aquí cortaría la del jefe que acaba de
-        // morir en el otro PC)
-        if (string.IsNullOrEmpty(field) || toggle.gameObject.scene.buildIndex < 0 || CharacterData.IsCharacterField(field) ||
-            Scene.EnemySync.IsEnemyObject(toggle.transform)) {
+        // Los enemigos también, pero solo para encenderlos (ver RecheckToggles)
+        if (string.IsNullOrEmpty(field) || toggle.gameObject.scene.buildIndex < 0 || CharacterData.IsCharacterField(field)) {
             return;
         }
 
@@ -449,6 +465,14 @@ internal sealed class QuestNpcSync {
         }
 
         _hooked = true;
+        On.DeactivateIfPlayerdataTrue.OnEnable += (orig, self) => {
+            orig(self);
+            NoteTurnedOff(self);
+        };
+        On.DeactivateIfPlayerdataFalse.OnEnable += (orig, self) => {
+            orig(self);
+            NoteTurnedOff(self);
+        };
         On.PlayerData.IncrementInt += (orig, self, name) => {
             if (_active == null || !_active.AlreadyAdvanced(name)) {
                 orig(self, name);
@@ -473,6 +497,19 @@ internal sealed class QuestNpcSync {
         };
         On.PlayerData.GetInt += (orig, self, name) =>
             _active != null && _active.StaleRead(name, out var before) ? before : orig(self, name);
+
+        // Igual los sí/no: con los dos en la escena de Hornet en la fuente, el que acababa segundo leía a mitad de la
+        // suya "ya encontrada" (hornetFountainEncounter, puesto por el otro), tomaba la rama de después y se quedaba sin
+        // control
+        On.PlayerData.GetBool += (orig, self, name) =>
+            _active != null && _active.StaleRead(name, out var before) ? before != 0 : orig(self, name);
+    }
+
+    /// <summary>El componente se encendió con su objeto y lo apagó: se apunta (ver <see cref="TurnedOffAtLoad"/>).</summary>
+    private static void NoteTurnedOff(MonoBehaviour toggle) {
+        if (_active != null && toggle != null && !toggle.gameObject.activeSelf) {
+            TurnedOffAtLoad.Add(toggle);
+        }
     }
 
     /// <summary>
