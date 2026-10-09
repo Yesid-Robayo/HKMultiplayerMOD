@@ -237,6 +237,12 @@ internal sealed class EnemySync {
 
         /// <summary>FSM paradas en la marioneta y si antes reiniciaban al reactivarse (se pausan, no se reinician).</summary>
         public readonly List<(PlayMakerFSM Fsm, bool Restart)> PausedFsms = new();
+
+        /// <summary>
+        /// FSM de piezas que se soltaron de la marioneta al morir (el cadáver del Hollow Knight): ya funcionan solas en este
+        /// PC y no siguen los efectos del original. Null si ninguna.
+        /// </summary>
+        public List<PlayMakerFSM> Detached;
         public RigidbodyType2D BodyType;
         public readonly SnapshotBuffer Buffer = new();
 
@@ -1400,7 +1406,61 @@ internal sealed class EnemySync {
     private static bool IsGeo(GameObject prefab) => prefab.name.StartsWith("Geo", StringComparison.Ordinal);
 
     /// <summary>
-    /// Aviso a todos que manda un jefe ya muerto (su vida a cero en el PC que lo mueve): ya no es su lógica de combate sino lo que sigue en la
+    /// La lógica del enemigo suelta una pieza suya (la deja sin padre): el Hollow Knight al morir suelta su cadáver, que
+    /// sigue solo en la sala (cae, humea y es donde el caballero absorbe el vacío para el final). En la marioneta su
+    /// lógica estaba parada y el cadáver se apagaba con el enemigo: en ese PC no aparecía y nadie podía acabar. Aquí se
+    /// suelta igual y sus FSM dejan de ser de la marioneta (funcionan solas, como en el PC que lo movía).
+    /// </summary>
+    private void DetachPart(Enemy enemy, HutongGames.PlayMaker.Actions.SetParent action) {
+        var part = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
+
+        // La variable con la pieza la llena su preparación, que en la marioneta no se hizo; y en el original ya está
+        // suelta cuando se envía el efecto, así que no llega como suya. Lo que se suelta al morir es su cadáver: se busca
+        // entre sus hijos y se apunta en la variable (la acción siguiente lo enciende)
+        var variable = action.gameObject?.GameObject;
+        if (part == null && variable != null && !string.IsNullOrEmpty(variable.Name)) {
+            foreach (var child in enemy.Transform.GetComponentsInChildren<Transform>(true)) {
+                if (child != enemy.Transform && child.name.IndexOf("Corpse", StringComparison.Ordinal) >= 0 &&
+                    child.GetComponent<PlayMakerFSM>() != null) {
+                    part = child.gameObject;
+                    variable.Value = part;
+                    break;
+                }
+            }
+        }
+
+        if (part == null || action.parent.Value != null || part == enemy.Root || !part.transform.IsChildOf(enemy.Transform)) {
+            if (TestMode) {
+                Log.Info($"[TEST] {enemy.Root.name}: no se suelta {(part != null ? part.name : "(nada)")} " +
+                         $"padre nuevo={(action.parent.Value != null ? action.parent.Value.name : "-")}");
+            }
+
+            return;
+        }
+
+        part.transform.SetParent(null, true);
+        foreach (var fsm in part.GetComponentsInChildren<PlayMakerFSM>(true)) {
+            if (!enemy.Disabled.Remove(fsm)) {
+                continue;
+            }
+
+            var paused = enemy.PausedFsms.FindIndex(entry => entry.Fsm == fsm);
+            if (paused >= 0) {
+                fsm.Fsm.RestartOnEnable = enemy.PausedFsms[paused].Restart;
+                enemy.PausedFsms.RemoveAt(paused);
+            }
+
+            _enemyFsms.Remove(fsm.Fsm);
+            _soundFsms.Remove(fsm.Fsm);
+            (enemy.Detached ??= new List<PlayMakerFSM>()).Add(fsm);
+            fsm.enabled = true;
+        }
+
+        Log.Info($"{enemy.Root.name}: suelta {part.name} como en el PC que lo movía");
+    }
+
+    /// <summary>
+    /// Aviso a todos que manda un jefe ya muerto en el PC que lo mueve: ya no es su lógica de combate sino lo que sigue en la
     /// sala tras vencerlo (Grimm manda GRIMM DEFEATED para que aparezca el Grimm que se inclina y habla). En la marioneta
     /// su lógica está parada y ese aviso no salía, así que en este PC no pasaba nada tras el combate.
     /// </summary>
@@ -1501,9 +1561,10 @@ internal sealed class EnemySync {
             }
         }
 
-        // Si ya está muerto aquí: sus avisos a todos son entonces para la sala (en la marioneta la vida no llega a cero)
+        // Si ya murió aquí: sus avisos a todos son entonces para la sala (en la marioneta no se sabe). Solo muerto de
+        // verdad: el Hollow Knight pasa por vida negativa entre fases y sus avisos de entonces son de su combate
         var health = sound.Enemy.Health;
-        writer.WriteBool(health != null && (health.isDead || health.hp <= 0));
+        writer.WriteBool(health != null && health.isDead);
         _session.End();
     }
 
@@ -1561,6 +1622,10 @@ internal sealed class EnemySync {
             return;
         }
 
+        if (enemy.Detached != null && enemy.Detached.Contains(enemy.Fsms[fsmIndex])) {
+            return;
+        }
+
         var states = enemy.Fsms[fsmIndex].FsmStates;
 
         // Solo sus efectos (sonido y arena); la lógica de la marioneta sigue parada
@@ -1570,12 +1635,18 @@ internal sealed class EnemySync {
         }
 
         foreach (var action in state.Actions) {
-            if (!action.Enabled || !IsEffectAction(action)) {
+            var detach = action as HutongGames.PlayMaker.Actions.SetParent;
+            if (!action.Enabled || !IsEffectAction(action) && detach == null) {
                 continue;
             }
 
             try {
                 action.Init(state);
+                if (detach != null) {
+                    DetachPart(enemy, detach);
+                    continue;
+                }
+
                 if (deadThere && IsDeathBroadcast(action, out var deathEvent)) {
                     BroadcastFromDead(enemy, deathEvent);
                     continue;

@@ -753,7 +753,7 @@ internal sealed class FsmStateSync {
         }
 
         var name = fsm.gameObject.name;
-        if (IsMimicBottle(fsm)) {
+        if (IsMimicBottle(fsm) || IsHollowKnightChain(fsm)) {
             return true;
         }
 
@@ -773,6 +773,14 @@ internal sealed class FsmStateSync {
     /// </summary>
     private static bool IsMimicBottle(PlayMakerFSM fsm) =>
         fsm.FsmName == "Bottle Control" && fsm.gameObject.name.StartsWith("Grub Mimic Bottle", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Cadenas que sujetan al Hollow Knight: cada una aguanta unos golpes de aguijón del caballero local y, rota, avisa a
+    /// "Boss Control", que empieza el combate cuando están rotas todas. Se copia su cadena como la de una palanca: si no,
+    /// cada PC contaba solo los golpes de su jugador y, repartidas entre los dos, el combate no empezaba en ninguno.
+    /// </summary>
+    private static bool IsHollowKnightChain(PlayMakerFSM fsm) =>
+        fsm.FsmName == "Control" && fsm.gameObject.name.StartsWith("hollow_knight_chain_base", StringComparison.Ordinal);
 
     /// <summary>
     /// Identificador de la FSM igual en todos los PCs: por su ruta en la sala. Los clonados en la raíz (lo que crean las
