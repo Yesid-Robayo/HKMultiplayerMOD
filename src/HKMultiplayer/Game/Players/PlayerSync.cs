@@ -24,6 +24,9 @@ internal sealed class PlayerSync {
 
     /// <summary>Efectos de las acciones de cada jugador (tajos, hechizos, dash...).</summary>
     private readonly PlayerEffects _effects = new();
+
+    /// <summary>El pasto y las telas que se mueven al paso de los avatares (sin red).</summary>
+    private readonly PartnerGrass _grass = new();
     private GameSession _session;
 
     // Jugador local
@@ -77,6 +80,7 @@ internal sealed class PlayerSync {
 
         // Antes que los avatares: sus efectos van pegados a ellos
         _effects.Detach();
+        _grass.Destroy();
         foreach (var remote in _remotes.Values) {
             remote.Avatar?.Destroy();
         }
@@ -123,7 +127,8 @@ internal sealed class PlayerSync {
     /// <summary>Efectos enviados, recibidos y reproducidos (modo de prueba).</summary>
     public string DescribeEffects() => $"efectos enviados={_effects.Sent} recibidos={_effects.Received} reproducidos={_effects.Played} " +
                                        $"descartados={_effects.Discarded} esperando={_effects.Waiting} " +
-                                       $"amuletos: {_effects.DescribeCharms()}";
+                                       $"amuletos: {_effects.DescribeCharms()} pasto={_grass.GrassCount} " +
+                                       $"empujes={_grass.Pushes}";
 
     public void ResetEffectCounters() => _effects.ResetCounters();
 
@@ -165,6 +170,7 @@ internal sealed class PlayerSync {
         _localScene = scene;
         _localSceneHash = PlayerSnapshot.HashScene(scene);
         _hasLastSent = false;
+        _grass.SetScene(scene);
         foreach (var remote in _remotes.Values) {
             remote.Buffer.Clear();
             DestroyAvatar(remote);
@@ -284,6 +290,9 @@ internal sealed class PlayerSync {
             remote.Avatar.SetNameVisible(showNames);
             remote.Avatar.Apply(state, _sprites, z);
             _effects.UpdateRemote(remote.Player, remote.Avatar, remote.Buffer.RenderTick);
+            if (state.Visible) {
+                _grass.Touch(remote.Player.Id, remote.Avatar.Position);
+            }
             visible++;
         }
 
@@ -307,6 +316,7 @@ internal sealed class PlayerSync {
     private void DestroyAvatar(Remote remote) {
         // Sus efectos se aparcan antes: si no, se destruirían con él
         _effects.Release(remote.Player.Id);
+        _grass.Forget(remote.Player.Id);
         remote.Avatar?.Destroy();
         remote.Avatar = null;
     }
