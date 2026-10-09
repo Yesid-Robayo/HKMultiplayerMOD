@@ -5,7 +5,7 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
 
 ## Versión y ramas
 
-- Rama principal `main`: **0.18.6**. M1 a M4 hechos; M5 juntado (primera y segunda parte) y sus jefes comprobados en
+- Rama principal `main`: **0.18.7**. M1 a M4 hechos; M5 juntado (primera y segunda parte) y sus jefes comprobados en
   vivo (ver abajo); amuletos y acompañantes del compañero en 0.18.0.
 - Ramas de agentes (en `.claude/worktrees/`, cada una con su rama `worktree-agent-...`):
   - `worktree-agent-a3fca8e41ebb6684d`: **M6, paquete para jugadores** (sobre 0.18.4, sin subir versión ni juntar).
@@ -180,7 +180,41 @@ Nota: la copia F tenía ya 4 mundos y la ruta no podía crear el suyo; `M3Jefes2
   es esa pared, al romperla (`Break` → `UNCOVER`) o al cargar la sala ya rota (`Activated` apaga `Masks`). Con la pared
   sin romper, en (36,4, 48,4) `covers` lista los `msk_generic`; con la pared rota (`sdset Crossroads_10 Breakable
   Wall`) y entrando por `door_dreamReturn`, ya no hay nada que tape. La pared es un objeto del mundo (`SceneObjectSync`):
-  rota por uno, rota para todos.
+  rota por uno, rota para todos. Ojo al probar: entrar con `goscene Crossroads_10 door_dreamReturn` deja la pantalla en
+  negro (el fundido de la cámara se queda en `FadingOut`: esa puerta espera la vuelta de un sueño); es de la orden de
+  prueba, no del mod.
+- **Ciervo con los dos** (B/C): OK. B toca la campana, se sube (zona `Travel Range`, menú de estaciones) y viaja a
+  Cruces Olvidados; en C el ciervo se queda en la estación y C viaja después al mismo sitio. Los dos llegan a
+  Crossroads_47 y se ven. Estético: mientras B viaja, el HUD de C dice "HostB en None".
+- **Sueño del Campeón Fallido** (B/C; 0.18.7). Arreglos:
+  - El jefe se quedaba dormido (`FalseyControl` en `Dormant`, invencible) si su `BATTLE START` se cruzaba con un cambio
+    de PC: el reenvío llegaba a un PC que ya no lo movía y lo descartaba. Ahora el aviso lleva a qué PC va; si ese ya
+    no lo mueve lo pasa al que lo mueve, y si está a punto de tomarlo lo guarda y lo atiende al tomarlo
+    (`EnemySync.OnEnemyEvent`, `SendEventTo`, `ApplyPendingEvents`). Un PC que se lo mandaba a sí mismo (aún sin
+    tomarlo) también lo perdía: ahora lo guarda.
+  - Y la espera de "todos dentro" no funcionaba con la zona del combate de esa arena (`Battle Scene`, una línea de 1 de
+    ancho en x = 45): el primero en cruzarla salía de ella, la espera se olvidaba y el combate no empezaba nunca (solo
+    empezaba si cruzaban los dos a la vez). Ahora en una zona fina cuenta estar ya al otro lado
+    (`FsmStateSync.InsideZone`, `ArenaSide`).
+  - Las puertas de la arena (`Dream Gate`, `Dream Gate (1)`, FSM `Control`) solo se cerraban en el PC que movía al
+    jefe: ahora son rejas con controlador (`FsmStateSync.IsGate`), con la puesta al día y el paso de un solo sentido
+    de las rejas. Además, el `DREAM GATE CLOSE` que manda el jefe cuando lo despierta la arena copiada de otro PC se
+    descartaba (se estaba aplicando esa cadena): ahora lo que manda un enemigo que mueve este PC cuenta.
+  - Otros sueños: el Tirano de Almas tiene `Dream Gate` (`Control`) y cuatro `Dream Gate Phase 2` (`Control2`, se
+    cierran con `PHASE 2`), también incluidas; Kin Perdido, `Dream Gate` y `Dream Gate (1)`; el Rey de las
+    Pesadillas, `Dream Gate` dentro de `Grimm Control`; el Defensor Blanco usa una `Battle Gate` (ya iba); en el de
+    Zote no hay puertas. Solo se comprobó en vivo el del Campeón Fallido.
+  - Un caído con el cuerpo en el sueño seguía a su compañero fuera del sueño (al ganar o al salir este) y se quedaba
+    caído sin que nadie pudiera revivirlo. Ahora el host lo revive junto a ese compañero
+    (`Revive.ReviveLeftInDreams`).
+  - Comprobado: 4 veces seguidas forzando el cambio de PC justo al empezar (C junto al jefe dormido; C se va y B cruza
+    la zona; luego C entra): el combate empieza (barra "Campeón Fallido" en los dos) y las dos puertas quedan
+    `Closed` en los dos PCs, con capturas del mismo momento (`fk3-b`, `fk3-c`). Y con B caído en mitad del combate, C
+    sigue dentro, gana, sale ("los compañeros del sueño salen también") y B revive a su lado; los dos con control.
+  - Sin comprobar: que las puertas se abran a la vez al ganar (el jefe las abre en `Floor Break`, justo antes de la
+    salida) y los otros sueños en vivo.
+  - Nota: `setup_session` de B/C carga partidas propias (no un mundo coop), así que ahí el progreso no se comparte
+    (`falseKnightDreamDefeated` quedó en verdadero solo en C). No es un fallo.
 
 ## M6: paquete e instalador (9 de octubre, mañana; copias H/I)
 

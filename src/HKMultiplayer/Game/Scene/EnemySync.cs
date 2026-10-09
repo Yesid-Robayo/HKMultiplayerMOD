@@ -249,6 +249,10 @@ internal sealed class EnemySync {
         public HandoverFsm[] Handover;
 
         public bool HandoverReady;
+
+        /// <summary>Avisos reenviados a este PC que llegaron cuando aún no lo movía (se atienden al tomarlo).</summary>
+        public List<(byte Fsm, string Event, float At)> PendingEvents;
+
         public readonly List<Behaviour> Disabled = new();
 
         /// <summary>Desde qué FSM de la lista son de las trampas de la sala que dispara (0: ninguna).</summary>
@@ -2211,6 +2215,28 @@ internal sealed class EnemySync {
         } finally {
             _takingOver = false;
         }
+
+        ApplyPendingEvents(enemy);
+    }
+
+    /// <summary>Los avisos reenviados que llegaron mientras este PC esperaba a tomarlo: ahora los atiende su lógica.</summary>
+    private static void ApplyPendingEvents(Enemy enemy) {
+        if (enemy.PendingEvents == null || enemy.Puppet) {
+            return;
+        }
+
+        var pending = enemy.PendingEvents;
+        enemy.PendingEvents = null;
+        var now = Time.unscaledTime;
+        foreach (var (fsmIndex, eventName, at) in pending) {
+            if (now - at > PendingEventSeconds || enemy.Fsms == null || fsmIndex >= enemy.Fsms.Length ||
+                enemy.Fsms[fsmIndex] == null) {
+                continue;
+            }
+
+            Log.Info($"{enemy.Root.name}/{enemy.Fsms[fsmIndex].FsmName}: {eventName} llegó mientras se tomaba, se atiende ahora");
+            enemy.Fsms[fsmIndex].SendEvent(eventName);
+        }
     }
 
     private void TakeOverUnguarded(Enemy enemy) {
@@ -2617,6 +2643,10 @@ internal sealed class EnemySync {
         return names.Count > 0 ? string.Join(", ", names) : "los demás";
     }
 
+    /// <summary>Si la FSM es de un enemigo que mueve este PC (su lógica funciona aquí, no es una marioneta).</summary>
+    public static bool IsRealEnemyFsm(HutongGames.PlayMaker.Fsm fsm) =>
+        _active != null && fsm != null && _active._enemyFsms.TryGetValue(fsm, out var owner) && !owner.Enemy.Puppet;
+
     /// <summary>Si en la sala hay un jefe vivo (con mucha vida): sus combates esperan a que entren todos.</summary>
     public static bool BossInRoom {
         get {
@@ -2972,13 +3002,43 @@ internal sealed class EnemySync {
         }
 
         _lastForward[key] = now;
+        SendEventTo(enemy, fsmIndex, eventName, ControllerOf(enemy, _session.OwnerOf(_scene)), 0);
+    }
+
+    /// <summary>
+    /// Envía el aviso al PC que mueve el enemigo (según este PC). Si es este mismo (lo acaba de recibir y aún no lo ha
+    /// tomado), se guarda para cuando lo tome: un mensaje a sí mismo no llega.
+    /// </summary>
+    private void SendEventTo(Enemy enemy, byte fsmIndex, string eventName, ushort target, byte hops) {
+        if (target == _session.LocalId) {
+            KeepPendingEvent(enemy, fsmIndex, eventName);
+            return;
+        }
+
         var writer = _session.Begin(EnemyEvent);
         writer.WriteUShort(_sceneHash);
         writer.WriteUInt(enemy.Id);
         writer.WriteByte(fsmIndex);
         writer.WriteString(eventName);
+        writer.WriteUShort(target);
+        writer.WriteByte(hops);
         _session.End();
     }
+
+    private static void KeepPendingEvent(Enemy enemy, byte fsmIndex, string eventName) {
+        enemy.PendingEvents ??= new List<(byte, string, float)>();
+        if (enemy.PendingEvents.Count < MaxPendingEvents) {
+            enemy.PendingEvents.Add((fsmIndex, eventName, Time.unscaledTime));
+        }
+    }
+
+    /// <summary>Avisos guardados como mucho para cuando se toma un enemigo, y cuánto valen.</summary>
+    private const int MaxPendingEvents = 8;
+
+    private const float PendingEventSeconds = 3f;
+
+    /// <summary>Veces que un aviso se pasa al siguiente PC si el que lo recibe ya no mueve el enemigo.</summary>
+    private const byte MaxEventHops = 3;
 
     /// <summary>
     /// Un objeto de la sala de este PC mandó un aviso a todos. La lógica de las marionetas está parada y no lo oye: si
@@ -3042,9 +3102,31 @@ internal sealed class EnemySync {
         var id = reader.ReadUInt();
         var fsmIndex = reader.ReadByte();
         var eventName = reader.ReadString(128);
-        if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var enemy) && !enemy.Puppet && enemy.Fsms != null &&
-            fsmIndex < enemy.Fsms.Length && enemy.Fsms[fsmIndex] != null) {
+        var target = reader.ReadUShort();
+        var hops = reader.ReadByte();
+        // Solo lo atiende el PC al que iba (si no, al cambiar quién lo mueve podrían atenderlo dos o ninguno)
+        if (sceneHash != _sceneHash || target != _session.LocalId || !_byId.TryGetValue(id, out var enemy) ||
+            enemy.Fsms == null || fsmIndex >= enemy.Fsms.Length || enemy.Fsms[fsmIndex] == null) {
+            return;
+        }
+
+        if (!enemy.Puppet) {
             enemy.Fsms[fsmIndex].SendEvent(eventName);
+            return;
+        }
+
+        // Ya no lo mueve este PC (cambió justo al enviarlo): se pasa al que lo mueve ahora, o se guarda si este PC
+        // está a punto de tomarlo. Antes se perdía: el BATTLE START de la arena del Campeón Fallido no llegaba a nadie
+        // y el jefe se quedaba dormido para siempre
+        var controller = ControllerOf(enemy, _session.OwnerOf(_scene));
+        // Si ya volvió una vez al que lo envió (cada uno cree que lo mueve el otro: el cambio aún no ha llegado a los
+        // dos), se guarda aquí por si este PC lo toma, en vez de ir y venir sin que nadie lo atienda
+        if (controller == _session.LocalId || controller == from.Id && hops > 0) {
+            KeepPendingEvent(enemy, fsmIndex, eventName);
+        } else if (hops < MaxEventHops && _session.CanSend) {
+            Log.Info($"{enemy.Root.name}/{enemy.Fsms[fsmIndex].FsmName}: {eventName} llegó y ya no lo mueve este PC: " +
+                     $"pasa al {controller}");
+            SendEventTo(enemy, fsmIndex, eventName, controller, (byte) (hops + 1));
         }
     }
 

@@ -65,6 +65,27 @@ internal sealed class FsmStateSync {
 
     private const string GateFsm = "BG Control";
 
+    /// <summary>Puertas de la arena de los sueños de jefe (Campeón Fallido...): "DREAM GATE CLOSE" / "DREAM GATE OPEN".</summary>
+    private const string DreamGateName = "Dream Gate";
+
+    private const string DreamGateFsm = "Control";
+
+    /// <summary>Las de la segunda fase del Tirano de Almas del sueño ("Dream Gate Phase 2": se cierran con "PHASE 2").</summary>
+    private const string DreamGatePhase2Fsm = "Control2";
+
+    /// <summary>
+    /// Rejas que se cierran con un jugador dentro: las de batalla y de jefe ("Battle Gate") y las puertas de la arena de
+    /// los sueños ("Dream Gate"). Antes las de los sueños no se copiaban: se cerraban solo en el PC de quien empezaba el
+    /// combate.
+    /// </summary>
+    private static bool IsGate(PlayMakerFSM fsm) =>
+        fsm.FsmName == GateFsm || (fsm.FsmName == DreamGateFsm || fsm.FsmName == DreamGatePhase2Fsm) && IsDreamGate(fsm.gameObject.name);
+
+    /// <summary>"Dream Gate", "Dream Gate (1)", "Dream Gate Phase 2 (2)"...; no "Dream Gate Set Lock" (no es una puerta).</summary>
+    private static bool IsDreamGate(string name) =>
+        name == DreamGateName || name.StartsWith(DreamGateName + " (", StringComparison.Ordinal) ||
+        name.StartsWith(DreamGateName + " Phase 2", StringComparison.Ordinal);
+
     /// <summary>
     /// Distancia a la reja (además de su grosor) a la que el caballero ya cruzó del todo: entonces vuelve a ser sólida sin
     /// empujarlo de vuelta.
@@ -88,6 +109,8 @@ internal sealed class FsmStateSync {
     private static readonly (string Name, string Fsm)[] Targets = {
         ("Ruins Lift", LiftFsm),
         ("Battle Gate", GateFsm),
+        (DreamGateName, DreamGateFsm),
+        (DreamGateName, DreamGatePhase2Fsm),
         ("Mantis Lord Throne", "Mantis Throne Main"),
         ("Mantis Lord Throne", "Mantis Throne Sub"),
         ("Mantis Battle", "Battle Control"),
@@ -166,6 +189,13 @@ internal sealed class FsmStateSync {
         // Combate de jefe que su zona quiso empezar sin estar todos dentro: el aviso, para darlo cuando entren
         public string PendingStart;
         public Collider2D Zone;
+
+        /// <summary>
+        /// Zona fina (una línea que se cruza, como la del Campeón Fallido): lado de la arena según hacia dónde iba el
+        /// caballero al cruzarla (1 o -1; 0 si la zona no es fina).
+        /// </summary>
+        public sbyte ZoneSide;
+
         public float NextWaitNotice;
 
         // Encuentro con diálogo: quién terminó de leer el de ahora (el controlador espera a todos)
@@ -588,11 +618,11 @@ internal sealed class FsmStateSync {
 
             var item = new Tracked {
                 Id = id, Fsm = fsm, LastState = fsm.ActiveStateName, CopyTransitions = !target,
-                LastStateTime = Time.unscaledTime, Platform = target && fsm.FsmName is LiftFsm or GateFsm ? FindPlatform(fsm) : null,
+                LastStateTime = Time.unscaledTime, Platform = target && (fsm.FsmName == LiftFsm || IsGate(fsm)) ? FindPlatform(fsm) : null,
                 Lift = target ? fsm.GetComponent<RuinsLift>() : null,
                 CurrentPosition = target ? fsm.FsmVariables.FindFsmInt("Current Position") : null,
-                Gate = target && fsm.FsmName == GateFsm ? fsm.GetComponent<BoxCollider2D>() : null,
-                Battle = target && fsm.FsmName != LiftFsm && fsm.FsmName != GateFsm,
+                Gate = target && IsGate(fsm) ? fsm.GetComponent<BoxCollider2D>() : null,
+                Battle = target && fsm.FsmName != LiftFsm && !IsGate(fsm),
                 Encounter = target && IsEncounter(fsm)
             };
             if (item.Encounter) {
@@ -734,6 +764,10 @@ internal sealed class FsmStateSync {
 
     private static bool IsTarget(PlayMakerFSM fsm) {
         foreach (var (name, fsmName) in Targets) {
+            if (name == DreamGateName && !IsDreamGate(fsm.gameObject.name)) {
+                continue;
+            }
+
             if (fsm.FsmName == fsmName && fsm.gameObject.name.StartsWith(name, StringComparison.Ordinal)) {
                 return true;
             }
@@ -901,7 +935,7 @@ internal sealed class FsmStateSync {
     /// pidan sus acciones corta las acciones siguientes (igual que en el PC de origen) y se retiene.
     /// </summary>
     private static void ApplyRemoteState(Tracked item, string state) {
-        if (item.Fsm.FsmName != LiftFsm && item.Fsm.FsmName != GateFsm) {
+        if (item.Fsm.FsmName != LiftFsm && !IsGate(item.Fsm)) {
             CloseChallengePrompts();
         }
 
@@ -1062,11 +1096,15 @@ internal sealed class FsmStateSync {
             return true;
         }
 
-        if (_applying != null) {
+        var sender = eventData?.SentByFsm ?? Fsm.EventData?.SentByFsm;
+
+        // Mientras se aplica aquí la cadena de otro objeto, lo que este manda a los demás ya lo mandó en su PC. Salvo lo
+        // que mande un enemigo que mueve este PC (su lógica solo va aquí): la arena del Campeón Fallido, copiada de otro
+        // PC, despierta al jefe de este PC y su DREAM GATE CLOSE no cerraba las puertas en ningún PC
+        if (_applying != null && (_applying == item || sender == null || !EnemySync.IsRealEnemyFsm(sender))) {
             return _applying == item;
         }
 
-        var sender = eventData?.SentByFsm ?? Fsm.EventData?.SentByFsm;
         if (item.Encounter) {
             if (fsmEvent.Name == ConvoFinish) {
                 return OnConvoFinish(item);
@@ -1253,7 +1291,12 @@ internal sealed class FsmStateSync {
         }
 
         item.Zone ??= item.Fsm.GetComponent<Collider2D>();
-        if (item.Zone == null || EveryoneInside(item)) {
+        if (item.Zone == null) {
+            return false;
+        }
+
+        item.ZoneSide = ArenaSide(item.Zone);
+        if (EveryoneInside(item)) {
             return false;
         }
 
@@ -1284,10 +1327,8 @@ internal sealed class FsmStateSync {
 
     /// <summary>Si los caballeros de todos los jugadores de la sala están dentro de la zona del combate.</summary>
     private bool EveryoneInside(Tracked item) {
-        var bounds = item.Zone.bounds;
-        bounds.Expand(new Vector3(0.5f, 0.5f, 1000f));
         var hero = HeroController.instance;
-        if (hero == null || !bounds.Contains(hero.transform.position)) {
+        if (hero == null || !InsideZone(item, hero.transform.position, 0.5f)) {
             return false;
         }
 
@@ -1297,12 +1338,60 @@ internal sealed class FsmStateSync {
                 continue;
             }
 
-            if (!_players.TryGetAvatarObject(player.Id, out var avatar) || !bounds.Contains(avatar.transform.position)) {
+            if (!_players.TryGetAvatarObject(player.Id, out var avatar) || !InsideZone(item, avatar.transform.position, 0.5f)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /// <summary>Por debajo de este grosor, la zona del combate es una línea que se cruza (no un sitio donde estar).</summary>
+    private const float ThinZone = 2f;
+
+    /// <summary>
+    /// Si un caballero está dentro de la zona del combate. En una zona fina (la del Campeón Fallido es una línea de 1 de
+    /// ancho a la entrada de la arena) cuenta también estar ya al otro lado, en el de la arena: si no, el primero en
+    /// cruzarla salía de ella enseguida, la espera se olvidaba y el combate no empezaba nunca (la zona solo avisa al
+    /// entrar).
+    /// </summary>
+    private static bool InsideZone(Tracked item, Vector3 position, float margin) {
+        var bounds = item.Zone.bounds;
+        var size = bounds.size;
+        if (item.ZoneSide == 0 || Mathf.Min(size.x, size.y) >= ThinZone) {
+            bounds.Expand(new Vector3(margin, margin, 1000f));
+            return bounds.Contains(position);
+        }
+
+        var vertical = size.x < size.y;
+        var across = vertical ? position.y : position.x;
+        var min = vertical ? bounds.min.y : bounds.min.x;
+        var max = vertical ? bounds.max.y : bounds.max.x;
+        if (across < min - margin || across > max + margin) {
+            return false;
+        }
+
+        var along = vertical ? position.x - bounds.center.x : position.y - bounds.center.y;
+        var half = (vertical ? size.x : size.y) * 0.5f + margin;
+        return Mathf.Abs(along) <= half || (along > 0f ? 1 : -1) == item.ZoneSide;
+    }
+
+    /// <summary>Lado de la arena de una zona fina: hacia donde va el caballero que acaba de entrar en ella (0 si no es fina).</summary>
+    private static sbyte ArenaSide(Collider2D zone) {
+        var size = zone.bounds.size;
+        var hero = HeroController.instance;
+        if (hero == null || Mathf.Min(size.x, size.y) >= ThinZone) {
+            return 0;
+        }
+
+        var vertical = size.x < size.y;
+        var body = hero.GetComponent<Rigidbody2D>();
+        var speed = body == null ? 0f : vertical ? body.velocity.x : body.velocity.y;
+        if (Mathf.Abs(speed) > 0.1f) {
+            return (sbyte) (speed > 0f ? 1 : -1);
+        }
+
+        return (sbyte) (vertical ? hero.cState.facingRight ? 1 : -1 : 0);
     }
 
     /// <summary>Combate retenido: empieza cuando están todos dentro; si este caballero sale, se olvida (al volver a
@@ -1313,9 +1402,7 @@ internal sealed class FsmStateSync {
         }
 
         var hero = HeroController.instance;
-        var bounds = item.Zone.bounds;
-        bounds.Expand(new Vector3(1.5f, 1.5f, 1000f));
-        if (hero == null || !bounds.Contains(hero.transform.position)) {
+        if (hero == null || !InsideZone(item, hero.transform.position, 1.5f)) {
             item.PendingStart = null;
             return;
         }
@@ -1340,12 +1427,10 @@ internal sealed class FsmStateSync {
     }
 
     private string MissingNames(Tracked item) {
-        var bounds = item.Zone.bounds;
-        bounds.Expand(new Vector3(0.5f, 0.5f, 1000f));
         var names = new List<string>();
         foreach (var player in _session.Players) {
             if (!player.IsLocal && player.Scene == _scene && !Features.PartyState.IsDown(player.Id) &&
-                (!_players.TryGetAvatarObject(player.Id, out var avatar) || !bounds.Contains(avatar.transform.position))) {
+                (!_players.TryGetAvatarObject(player.Id, out var avatar) || !InsideZone(item, avatar.transform.position, 0.5f))) {
                 names.Add(player.Name);
             }
         }
@@ -1746,7 +1831,8 @@ internal sealed class FsmStateSync {
             return null;
         }
 
-        var target = remoteClosed ? "Close 1" : "Open";
+        // Las de batalla cierran con "Close 1"; las de los sueños, con "Close"
+        var target = remoteClosed ? HasState(item, "Close 1") ? "Close 1" : "Close" : "Open";
         return HasState(item, target) ? target : null;
     }
 

@@ -8,7 +8,7 @@ Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más)
 sigue: [docs/estado.md](docs/estado.md). El diseño detallado está en
 [docs/arquitectura.md](docs/arquitectura.md).
 
-**Versión actual: 0.18.6** · Hitos M1 a M6 terminados (ver [Estado](#estado)).
+**Versión actual: 0.18.7** · Hitos M1 a M6 terminados (ver [Estado](#estado)).
 
 ---
 

@@ -98,7 +98,11 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     avisos a todos de un objeto de la sala no llegan a la lógica parada de una marioneta: si en su estado de ahora
     esperaba uno, también se reenvía (la zona de abajo del Tirano de Almas, `PHASE 2`). Y un aguijonazo del jugador
     local a una marioneta cuya lógica esperaba un aguijonazo en su caja (`Trigger2dEvent` con "Nail Attack", el
-    `FINAL HIT` de la Radiancia) manda ese aviso al PC que la mueve. Cada golpe que
+    `FINAL HIT` de la Radiancia) manda ese aviso al PC que la mueve. El aviso lleva a qué PC va (el que la mueve
+    según quien lo manda) y solo lo atiende ese. Si al llegar ya no la mueve (el cambio de PC se cruzó con el aviso),
+    lo pasa al que la mueve ahora; si es él mismo quien está a punto de tomarla, lo guarda y lo atiende al tomarla
+    (como mucho 3 s). Antes se perdía: el `BATTLE START` del Campeón Fallido no llegaba a nadie y el jefe se quedaba
+    dormido. Cada golpe que
     recibe un enemigo real se avisa a la sala: los demás ven el impacto, el destello y oyen el golpe (quien golpeó ya
     los vio en su PC). La marioneta copia también su giro, si se dibuja, si choca y si es invencible (y desde dónde).
   - Lo que se ve y se oye de la lógica del enemigo también pasa en las marionetas: cuando su FSM entra en un estado,
@@ -121,7 +125,11 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     espera a oír al controlador antes de tomarlo, y si su objeto está en otro estado se pone al día (una reja cerrada
     allí se cierra aquí con su animación y su colisión).
   - Rejas de batalla y de jefes: si una se cierra con un jugador dentro, el otro puede entrar a ayudar pero no salir
-    hasta que se abra. Las que ya están cerradas al cargar la sala no se cruzan.
+    hasta que se abra. Las que ya están cerradas al cargar la sala no se cruzan. Son también rejas las puertas de la
+    arena de los sueños de jefe (`Dream Gate`/`Control`, y `Dream Gate Phase 2`/`Control2` del Tirano de Almas): las
+    cierra y abre el jefe (`DREAM GATE CLOSE`/`OPEN`, `PHASE 2`) en el PC que lo mueve y antes solo se cerraban allí.
+    Lo que manda un enemigo que mueve este PC a un objeto con controlador cuenta aunque llegue mientras se aplica la
+    cadena copiada de otro objeto (la arena copiada despierta aquí al jefe y este cierra las puertas).
   - Controladores de batalla que no son enemigos (Señores Mantis: los tronos, `Mantis Battle`, `Battle Main` y
     `Battle Sub`, que coordina a la pareja; Coliseo de los Tontos: su gestor, sus oleadas y sus jaulas, algunas con
     esperas al azar): igual que ascensores y rejas, los lleva un PC y los demás siguen sus estados. Quien acepta el
@@ -160,6 +168,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Combates de jefe: si la zona que los empieza (la que cierra la arena o empieza el diálogo) avisa sin estar dentro
     todos los jugadores de la sala, se espera ("Esperando a ... para empezar el combate") y empieza cuando entran. Solo
     se retiene el aviso de la zona (un `Trigger2dEvent` del estado de ahora), no los demás del encuentro ya empezado.
+    Una zona fina (menos de 2 de grosor: una línea a la entrada de la arena, como la del Campeón Fallido) se cruza:
+    cuenta como dentro estar en ella o ya al otro lado, en el de la arena (hacia donde iba el caballero al tocarla). Si
+    no, el primero en cruzarla salía de ella enseguida, la espera se olvidaba y el combate no empezaba nunca.
   - Jefes que se despiertan al ver al caballero (Hornet 1, Guardián de Cristal...): se apunta en qué estado duerme su
     lógica principal y su primer cambio desde ahí es despertar. Si algún jugador de la sala está a más de 25 de él,
     ese cambio se retiene (el mismo aviso) y el jefe es invulnerable mientras: golpearlo no lo despierta ni le quita
@@ -356,7 +367,10 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   `ReviveRequest`; el host lo valida (en pie y en la sala del cuerpo) y responde `Revived` (cuerpo y vida). El progreso
   va a la sala con `ReviveProgress` (no fiable): el caído lee "X te está reviviendo". `BenchRest` al sentarse revive a
   los caídos en ese banco con toda la vida; si no queda nadie en pie, `Wipe`: cada caído vuelve a su cuerpo y muere de
-  verdad. Al guardar estando caído no se guardan la invencibilidad ni la vida a 0.
+  verdad. Al guardar estando caído no se guardan la invencibilidad ni la vida a 0. Un caído con el cuerpo en un sueño
+  del que ya salieron todos los que estaban en pie (el compañero ganó, cayó al vacío o despertó) revive junto a ese
+  compañero (`Revived` sin posición: donde esté al llegar); antes lo seguía fuera del sueño como caído y nadie podía
+  revivirlo.
 - **HUD del compañero** (`Vitals`, mensaje 81; `PartnerHud`): vida, vida máxima, azules, alma y zona de la sala de cada
   uno, al cambiar y como mucho 4 por segundo; el host guarda las últimas y se las da a quien entra. Mini-HUD arriba a la
   derecha, espejo exacto del HUD del compañero (sprites de `HUD Cln`: la llena `appear_v020004`, la vacía

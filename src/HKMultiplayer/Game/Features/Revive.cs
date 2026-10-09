@@ -128,6 +128,9 @@ internal sealed class Revive {
     private float _downedAt;
     private Arrival _arrival;
     private bool _reviveFull;
+
+    /// <summary>Revive junto a su compañero, donde esté al llegar, y no en su cuerpo (que quedó en un sueño).</summary>
+    private bool _reviveAtPartner;
     private int _lastHazardType;
     private readonly HashSet<Renderer> _hiddenRenderers = new();
     private readonly List<Renderer> _rendererScratch = new();
@@ -637,6 +640,44 @@ internal sealed class Revive {
         RetargetFollowers(player.Id);
     }
 
+    /// <summary>
+    /// Host: un caído con el cuerpo en un sueño del que ya salieron los que estaban en pie (el que lo seguía ganó, cayó al
+    /// vacío o despertó) revive junto a su compañero. Seguía a su compañero fuera del sueño, pero su cuerpo se quedaba en
+    /// él: nadie podía revivirlo (solo un banco) y se quedaba mirando como caído.
+    /// </summary>
+    private void ReviveLeftInDreams() {
+        foreach (var member in _party.Members) {
+            if (member.Status != PlayerStatus.Downed || !member.BodyScene.StartsWith(DreamPrefix, StringComparison.Ordinal)) {
+                continue;
+            }
+
+            var partner = _party.Get(member.Partner);
+            var partnerScene = partner?.Player?.Scene;
+            if (partner == null || partner.Status == PlayerStatus.Downed || !IsFollowedScene(partnerScene) ||
+                AnyStandingIn(member.BodyScene)) {
+                continue;
+            }
+
+            Log.Info($"{member.Name} tenía el cuerpo en {member.BodyScene} y ya no queda nadie allí: revive junto a " +
+                     $"{partner.Name} ({partnerScene})");
+            _party.SetStatus(member.Id, PlayerStatus.Standing);
+            SendRevived(member.Id, partnerScene, float.NaN, float.NaN, false, partner.Name);
+        }
+    }
+
+    private const string DreamPrefix = "Dream_";
+
+    /// <summary>Si algún jugador en pie está en esa sala.</summary>
+    private bool AnyStandingIn(string scene) {
+        foreach (var member in _party.Members) {
+            if (member.Status != PlayerStatus.Downed && member.Player != null && member.Player.Scene == scene) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private void SendRevived(ushort id, string scene, float x, float y, bool full, string by) {
         if (id == _session.LocalId) {
             HandleRevived(scene, x, y, full, by);
@@ -707,7 +748,12 @@ internal sealed class Revive {
         }
 
         _bodyScene = scene;
-        _bodyPosition = new Vector3(x, y, _bodyPosition.z);
+        // Sin posición (NaN): junto al compañero, donde esté al llegar (salió de un sueño con el cuerpo dentro)
+        _reviveAtPartner = float.IsNaN(x);
+        if (!_reviveAtPartner) {
+            _bodyPosition = new Vector3(x, y, _bodyPosition.z);
+        }
+
         _reviveFull = full;
         GoToBodyThen(Arrival.Revive);
     }
@@ -754,6 +800,10 @@ internal sealed class Revive {
         }
 
         UpdateBench();
+        if (_session.IsHost && _party != null) {
+            ReviveLeftInDreams();
+        }
+
         UpdateBodies(scene);
         if (!HandleArrival()) {
             if (_downed) {
@@ -971,7 +1021,7 @@ internal sealed class Revive {
             return;
         }
 
-        TeleportToScene(_bodyScene, _bodyPosition);
+        TeleportToScene(_bodyScene, _reviveAtPartner ? null : _bodyPosition);
     }
 
     private void FinishArrival() {
@@ -981,6 +1031,15 @@ internal sealed class Revive {
         _downed = false;
         if (hero == null) {
             return;
+        }
+
+        if (_reviveAtPartner) {
+            _reviveAtPartner = false;
+            var partner = _party?.Local?.Partner ?? 0;
+            var position = _players != null && _players.TryGetAvatarPosition(partner, out var avatar)
+                ? avatar
+                : hero.transform.position;
+            _bodyPosition = new Vector3(position.x, position.y, hero.transform.position.z);
         }
 
         hero.transform.position = _bodyPosition;
