@@ -3,8 +3,10 @@ room Deepnest_East_01 right1
 partner-moves left
 breakables-sync
 rock-sync
-objects-sync
 enemies-sync
+# El primer objeto sin activar puede ser el suelo que se rompe bajo los dos (Break Floor 1): al final, porque el
+# invitado cae a otra sala
+objects-sync
 scene-data-sync
 
 room Hive_01 left1
