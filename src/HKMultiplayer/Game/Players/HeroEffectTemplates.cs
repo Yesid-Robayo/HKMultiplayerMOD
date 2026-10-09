@@ -83,6 +83,9 @@ internal sealed class HeroEffectTemplates {
     /// <summary>Efectos de amuletos que crean objetos aparte (rayos, nubes, moscas, onda del grito); puede faltar.</summary>
     public CharmTemplates Charms { get; private set; }
 
+    /// <summary>Acompañantes que atacan solos (crías, tejedoras, Grimmchild); puede faltar.</summary>
+    public CompanionTemplates Companions { get; private set; }
+
     public HeroEffectTemplates(HeroController hero) {
         Hero = hero;
         HeroAudio = hero.GetComponent<HeroAudioController>();
@@ -133,6 +136,12 @@ internal sealed class HeroEffectTemplates {
             Charms = new CharmTemplates(this, hero, _holder.transform);
         } catch (System.Exception e) {
             Log.Warn($"Efectos: sin los efectos de amuletos del compañero: {e}");
+        }
+
+        try {
+            Companions = new CompanionTemplates(hero, _holder.transform);
+        } catch (System.Exception e) {
+            Log.Warn($"Efectos: sin los acompañantes del compañero: {e}");
         }
 
         HitParticles[0] = heroTransform.Find("Effects/Damage Effect/Hit Pt 1")?.gameObject;

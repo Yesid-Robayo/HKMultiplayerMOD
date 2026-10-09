@@ -156,6 +156,10 @@ internal sealed class RemoteEffects {
             _charms = new RemoteCharmEffects(templates.Charms, hero, _loose.transform);
         }
 
+        if (templates.Companions != null) {
+            Companions = new RemoteCompanions(templates.Companions, _loose.transform);
+        }
+
         foreach (var art in templates.NailArts) {
             var copy = Resolve(art.HeroObject);
             var animator = Component<tk2dSpriteAnimator>(copy);
@@ -174,8 +178,12 @@ internal sealed class RemoteEffects {
     /// <summary>Efectos reproducidos (modo de prueba).</summary>
     public int Played { get; private set; }
 
+    /// <summary>Sus acompañantes (crías, tejedoras, Grimmchild); puede faltar.</summary>
+    public RemoteCompanions Companions { get; }
+
     /// <summary>Lo encendido de sus amuletos (modo de prueba).</summary>
-    public string DescribeCharms() => _charms?.Describe() ?? " sin efectos de amuletos";
+    public string DescribeCharms() =>
+        (_charms?.Describe() ?? " sin efectos de amuletos") + $" acompañantes={Companions?.ShownCount ?? 0}";
 
     /// <summary>
     /// Algún objeto de la copia se perdió (una FSM lo sacó al mundo y la sala se descargó): hay que crearla de nuevo.
@@ -219,6 +227,7 @@ internal sealed class RemoteEffects {
         _audio.Stop();
         HideFireballs();
         _charms?.Hide();
+        Companions?.Hide();
         for (var f = 0; f < _nodes.Length; f++) {
             var nodes = _nodes[f];
             if (nodes == null) {
@@ -245,6 +254,7 @@ internal sealed class RemoteEffects {
     public void Destroy() {
         HideFireballs();
         _charms?.Destroy();
+        Companions?.Destroy();
         foreach (var fireball in _fireballs) {
             if (fireball?.Object != null) {
                 Object.Destroy(fireball.Object);

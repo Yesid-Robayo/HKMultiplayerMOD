@@ -229,8 +229,13 @@ internal sealed class PlayerEffects {
     private static PlayerEffects _active;
     private static bool _hooked;
 
+    /// <summary>Acompañantes de los jugadores (no fiable: solo vale el último).</summary>
+    public const MessageType PlayerCompanions = MessageType.PlayerCompanions;
+
     private readonly Dictionary<ushort, Remote> _remotes = new();
     private readonly MessageHandler _onEvent;
+    private readonly MessageHandler _onCompanions;
+    private readonly LocalCompanions _localCompanions = new();
     private GameSession _session;
     private PlayerSync _players;
     private HeroEffectTemplates _templates;
@@ -251,6 +256,7 @@ internal sealed class PlayerEffects {
 
     public PlayerEffects() {
         _onEvent = OnEvent;
+        _onCompanions = OnCompanions;
     }
 
     /// <summary>Eventos enviados y reproducidos (modo de prueba).</summary>
@@ -284,12 +290,14 @@ internal sealed class PlayerEffects {
         _players = players;
         _active = this;
         session.On(MessageType.PlayerEvent, _onEvent);
+        session.On(PlayerCompanions, _onCompanions);
         InstallHooks();
     }
 
     public void Detach() {
         if (_session != null) {
             _session.On(MessageType.PlayerEvent, null);
+            _session.On(PlayerCompanions, null);
             _session = null;
         }
 
@@ -304,6 +312,7 @@ internal sealed class PlayerEffects {
         _remotes.Clear();
         _templates?.Destroy();
         _templates = null;
+        _localCompanions.SetTemplates(null);
         if (_parking != null) {
             Object.Destroy(_parking);
             _parking = null;
@@ -342,6 +351,8 @@ internal sealed class PlayerEffects {
             _failedHero = hero;
         }
 
+        _localCompanions.SetTemplates(_templates?.Companions);
+
         return _templates;
     }
 
@@ -362,6 +373,10 @@ internal sealed class PlayerEffects {
         }
 
         SendPendingSpawns();
+        if (CanSend()) {
+            _localCompanions.Send(_session, _players.LocalSceneHash);
+        }
+
         var stage =hero.artChargedEffect != null && hero.artChargedEffect.activeSelf ? (byte) 2 :
             hero.artChargeEffect != null && hero.artChargeEffect.activeSelf ? (byte) 1 : (byte) 0;
         if (stage == _chargeStage) {
@@ -456,6 +471,7 @@ internal sealed class PlayerEffects {
     /// final del frame. Antes no: quien lo crea le pone después su velocidad, giro y escala.
     /// </summary>
     private void OnPoolSpawn(GameObject prefab, GameObject spawned) {
+        _localCompanions.OnPoolSpawn(prefab, spawned);
         var charms = _templates?.Charms;
         if (charms == null || spawned == null || _pendingCount == PendingSize ||
             !charms.TryGetSpawn(prefab, out var kind, out var index) || !CanSend()) {
@@ -538,6 +554,16 @@ internal sealed class PlayerEffects {
         remote.Queue[remote.Count++] = _incoming;
     }
 
+    private void OnCompanions(SessionPlayer from, PacketReader reader) {
+        var tick = reader.ReadUInt();
+        var sceneHash = reader.ReadUShort();
+        if (sceneHash != _players.LocalSceneHash || sceneHash == 0 || !_remotes.TryGetValue(from.Id, out var remote)) {
+            return;
+        }
+
+        remote.Effects?.Companions?.Read(reader, tick);
+    }
+
     /// <summary>
     /// El avatar de un jugador se acaba de dibujar en el tick <paramref name="renderTick"/> de su reloj: se pegan sus
     /// efectos y salen los eventos que ya tocan. Llamar después de <see cref="RemoteAvatar.Apply"/>.
@@ -591,6 +617,7 @@ internal sealed class PlayerEffects {
         }
 
         remote.Effects.Update(Time.deltaTime);
+        remote.Effects.Companions?.Update(renderTick);
     }
 
     /// <summary>Detalle de un evento para el registro del modo de prueba (FSM y estado, o qué objeto).</summary>

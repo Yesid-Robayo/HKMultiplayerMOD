@@ -147,6 +147,9 @@ internal sealed class PlayerSync {
     /// <summary>Búfer de un jugador (diagnóstico en el modo de prueba).</summary>
     internal SnapshotBuffer BufferOf(ushort id) => _remotes.TryGetValue(id, out var remote) ? remote.Buffer : null;
 
+    /// <summary>Huella de la sala local (0 si no se está jugando).</summary>
+    public ushort LocalSceneHash => _localSceneHash;
+
     /// <summary>La sala local cambió (vacía si no se está jugando).</summary>
     public void SetLocalScene(string scene) {
         if (scene == _localScene) {
