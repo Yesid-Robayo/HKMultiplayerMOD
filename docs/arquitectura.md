@@ -341,8 +341,12 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   Nombre y puerto; hostear (mundos coop, borrar con confirmación, nuevo) y unirse (dirección y código).
 - **Pausa → Multijugador** (solo en partida multijugador): mundo, código, IP oculta hasta pedirla, jugadores con su
   ping y cerrar o salir de la partida. Páginas *Ajustes de la partida* (dos, con filas "Opción < valor >" copiadas de
-  las opciones del juego: `GameStyledMenu.AddOption`, que el invitado ve sin poder cambiar) y *Compañeros* (vida y alma
-  de cada uno, dar geo, desatascarse y recargar la sala).
+  las opciones del juego: `GameStyledMenu.AddOption`, que el invitado ve sin poder cambiar; la primera con dificultad
+  y revivir, la segunda con pantalla y permisos) y *Compañeros* (vida y alma de cada uno y dónde está, dar geo, ir con
+  él, desatascarse y recargar la sala; lo que el host no permite sale apagado con `SetButtonEnabled`). Las acciones
+  que se hacen al quitar la pausa vuelven al menú de pausa y lo cierran en cuanto el juego deja quitarla
+  (`UIManager.ignoreUnpause`, mientras el menú termina de aparecer; con una espera fija de 0,3 s a veces la partida se
+  quedaba en pausa y la acción no se hacía).
 - Avisos en pantalla con la letra del juego (código al abrir la partida, quién entra o sale).
 
 ### Funciones del coop (`Game/Features/`)
@@ -350,7 +354,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 Diseño aprobado en [m5-diseno.md](m5-diseno.md). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
-mensajes nuevos van del 73 al 97. La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
+mensajes nuevos van del 73 al 102 (el 98 es de `EnemySync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
 juego (16:9; con otra proporción el juego deja franjas) y escala con su alto como el HUD del juego; las piezas se crean
 una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
 
@@ -358,13 +362,22 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   lo reparte entero al cambiar y a quien entra. Un caído no cuenta para repartir enemigos (`EnemySync.AssignControllers`:
   los suyos pasan enseguida a quien sigue en pie), ni para las esperas de los combates de jefe (`MissingNear`,
   `EveryoneInside`), ni para los diálogos (`AllConvoDone`), y su avatar no se dibuja.
-- **Ajustes del host** (`HostSettings`, mensaje 73 con versión de formato): dificultad (vida de jefes 1,5× por defecto,
-  solo con el compañero en la sala; enemigos; daño recibido), revivir (sí/no, tiempo, alma, máscaras,
-  invulnerabilidad, en el banco), pantalla (nombres, vida del compañero, flechas, avisos, barra del jefe) y regalar geo.
-  Se guardan en `settings.json` de cada mundo y se envían al cambiar y a quien entra. La vida extra se hace dividiendo
-  el daño en `HealthManager.TakeDamage` en el PC que mueve al enemigo (`Difficulty`; las marionetas reciben los golpes
-  con multiplicador 0); un jefe es lo que tiene `unlockBossScene`. El daño recibido se escala en
-  `HeroController.TakeDamage`, salvo pinchos, ácido y pozos.
+- **Ajustes del host** (`HostSettings`, mensaje 73 con versión de formato, ahora la 2): dificultad (vida de jefes 1,5×
+  por defecto, solo con el compañero en la sala; enemigos; daño recibido), revivir (sí/no, tiempo, alma, máscaras,
+  invulnerabilidad, en el banco), pantalla (nombres, vida del compañero, flechas, avisos, barra del jefe, barras de
+  enemigos) y permisos (regalar geo, ir con un compañero, saltar cinemáticas). Se guardan en `settings.json` de cada
+  mundo (por nombre de clave: los que falten en un archivo viejo quedan por defecto) y se envían al cambiar y a quien
+  entra. La vida extra se hace dividiendo el daño en `HealthManager.TakeDamage` en el PC que mueve al enemigo
+  (`Difficulty`; las marionetas reciben los golpes con multiplicador 0); un jefe es lo que tiene `unlockBossScene`. El
+  juego redondea el daño (`RoundToInt`, y los .5 al par), así que se lleva por enemigo lo que sobra y se pone el
+  multiplicador que da justo el entero: con el aguijón de 5, 1,5× quita 3, 3 y 4 (antes 3 siempre, 1,67×) y 2× quita 2
+  y 3 (antes 2, 2,5×). El daño recibido se escala en `HeroController.TakeDamage`, salvo pinchos, ácido y pozos, con lo
+  que sobra para el golpe siguiente; un golpe que queda en 0 se recibe igual (retroceso e invulnerabilidad: si no, el
+  enemigo volvería a golpear en el frame siguiente) pero `PlayerData.TakeHealth` no quita vida. Antes, con 0,5× los
+  golpes de 1 (casi todos) seguían quitando 1. El alma para revivir nunca pasa de `maxMP` (con la sombra sin
+  recuperar el orbe es de 66 y con "99" nadie podía revivir). "Avisos" apaga los avisos de lo que hacen los demás (se
+  unió, salió, cayó, sombra recuperada, regalo de geo, Grimmchild, skin); los que responden a lo que hace uno
+  (devoluciones, "Ir con ...", esperas de combate) salen siempre.
 - **Revivir** (`Revive`, mensajes 75 a 80): `HeroController.Die` se sustituye por la caída si hay alguien en pie (en un
   sueño, solo si está en el mismo; en los Panteones, nunca). El caído envía `Downed` (sala y suelo bajo él); el host
   le asigna el compañero en pie al que seguir. El caballero del caído se oculta (sin colisión, sin gravedad,
@@ -386,7 +399,11 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   `health_backboard` y la azul `idle0000`, a escala entre sí por sus vértices de tk2d y girados si tk2d los guarda
   girados), con su orbe de alma y su estado; sus máscaras sobre su cabeza 3 s al cambiarle la vida y flechas en el borde.
 - **Barra del jefe** (`BossBar`): los jefes se apuntan al encenderse (`HealthManager.OnEnable`), con el nombre de su
-  entrada del diario; la vida máxima es la mayor vista.
+  entrada del diario; la vida máxima es la mayor vista. Con barras visibles, `Notice.SetLift` sube los avisos (abajo a
+  la derecha) por encima de ellas: el de dos líneas pisaba la barra.
+- **Barras de enemigos** (`EnemyBars`, ajuste del host, apagado por defecto): como la barra del jefe, los enemigos que
+  no son jefes se apuntan al encenderse; cada frame se dibuja una barra pequeña (hasta 16, creadas una vez) sobre los
+  heridos que se ven, encima de su `Renderer`. En el PC que no los mueve se lee la vida de la marioneta.
 - **Sombras** (`ShadeSync`, mensajes 82 a 84): cada uno informa de la suya al host, que la reenvía y la da a quien entra.
   En cada PC se crea una copia (`hollowShadeObject` con su lógica, sin "Dreamnail Kill"; su nombre empieza por
   "Hollow Shade" para que `EnemySync` no la comparta) que lee los datos del dueño (`GetPlayerDataInt`/`String`). Su
@@ -394,6 +411,24 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   en su sala, se crea un momento junto a él).
 - **Compañeros** (`PartyActions`, mensajes 85 y 86): regalo de geo validado por el host (o devuelto), desatascarse y
   recargar la sala al quitar la pausa.
+- **Ir con un compañero** (`PartnerTravel`, mensajes 99 a 102): quien lo pide desde el panel lo envía al quitar la
+  pausa (`GoToRequest`); el host comprueba el ajuste y el estado de los dos (caído, cinemática, sueño) y pregunta al
+  compañero (`GoToQuery`), que responde (`GoToAnswer`) con su sala y el último suelo que pisó en ella (apuntado cada
+  frame con `cState.onGround`, sin pinchos ni caída en curso; si aún no pisó suelo en la sala, su punto de
+  reaparición) o por qué no se puede (en otro mundo, cambiando de sala, en un sitio al que no se sigue). El host lo
+  pasa a quien lo pidió (`GoToResult`). Si es el host quien pide o a quien se pide, su parte se hace en el sitio. En
+  la misma sala se coloca al lado; en otra, `SceneTravel` (sin puerta) y al llegar se coloca. "Al lado" es 0,9 a la
+  izquierda o a la derecha si cabe el caballero (sin `Terrain`), hay suelo a la misma altura y nada con `DamageHero`;
+  si no, en su mismo punto. Se fija ahí la reaparición tras pinchos (`SetHazardRespawn`). Este PC además no deja ir si
+  está caído, en un sueño o una cinemática, cambiando de sala, sentado en un banco (movido así se quedaba sentado en
+  el aire) o sin control, ni si no juega el mundo coop del host (`CoopSaves`: el host en el suyo, el invitado en el
+  del host; con partidas propias las salas se llaman igual pero no son el mismo mundo). Sin respuesta en 6 s, se
+  abandona con un aviso.
+- **Viaje sin puerta** (`SceneTravel`, lo usan "Ir con ..." y la vuelta de las cinemáticas compartidas): se entra con la
+  entrada `dreamGate` del juego (la de la Puerta de los sueños), que coloca al caballero en `dreamGateX/Y` antes de
+  mostrar la sala; ese punto se cambia un momento por el pedido y se repone al llegar. Con la entrada vacía el juego
+  ponía al caballero en la primera puerta de la sala (`FindTransitionPoint` con "cualquiera"): en Cruces Olvidados
+  (sala de Madre Gruz) aparecía en `right1` y salía por ella a `Crossroads_50` antes de que el mod lo colocara.
 - **Lo que hace cada uno** (`PartyState`, mensaje 91): cada jugador informa al host si está en una cinemática
   compartida o en un sueño; es su estado mientras no está caído (al revivir en un sueño vuelve a "en sueño"). El
   mini-HUD lo muestra si está en otra sala. Con eso va si tiene el juego en pausa (el host lo reparte en
@@ -405,7 +440,10 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   llevado, la malla del vídeo (`CinematicPlayer`) quedaba donde estaba su cámara en la sala anterior y se veía negro: se
   vuelve a colocar delante de la cámara como lo hace el juego. Saltar (`GameManager.SkipCutscene`) es un voto: el host
   manda saltar a todos cuando votaron todos los que la ven (o con uno, si así lo eligió en "Saltar cinemáticas") y
-  todos ven "Esperando a X para saltar 1/2"; si el que faltaba se va, se salta. Al terminar
+  todos ven "Esperando a X para saltar 1/2"; si el que faltaba se va, se salta. En el host su propio voto completa la
+  votación en el sitio (su mensaje al servidor se procesa dentro de la misma llamada) y el salto ya había empezado
+  cuando el gancho le quitaba la marca de "saltando" para no dejarla puesta: el host se quedaba en la cinemática
+  mientras los demás seguían. Ahora la marca solo se quita si no llegó la orden de saltar durante el voto. Al terminar
   (`CutsceneHelper.DoSceneLoad`) la siguiente del final sigue; el final de la secuencia lleva a todos a su banco
   (`ContinueGame`) en lugar del menú, y quien fue llevado a una que acaba en una sala de juego vuelve a donde estaba
   (`SceneTravel`).
@@ -455,6 +493,11 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   enemigos ocultos (sin dibujarse) y sin caja de colisión. Si algo apaga un enemigo vivo, el registro dice
   "apagado vivo" con la FSM que lo hizo y la pila de llamadas. `slashes <n> <s> [up|down]` da una ráfaga de
   aguijonazos seguidos (varios `press attack` en la misma lectura de órdenes serían uno solo).
+- Ajustes del host e "Ir con ...": `goto <nombre>|#<id>` (como pulsar "Ir con ..."; con `#id` aunque ya no esté),
+  `travel` (lo pedido, el viaje y el último suelo pisado), `warp <sala> <x> <y>` (viaje sin puerta, p. ej. a un sueño
+  o a una cinemática), `scenetrace <s>` (sala, cambio de sala y posición cada 0,2 s), `enemybars`, `invulwatch <s>`
+  (cuándo empieza y acaba la invulnerabilidad), `hurt [daño] [tipo]` (tipo 2 = pinchos, 3 = ácido) y `status` dice el
+  dueño de la sala.
 - Funciones del coop: `settings` (ajustes que rigen), `party` (revivir y estado de cada jugador), `vitals`, `shades`,
   `killshade` (mata la copia de la sombra de un compañero), `bossbar`, `focus <s>` (Focus simulado), `tpbody`, `heal`
   (vida llena por la vía del juego: `pdset maxHealth` no redibuja el HUD del juego y el mini-HUD lo mostraría distinto),
