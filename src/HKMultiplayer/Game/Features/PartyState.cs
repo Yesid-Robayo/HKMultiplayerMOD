@@ -1,0 +1,270 @@
+using System;
+using System.Collections.Generic;
+using HKMultiplayer.Net;
+using HKMultiplayer.Session;
+using HKMultiplayer.Util;
+
+namespace HKMultiplayer.Game.Features;
+
+/// <summary>Cómo está un jugador de la partida.</summary>
+internal enum PlayerStatus : byte {
+    /// <summary>Jugando con normalidad.</summary>
+    Standing = 0,
+
+    /// <summary>Caído: espera a que lo revivan (su cuerpo queda en una sala).</summary>
+    Downed = 1,
+
+    /// <summary>Viendo una cinemática compartida.</summary>
+    Cutscene = 2,
+
+    /// <summary>Dentro de un sueño.</summary>
+    Dream = 3
+}
+
+/// <summary>
+/// Estado de cada jugador de la partida (en pie, caído, en cinemática, en sueño). Lo decide el host y lo reparte entero
+/// a todos con <see cref="PartyStatus"/> cada vez que cambia y a quien entra. Las demás capas lo consultan: un caído no
+/// cuenta para repartir enemigos, ni para las esperas de los combates ("Esperando a ..."), ni para los diálogos.
+/// </summary>
+internal sealed class PartyState {
+    /// <summary>Estado de todos (host → todos).</summary>
+    public const MessageType PartyStatus = (MessageType) 74;
+
+    /// <summary>Lo que se sabe de un jugador.</summary>
+    public sealed class Member {
+        public ushort Id;
+        public string Name = string.Empty;
+
+        /// <summary>Su jugador de la sesión (sala en la que está, si es el local...).</summary>
+        public SessionPlayer Player;
+
+        public PlayerStatus Status;
+
+        /// <summary>Caído: sala y posición de su cuerpo.</summary>
+        public string BodyScene = string.Empty;
+
+        public float BodyX;
+        public float BodyY;
+
+        /// <summary>Caído: el compañero en pie al que sigue su cámara.</summary>
+        public ushort Partner;
+    }
+
+    private static PartyState _current;
+
+    private readonly Dictionary<ushort, Member> _members = new();
+
+    /// <summary>Los mismos, en una lista (para recorrerlos sin crear memoria).</summary>
+    private readonly List<Member> _list = new();
+
+    private readonly MessageHandler _onStatus;
+    private GameSession _session;
+
+    /// <summary>Cambió el estado de un jugador (jugador y estado anterior).</summary>
+    public event Action<Member, PlayerStatus> StatusChanged;
+
+    static PartyState() {
+        MessageRoutes.Register(PartyStatus, Route.Server, reliable: true);
+    }
+
+    public PartyState() {
+        _onStatus = OnStatus;
+    }
+
+    /// <summary>Estado de la partida en curso (null sin partida).</summary>
+    public static PartyState Current => _current;
+
+    /// <summary>Si el jugador está caído.</summary>
+    public static bool IsDown(ushort id) =>
+        _current != null && _current._members.TryGetValue(id, out var member) && member.Status == PlayerStatus.Downed;
+
+    /// <summary>Jugadores conocidos (incluido el local).</summary>
+    public IReadOnlyList<Member> Members => _list;
+
+    public Member Get(ushort id) => _members.TryGetValue(id, out var member) ? member : null;
+
+    public Member Local => _session != null ? Get(_session.LocalId) : null;
+
+    public void Attach(GameSession session) {
+        _session = session;
+        _current = this;
+        _members.Clear();
+        _list.Clear();
+        session.On(PartyStatus, _onStatus);
+        session.PlayerJoined += OnPlayerJoined;
+        session.PlayerLeft += OnPlayerLeft;
+        session.Connected += OnConnected;
+        foreach (var player in session.Players) {
+            Add(player);
+        }
+    }
+
+    public void Detach() {
+        if (_session != null) {
+            _session.On(PartyStatus, null);
+            _session.PlayerJoined -= OnPlayerJoined;
+            _session.PlayerLeft -= OnPlayerLeft;
+            _session.Connected -= OnConnected;
+            _session = null;
+        }
+
+        if (_current == this) {
+            _current = null;
+        }
+
+        _members.Clear();
+        _list.Clear();
+    }
+
+    private Member Add(SessionPlayer player) {
+        if (_members.TryGetValue(player.Id, out var member)) {
+            member.Name = player.Name;
+            member.Player = player;
+            return member;
+        }
+
+        member = new Member { Id = player.Id, Name = player.Name, Player = player };
+        _members[player.Id] = member;
+        _list.Add(member);
+        return member;
+    }
+
+    private void OnConnected() {
+        // El cliente ya sabe su id: se apunta a sí mismo
+        var local = _session?.LocalPlayer;
+        if (local != null) {
+            Add(local);
+        }
+    }
+
+    private void OnPlayerJoined(SessionPlayer player) {
+        Add(player);
+        // Quien entra recibe cómo está cada uno (los caídos, con su cuerpo)
+        if (_session != null && _session.IsHost && player.Connection != null) {
+            SendTo(player);
+        }
+    }
+
+    private void OnPlayerLeft(SessionPlayer player) {
+        if (_members.TryGetValue(player.Id, out var member)) {
+            _members.Remove(player.Id);
+            _list.Remove(member);
+        }
+    }
+
+    // =====================================================================================================
+    // Host
+    // =====================================================================================================
+
+    /// <summary>
+    /// El host cambia el estado de un jugador y lo reparte a todos. Para un caído, dónde está su cuerpo y a quién sigue.
+    /// </summary>
+    public void SetStatus(ushort id, PlayerStatus status, string bodyScene = null, float x = 0f, float y = 0f,
+        ushort partner = 0) {
+        if (_session == null || !_session.IsHost || !_members.TryGetValue(id, out var member)) {
+            return;
+        }
+
+        var previous = member.Status;
+        member.Status = status;
+        member.BodyScene = status == PlayerStatus.Downed ? bodyScene ?? string.Empty : string.Empty;
+        member.BodyX = x;
+        member.BodyY = y;
+        member.Partner = status == PlayerStatus.Downed ? partner : (ushort) 0;
+        Broadcast();
+        StatusChanged?.Invoke(member, previous);
+    }
+
+    /// <summary>El host cambia solo a quién sigue un caído (su compañero se fue o cayó).</summary>
+    public void SetPartner(ushort id, ushort partner) {
+        if (_session == null || !_session.IsHost || !_members.TryGetValue(id, out var member) ||
+            member.Status != PlayerStatus.Downed || member.Partner == partner) {
+            return;
+        }
+
+        member.Partner = partner;
+        Broadcast();
+        StatusChanged?.Invoke(member, member.Status);
+    }
+
+    private void Broadcast() {
+        foreach (var player in _session.Players) {
+            if (player.Connection != null) {
+                SendTo(player);
+            }
+        }
+    }
+
+    private void SendTo(SessionPlayer target) {
+        var writer = _session.BeginTo(target, PartyStatus);
+        writer.WriteByte((byte) _list.Count);
+        foreach (var member in _list) {
+            writer.WriteUShort(member.Id);
+            writer.WriteByte((byte) member.Status);
+            writer.WriteUShort(member.Partner);
+            writer.WriteString(member.BodyScene);
+            writer.WriteFloat(member.BodyX);
+            writer.WriteFloat(member.BodyY);
+        }
+
+        _session.EndTo();
+    }
+
+    // =====================================================================================================
+    // Cliente
+    // =====================================================================================================
+
+    private void OnStatus(SessionPlayer from, PacketReader reader) {
+        // Solo lo decide el host
+        if (_session == null || _session.IsHost || from.Id != GameSession.HostPlayerId) {
+            return;
+        }
+
+        var count = reader.ReadByte();
+        for (var i = 0; i < count; i++) {
+            var id = reader.ReadUShort();
+            var status = (PlayerStatus) reader.ReadByte();
+            var partner = reader.ReadUShort();
+            var scene = reader.ReadString(128);
+            var x = reader.ReadFloat();
+            var y = reader.ReadFloat();
+            if (!_members.TryGetValue(id, out var member)) {
+                continue;
+            }
+
+            var previous = member.Status;
+            var changed = previous != status || member.Partner != partner || member.BodyScene != scene;
+            member.Status = status;
+            member.Partner = partner;
+            member.BodyScene = scene;
+            member.BodyX = x;
+            member.BodyY = y;
+            if (changed) {
+                Log.Info($"{member.Name}: {Describe(status)}");
+                StatusChanged?.Invoke(member, previous);
+            }
+        }
+    }
+
+    public static string Describe(PlayerStatus status) => status switch {
+        PlayerStatus.Downed => "caído",
+        PlayerStatus.Cutscene => "en una cinemática",
+        PlayerStatus.Dream => "en un sueño",
+        _ => "en pie"
+    };
+
+    /// <summary>Resumen para el modo de prueba.</summary>
+    public string DescribeAll() {
+        var text = new System.Text.StringBuilder();
+        foreach (var member in _list) {
+            text.Append($"{member.Id}:{member.Name}={Describe(member.Status)}");
+            if (member.Status == PlayerStatus.Downed) {
+                text.Append($"@{member.BodyScene}({member.BodyX:0.0},{member.BodyY:0.0}) sigue a {member.Partner}");
+            }
+
+            text.Append("; ");
+        }
+
+        return text.ToString();
+    }
+}

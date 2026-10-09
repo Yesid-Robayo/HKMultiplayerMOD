@@ -276,6 +276,116 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         return input;
     }
 
+    /// <summary>Opciones del mod y qué hacer al cambiarlas (con las flechas, el ratón o "aceptar").</summary>
+    private static readonly Dictionary<MenuOptionHorizontal, Action<int>> OptionHandlers = new();
+
+    private static bool _optionHooked;
+
+    /// <summary>
+    /// Fila "Opción  &lt; valor &gt;" como las de las opciones del juego (copia de "Vibración de la cámara"): se cambia
+    /// con izquierda y derecha, el ratón en sus flechas o "aceptar". Si no es <paramref name="interactable"/> se ve pero
+    /// no se puede elegir ni cambiar.
+    /// </summary>
+    protected MenuOptionHorizontal AddOption(GameObject parent, string label, string[] values, int index,
+        Action<int> changed, bool interactable = true) {
+        var template = OptionTemplate();
+        if (template == null) {
+            // Sin plantilla (no debería pasar): al menos se ve el valor
+            AddText(parent, $"{label}: {values[index]}", 36);
+            return null;
+        }
+
+        HookOptions();
+        var wrapper = Instantiate(template.transform.parent.gameObject, parent.transform, false);
+        wrapper.name = label;
+        wrapper.SetActive(true);
+        RemoveLocalization(wrapper);
+        var element = wrapper.GetComponent<LayoutElement>() ?? wrapper.AddComponent<LayoutElement>();
+        element.preferredHeight = 72;
+
+        var option = wrapper.GetComponentInChildren<MenuOptionHorizontal>(true);
+        foreach (var setting in option.GetComponents<MenuSetting>()) {
+            DestroyImmediate(setting);
+        }
+
+        option.menuSetting = null;
+        option.refreshListOnChange = null;
+        option.localizeText = false;
+        option.optionList = values;
+        option.selectedOptionIndex = Mathf.Clamp(index, 0, values.Length - 1);
+        option.cancelAction = CancelAction.CustomCancelAction;
+        option.customCancelAction = _ => OnBack();
+        var nav = option.navigation;
+        nav.mode = Navigation.Mode.Automatic;
+        option.navigation = nav;
+        option.interactable = interactable;
+
+        foreach (var text in option.GetComponentsInChildren<Text>(true)) {
+            switch (text.name) {
+                case "Label":
+                    text.text = label;
+                    break;
+                case "Description":
+                    text.text = string.Empty;
+                    break;
+            }
+        }
+
+        if (option.optionText != null) {
+            option.optionText.text = values[option.selectedOptionIndex];
+        }
+
+        OptionHandlers[option] = changed;
+        return option;
+    }
+
+    /// <summary>Pone el valor de una opción sin avisar de que cambió (al refrescar lo que dice el host).</summary>
+    protected static void SetOptionValue(MenuOptionHorizontal option, int index) {
+        if (option == null || index < 0 || index >= option.optionList.Length) {
+            return;
+        }
+
+        option.selectedOptionIndex = index;
+        if (option.optionText != null) {
+            option.optionText.text = option.optionList[index];
+        }
+    }
+
+    private static MenuOptionHorizontal _optionTemplate;
+
+    private static MenuOptionHorizontal OptionTemplate() {
+        if (_optionTemplate != null) {
+            return _optionTemplate;
+        }
+
+        var screen = UIManager.instance != null ? UIManager.instance.gameOptionsMenuScreen : null;
+        if (screen == null) {
+            return null;
+        }
+
+        _optionTemplate = screen.GetComponentsInChildren<MenuOptionHorizontal>(true)
+                              .FirstOrDefault(o => o.name == "CamShakePopupOption") ??
+                          screen.GetComponentsInChildren<MenuOptionHorizontal>(true).FirstOrDefault();
+        return _optionTemplate;
+    }
+
+    private static void HookOptions() {
+        if (_optionHooked) {
+            return;
+        }
+
+        _optionHooked = true;
+        // El juego llama aquí cada vez que la opción cambia de valor (su ajuste del juego, en las nuestras, no hay)
+        On.UnityEngine.UI.MenuOptionHorizontal.UpdateSetting += (orig, self) => {
+            if (OptionHandlers.TryGetValue(self, out var handler)) {
+                handler?.Invoke(self.selectedOptionIndex);
+                return;
+            }
+
+            orig(self);
+        };
+    }
+
     // =====================================================================================================
     // Utilidades
     // =====================================================================================================
@@ -322,6 +432,39 @@ internal abstract class GameStyledMenu : MonoBehaviour {
 
         button.OnSubmit(new BaseEventData(EventSystem.current));
         return true;
+    }
+
+    private static readonly System.Reflection.MethodInfo IncrementOption = typeof(MenuOptionHorizontal).GetMethod(
+        "IncrementOption", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+    /// <summary>
+    /// Avanza la opción visible cuya etiqueta empieza así, como la flecha derecha. Devuelve su valor o null si no hay
+    /// (o no se puede cambiar).
+    /// </summary>
+    public string TestOption(string label, int steps) {
+        var option = GetComponentsInChildren<MenuOptionHorizontal>(false).FirstOrDefault(o =>
+            o.transform.parent != null && o.transform.parent.name.StartsWith(label, StringComparison.OrdinalIgnoreCase));
+        if (option == null) {
+            return null;
+        }
+
+        if (!option.interactable) {
+            return $"(no se puede cambiar) {option.optionList[option.selectedOptionIndex]}";
+        }
+
+        for (var i = 0; i < steps; i++) {
+            IncrementOption?.Invoke(option, null);
+        }
+
+        return option.optionList[option.selectedOptionIndex];
+    }
+
+    /// <summary>Etiqueta y valor de cada opción visible (modo de prueba).</summary>
+    public IEnumerable<string> TestDescribeOptions() {
+        foreach (var option in GetComponentsInChildren<MenuOptionHorizontal>(false)) {
+            yield return $"{option.transform.parent?.name}={option.optionList[option.selectedOptionIndex]}" +
+                         (option.interactable ? "" : " (solo ver)");
+        }
     }
 
     /// <summary>Escribe en el campo visible con esa etiqueta.</summary>
