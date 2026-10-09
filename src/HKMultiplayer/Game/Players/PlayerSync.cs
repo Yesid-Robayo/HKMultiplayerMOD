@@ -21,6 +21,9 @@ internal sealed class PlayerSync {
 
     private readonly Dictionary<ushort, Remote> _remotes = new();
     private readonly MessageHandler _onState;
+
+    /// <summary>Efectos de las acciones de cada jugador (tajos, hechizos, dash...).</summary>
+    private readonly PlayerEffects _effects = new();
     private GameSession _session;
 
     // Jugador local
@@ -52,6 +55,7 @@ internal sealed class PlayerSync {
         session.PlayerJoined += OnPlayerJoined;
         session.PlayerLeft += OnPlayerLeft;
         session.PlayerSceneChanged += OnPlayerSceneChanged;
+        _effects.Attach(session, this);
         foreach (var player in session.Players) {
             if (!player.IsLocal) {
                 OnPlayerJoined(player);
@@ -68,6 +72,8 @@ internal sealed class PlayerSync {
             _session = null;
         }
 
+        // Antes que los avatares: sus efectos van pegados a ellos
+        _effects.Detach();
         foreach (var remote in _remotes.Values) {
             remote.Avatar?.Destroy();
         }
@@ -92,6 +98,24 @@ internal sealed class PlayerSync {
         avatar = _remotes.TryGetValue(id, out var remote) && remote.Avatar != null ? remote.Avatar.Root : null;
         return avatar != null;
     }
+
+    /// <summary>Si algún jugador remoto está en la sala del local (si no, no hace falta enviar sus efectos).</summary>
+    public bool AnyRemoteInScene() {
+        if (_localScene.Length == 0) {
+            return false;
+        }
+
+        foreach (var remote in _remotes.Values) {
+            if (remote.Player.Scene == _localScene) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Efectos enviados, recibidos y reproducidos (modo de prueba).</summary>
+    public string DescribeEffects() => $"efectos enviados={_effects.Sent} recibidos={_effects.Received} reproducidos={_effects.Played}";
 
     /// <summary>Primer jugador remoto dibujado en la sala (0 si ninguno).</summary>
     public ushort FirstVisibleId() {
@@ -140,6 +164,10 @@ internal sealed class PlayerSync {
 
     /// <summary>Envía el estado del caballero local si toca. Llamar en LateUpdate, antes de actualizar la red.</summary>
     public void SendLocalState(double time) {
+        if (_localScene.Length > 0) {
+            _effects.UpdateLocal();
+        }
+
         var tickNow = (uint) (time * NetConstants.TickRate);
         if (tickNow == _tick) {
             return;
@@ -236,6 +264,7 @@ internal sealed class PlayerSync {
 
             remote.Avatar ??= new RemoteAvatar(remote.Player.Name, _hero, Font);
             remote.Avatar.Apply(state, _sprites, z);
+            _effects.UpdateRemote(remote.Player, remote.Avatar, remote.Buffer.RenderTick);
             visible++;
         }
 
@@ -256,7 +285,9 @@ internal sealed class PlayerSync {
         }
     }
 
-    private static void DestroyAvatar(Remote remote) {
+    private void DestroyAvatar(Remote remote) {
+        // Sus efectos se aparcan antes: si no, se destruirían con él
+        _effects.Release(remote.Player.Id);
         remote.Avatar?.Destroy();
         remote.Avatar = null;
     }
@@ -271,6 +302,7 @@ internal sealed class PlayerSync {
         if (_remotes.TryGetValue(player.Id, out var remote)) {
             DestroyAvatar(remote);
             _remotes.Remove(player.Id);
+            _effects.Forget(player.Id);
         }
     }
 

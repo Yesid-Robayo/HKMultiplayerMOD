@@ -7,7 +7,7 @@ real y pelean juntos contra los mismos enemigos y jefes.
 Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más). El diseño detallado está en
 [docs/arquitectura.md](docs/arquitectura.md).
 
-**Versión actual: 0.14.3** · Hitos M1, M2 y M3 terminados (ver [Estado](#estado)).
+**Versión actual: 0.15.0** · Hitos M1 a M4 terminados (ver [Estado](#estado)).
 
 ---
 
@@ -33,6 +33,22 @@ Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más)
   (interpolación adaptativa a la conexión).
 - **Inventario propio** de cada uno: vida, alma, geo, máscaras y vasijas, aguijón y artes, amuletos y muescas, llaves,
   reliquias, mapas, esencia, compras, banco y sombra.
+
+### Efectos del compañero
+
+Se ven y se oyen las acciones del compañero con los mismos efectos del juego, a la vez que su animación:
+
+- **Tajos del aguijón** (de lado, alternos, arriba, abajo y en la pared), más grandes con Mark of Pride y Longnail y con
+  el color de Fury of the Fallen.
+- **Artes del aguijón**: la carga (partículas, destello y sonido), Great Slash, Dash Slash y Cyclone Slash.
+- **Hechizos**: Vengeful Spirit y Shade Soul (estallido y bola que vuela hasta chocar), Desolate Dive y Descending Dark
+  (carga, caída, golpe en el suelo y pilar), Howling Wraiths y Abyss Shriek.
+- **Movimiento**: dash y Shade Dash (ráfaga, estela y sombra), doble salto (alas y plumas), salto de pared, Crystal
+  Heart (carga, salida, estela, choque y frenada).
+- **Curación** (líneas, polvo, destello y sonido), **aguijón onírico** (carga y tajo) y **golpes recibidos**
+  (partículas, destello y sonido).
+- Son solo visuales: no dañan, no rompen nada, no gastan alma ni tocan a tu caballero; el daño real ya va por los
+  golpes de cada uno.
 
 ### Mundo compartido
 
@@ -125,7 +141,7 @@ El paquete para jugadores incluye la Modding API, el mod y un instalador:
 | M1 | Transporte, sesión y jugadores (verse y moverse) | Hecho |
 | M2 | Mundo compartido (progreso, objetos persistentes, unirse) | Hecho |
 | M3 | Enemigos, jefes y objetos de sala | Hecho |
-| M4 | Efectos del otro jugador (tajos, hechizos, dash, curación) | Pendiente |
+| M4 | Efectos del otro jugador (tajos, hechizos, dash, curación) | Hecho |
 | M5 | Revivir, sombras compartidas, barras de vida, cinemáticas compartidas, skins, ajustes del host | Pendiente |
 | M6 | Instalador y paquete con el nombre nuevo | Pendiente |
 
@@ -142,7 +158,7 @@ juntos a un sueño). La lista completa de pendientes está al final de la arquit
 |---|---|
 | `src/HKMultiplayer/Net/` | Transporte UDP, canales, cifrado y código de partida (sin Unity, se prueba fuera del juego). |
 | `src/HKMultiplayer/Session/` | Sesión: host y unirse, jugadores, salas y dueño de cada sala, reparto de mensajes. |
-| `src/HKMultiplayer/Game/Players/` | Estado de los jugadores, interpolación y avatares del compañero. |
+| `src/HKMultiplayer/Game/Players/` | Estado de los jugadores, interpolación, avatares del compañero y efectos de sus acciones. |
 | `src/HKMultiplayer/Game/World/` | Mundos coop, guardado, personajes de los invitados y progreso compartido. |
 | `src/HKMultiplayer/Game/Scene/` | Objetos de sala, rompibles, ascensores y rejas, controladores de batalla, enemigos y jefes, peligros animados. |
 | `src/HKMultiplayer/UI/` | Menús y avisos. |

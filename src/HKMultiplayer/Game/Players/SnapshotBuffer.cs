@@ -45,6 +45,9 @@ internal sealed class SnapshotBuffer {
     /// <summary>Retraso de dibujo actual, en ticks.</summary>
     public double Delay => _delay;
 
+    /// <summary>Tick del remitente que se está dibujando (los efectos esperan a que llegue el suyo).</summary>
+    public double RenderTick => _renderTick;
+
     /// <summary>Variación observada de las llegadas, en ticks.</summary>
     public double Jitter => _jitterPeak;
 
