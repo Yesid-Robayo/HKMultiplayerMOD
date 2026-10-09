@@ -714,6 +714,32 @@ internal sealed class TestDriver : MonoBehaviour {
                          $"hud={cams?.hudCamera?.isActiveAndEnabled} estado={GameManager.instance.gameState} " +
                          $"ui={UIManager.instance?.uiState} omitir={GameManager.instance.inputHandler.skipMode}");
                 break;
+            case "charmupdate":
+                // Como cambiar de amuletos en un banco: el caballero aplica los equipados (p. ej. sale Grimmchild)
+                hero.CharmUpdate();
+                PlayMakerFSM.BroadcastEvent("CHARM EQUIP CHECK");
+                PlayMakerFSM.BroadcastEvent("CHARM INDICATOR CHECK");
+                break;
+            case "senders":
+                // senders <evento>: FSM de la sala (también inactivas) que mandan ese aviso, con su estado y su destino
+                var wanted = string.Join(" ", args.Skip(1));
+                foreach (var fsm in FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+                    foreach (var state in fsm.FsmStates) {
+                        foreach (var action in state.Actions) {
+                            var sent = action switch {
+                                HutongGames.PlayMaker.Actions.SendEventByName byName => byName.sendEvent?.Value,
+                                HutongGames.PlayMaker.Actions.SendEvent plain => plain.sendEvent?.Name,
+                                _ => null
+                            };
+                            if (sent == wanted) {
+                                Log.Info($"{Tag}manda {fsm.gameObject.name}/{fsm.FsmName} [{state.Name}] {action.GetType().Name} " +
+                                         $"actual={fsm.ActiveStateName} activo={fsm.gameObject.activeInHierarchy}");
+                            }
+                        }
+                    }
+                }
+
+                break;
             case "langget":
                 // langget <hoja> <clave>: texto del juego en su idioma (p. ej. "Titles FALSE_KNIGHT_MAIN")
                 Log.Info($"{Tag}texto {args[1]}/{args[2]}=" + (TeamCherry.Localization.Language.Has(args[2], args[1])

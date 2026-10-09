@@ -199,8 +199,17 @@ internal sealed class BossBar {
         return viewport.z > 0f && viewport.x > -0.2f && viewport.x < 1.2f && viewport.y > -0.2f && viewport.y < 1.2f;
     }
 
-    /// <summary>Nombre del jefe como en su entrada del diario; si no tiene, el del objeto limpio.</summary>
+    /// <summary>
+    /// Nombre del jefe en el idioma del juego: el título con el que el juego lo presenta (hoja "Titles"); si no tiene,
+    /// el de su entrada del diario (hay jefes con la entrada de otro: el Rey de las Pesadillas lleva la de Hornet); y si
+    /// tampoco, el del objeto limpio.
+    /// </summary>
     private static string BossName(HealthManager health) {
+        var title = TitleName(health);
+        if (title != null) {
+            return title;
+        }
+
         var deathEffects = health.GetComponent<EnemyDeathEffects>();
         var dataName = deathEffects != null ? PlayerDataNameField?.GetValue(deathEffects) as string : null;
         if (!string.IsNullOrEmpty(dataName)) {
@@ -220,12 +229,6 @@ internal sealed class BossBar {
                     return localized.Replace("<br>", " ").Trim();
                 }
             }
-        }
-
-        // El título con el que el juego presenta al jefe (hoja "Titles": la clave que su lógica le pasa al título de zona)
-        var title = TitleName(health);
-        if (title != null) {
-            return title;
         }
 
         var name = Regex.Replace(health.gameObject.name, @"\(Clone\)|\(\d+\)|\bNew\b|\d+$", string.Empty).Trim();
@@ -265,6 +268,19 @@ internal sealed class BossBar {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // Si su lógica no la lleva, la clave sale a veces de su nombre ("Grimm Boss" → "GRIMM"): las palabras en
+        // mayúsculas unidas con "_", de la más larga a la más corta
+        var words = Regex.Replace(health.gameObject.name, @"\(Clone\)|\(\d+\)|\d+", " ").ToUpperInvariant()
+            .Split(new[] { ' ', '_', '-' }, System.StringSplitOptions.RemoveEmptyEntries);
+        for (var length = words.Length; length > 0; length--) {
+            for (var start = 0; start + length <= words.Length; start++) {
+                var found = TitleFor(string.Join("_", words, start, length));
+                if (found != null) {
+                    return found;
                 }
             }
         }
