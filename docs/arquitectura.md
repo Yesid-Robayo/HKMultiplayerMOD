@@ -92,14 +92,23 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     repite su presentación.
   - Los golpes del jugador local a una marioneta van al PC que la mueve, que los aplica al enemigo real. Cualquier
     aviso de fuera que llegue a una marioneta (el de daño del ataque, la zona de la arena en la que entró el caballero,
-    la escena de batalla) también va al PC que la mueve: con esos avisos despiertan o reaccionan muchos jefes. Cada golpe que
+    la escena de batalla) también va al PC que la mueve: con esos avisos despiertan o reaccionan muchos jefes. Los
+    avisos a todos de un objeto de la sala no llegan a la lógica parada de una marioneta: si en su estado de ahora
+    esperaba uno, también se reenvía (la zona de abajo del Tirano de Almas, `PHASE 2`). Y un aguijonazo del jugador
+    local a una marioneta cuya lógica esperaba un aguijonazo en su caja (`Trigger2dEvent` con "Nail Attack", el
+    `FINAL HIT` de la Radiancia) manda ese aviso al PC que la mueve. Cada golpe que
     recibe un enemigo real se avisa a la sala: los demás ven el impacto, el destello y oyen el golpe (quien golpeó ya
     los vio en su PC). La marioneta copia también su giro, si se dibuja, si choca y si es invencible (y desde dónde).
   - Lo que se ve y se oye de la lógica del enemigo también pasa en las marionetas: cuando su FSM entra en un estado,
     la marioneta hace solo sus efectos (sonidos y música de jefe; objetos de la arena que se activan, partículas,
     ráfagas como los disparos de Mawlek, efectos y avisos a otros objetos de la arena, como las animaciones de la
     presentación de la Vasija Rota), con los números de su FSM en ese momento (velocidad y ángulo de una ráfaga). No
-    los avisos al caballero ni a todos, ni lo que suelta geo.
+    los avisos al caballero ni a todos, ni lo que suelta geo. Los avisos a todos sí cuando el jefe ya murió en el PC que
+    lo mueve (`HealthManager` muerto o su lógica atendió `ZERO HP`): son lo que sigue tras vencerlo (`GRIMM DEFEATED`
+    saca al Grimm que se inclina y habla). Solo muerto de verdad: el Hollow Knight pasa por vida negativa entre fases.
+    Lo que su lógica suelta de sí al morir (`SetParent` sin padre: el cadáver del Hollow Knight) se suelta también en la
+    marioneta y sus FSM pasan a funcionar solas en ese PC (allí es donde se absorbe el vacío para el final).
+  - Un objeto con dos `HealthManager` (la segunda fase del Tirano de Almas del sueño) es un solo enemigo, el primero.
   - Los objetos de la arena que su lógica enciende y apaga se sincronizan además como estado (al cambiar, y todos a
     quien entra en la sala): no dependen de haber visto el efecto en directo.
   - Ascensores y rejas: los mueve quien los usa (su controlador). Las copias de los demás no avanzan solas: solo pasan
@@ -136,15 +145,25 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     es enemigo, con un diálogo, que después despierta o enciende a un enemigo o cierra la arena): van como los
     controladores de batalla, así que los dos ven el diálogo, con su caballero quieto mientras, y la Hornet que habla
     desaparece en los dos al empezar. Cada diálogo espera a que todos los de la sala lo terminen de leer (si alguno no
-    responde en 30 s, sigue). Los personajes que solo hablan no cuentan y siguen siendo de cada uno.
+    responde en 30 s, sigue). Los personajes que solo hablan no cuentan y siguen siendo de cada uno. Empezado en otro
+    PC, lo que le mandan otros objetos de este (el Grimmchild que llega a Grimm con `ABSORB END`) no lo hace avanzar ni
+    toma el control: si no, los dos se quitaban el control y Grimm se quedaba en "Call Child". La copia sí pone los
+    datos propios de cada jugador (`SetPlayerData*` de un campo de `CharacterData`: `metGrimm`, el amuleto, la
+    invulnerabilidad de la presentación); sumar o restar no.
+  - Grimm: su primer encuentro, el combate y el Grimm vencido (con quien habla cada uno) van en los dos. Las cadenas
+    del Hollow Knight copian sus golpes como una palanca (cada una aguanta unos golpes y, rotas todas, empieza el
+    combate). La presentación de la Radiancia (`Boss Control`/`Control`) es un controlador compartido.
   - Combates de jefe: si la zona que los empieza (la que cierra la arena o empieza el diálogo) avisa sin estar dentro
-    todos los jugadores de la sala, se espera ("Esperando a ... para empezar el combate") y empieza cuando entran.
+    todos los jugadores de la sala, se espera ("Esperando a ... para empezar el combate") y empieza cuando entran. Solo
+    se retiene el aviso de la zona (un `Trigger2dEvent` del estado de ahora), no los demás del encuentro ya empezado.
   - Jefes que se despiertan al ver al caballero (Hornet 1, Guardián de Cristal...): se apunta en qué estado duerme su
     lógica principal y su primer cambio desde ahí es despertar. Si algún jugador de la sala está a más de 25 de él,
     ese cambio se retiene (el mismo aviso) y el jefe es invulnerable mientras: golpearlo no lo despierta ni le quita
-    vida. Despierta en cuanto están todos cerca. No esperan los de una batalla de arena (su `HealthManager` tiene
-    `battleScene`) ni los que crea una jaula: los saca la arena, que ya espera a que entren todos. Oblobble entra
-    volando desde muy arriba y, si esperaba, se quedaba invulnerable para siempre.
+    vida. Despierta en cuanto están todos cerca. No esperan los de una arena que ya espera a que entren todos (su
+    `HealthManager` tiene `battleScene` y esa arena es una zona con FSM o la lleva un controlador compartido, como el
+    Coliseo; Oblobble entra volando desde muy arriba y, si esperaba, se quedaba invulnerable para siempre) ni los que
+    crea una jaula. La arena de Mawlek no tiene zona propia (solo las de la cámara): Mawlek sí espera. Tampoco se retiene
+    si el caballero local no está cerca (no despierta por verlo: la Radiancia espera muy arriba de la arena).
   - Las copias no tocan los datos del jugador (contadores como las larvas llegan una vez, del PC de origen). Los tarros
     de larva se rompen en todos y la larva sale también en los demás.
   - Cofres: abrirlos es del mundo (el otro lo ve abrirse en directo, o ya abierto si entra después), pero lo que
@@ -401,7 +420,8 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   Segunda parte de M5: `partystate`, `cutscenes`, `cinematic` (vídeos de la escena, dónde se dibujan y el fundido),
   `presentation`, `dreams`, `dreamhit [encender]`, `transitions` (cambios de sala de las FSM de la sala), `senders
   <evento>`, `covers` (lo que tapa la cámara), `langget <hoja> <clave>`, `charmupdate`, `skins`, `skin <nombre>|normal`
-  y `skinshow si|no`; `findobj` muestra la caja del colisionador y `sdset` acepta ids con espacios.
+  y `skinshow si|no`; `findobj` muestra la caja del colisionador y `sdset` acepta ids con espacios. `listeners <evento>`
+  lista las FSM que cambian de estado con un aviso y `bosses` dice la arena de cada jefe y si espera para despertar.
   `fsmdump` muestra también las variables de objeto y cada efecto que reproduce una marioneta se registra
   ("efecto de enemigo ...").
 - Efectos del otro jugador: `burst <nombre> <n> <segundos>` hace capturas seguidas (las órdenes se leen cada medio
@@ -467,17 +487,26 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
     Pesadillas. La entrada directa a la Radiancia sin el Corazón del Vacío.
   - Skins: POPKnight y Pale King, cada una en un PC, vistas en el otro (cuerpo y hechizos), el HUD propio y el envío
     sin tirones ni retrasos de golpes.
+  - Jefes de M5 comprobados en vivo con dos copias (0.18.3):
+    - Grimm: primer encuentro (los dos ven el diálogo; los dos quedan con `metGrimm` y Grimmchild), combate (espera
+      a que entren los dos, diálogos leídos por los dos, "Call Child" sigue en los dos) y el Grimm vencido sale en los
+      dos; quien no movía a Grimm habla con él y sube Grimmchild a nivel 3 (`killedGrimm` y el nivel en los dos).
+    - Tirano de Almas: espera a los dos para despertar, primera fase, el suelo se rompe en los dos, segunda fase
+      (también si cae solo quien no mueve al jefe), victoria y los dos salen tendidos junto al cuerpo.
+    - Hollow Knight: entrando desde el Atrio, las cadenas rotas entre los dos (dos cada uno) empiezan el combate en
+      los dos; las cuatro fases; el cadáver sale en los dos; absorber el vacío lleva a los dos al final A, los créditos
+      y al banco del Atrio.
+    - Radiancia: el desafío en su cartel empieza la presentación en los dos; combate, subida, golpe final (lo puede dar
+      quien no la mueve), final C compartido, créditos y banco.
+    - Hornet 1 y Mawlek siguen esperando a los dos.
   Sin probar en vivo, o solo en parte:
-  - Tirano de Almas: entran juntos y la primera fase va bien; en la prueba automática la segunda no empezó (el suelo no
-    se rompió tras vencer la primera con golpes de prueba). Falta probarlo jugando.
-  - Grimm: M3 detecta su encuentro con diálogo, pero en la prueba la copia del PC que no lo controla se quedó en
-    "Call Child" (espera a que llegue su Grimmchild) y el diálogo del otro no avanzó. Es de `FsmStateSync` (M3), que se
-    cambia en paralelo: no se tocó. Grimmchild para los dos, sin probar en vivo.
-  - Hollow Knight: entrando por `left1` el combate no empezó (necesita la entrada desde el Atrio); su espera de M3, la
-    presentación compartida y el final compartido con el combate real quedan sin probar (el final A compartido sí,
-    entrando a la cinemática).
-  - Radiancia: solo la entrada (el combate y el final C, sin probar).
-  - Revivir con 3 o más jugadores.
+  - Radiancia por el camino del juego: tras la fase 4 del Hollow Knight con el Corazón del Vacío, Hornet lo ata; en la
+    prueba la lógica del Hollow Knight se quedó en "H Thread" (el hilo de Hornet, pieza del jefe, apagado en el PC que
+    lo movía) y no se pudo entrar golpeándolo con el aguijón onírico. La prueba entró directa al sueño (`goscene`).
+    Además ese camino depende del Corazón del Vacío de quien mueve al Hollow Knight en la fase 4 (su lógica lo mira).
+  - Radiancia y Hollow Knight: el jefe pasa al jugador más cercano también en sus secuencias finales; quien lo mueve en
+    ese momento es quien debe pulsar ataque en los últimos golpes de la Radiancia (la lógica escucha su botón).
+  - La entrada al Núcleo con `killedHollowKnight` ya puesto (la revisita) no se probó.
   - No probado en vivo: revivir con 3 o más jugadores y el revivido parpadeando (la invulnerabilidad se pone con el
     `StartInvulnerable` del juego).
   Jefes que dependen de cinemáticas o de entrar juntos:

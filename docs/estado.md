@@ -5,7 +5,8 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
 
 ## Versión y ramas
 
-- Rama principal `main`: **0.16.1** (`aa0e259`). M1, M2, M3 y M4 hechos; M5 a medias (primera parte juntada).
+- Rama principal `main`: **0.18.3**. M1 a M4 hechos; M5 juntado (primera y segunda parte) y sus jefes comprobados en
+  vivo (ver abajo); amuletos y acompañantes del compañero en 0.18.0.
 - Ramas de agentes (en `.claude/worktrees/`, cada una con su rama `worktree-agent-...`):
   - `worktree-agent-a8e869211b55a23d1`: **M5, segunda parte, en curso** (cinemáticas, sueños y jefes, skins). Lleva
     un commit (`78cd576`, cinemáticas) y cambios sin commit (`DreamSync.cs`, `BossPresentation.cs`,
@@ -35,11 +36,34 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
    - Barra de vida del jefe: el nombre debe salir **en el idioma del juego** (español), no el interno en inglés.
    - Después: el resto de jefes de sueño, Grimm, Rey de las Pesadillas, Hollow Knight, Radiancia y las skins.
 
+## Jefes de M5 (9 de octubre, mañana; copias F/G)
+
+Comprobado en vivo con capturas de los dos PCs (detalle en [arquitectura.md](arquitectura.md), Pendientes → M5):
+
+- **Grimm**: primer encuentro y regalo de Grimmchild, combate (espera, diálogos, "Call Child") y el Grimm vencido en
+  los dos. Arreglos: la copia del encuentro no toma el control por el `ABSORB END` de su Grimmchild; la copia pone los
+  datos propios (`metGrimm`); el aviso `GRIMM DEFEATED` del jefe muerto llega a la sala del otro; la espera del
+  encuentro solo retiene el aviso de su zona (el `LAND` se quedaba retenido).
+- **Tirano de Almas**: primera fase, suelo roto, segunda fase y salida de los dos junto al cuerpo. Arreglos: avisos a
+  todos (`PHASE 2`) a la lógica parada de una marioneta se reenvían al PC que la mueve; la segunda fase tenía dos
+  `HealthManager` y salía como dos enemigos.
+- **Hollow Knight**: desde el Atrio, cadenas (copiadas como palancas), combate, cadáver en los dos y final A
+  compartido hasta el banco. Arreglos: cadenas; el cadáver se suelta también en la marioneta; avisos de muerte solo
+  si murió de verdad.
+- **Radiancia**: presentación compartida (su `Boss Control`), combate, golpe final desde cualquiera y final C
+  compartido hasta el banco. Arreglos: controlador compartido; no se retiene a un jefe lejos del caballero local;
+  aguijonazos que espera la lógica parada se reenvían.
+- **Hornet 1 y Mawlek** siguen esperando a los dos (Mawlek no esperaba: su arena no tiene zona propia).
+
+Sin probar o pendiente: la entrada a la Radiancia por el camino del juego (Hornet ata al Hollow Knight; se quedó en
+"H Thread" en la prueba) y que depende del Corazón del Vacío de quien mueve al Hollow Knight; quien mueve a la
+Radiancia en sus últimos golpes es quien debe pulsar ataque (el jefe cambia al más cercano también ahí); la revisita
+del Núcleo con el Hollow Knight ya vencido.
+
 ## Pendiente después
 
 - **M3**:
   - Comprobar en vivo que `RefreshZoneFlags` desatasca el Mage Blob de la oleada 23 de Oro.
-  - Que Hornet 1 y Mawlek siguen esperando a los dos tras el cambio `InBattleScene` (los jefes de arena ya no esperan).
   - Coliseo de Bronce: espera en "WaveCheck 5" en la prueba automática (minero escondido; los caballeros no se
     mueven). Jugando no debería pasar.
 - **M4**: está juntado pero sin repasar en el juego tras el merge: pasar `tests/routes/effects.route`.
