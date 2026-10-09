@@ -222,6 +222,12 @@ internal sealed class BossBar {
             }
         }
 
+        // El título con el que el juego presenta al jefe (hoja "Titles": la clave que su lógica le pasa al título de zona)
+        var title = TitleName(health);
+        if (title != null) {
+            return title;
+        }
+
         var name = Regex.Replace(health.gameObject.name, @"\(Clone\)|\(\d+\)|\bNew\b|\d+$", string.Empty).Trim();
         var builder = new StringBuilder(name.Length);
         foreach (var c in name) {
@@ -229,6 +235,61 @@ internal sealed class BossBar {
         }
 
         return builder.ToString().Trim();
+    }
+
+    private const string TitlesSheet = "Titles";
+
+    /// <summary>
+    /// Nombre del jefe en el idioma del juego tal como sale en su presentación: la lógica del jefe (o lo que cuelga de él)
+    /// lleva la clave de su título ("FALSE_KNIGHT", "FAILED_CHAMPION"...) en un texto de sus FSM; el título es esa clave
+    /// con "_SUPER" (la parte pequeña de encima), "_MAIN" (la grande) y "_SUB" (la de debajo) en la hoja "Titles". Null
+    /// si no se encuentra.
+    /// </summary>
+    private static string TitleName(HealthManager health) {
+        foreach (var fsm in health.GetComponentsInChildren<PlayMakerFSM>(true)) {
+            foreach (var variable in fsm.FsmVariables.StringVariables) {
+                var found = TitleFor(variable.Value);
+                if (found != null) {
+                    return found;
+                }
+            }
+
+            foreach (var state in fsm.FsmStates) {
+                foreach (var action in state.Actions) {
+                    foreach (var field in action.GetType().GetFields(BindingFlags.Public | BindingFlags.Instance)) {
+                        if (field.FieldType == typeof(HutongGames.PlayMaker.FsmString) &&
+                            field.GetValue(action) is HutongGames.PlayMaker.FsmString text) {
+                            var found = TitleFor(text.Value);
+                            if (found != null) {
+                                return found;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string TitleFor(string key) {
+        if (string.IsNullOrEmpty(key) || key.Length > 40 || key.IndexOf(' ') >= 0 || !GameText.Has(key + "_MAIN", TitlesSheet)) {
+            return null;
+        }
+
+        // El título va en partes: la pequeña de encima, la grande y la pequeña de debajo ("Campeón" / "Fallido")
+        var main = GameText.Get(key + "_MAIN", TitlesSheet);
+        if (string.IsNullOrEmpty(main) || main.Contains("#!#")) {
+            return null;
+        }
+
+        return (TitlePart(key + "_SUPER") + " " + main + " " + TitlePart(key + "_SUB")).Replace("<br>", " ").Trim();
+    }
+
+    /// <summary>Parte pequeña del título (encima o debajo de la grande), vacía si no tiene.</summary>
+    private static string TitlePart(string key) {
+        var part = GameText.Has(key, TitlesSheet) ? GameText.Get(key, TitlesSheet) : string.Empty;
+        return string.IsNullOrEmpty(part) || part.Contains("#!#") ? string.Empty : part;
     }
 
     /// <summary>Resumen para el modo de prueba.</summary>
