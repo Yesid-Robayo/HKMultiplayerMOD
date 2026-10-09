@@ -28,7 +28,10 @@ internal sealed class TestDriver : MonoBehaviour {
     private int _processedLines;
     private float _nextPoll;
 
-    public static bool IsEnabled() => Environment.GetCommandLineArgs().Contains(CommandLineFlag);
+    /// <summary>Se mira una vez: se pregunta en cada efecto y cada paquete, y leer los argumentos crea memoria.</summary>
+    private static readonly bool Enabled = Environment.GetCommandLineArgs().Contains(CommandLineFlag);
+
+    public static bool IsEnabled() => Enabled;
 
     private void Start() {
         _commandFile = Path.Combine(Application.persistentDataPath, "mp-test.txt");
@@ -922,7 +925,11 @@ internal sealed class TestDriver : MonoBehaviour {
 
                 break;
             case "effects":
-                // Efectos del otro jugador enviados, recibidos y reproducidos
+                // Efectos del otro jugador enviados, recibidos y reproducidos ("effects reset": a cero)
+                if (args.Length > 1 && args[1] == "reset") {
+                    runner.Players.ResetEffectCounters();
+                }
+
                 Log.Info($"{Tag}{runner.Players.DescribeEffects()}");
                 break;
             case "tree":

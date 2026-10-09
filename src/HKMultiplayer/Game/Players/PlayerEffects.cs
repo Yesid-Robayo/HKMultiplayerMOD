@@ -281,15 +281,30 @@ internal sealed class PlayerEffects {
 
     public int Received { get; private set; }
 
-    public int Played {
+    /// <summary>
+    /// Eventos reproducidos sobre el avatar de su dueño. Se cuentan aquí y no en su copia de efectos: la copia se rehace
+    /// (otra partida, una pieza perdida) y su cuenta se perdería con ella.
+    /// </summary>
+    public int Played { get; private set; }
+
+    /// <summary>Eventos sin reproducir porque su dueño ya no se dibujaba en la sala (cambio de sala, caído).</summary>
+    public int Discarded { get; private set; }
+
+    /// <summary>Eventos que esperan ahora en las colas a que su avatar llegue a su tick.</summary>
+    public int Waiting {
         get {
-            var played = 0;
+            var waiting = 0;
             foreach (var remote in _remotes.Values) {
-                played += remote.Effects?.Played ?? 0;
+                waiting += remote.Count;
             }
 
-            return played;
+            return waiting;
         }
+    }
+
+    /// <summary>Pone a cero los contadores (modo de prueba: contar una acción sola).</summary>
+    public void ResetCounters() {
+        Sent = Received = Played = Discarded = 0;
     }
 
     /// <summary>Lo encendido de los amuletos de cada compañero (modo de prueba).</summary>
@@ -416,6 +431,9 @@ internal sealed class PlayerEffects {
         effect.Write(writer);
         _session.End();
         Sent++;
+        if (TestDriver.IsEnabled()) {
+            Log.Info($"[TEST] efecto enviado {effect.Kind} {DescribeEvent(effect)}");
+        }
     }
 
     /// <summary>
@@ -570,12 +588,29 @@ internal sealed class PlayerEffects {
         _incoming.Arrival = Time.unscaledTimeAsDouble;
         if (remote.Count == QueueSize) {
             // Cola llena (no debería pasar): el más viejo sale ya
-            remote.Effects?.Play(remote.Queue[0]);
+            PlayNow(remote, remote.Queue[0], "cola llena");
             Array.Copy(remote.Queue, 1, remote.Queue, 0, QueueSize - 1);
             remote.Count--;
         }
 
         remote.Queue[remote.Count++] = _incoming;
+    }
+
+    /// <summary>Reproduce un evento sobre el avatar de su dueño y lo cuenta (reproducido o descartado).</summary>
+    private void PlayNow(Remote remote, in EffectEvent effect, string why) {
+        if (remote.Effects != null && remote.Effects.Play(effect)) {
+            Played++;
+            if (TestDriver.IsEnabled()) {
+                Log.Info($"[TEST] efecto {effect.Kind} de {remote.Player.Name} {DescribeEvent(effect)}{why}");
+            }
+
+            return;
+        }
+
+        Discarded++;
+        if (TestDriver.IsEnabled()) {
+            Log.Info($"[TEST] efecto {effect.Kind} de {remote.Player.Name} descartado: sin avatar en la sala{why}");
+        }
     }
 
     private void OnCompanions(SessionPlayer from, PacketReader reader) {
@@ -627,11 +662,7 @@ internal sealed class PlayerEffects {
                 break;
             }
 
-            remote.Effects.Play(effect);
-            if (TestDriver.IsEnabled()) {
-                Log.Info($"[TEST] efecto {effect.Kind} de {player.Name} {DescribeEvent(effect)}");
-            }
-
+            PlayNow(remote, effect, effect.Tick > renderTick ? " (tarde)" : string.Empty);
             played++;
         }
 
@@ -660,6 +691,13 @@ internal sealed class PlayerEffects {
     public void Release(ushort playerId) {
         if (_remotes.TryGetValue(playerId, out var remote)) {
             remote.Effects?.Detach();
+            if (remote.Count > 0) {
+                Discarded += remote.Count;
+                if (TestDriver.IsEnabled()) {
+                    Log.Info($"[TEST] {remote.Count} efectos de {remote.Player.Name} descartados: su avatar dejó la sala");
+                }
+            }
+
             remote.Count = 0;
         }
     }

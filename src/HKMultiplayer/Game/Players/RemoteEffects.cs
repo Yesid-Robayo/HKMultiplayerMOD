@@ -175,9 +175,6 @@ internal sealed class RemoteEffects {
         }
     }
 
-    /// <summary>Efectos reproducidos (modo de prueba).</summary>
-    public int Played { get; private set; }
-
     /// <summary>Sus acompañantes (crías, tejedoras, Grimmchild); puede faltar.</summary>
     public RemoteCompanions Companions { get; }
 
@@ -286,12 +283,12 @@ internal sealed class RemoteEffects {
     // Eventos
     // =====================================================================================================
 
-    public void Play(in EffectEvent effect) {
+    /// <summary>Reproduce un evento sobre el avatar. false si no hay avatar al que pegarlo (no se pudo reproducir).</summary>
+    public bool Play(in EffectEvent effect) {
         if (_avatar == null) {
-            return;
+            return false;
         }
 
-        Played++;
         try {
             switch (effect.Kind) {
                 case EffectKind.FsmState:
@@ -332,6 +329,8 @@ internal sealed class RemoteEffects {
         } catch (Exception e) {
             WarnOnce($"Efecto {effect.Kind} del compañero no reproducido: {e}");
         }
+
+        return true;
     }
 
     /// <summary>Lo que se mueve o se apaga solo con el tiempo: bolas de fuego y partículas del dash.</summary>
