@@ -321,6 +321,9 @@ internal sealed class RemoteEffects {
                 case EffectKind.Cloud:
                     _charms?.SpawnCloud(effect.A, new Vector3(effect.X, effect.Y, 0f), effect.Scale);
                     break;
+                case EffectKind.Puff:
+                    _charms?.SpawnPuff(effect.A, new Vector2(effect.X, effect.Y), effect.Angle, effect.Scale);
+                    break;
                 case EffectKind.Fluke:
                     _charms?.SpawnFluke(effect.A, new Vector2(effect.X, effect.Y), new Vector2(effect.VX, effect.VY),
                         effect.Angle, effect.Scale, effect.Spin);

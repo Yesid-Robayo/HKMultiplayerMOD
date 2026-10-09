@@ -19,7 +19,10 @@ internal sealed class CharmTemplates {
         None = 0,
         Beam = 1,
         Cloud = 2,
-        Fluke = 3
+        Fluke = 3,
+
+        /// <summary>Un efecto suelto del caballero que sale del pool (ráfagas del dash sombra, aterrizaje fuerte...).</summary>
+        Puff = 4
     }
 
     /// <summary>Un rayo de Grubberfly's Elegy (normal o de furia, en cada dirección).</summary>
@@ -83,6 +86,27 @@ internal sealed class CharmTemplates {
 
     public readonly List<FlukeInfo> Flukes = new();
 
+    /// <summary>Efecto suelto del pool: su copia y lo que dura como mucho (lo que tarda su animación más larga).</summary>
+    internal sealed class PuffInfo {
+        public GameObject Prefab;
+        public GameObject Template;
+        public float Life;
+
+        /// <summary>
+        /// Si crece y se desvanece con su FSM "Play Effect" (el anillo del dash sombra): hasta qué escala y en cuánto
+        /// tiempo (0 si no).
+        /// </summary>
+        public float GrowTo;
+
+        public float GrowTime;
+    }
+
+    /// <summary>
+    /// Efectos sueltos que el código del caballero saca del pool: ráfagas y anillo del dash sombra (también con Sharp
+    /// Shadow y hacia abajo con Dashmaster), el polvo del dash en el suelo y el aterrizaje fuerte.
+    /// </summary>
+    public readonly List<PuffInfo> Puffs = new();
+
     /// <summary>La onda del grito (Howling Wraiths y Abyss Shriek); se crea tal cual, como hace el caballero.</summary>
     public GameObject RoarWave { get; private set; }
 
@@ -107,6 +131,31 @@ internal sealed class CharmTemplates {
             };
             Beams[i] = info;
             _spawns[prefab] = Pack(SpawnKind.Beam, i);
+        }
+
+        foreach (var prefab in new[] {
+                     hero.shadowdashBurstPrefab, hero.shadowdashDownBurstPrefab, hero.shadowRingPrefab, hero.backDashPrefab,
+                     hero.hardLandingEffectPrefab
+                 }) {
+            // Solo los que salen del pool (algunos campos apuntan a hijos del caballero, que ya se copian)
+            if (prefab == null || prefab.scene.IsValid() || _spawns.ContainsKey(prefab)) {
+                continue;
+            }
+
+            _spawns[prefab] = Pack(SpawnKind.Puff, Puffs.Count);
+            var puff = new PuffInfo { Prefab = prefab, Template = Copy(prefab, holder), Life = LifeOf(prefab) };
+            // Las acciones de un prefab que aún no se usó pueden no tener sus valores: entonces, los de su FSM en el juego
+            // (ScaleTo hasta 1,4 y EaseColor hasta transparente en 0,4 s)
+            var effect = FSMUtility.LocateFSM(prefab, "Play Effect");
+            if (effect != null && prefab.GetComponent<SpriteRenderer>() != null) {
+                var grow = HeroEffectTemplates.FirstAction<ScaleTo>(effect, "Grow");
+                var valid = grow != null && grow.duration.Value > 0f && grow.target.Value.x > 0f;
+                puff.GrowTo = valid ? grow.target.Value.x : 1.4f;
+                puff.GrowTime = valid ? grow.duration.Value : 0.4f;
+                puff.Life = puff.GrowTime;
+            }
+
+            Puffs.Add(puff);
         }
 
         var spells = FSMUtility.LocateFSM(hero.gameObject, "Spell Control");
@@ -179,6 +228,23 @@ internal sealed class CharmTemplates {
         copy.name = prefab.name;
         HeroEffectTemplates.Strip(copy, keepFsms: false);
         return copy;
+    }
+
+    /// <summary>Lo que tarda la animación más larga de un efecto (como mucho 2 s; 1 s si no tiene).</summary>
+    private static float LifeOf(GameObject prefab) {
+        var life = 0f;
+        foreach (var animator in prefab.GetComponentsInChildren<tk2dSpriteAnimator>(true)) {
+            var clip = animator.DefaultClip;
+            if (clip != null && clip.fps > 0f && clip.frames != null) {
+                life = Mathf.Max(life, clip.frames.Length / clip.fps);
+            }
+        }
+
+        foreach (var particles in prefab.GetComponentsInChildren<ParticleSystem>(true)) {
+            life = Mathf.Max(life, particles.main.duration + particles.main.startLifetime.constantMax);
+        }
+
+        return life > 0f ? Mathf.Min(life, 2f) : 1f;
     }
 
     private static CloudInfo PrepareCloud(GameObject prefab, string waitState, Transform holder) {

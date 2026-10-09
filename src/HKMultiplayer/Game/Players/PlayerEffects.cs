@@ -35,7 +35,10 @@ internal enum EffectKind : byte {
     Cloud = 9,
 
     /// <summary>Una mosca de Flukenest (cuál, dónde, velocidad, giro y tamaño).</summary>
-    Fluke = 10
+    Fluke = 10,
+
+    /// <summary>Un efecto suelto del caballero sacado del pool (dash sombra, aterrizaje fuerte...): cuál, dónde, giro y escala.</summary>
+    Puff = 11
 }
 
 /// <summary>Amuletos que cambian cómo se ve un efecto (viajan en cada evento, en un byte).</summary>
@@ -116,6 +119,13 @@ internal struct EffectEvent {
                 writer.WriteFloat(Y);
                 writer.WriteFloat(Scale);
                 break;
+            case EffectKind.Puff:
+                writer.WriteByte(A);
+                writer.WriteFloat(X);
+                writer.WriteFloat(Y);
+                writer.WriteFloat(Angle);
+                writer.WriteFloat(Scale);
+                break;
             case EffectKind.Fluke:
                 writer.WriteByte(A);
                 writer.WriteFloat(X);
@@ -165,6 +175,13 @@ internal struct EffectEvent {
                 A = reader.ReadByte();
                 X = reader.ReadFloat();
                 Y = reader.ReadFloat();
+                Scale = reader.ReadFloat();
+                break;
+            case EffectKind.Puff:
+                A = reader.ReadByte();
+                X = reader.ReadFloat();
+                Y = reader.ReadFloat();
+                Angle = reader.ReadFloat();
                 Scale = reader.ReadFloat();
                 break;
             case EffectKind.Fluke:
@@ -507,6 +524,13 @@ internal sealed class PlayerEffects {
                     effect.Y = position.y;
                     effect.Scale = transform.localScale.x;
                     break;
+                case CharmTemplates.SpawnKind.Puff:
+                    effect.Kind = EffectKind.Puff;
+                    effect.X = position.x;
+                    effect.Y = position.y;
+                    effect.Angle = transform.eulerAngles.z;
+                    effect.Scale = transform.localScale.x;
+                    break;
                 case CharmTemplates.SpawnKind.Fluke:
                     effect.Kind = EffectKind.Fluke;
                     effect.X = position.x;
@@ -627,7 +651,7 @@ internal sealed class PlayerEffects {
             return $"{fsm.FsmName}/{fsm.FsmStates[effect.B].Name}";
         }
 
-        return effect.Kind is EffectKind.Beam or EffectKind.Cloud or EffectKind.Fluke
+        return effect.Kind is EffectKind.Beam or EffectKind.Cloud or EffectKind.Fluke or EffectKind.Puff
             ? $"#{effect.A} ({effect.X:0.0},{effect.Y:0.0}) v=({effect.VX:0.0},{effect.VY:0.0}) escala={effect.Scale:0.00}"
             : string.Empty;
     }

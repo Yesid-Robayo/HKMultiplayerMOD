@@ -16,6 +16,7 @@ internal sealed class RemoteCharmEffects {
     private const int BeamsPerKind = 3;
     private const int CloudsPerKind = 2;
     private const int FlukesPerKind = 16;
+    private const int PuffsPerKind = 3;
 
     /// <summary>Lo que tarda un rayo en empezar a deshacerse (esperas "Inactive" y "Active" de su FSM).</summary>
     private const float BeamFlight = 0.23f;
@@ -98,6 +99,7 @@ internal sealed class RemoteCharmEffects {
     private readonly Beam[] _beams;
     private readonly Cloud[] _clouds;
     private readonly Fluke[] _flukes;
+    private readonly Puff[] _puffs;
     private GameObject _roarWave;
     private PlayMakerFSM _roarEmitter;
     private float _roarWaveAge;
@@ -109,6 +111,7 @@ internal sealed class RemoteCharmEffects {
         _beams = new Beam[templates.Beams.Length * BeamsPerKind];
         _clouds = new Cloud[templates.Clouds.Length * CloudsPerKind];
         _flukes = new Fluke[templates.Flukes.Count * FlukesPerKind];
+        _puffs = new Puff[templates.Puffs.Count * PuffsPerKind];
     }
 
     // =====================================================================================================
@@ -570,6 +573,125 @@ internal sealed class RemoteCharmEffects {
     }
 
     // =====================================================================================================
+    // Efectos sueltos del caballero (dash sombra, aterrizaje fuerte...)
+    // =====================================================================================================
+
+    private sealed class Puff {
+        public GameObject Object;
+        public Transform Transform;
+        public tk2dSpriteAnimator[] Animators;
+        public MeshRenderer[] Renderers;
+        public ParticleSystem[] Particles;
+        public SpriteRenderer Sprite;
+        public CharmTemplates.PuffInfo Info;
+        public float StartScale;
+        public float Age;
+        public float Life;
+        public bool Active;
+    }
+
+    /// <summary>Un efecto suelto donde lo sacó el caballero del dueño, con su giro y escala.</summary>
+    public void SpawnPuff(int index, Vector2 position, float angle, float scaleX) {
+        if (index >= _templates.Puffs.Count) {
+            return;
+        }
+
+        var info = _templates.Puffs[index];
+        Puff puff = null;
+        Puff oldest = null;
+        for (var i = index * PuffsPerKind; i < (index + 1) * PuffsPerKind; i++) {
+            var candidate = _puffs[i];
+            if (candidate == null) {
+                var copy = Object.Instantiate(info.Template, _parking, false);
+                copy.name = info.Template.name;
+                copy.SetActive(false);
+                candidate = _puffs[i] = new Puff {
+                    Object = copy,
+                    Transform = copy.transform,
+                    Animators = copy.GetComponentsInChildren<tk2dSpriteAnimator>(true),
+                    Renderers = copy.GetComponentsInChildren<MeshRenderer>(true),
+                    Particles = copy.GetComponentsInChildren<ParticleSystem>(true),
+                    Sprite = copy.GetComponent<SpriteRenderer>(),
+                    Info = info
+                };
+                foreach (var animator in candidate.Animators) {
+                    animator.AnimationCompleted = RemoteEffects.HideWhenDone;
+                }
+            }
+
+            if (!candidate.Active) {
+                puff = candidate;
+                break;
+            }
+
+            if (oldest == null || candidate.Age > oldest.Age) {
+                oldest = candidate;
+            }
+        }
+
+        puff ??= oldest;
+        if (puff == null) {
+            return;
+        }
+
+        var baseScale = info.Template.transform.localScale;
+        puff.Object.SetActive(false);
+        puff.Transform.position = new Vector3(position.x, position.y, info.Template.transform.position.z);
+        puff.Transform.localEulerAngles = new Vector3(0f, 0f, angle);
+        puff.Transform.localScale = new Vector3(scaleX, baseScale.y, baseScale.z);
+        puff.Age = 0f;
+        puff.Life = info.Life;
+        puff.StartScale = scaleX;
+        if (puff.Sprite != null) {
+            puff.Sprite.color = Color.white;
+        }
+
+        puff.Active = true;
+        puff.Object.SetActive(true);
+        foreach (var renderer in puff.Renderers) {
+            renderer.enabled = true;
+        }
+
+        foreach (var animator in puff.Animators) {
+            var clip = animator.DefaultClip;
+            if (clip != null) {
+                animator.PlayFromFrame(clip, 0);
+            }
+        }
+
+        foreach (var particles in puff.Particles) {
+            particles.Clear();
+            particles.Play();
+        }
+    }
+
+    private static void UpdatePuff(Puff puff, float deltaTime) {
+        if (puff.Object == null) {
+            puff.Active = false;
+            return;
+        }
+
+        puff.Age += deltaTime;
+        if (puff.Age >= puff.Life) {
+            puff.Active = false;
+            puff.Object.SetActive(false);
+            return;
+        }
+
+        // Crece y se desvanece como su FSM "Play Effect" (ScaleTo y EaseColor, easeOutQuad)
+        var info = puff.Info;
+        if (info.GrowTime > 0f) {
+            var t = Mathf.Clamp01(puff.Age / info.GrowTime);
+            var eased = 1f - (1f - t) * (1f - t);
+            var scale = Mathf.Lerp(puff.StartScale, info.GrowTo, eased);
+            puff.Transform.localScale = new Vector3(scale, scale, scale);
+            if (puff.Sprite != null) {
+                puff.Sprite.color = new Color(1f, 1f, 1f, 1f - eased);
+            }
+        }
+    }
+
+    // =====================================================================================================
     // Onda de los gritos
     // =====================================================================================================
 
@@ -639,6 +761,12 @@ internal sealed class RemoteCharmEffects {
             }
         }
 
+        foreach (var puff in _puffs) {
+            if (puff is { Active: true }) {
+                UpdatePuff(puff, deltaTime);
+            }
+        }
+
         if (_roarWave != null) {
             _roarWaveAge += deltaTime;
             if (_roarWaveAge >= RoarWaveMax) {
@@ -670,6 +798,13 @@ internal sealed class RemoteCharmEffects {
                 fluke.Object.SetActive(false);
             }
         }
+
+        foreach (var puff in _puffs) {
+            if (puff?.Object != null) {
+                puff.Active = false;
+                puff.Object.SetActive(false);
+            }
+        }
     }
 
     public void Destroy() {
@@ -689,6 +824,12 @@ internal sealed class RemoteCharmEffects {
         foreach (var fluke in _flukes) {
             if (fluke?.Object != null) {
                 Object.Destroy(fluke.Object);
+            }
+        }
+
+        foreach (var puff in _puffs) {
+            if (puff?.Object != null) {
+                Object.Destroy(puff.Object);
             }
         }
     }
@@ -718,6 +859,13 @@ internal sealed class RemoteCharmEffects {
 
         if (_roarWave != null) {
             text.Append($" onda en {_roarWave.transform.position} estado={_roarEmitter?.ActiveStateName};");
+        }
+
+        foreach (var puff in _puffs) {
+            if (puff is { Active: true }) {
+                text.Append($" efecto {puff.Object.name} en {puff.Transform.position} escala={puff.Transform.localScale.x:0.00} " +
+                            $"edad={puff.Age:0.00}/{puff.Life:0.00} crece={puff.Info.GrowTime:0.00};");
+            }
         }
 
         return text.ToString();
