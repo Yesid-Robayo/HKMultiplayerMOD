@@ -505,6 +505,15 @@ internal sealed class EnemySync {
     private const uint LinkedRefreshTicks = 120;
     private readonly List<(uint Id, ushort Controller)> _controlOut = new();
     private float _nextAssign;
+
+    /// <summary>
+    /// Cuándo repite el dueño de la sala quién mueve cada enemigo (a todos). Los avisos de cambio solo llegan al cambiar:
+    /// quien recargó la sala (revivir, desatascarse, entrar otra vez) o perdió uno por un cambio de dueño se quedaba con
+    /// otro reparto y cada PC creía que el enemigo lo movía el otro (quieto en los dos).
+    /// </summary>
+    private float _nextControlResync;
+
+    private const float ControlResyncInterval = 2f;
     private readonly Action<SessionPlayer> _onPlayerScene;
 
     private GameSession _session;
@@ -715,6 +724,10 @@ internal sealed class EnemySync {
             if (isOwner && now >= _nextAssign && _session.CanSend) {
                 _nextAssign = now + 0.5f;
                 AssignControllers();
+                if (now >= _nextControlResync) {
+                    _nextControlResync = now + ControlResyncInterval;
+                    ResendControllers();
+                }
             }
 
             for (var i = _enemies.Count - 1; i >= 0; i--) {
@@ -2179,15 +2192,18 @@ internal sealed class EnemySync {
         var roomOwner = _session.LocalId;
         _controlOut.Clear();
         foreach (var enemy in _enemies) {
-            if (enemy.Spawned || enemy.Root == null || !enemy.Root.activeInHierarchy || enemy.Health == null ||
-                enemy.Health.isDead) {
+            if (enemy.Spawned || enemy.Root == null || enemy.Health == null || enemy.Health.isDead) {
                 continue;
             }
 
             // Un caído (o quien tiene el juego en pausa: sus enemigos se quedarían congelados para los demás) no se queda
-            // con enemigos: pasan enseguida a quien sigue jugando
+            // con enemigos: pasan enseguida a quien sigue jugando. También los apagados: en una marioneta, apagado es lo
+            // último que dijo quien la movía, y si ese ya no juega nadie lo cambiaría (cada PC creía que lo movía el otro)
             var current = ControllerOf(enemy, roomOwner);
             var currentDown = Features.PartyState.IsInactive(current);
+            if (!enemy.Root.activeInHierarchy && !currentDown) {
+                continue;
+            }
             var interval = enemy.Health.hp >= BossHp ? BossSwitchInterval : SwitchInterval;
             if (now - enemy.LastSwitch < interval && !currentDown) {
                 continue;
@@ -2218,6 +2234,32 @@ internal sealed class EnemySync {
             }
         }
 
+        SendControlOut();
+    }
+
+    /// <summary>
+    /// El reparto entero del dueño de la sala, a todos (cada 2 s si hay alguien más). Quien lo tiene igual no hace nada;
+    /// quien no, pasa a moverlo o lo suelta como con un cambio normal.
+    /// </summary>
+    private void ResendControllers() {
+        if (!OthersInScene()) {
+            return;
+        }
+
+        var roomOwner = _session.LocalId;
+        _controlOut.Clear();
+        foreach (var enemy in _enemies) {
+            if (enemy.Spawned || enemy.Root == null || enemy.Health == null || enemy.Health.isDead) {
+                continue;
+            }
+
+            _controlOut.Add((enemy.Id, ControllerOf(enemy, roomOwner)));
+        }
+
+        SendControlOut();
+    }
+
+    private void SendControlOut() {
         for (var start = 0; start < _controlOut.Count; start += MaxEntriesPerMessage) {
             var count = Math.Min(MaxEntriesPerMessage, _controlOut.Count - start);
             var writer = _session.Begin(EnemyControl);
@@ -4393,6 +4435,8 @@ internal sealed class EnemySync {
         // Alguien entra en la sala del dueño: le llega qué está muerto y la vida de cada uno
         if (player.Scene == _scene && _scene.Length > 0 && _session.IsLocalSceneOwner) {
             _sendSnapshot = true;
+            // Y el reparto en cuanto haya repasado la sala
+            _nextControlResync = Math.Min(_nextControlResync, Time.unscaledTime + 1.5f);
         }
 
         // Y de cada enemigo que mueve este PC, qué objetos de la arena tiene encendidos
@@ -4734,9 +4778,22 @@ internal sealed class EnemySync {
 
     public int EffectsPlayed { get; private set; }
 
+    /// <summary>Jugadores caídos o en pausa (no mueven enemigos), para el modo de prueba.</summary>
+    private string DescribeInactive() {
+        var text = new StringBuilder();
+        foreach (var player in _session?.Players ?? Array.Empty<SessionPlayer>()) {
+            if (Features.PartyState.IsInactive(player.Id)) {
+                text.Append(text.Length > 0 ? "," : string.Empty).Append(player.Id);
+            }
+        }
+
+        return text.ToString();
+    }
+
     public IEnumerable<string> Describe() {
         yield return $"efectos de golpes ajenos={HitFxPlayed} efectos de marionetas={EffectsPlayed} " +
-                     $"fsm con sonido={_soundFsms.Count}";
+                     $"fsm con sonido={_soundFsms.Count} sala={_scene} dueño={_session?.OwnerOf(_scene)} " +
+                     $"inactivos={DescribeInactive()}";
         foreach (var enemy in _enemies) {
             if (enemy.Root == null) {
                 yield return $"id={enemy.Id:x8} MUERTO (ya no existe)";
