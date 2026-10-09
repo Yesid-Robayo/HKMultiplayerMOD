@@ -967,12 +967,35 @@ internal sealed class FsmStateSync {
             }
 
             foreach (var action in fsmState.Actions) {
-                if (action.Enabled && (PlayerDataActions.Contains(action.GetType().Name) || !item.Encounter && TouchesHero(action))) {
+                if (action.Enabled && (PlayerDataActions.Contains(action.GetType().Name) && !SetsOwnField(item, action) ||
+                                       !item.Encounter && TouchesHero(action))) {
                     action.Enabled = false;
                     DisabledActions.Add(action);
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// En un encuentro con diálogo, lo que pone un dato propio de cada jugador (no llega por el progreso compartido) se
+    /// hace también en la copia: "metGrimm" al conocer a Grimm, el amuleto que da, o la invulnerabilidad y la pausa
+    /// desactivada durante la presentación. Si no, quien lo veía desde la copia seguía sin haberlo conocido y la
+    /// siguiente vez su Grimm empezaba por el primer encuentro mientras el del otro empezaba el combate. Solo los que
+    /// ponen un valor: sumar o restar se haría dos veces si el dato también fuera compartido.
+    /// </summary>
+    private static bool SetsOwnField(Tracked item, FsmStateAction action) {
+        if (!item.Encounter) {
+            return false;
+        }
+
+        var field = action switch {
+            HutongGames.PlayMaker.Actions.SetPlayerDataBool set => set.boolName?.Value,
+            HutongGames.PlayMaker.Actions.SetPlayerDataInt set => set.intName?.Value,
+            HutongGames.PlayMaker.Actions.SetPlayerDataFloat set => set.floatName?.Value,
+            HutongGames.PlayMaker.Actions.SetPlayerDataString set => set.stringName?.Value,
+            _ => null
+        };
+        return !string.IsNullOrEmpty(field) && World.CharacterData.IsCharacterField(field);
     }
 
     /// <summary>
@@ -1037,6 +1060,14 @@ internal sealed class FsmStateSync {
                 !IsController(item)) {
                 TakeControl(item, $"{fsmEvent.Name}: su caballero empieza el encuentro");
                 return true;
+            }
+
+            // Ya empezado en otro PC, lo que le manden aquí otros objetos (el Grimmchild de este jugador que llega a
+            // Grimm con ABSORB END) no lo hace avanzar ni le quita el control a quien lo lleva: su siguiente estado llega
+            // de allí. Si no, cuando el Grimmchild de la copia llegaba antes, los dos PCs se quitaban el control a la vez
+            // y el encuentro se quedaba en "Call Child" en los dos
+            if (sender != null && sender != fsm && fsmEvent.Name != "FINISHED" && !IsController(item)) {
+                return false;
             }
         }
 
