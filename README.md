@@ -4,7 +4,8 @@ Mod cooperativo para **Hollow Knight 1.5.12620** (la versión actual de Steam, U
 coop y su compañero se une con la dirección del host y el código de la partida: comparten el mundo, se ven en tiempo
 real y pelean juntos contra los mismos enemigos y jefes.
 
-Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más). El diseño detallado está en
+Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más). En qué punto está el trabajo y qué
+sigue: [docs/estado.md](docs/estado.md). El diseño detallado está en
 [docs/arquitectura.md](docs/arquitectura.md).
 
 **Versión actual: 0.16.1** · Hitos M1 a M4 terminados (ver [Estado](#estado)).
