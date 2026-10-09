@@ -31,6 +31,7 @@ public static partial class Program {
         Run("Fiable: todo llega, una vez y en orden (20% de pérdida y desorden)", ReliableInOrderUnderLoss);
         Run("No fiable: llega lo que no se pierde, sin duplicados", UnreliableArrives);
         Run("Datos grandes: 13 MB íntegros con 5% de pérdida", LargeTransfer);
+        Run("Datos grandes de baja prioridad: a su ritmo y sin retrasar los mensajes", LowPriorityLargeTransfer);
         Run("Paquetes repetidos (reenvío malicioso): se ignoran", ReplayIgnored);
         Run("Desconexión avisada", DisconnectNotified);
         Run("Memoria creada por paquete en régimen estable", SteadyStateAllocations);
@@ -209,6 +210,40 @@ public static partial class Program {
         using var sha = SHA256.Create();
         Assert(sha.ComputeHash(pair.ServerListener.Large[0]).SequenceEqual(sha.ComputeHash(data)), "datos distintos");
         Console.Write($"[{watch.Elapsed.TotalSeconds:0.0} s, {data.Length / 1048576.0 / watch.Elapsed.TotalSeconds:0.0} MB/s] ");
+    }
+
+    private static void LowPriorityLargeTransfer() {
+        var pair = new Pair();
+        pair.Network.Latency = 0.03;
+        pair.ConnectOrFail();
+        var data = new byte[2 * 1024 * 1024];
+        new Random(11).NextBytes(data);
+        var watch = Stopwatch.StartNew();
+        pair.Client.Connection.SendLarge(9, data, data.Length, true);
+        // Mientras va la skin, un evento cada 50 ms: ninguno debe tardar mucho más que la latencia de la red
+        var sentAt = new Dictionary<uint, double>();
+        var worst = 0.0;
+        uint next = 0;
+        var seen = 0;
+        while (pair.ServerListener.Large.Count == 0 && watch.Elapsed.TotalSeconds < 30) {
+            var writer = pair.Client.Connection.BeginReliable();
+            writer.WriteByte(20);
+            writer.WriteUInt(next);
+            pair.Client.Connection.EndMessage();
+            sentAt[next++] = NetPeer.Now;
+            pair.Pump(() => false, 0.05);
+            for (; seen < pair.ServerListener.Reliable.Count; seen++) {
+                worst = Math.Max(worst, NetPeer.Now - sentAt[pair.ServerListener.Reliable[seen]]);
+            }
+        }
+
+        Assert(pair.ServerListener.Large.Count == 1, "no llegó entera");
+        using var sha = SHA256.Create();
+        Assert(sha.ComputeHash(pair.ServerListener.Large[0]).SequenceEqual(sha.ComputeHash(data)), "datos distintos");
+        var rate = data.Length / watch.Elapsed.TotalSeconds;
+        Assert(rate < NetConnection.LowPriorityBytesPerSecond * 1.3, $"demasiado rápida: {rate / 1048576:0.00} MB/s");
+        Assert(worst < 0.25, $"un mensaje tardó {worst * 1000:0} ms");
+        Console.Write($"[{watch.Elapsed.TotalSeconds:0.0} s, {rate / 1048576.0:0.00} MB/s, mensaje más lento {worst * 1000:0} ms] ");
     }
 
     private static void ReplayIgnored() {

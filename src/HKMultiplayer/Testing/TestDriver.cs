@@ -135,7 +135,9 @@ internal sealed class TestDriver : MonoBehaviour {
                 break;
             case "sdset":
                 // sdset <sala> <id>: marca un objeto de sala como activado (como al romper una pared)
-                SceneData.instance.SaveMyState(new PersistentBoolData { sceneName = args[1], id = args[2], activated = true });
+                SceneData.instance.SaveMyState(new PersistentBoolData {
+                    sceneName = args[1], id = string.Join(" ", args.Skip(2)), activated = true
+                });
                 break;
             case "sdclear":
                 // sdclear <sala> <id>: vuelve a dejar sin activar un objeto de sala (p. ej. revivir un jefe para probarlo)
@@ -297,7 +299,8 @@ internal sealed class TestDriver : MonoBehaviour {
                     var components = string.Join(",", found.GetComponents<Component>().Select(c => c.GetType().Name));
                     var fsms = string.Join(",", found.GetComponents<PlayMakerFSM>().Select(f => f.FsmName + ":" + f.ActiveStateName));
                     Log.Info($"{Tag}obj {found.name} padre={(found.parent != null ? found.parent.name : "-")}{(found.gameObject.activeInHierarchy ? "" : " (inactivo)")} [{components}] fsm=[{fsms}] " +
-                             $"pos=({found.position.x:0.0},{found.position.y:0.0})");
+                             $"pos=({found.position.x:0.0},{found.position.y:0.0})" +
+                             (found.GetComponent<Collider2D>() is { } box ? $" caja={box.bounds.min:F1}-{box.bounds.max:F1}" : string.Empty));
                 }
 
                 break;
@@ -677,6 +680,123 @@ internal sealed class TestDriver : MonoBehaviour {
             case "party":
                 // Estado de revivir: caído, cuerpo, viaje, progreso y estado de cada jugador
                 Log.Info($"{Tag}revivir {runner.Revive.Describe()}");
+                break;
+            case "partystate":
+                // Estado de cada jugador según el host (en pie, caído, en cinemática, en sueño)
+                Log.Info($"{Tag}estado {runner.Party.DescribeAll()}");
+                break;
+            case "cutscenes":
+                // Cinemática compartida en curso, votos, quién fue llevado y (en el host) quién ve cada una
+                Log.Info($"{Tag}cinemáticas {runner.Cutscenes.Describe()}");
+                break;
+            case "dreams":
+                // Sueños: si está en uno y las entradas a sueños de la sala con su estado
+                Log.Info($"{Tag}sueños {runner.Dreams.Describe()}");
+                break;
+            case "dreamhit":
+                // dreamhit [encender]: como golpear con el aguijón onírico la entrada a un sueño de la sala; con
+                // "encender", si ninguna está encendida se enciende la primera (luego otro dreamhit la golpea)
+                Log.Info($"{Tag}golpe onírico: {(runner.Dreams.TestDreamHit(args.Length > 1) ? "sí" : "no hay entrada")}");
+                break;
+            case "presentation":
+                // Presentación de jefe: si este PC avisó, quién tiene quieto al caballero local
+                Log.Info($"{Tag}presentación {runner.Presentations.Describe()}");
+                break;
+            case "cinematic":
+                // Reproductores de vídeo de la escena: si su vídeo va, dónde se dibuja y cómo está el fundido de la cámara
+                var flagsAll = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                foreach (var player in FindObjectsByType<CinematicPlayer>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+                    var video = player.GetComponents<Component>().FirstOrDefault(c => c.GetType().Name == "VideoPlayer");
+                    var meshRenderer = player.GetComponent<MeshRenderer>();
+                    Log.Info($"{Tag}vídeo {player.name} tipo={player.videoType} activo={player.isActiveAndEnabled} " +
+                             $"disparado={typeof(CinematicPlayer).GetField("videoTriggered", flagsAll)?.GetValue(player)} " +
+                             $"reproduciendo={typeof(CinematicPlayer).GetField("isPlaying", flagsAll)?.GetValue(player)} " +
+                             $"malla={(meshRenderer != null && meshRenderer.enabled)} unity={(video != null ? $"{video.GetType().GetProperty("isPlaying")?.GetValue(video)} t={video.GetType().GetProperty("time")?.GetValue(video)}" : "-")} " +
+                             $"pos={player.transform.position} capa={player.gameObject.layer}");
+                }
+
+                var cams = GameCameras.instance;
+                Log.Info($"{Tag}cámara pos={cams?.mainCamera?.transform.position} fundido={cams?.cameraFadeFSM?.ActiveStateName} " +
+                         $"hud={cams?.hudCamera?.isActiveAndEnabled} estado={GameManager.instance.gameState} " +
+                         $"ui={UIManager.instance?.uiState} omitir={GameManager.instance.inputHandler.skipMode}");
+                break;
+            case "skins":
+                // Skin propia, las cargadas, la que lleva cada uno y qué textura dibuja cada caballero
+                Log.Info($"{Tag}skins {runner.Skins.Describe()}");
+                break;
+            case "skin":
+                // skin <nombre de la carpeta>|normal: elige la skin propia (como en el panel)
+                var skinName = string.Join(" ", args.Skip(1));
+                HKMultiplayer.Game.Features.Skins.SelectLocalSkin(skinName == "normal" ? string.Empty : skinName);
+                break;
+            case "skinshow":
+                // skinshow si|no: ver o no las skins de los demás en este PC
+                HKMultiplayer.Game.Features.Skins.SetShowOthers(args.Length < 2 || args[1] != "no");
+                break;
+            case "charmupdate":
+                // Como cambiar de amuletos en un banco: el caballero aplica los equipados (p. ej. sale Grimmchild)
+                hero.CharmUpdate();
+                PlayMakerFSM.BroadcastEvent("CHARM EQUIP CHECK");
+                PlayMakerFSM.BroadcastEvent("CHARM INDICATOR CHECK");
+                break;
+            case "senders":
+                // senders <evento>: FSM de la sala (también inactivas) que mandan ese aviso, con su estado y su destino
+                var wanted = string.Join(" ", args.Skip(1));
+                foreach (var fsm in FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+                    foreach (var state in fsm.FsmStates) {
+                        foreach (var action in state.Actions) {
+                            var sent = action switch {
+                                HutongGames.PlayMaker.Actions.SendEventByName byName => byName.sendEvent?.Value,
+                                HutongGames.PlayMaker.Actions.SendEvent plain => plain.sendEvent?.Name,
+                                _ => null
+                            };
+                            if (sent == wanted) {
+                                Log.Info($"{Tag}manda {fsm.gameObject.name}/{fsm.FsmName} [{state.Name}] {action.GetType().Name} " +
+                                         $"actual={fsm.ActiveStateName} activo={fsm.gameObject.activeInHierarchy}");
+                            }
+                        }
+                    }
+                }
+
+                break;
+            case "langget":
+                // langget <hoja> <clave>: texto del juego en su idioma (p. ej. "Titles FALSE_KNIGHT_MAIN")
+                Log.Info($"{Tag}texto {args[1]}/{args[2]}=" + (TeamCherry.Localization.Language.Has(args[2], args[1])
+                    ? TeamCherry.Localization.Language.Get(args[2], args[1]) : "(no existe)"));
+                break;
+            case "covers":
+                // Lo que se dibuja delante de la cámara y la tapa (grande, sobre su centro): máscaras de zonas ocultas...
+                var view = GameCameras.instance.mainCamera.transform.position;
+                foreach (var drawn in FindObjectsByType<Renderer>(FindObjectsSortMode.None)) {
+                    var area = drawn.bounds;
+                    if (!drawn.enabled || area.size.x < 4f || area.size.y < 3f || view.x < area.min.x || view.x > area.max.x ||
+                        view.y < area.min.y || view.y > area.max.y) {
+                        continue;
+                    }
+
+                    var fsms = string.Join(",", drawn.GetComponents<PlayMakerFSM>().Select(f => f.FsmName + ":" + f.ActiveStateName));
+                    Log.Info($"{Tag}tapa {drawn.name} padre={(drawn.transform.parent != null ? drawn.transform.parent.name : "-")} " +
+                             $"tipo={drawn.GetType().Name} z={drawn.transform.position.z:0.0} caja={area.min:F1}-{area.max:F1} " +
+                             $"color={(drawn is SpriteRenderer sprite ? sprite.color.ToString() : "-")} fsm=[{fsms}] " +
+                             $"comp=[{string.Join(",", drawn.GetComponents<Component>().Select(c => c.GetType().Name))}]");
+                }
+
+                break;
+            case "transitions":
+                // FSM de la sala con un cambio de sala (BeginSceneTransition): a qué sala, por qué puerta y cómo se ve
+                foreach (var fsm in FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+                    foreach (var state in fsm.FsmStates) {
+                        foreach (var action in state.Actions) {
+                            if (action is HutongGames.PlayMaker.Actions.BeginSceneTransition transition) {
+                                Log.Info($"{Tag}cambio {fsm.gameObject.name}/{fsm.FsmName} [{state.Name}] -> " +
+                                         $"{transition.sceneName.Value}/{transition.entryGateName.Value} " +
+                                         $"{transition.visualization.Value} actual={fsm.ActiveStateName} " +
+                                         $"activo={fsm.gameObject.activeInHierarchy}");
+                            }
+                        }
+                    }
+                }
+
                 break;
             case "focus":
                 // focus <segundos>: como mantener Focus (para revivir)

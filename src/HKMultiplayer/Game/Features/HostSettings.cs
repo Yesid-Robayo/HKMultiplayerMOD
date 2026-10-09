@@ -107,11 +107,19 @@ internal sealed class HostSettings {
 
     public static readonly HostOption GeoGiftsOption = new(15, "geoGifts", "Regalar geo", YesNoValues, YesNo, 0);
 
+    /// <summary>
+    /// Cómo se salta una cinemática compartida: cuando todos los que la ven votan saltarla, o en cuanto la salta
+    /// cualquiera (para todos).
+    /// </summary>
+    public static readonly HostOption SkipCutscenesOption = new(16, "skipCutscenes", "Saltar cinemáticas",
+        new[] { 0f, 1f }, new[] { "Votación", "Cualquiera" }, 0);
+
     /// <summary>Todos, en el orden del mensaje y del panel.</summary>
     public static readonly HostOption[] Options = {
         BossHealthOption, EnemyHealthOption, PartnerInRoomOption, DamageTakenOption,
         ReviveOption, ReviveSecondsOption, ReviveSoulOption, ReviveMasksOption, ReviveInvulnerableOption, ReviveAtBenchOption,
-        ShowNamesOption, ShowPartnerHealthOption, ShowArrowsOption, ShowNoticesOption, ShowBossBarOption, GeoGiftsOption
+        ShowNamesOption, ShowPartnerHealthOption, ShowArrowsOption, ShowNoticesOption, ShowBossBarOption, GeoGiftsOption,
+        SkipCutscenesOption
     };
 
     /// <summary>Posición elegida de cada ajuste.</summary>
@@ -159,6 +167,9 @@ internal sealed class HostSettings {
     public bool ShowNotices => Flag(ShowNoticesOption);
     public bool ShowBossBar => Flag(ShowBossBarOption);
     public bool AllowGeoGifts => Flag(GeoGiftsOption);
+
+    /// <summary>Una cinemática compartida se salta en cuanto la salta cualquiera (si no, votan todos).</summary>
+    public bool AnyoneSkipsCutscenes => Flag(SkipCutscenesOption);
 
     // =====================================================================================================
     // Red

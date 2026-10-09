@@ -259,10 +259,20 @@ internal sealed class PartnerHud {
         // Estado: caído, o la zona si está en otra (el texto solo se rehace al cambiar)
         var downed = member.Status == PlayerStatus.Downed;
         var localZone = (int) Vitals.CurrentZone();
-        var statusKey = downed ? 1000 : vitals != null && vitals.Zone != localZone && member.Player?.Scene != scene ? vitals.Zone : -2;
+        var elsewhere = member.Player?.Scene != scene;
+        var statusKey = downed ? 1000
+            : elsewhere && member.Status == PlayerStatus.Cutscene ? 1001
+            : elsewhere && member.Status == PlayerStatus.Dream ? 1002
+            : vitals != null && vitals.Zone != localZone && elsewhere ? vitals.Zone : -2;
         if (statusKey != slot.StatusKey) {
             slot.StatusKey = statusKey;
-            slot.Status.text = statusKey == 1000 ? "caído" : statusKey >= 0 ? $"en {Zones.Name((byte) statusKey)}" : string.Empty;
+            slot.Status.text = statusKey switch {
+                1000 => "caído",
+                1001 => "viendo una cinemática",
+                1002 => "en un sueño",
+                >= 0 => $"en {Zones.Name((byte) statusKey)}",
+                _ => string.Empty
+            };
         }
 
         if (vitals == null) {

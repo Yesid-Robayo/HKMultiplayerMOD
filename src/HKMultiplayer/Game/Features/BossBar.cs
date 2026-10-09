@@ -199,8 +199,17 @@ internal sealed class BossBar {
         return viewport.z > 0f && viewport.x > -0.2f && viewport.x < 1.2f && viewport.y > -0.2f && viewport.y < 1.2f;
     }
 
-    /// <summary>Nombre del jefe como en su entrada del diario; si no tiene, el del objeto limpio.</summary>
+    /// <summary>
+    /// Nombre del jefe en el idioma del juego: el título con el que el juego lo presenta (hoja "Titles"); si no tiene,
+    /// el de su entrada del diario (hay jefes con la entrada de otro: el Rey de las Pesadillas lleva la de Hornet); y si
+    /// tampoco, el del objeto limpio.
+    /// </summary>
     private static string BossName(HealthManager health) {
+        var title = TitleName(health);
+        if (title != null) {
+            return title;
+        }
+
         var deathEffects = health.GetComponent<EnemyDeathEffects>();
         var dataName = deathEffects != null ? PlayerDataNameField?.GetValue(deathEffects) as string : null;
         if (!string.IsNullOrEmpty(dataName)) {
@@ -229,6 +238,74 @@ internal sealed class BossBar {
         }
 
         return builder.ToString().Trim();
+    }
+
+    private const string TitlesSheet = "Titles";
+
+    /// <summary>
+    /// Nombre del jefe en el idioma del juego tal como sale en su presentación: la lógica del jefe (o lo que cuelga de él)
+    /// lleva la clave de su título ("FALSE_KNIGHT", "FAILED_CHAMPION"...) en un texto de sus FSM; el título es esa clave
+    /// con "_SUPER" (la parte pequeña de encima), "_MAIN" (la grande) y "_SUB" (la de debajo) en la hoja "Titles". Null
+    /// si no se encuentra.
+    /// </summary>
+    private static string TitleName(HealthManager health) {
+        foreach (var fsm in health.GetComponentsInChildren<PlayMakerFSM>(true)) {
+            foreach (var variable in fsm.FsmVariables.StringVariables) {
+                var found = TitleFor(variable.Value);
+                if (found != null) {
+                    return found;
+                }
+            }
+
+            foreach (var state in fsm.FsmStates) {
+                foreach (var action in state.Actions) {
+                    foreach (var field in action.GetType().GetFields(BindingFlags.Public | BindingFlags.Instance)) {
+                        if (field.FieldType == typeof(HutongGames.PlayMaker.FsmString) &&
+                            field.GetValue(action) is HutongGames.PlayMaker.FsmString text) {
+                            var found = TitleFor(text.Value);
+                            if (found != null) {
+                                return found;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Si su lógica no la lleva, la clave sale a veces de su nombre ("Grimm Boss" → "GRIMM"): las palabras en
+        // mayúsculas unidas con "_", de la más larga a la más corta
+        var words = Regex.Replace(health.gameObject.name, @"\(Clone\)|\(\d+\)|\d+", " ").ToUpperInvariant()
+            .Split(new[] { ' ', '_', '-' }, System.StringSplitOptions.RemoveEmptyEntries);
+        for (var length = words.Length; length > 0; length--) {
+            for (var start = 0; start + length <= words.Length; start++) {
+                var found = TitleFor(string.Join("_", words, start, length));
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string TitleFor(string key) {
+        if (string.IsNullOrEmpty(key) || key.Length > 40 || key.IndexOf(' ') >= 0 || !GameText.Has(key + "_MAIN", TitlesSheet)) {
+            return null;
+        }
+
+        // El título va en partes: la pequeña de encima, la grande y la pequeña de debajo ("Campeón" / "Fallido")
+        var main = GameText.Get(key + "_MAIN", TitlesSheet);
+        if (string.IsNullOrEmpty(main) || main.Contains("#!#")) {
+            return null;
+        }
+
+        return (TitlePart(key + "_SUPER") + " " + main + " " + TitlePart(key + "_SUB")).Replace("<br>", " ").Trim();
+    }
+
+    /// <summary>Parte pequeña del título (encima o debajo de la grande), vacía si no tiene.</summary>
+    private static string TitlePart(string key) {
+        var part = GameText.Has(key, TitlesSheet) ? GameText.Get(key, TitlesSheet) : string.Empty;
+        return string.IsNullOrEmpty(part) || part.Contains("#!#") ? string.Empty : part;
     }
 
     /// <summary>Resumen para el modo de prueba.</summary>

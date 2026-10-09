@@ -6,7 +6,7 @@
     <PropertyGroup>
         <AssemblyName>HKMultiplayer</AssemblyName>
         <RootNamespace>HKMultiplayer</RootNamespace>
-        <AssemblyVersion>0.16.2.0</AssemblyVersion>
+        <AssemblyVersion>0.17.0.0</AssemblyVersion>
         <TargetFramework>net472</TargetFramework>
         <LangVersion>latest</LangVersion>
         <Nullable>disable</Nullable>
@@ -32,6 +32,7 @@
         <Reference Include="$(References)\UnityEngine.AudioModule.dll" Private="False" />
         <Reference Include="$(References)\UnityEngine.ParticleSystemModule.dll" Private="False" />
         <Reference Include="$(References)\UnityEngine.IMGUIModule.dll" Private="False" />
+        <Reference Include="$(References)\UnityEngine.ImageConversionModule.dll" Private="False" />
         <Reference Include="$(References)\UnityEngine.InputLegacyModule.dll" Private="False" />
         <Reference Include="$(References)\UnityEngine.Physics2DModule.dll" Private="False" />
         <Reference Include="$(References)\UnityEngine.ScreenCaptureModule.dll" Private="False" />
