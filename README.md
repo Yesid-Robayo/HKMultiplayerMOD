@@ -67,11 +67,24 @@ Se ven y se oyen las acciones del compañero con los mismos efectos del juego, a
 - **HUD del compañero** arriba a la derecha: su nombre, sus máscaras (llenas, vacías y azules, igual que su HUD), un
   orbe con su alma y si está caído o en otra zona. Sus máscaras salen sobre su cabeza unos segundos al cambiarle la
   vida, y hay flechas en el borde de la pantalla hacia el compañero y los cuerpos que no se ven.
-- **Barra del jefe** abajo, con su nombre.
+- **Barra del jefe** abajo, con su nombre en el idioma del juego (el título con el que el juego lo presenta).
+- **Cinemáticas compartidas**: los finales, los créditos y Mr. Mushroom se ven a la vez aunque el compañero esté en
+  otra sala. Se saltan cuando todos pulsan saltar ("Esperando a X para saltar 1/2"; el host puede elegir que baste
+  con uno). Tras el final, todos vuelven a su banco y la partida sigue.
+- **Presentaciones de jefe**: mientras un jefe se presenta, los dos caballeros se quedan quietos y recuperan el control
+  a la vez.
+- **Sueños compartidos**: si uno entra en un sueño con el aguijón onírico, el compañero de la misma sala entra con él
+  (mismo destello). Al ganar salen los dos; quien cae al vacío o muere sale solo (y dentro se puede revivir). Jefes de
+  sueño, Rey de las Pesadillas y Radiancia (el compañero entra aunque no tenga el Corazón del Vacío).
+- **Grimmchild**: si uno lo recibe, el otro también.
+- **Skins** compatibles con CustomKnight (*Pausa › Multijugador › Skin*): cada uno elige la suya (carpeta en
+  `Mods/HKMultiplayer/Skins` o las de CustomKnight) y los demás la ven aunque no la tengan: cuerpo, hechizos y
+  efectos; el HUD con la skin lo ve su dueño. Se envían por la red del mod en segundo plano (unos 0,5 MB/s, sin
+  retrasar golpes); se puede desactivar ver las de los demás.
 - **Ajustes de la partida** que decide el host (*Pausa › Multijugador › Ajustes de la partida*), guardados en cada
   mundo; los invitados los ven sin poder cambiarlos: vida de los jefes (1,5× por defecto) y de los enemigos, solo con
   el compañero en la sala, daño recibido, revivir (sí/no, tiempo, alma, máscaras, invulnerabilidad, en el banco),
-  nombres, vida del compañero, flechas, avisos, barra del jefe y regalar geo.
+  nombres, vida del compañero, flechas, avisos, barra del jefe, regalar geo y cómo se saltan las cinemáticas.
 - **Compañeros** (*Pausa › Multijugador › Compañeros*): la vida y el alma de cada uno, **dar geo**, **desatascarse** (al
   último suelo seguro) y **recargar la sala**.
 
@@ -167,11 +180,11 @@ El paquete para jugadores incluye la Modding API, el mod y un instalador:
 | M2 | Mundo compartido (progreso, objetos persistentes, unirse) | Hecho |
 | M3 | Enemigos, jefes y objetos de sala | Hecho |
 | M4 | Efectos del otro jugador (tajos, hechizos, dash, curación) | Hecho |
-| M5 | Revivir, sombras compartidas, HUD del compañero y barra del jefe, ajustes del host, cinemáticas compartidas, sueños, skins | En curso: hecha la primera parte (hasta las sombras) |
+| M5 | Revivir, sombras compartidas, HUD del compañero y barra del jefe, ajustes del host, cinemáticas compartidas, sueños, skins | Hecho (algunos jefes sin probar en vivo) |
 | M6 | Instalador y paquete con el nombre nuevo | Pendiente |
 
-De M5 quedan las cinemáticas compartidas, los sueños compartidos y sus jefes (Grimm, jefes de sueño, Rey de las
-Pesadillas, Hollow Knight y la Radiancia) y las skins. La lista completa de pendientes está al final de la arquitectura.
+De M5 quedan sin probar en vivo enteros el Tirano de Almas (su segunda fase), Grimm, Hollow Knight y la Radiancia. La
+lista completa de pendientes está al final de la arquitectura.
 
 ---
 

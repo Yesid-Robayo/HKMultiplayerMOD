@@ -245,7 +245,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 Diseño aprobado en [m5-diseno.md](m5-diseno.md). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
-mensajes nuevos van del 73 al 86. La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
+mensajes nuevos van del 73 al 97. La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
 juego (16:9; con otra proporción el juego deja franjas) y escala con su alto como el HUD del juego; las piezas se crean
 una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
 
@@ -285,6 +285,46 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   en su sala, se crea un momento junto a él).
 - **Compañeros** (`PartyActions`, mensajes 85 y 86): regalo de geo validado por el host (o devuelto), desatascarse y
   recargar la sala al quitar la pausa.
+- **Lo que hace cada uno** (`PartyState`, mensaje 91): cada jugador informa al host si está en una cinemática
+  compartida o en un sueño; es su estado mientras no está caído (al revivir en un sueño vuelve a "en sueño"). El
+  mini-HUD lo muestra si está en otra sala.
+- **Cinemáticas compartidas** (`SharedCutscenes`, mensajes 87 a 90): los finales, los créditos, Mr. Mushroom y las
+  pantallas con las que acaba el final (partida completada, Alma de Acero). Quien entra en una lo dice al host, que
+  lleva a los demás (con un cambio de sala, esperando si están en pausa o cambiando de sala; un caído no va). Al
+  llevado, la malla del vídeo (`CinematicPlayer`) quedaba donde estaba su cámara en la sala anterior y se veía negro: se
+  vuelve a colocar delante de la cámara como lo hace el juego. Saltar (`GameManager.SkipCutscene`) es un voto: el host
+  manda saltar a todos cuando votaron todos los que la ven (o con uno, si así lo eligió en "Saltar cinemáticas") y
+  todos ven "Esperando a X para saltar 1/2"; si el que faltaba se va, se salta. Al terminar
+  (`CutsceneHelper.DoSceneLoad`) la siguiente del final sigue; el final de la secuencia lleva a todos a su banco
+  (`ContinueGame`) en lugar del menú, y quien fue llevado a una que acaba en una sala de juego vuelve a donde estaba
+  (`SceneTravel`).
+- **Presentaciones de jefe** (`BossPresentation`, mensaje 92): `RelinquishControl` llamado desde la lógica de un jefe
+  (enemigo o lo que cuelga de él) o de un controlador de combate compartido, con un jefe vivo en la sala, avisa a la
+  sala; los demás caballeros se quedan quietos hasta que esa lógica devuelve el control (como mucho 30 s, y se sueltan
+  si quien presenta sale de la sala). Si su propia lógica también lo quitó, se espera a las dos.
+- **Sueños compartidos** (`DreamSync`, mensajes 93 y 94): al cargar una sala se buscan las FSM con un cambio de sala de
+  tipo sueño (`BeginSceneTransition` con `Dream` o `GrimmDream`: los cuerpos de los jefes, Grimm dormido, el Hollow
+  Knight vencido); cada frame se mira si alguna sale de su reposo, lo que significa que el aguijón de este jugador la
+  golpeó, y se avisa a la sala con el aviso con el que salió (`DREAM HIT`). En los demás PCs la misma FSM recibe ese
+  aviso: mismo destello, sala de vuelta y cambio de sala. Antes se pone la sala de vuelta (`dreamReturnScene`) del
+  llevado. Si la entrada no está encendida en ese PC (la de la Radiancia pide el Corazón del Vacío), se entra directo al
+  mismo sueño. Al salir de un sueño con jefe sin caer al vacío (`Dream Fall Catcher`) ni morir, se avisa a la sala y los
+  que siguen dentro salen como el juego, por el estado `Leave Dream` de la FSM `Dream Nail` del caballero (quedan
+  tendidos y se levantan al pulsar); las demás salidas son de cada uno.
+- **Grimmchild** (`GrimmchildGift`, mensaje 95): el amuleto es de cada jugador pero su nivel y la Compañía son del
+  mundo; si uno lo recibe, los demás también.
+- **Skins** (`Skins`, mensajes 96 y 97, transferencia grande 3): compatibles con CustomKnight, como la 0.7.3 (con
+  `AtlasRepair` para las hojas antiguas del HUD y el geo). Cada uno anuncia su skin (nombre y huella SHA-256 de los
+  archivos que ven los demás) y quien no la tiene la pide al host, que la envía o se la pide a su dueño. Van por la
+  conexión cifrada del mod como transferencia grande de **baja prioridad** (`NetConnection`: cola aparte, solo sin otras
+  transferencias pendientes, a unos 0,5 MB/s y con como mucho 48 mensajes sin confirmar, así los golpes y eventos no
+  esperan detrás de la skin). Máximo 32 MB, solo PNG de hasta 4096x4096; la huella se comprueba en otro hilo y todo
+  queda en memoria. Cuerpo con un bloque de propiedades por renderer; hechizos, amuletos y HUD propios en los
+  materiales compartidos; efectos del compañero (sus copias bajo el avatar) con su skin. Crear la textura de una hoja de
+  4096 cuesta 0,15-0,25 s (el juego descomprime el PNG en el hilo principal): se hace en pausa o al cambiar de sala (si
+  no llega ese momento en 60 s, fuera de un combate de jefe). Cada PC elige si ve las skins de los demás.
+- **Barra del jefe**: el nombre es el título con el que el juego presenta al jefe (hoja `Titles`, partes `_SUPER`,
+  `_MAIN` y `_SUB`), buscado en los textos de sus FSM o en las palabras de su nombre; si no, el de su diario.
 
 ## Pruebas
 
@@ -306,6 +346,10 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   (vida llena por la vía del juego: `pdset maxHealth` no redibuja el HUD del juego y el mini-HUD lo mostraría distinto),
   `soul <n>`, `mppage <partida|ajustes|ajustes2|compañeros>`, `mpoption <etiqueta>|<pasos>`, `mpoptions`,
   `spriteof <objeto>`, `sprites <colección>|<texto>`, `collections <texto>`, `hudsprite`, `hudrot` y `clips <texto>`.
+  Segunda parte de M5: `partystate`, `cutscenes`, `cinematic` (vídeos de la escena, dónde se dibujan y el fundido),
+  `presentation`, `dreams`, `dreamhit [encender]`, `transitions` (cambios de sala de las FSM de la sala), `senders
+  <evento>`, `covers` (lo que tapa la cámara), `langget <hoja> <clave>`, `charmupdate`, `skins`, `skin <nombre>|normal`
+  y `skinshow si|no`; `findobj` muestra la caja del colisionador y `sdset` acepta ids con espacios.
   `fsmdump` muestra también las variables de objeto y cada efecto que reproduce una marioneta se registra
   ("efecto de enemigo ...").
 - Efectos del otro jugador: `burst <nombre> <n> <segundos>` hace capturas seguidas (las órdenes se leen cada medio
@@ -354,14 +398,26 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   Shroom y Defender's Crest al curarse, Thorns of Agony, Sharp Shadow (su golpe; el sonido sí), la onda en pantalla de
   los gritos, la muerte del compañero (su animación ya se ve en su sprite, sin la cabeza ni el aguijón que salen
   despedidos), los aterrizajes fuertes y el destello parpadeante de invulnerabilidad.
-- **M5**: hecha la primera parte (estado de cada jugador, ajustes del host y panel, HUD del compañero y barra del jefe,
-  revivir y sombras), probada en vivo con dos copias. Queda la segunda: cinemáticas compartidas, sueños compartidos y sus
-  jefes y skins. De la primera parte:
-  - El estado "en cinemática" y "en sueño" de `PartyState` existe pero aún no lo pone nadie (llega con la segunda parte).
-  - Caer en un sueño solo se permite con el compañero en el mismo sueño; "si caen los dos, despiertan los dos" sale de
-    la muerte normal del juego en un sueño, sin probar (hacen falta los sueños compartidos).
-  - Sin barras de vida de enemigos normales (el diseño solo pide la del jefe) ni opción "Saltar cinemáticas" en los
-    ajustes (llega con las cinemáticas). La página "Skin" del panel llega con las skins.
+- **M5**: hecho, probado en vivo con dos copias:
+  - Cinemáticas: los finales A, B y C, Mr. Mushroom, los créditos y las pantallas del final (el llevado ve el mismo
+    vídeo a la vez), votación y vuelta al banco. Los vídeos de los finales y Mr. Mushroom no dejan saltar la primera
+    vez (es del juego): la votación se probó en los créditos y en las pantallas del final.
+  - Sueños completos (entrada juntos, caída y muerte de cada uno, victoria y salida de los dos): Campeón Fallido, Kin
+    Perdido, Defensor Blanco (su mensaje del final espera a que cada uno pulse), Zote el Poderoso y el Rey de las
+    Pesadillas. La entrada directa a la Radiancia sin el Corazón del Vacío.
+  - Skins: POPKnight y Pale King, cada una en un PC, vistas en el otro (cuerpo y hechizos), el HUD propio y el envío
+    sin tirones ni retrasos de golpes.
+  Sin probar en vivo, o solo en parte:
+  - Tirano de Almas: entran juntos y la primera fase va bien; en la prueba automática la segunda no empezó (el suelo no
+    se rompió tras vencer la primera con golpes de prueba). Falta probarlo jugando.
+  - Grimm: M3 detecta su encuentro con diálogo, pero en la prueba la copia del PC que no lo controla se quedó en
+    "Call Child" (espera a que llegue su Grimmchild) y el diálogo del otro no avanzó. Es de `FsmStateSync` (M3), que se
+    cambia en paralelo: no se tocó. Grimmchild para los dos, sin probar en vivo.
+  - Hollow Knight: entrando por `left1` el combate no empezó (necesita la entrada desde el Atrio); su espera de M3, la
+    presentación compartida y el final compartido con el combate real quedan sin probar (el final A compartido sí,
+    entrando a la cinemática).
+  - Radiancia: solo la entrada (el combate y el final C, sin probar).
+  - Revivir con 3 o más jugadores.
   - No probado en vivo: revivir con 3 o más jugadores y el revivido parpadeando (la invulnerabilidad se pone con el
     `StartInvulnerable` del juego).
   Jefes que dependen de cinemáticas o de entrar juntos:
