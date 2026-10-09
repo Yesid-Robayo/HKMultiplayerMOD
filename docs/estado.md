@@ -51,6 +51,13 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
   ritmo rápido), Mark of Pride y Longnail (alcance), Shaman Stone y Spell Twister (hechizos), Dashmaster/Sprintmaster,
   y los acompañantes que atacan solos (crías de Glowing Womb, tejedoras de Weaversong, Grimmchild). Todo visual en el
   PC que mira; el daño lo hace el PC del dueño.
+- **Cinemáticas**: saltarlas solo cuando le dan los dos (voto 1/2, 2/2), sin bloquearse si uno se va.
+- **Pruebas extra para sincronizar al 100 %** (pedido del usuario): las dos a la vez entrando y saliendo de salas por
+  puertas distintas; bancos (sentarse uno con el otro en combate); viaje en ciervo y ascensores con los dos; tiendas y
+  NPC (cada uno lo suyo); recoger objetos individuales y geo; muerte, sombra y reaparición tras pinchos; entrar tarde
+  a una sala con combate, jefe o palanca a medias; salir y volver a unirse en mitad de un combate; red mala
+  (`netsim` con retraso y pérdida) en un jefe y en el Coliseo; el host en pausa; tres pasadas de las rutas seguidas
+  para ver fallos intermitentes.
 - **Pruebas finales**: agentes que pasen todas las rutas (`bash tools/run-routes.sh --pairs 2`) sobre la versión
   completa, con el PC sin otros juegos abiertos (la memoria va justa: cada copia ~1,1 GB; Edge y Discord ocupan mucho).
 - **M6**: `tools/package.sh` aún usa los nombres del mod anterior (HollowKnightCoop).
