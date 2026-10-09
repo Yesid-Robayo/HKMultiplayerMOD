@@ -186,7 +186,8 @@ setup_pair() {
 }
 
 # Salas que no son de juego (menús, cinemáticas)
-HK_NOT_PLAYABLE='^(|Pre_Menu_Intro|Menu_Title|Quit_To_Menu|BetaEnd|Knight_Pickup|Opening_Sequence|Cinematic_.*|End_.*)$'
+# (sin alternativa vacía: "^(|...)$" deja pasar cualquier sala con la regex de bash en Windows; la sala vacía se mira aparte)
+HK_NOT_PLAYABLE='^(Pre_Menu_Intro|Menu_Title|Quit_To_Menu|BetaEnd|Knight_Pickup|Opening_Sequence|Cinematic_.*|End_.*)$'
 
 # Espera a que la copia esté jugando en una sala normal; mientras tanto salta cinemáticas
 wait_playable() {
