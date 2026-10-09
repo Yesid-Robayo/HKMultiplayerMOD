@@ -3371,7 +3371,10 @@ internal sealed class EnemySync {
             }
 
             if (_byId.TryGetValue(id, out var enemy)) {
-                if (kind == HealthKind.Update && !enemy.Puppet) {
+                // La vida de uno que mueve este PC es la suya. Uno recién encontrado aún no es marioneta (lo será en
+                // PuppetDelay) aunque lo mueva otro: la foto de quien llega trae su vida y no se descarta (si no, quien
+                // entraba tarde veía con la vida entera a los enemigos ya heridos)
+                if (kind == HealthKind.Update && !enemy.Puppet && ControllerOf(enemy, _session.OwnerOf(_scene)) == _session.LocalId) {
                     continue;
                 }
 
