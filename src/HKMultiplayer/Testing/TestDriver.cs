@@ -673,6 +673,48 @@ internal sealed class TestDriver : MonoBehaviour {
                 // Estado de revivir: caído, cuerpo, viaje, progreso y estado de cada jugador
                 Log.Info($"{Tag}revivir {runner.Revive.Describe()}");
                 break;
+            case "partystate":
+                // Estado de cada jugador según el host (en pie, caído, en cinemática, en sueño)
+                Log.Info($"{Tag}estado {runner.Party.DescribeAll()}");
+                break;
+            case "cutscenes":
+                // Cinemática compartida en curso, votos, quién fue llevado y (en el host) quién ve cada una
+                Log.Info($"{Tag}cinemáticas {runner.Cutscenes.Describe()}");
+                break;
+            case "cinematic":
+                // Reproductores de vídeo de la escena: si su vídeo va, dónde se dibuja y cómo está el fundido de la cámara
+                var flagsAll = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                foreach (var player in FindObjectsByType<CinematicPlayer>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+                    var video = player.GetComponents<Component>().FirstOrDefault(c => c.GetType().Name == "VideoPlayer");
+                    var meshRenderer = player.GetComponent<MeshRenderer>();
+                    Log.Info($"{Tag}vídeo {player.name} tipo={player.videoType} activo={player.isActiveAndEnabled} " +
+                             $"disparado={typeof(CinematicPlayer).GetField("videoTriggered", flagsAll)?.GetValue(player)} " +
+                             $"reproduciendo={typeof(CinematicPlayer).GetField("isPlaying", flagsAll)?.GetValue(player)} " +
+                             $"malla={(meshRenderer != null && meshRenderer.enabled)} unity={(video != null ? $"{video.GetType().GetProperty("isPlaying")?.GetValue(video)} t={video.GetType().GetProperty("time")?.GetValue(video)}" : "-")} " +
+                             $"pos={player.transform.position} capa={player.gameObject.layer}");
+                }
+
+                var cams = GameCameras.instance;
+                Log.Info($"{Tag}cámara pos={cams?.mainCamera?.transform.position} fundido={cams?.cameraFadeFSM?.ActiveStateName} " +
+                         $"hud={cams?.hudCamera?.isActiveAndEnabled} estado={GameManager.instance.gameState} " +
+                         $"ui={UIManager.instance?.uiState} omitir={GameManager.instance.inputHandler.skipMode}");
+                break;
+            case "transitions":
+                // FSM de la sala con un cambio de sala (BeginSceneTransition): a qué sala, por qué puerta y cómo se ve
+                foreach (var fsm in FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+                    foreach (var state in fsm.FsmStates) {
+                        foreach (var action in state.Actions) {
+                            if (action is HutongGames.PlayMaker.Actions.BeginSceneTransition transition) {
+                                Log.Info($"{Tag}cambio {fsm.gameObject.name}/{fsm.FsmName} [{state.Name}] -> " +
+                                         $"{transition.sceneName.Value}/{transition.entryGateName.Value} " +
+                                         $"{transition.visualization.Value} actual={fsm.ActiveStateName} " +
+                                         $"activo={fsm.gameObject.activeInHierarchy}");
+                            }
+                        }
+                    }
+                }
+
+                break;
             case "focus":
                 // focus <segundos>: como mantener Focus (para revivir)
                 runner.Revive.TestFocus(ParseFloat(args[1]));

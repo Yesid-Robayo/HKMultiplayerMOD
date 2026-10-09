@@ -58,6 +58,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     public Features.PartyActions Actions { get; } = new();
 
+    /// <summary>Finales, créditos y Mr. Mushroom a la vez para todos.</summary>
+    public Features.SharedCutscenes Cutscenes { get; } = new();
+
     /// <summary>El jugador salió de un mundo ajeno: al llegar al menú se deja la partida.</summary>
     private bool _leaveOnMenu;
 
@@ -105,6 +108,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Features.ShadeSync.InstallHooks();
         Features.BossBar.InstallHooks();
         Features.Difficulty.Install();
+        Features.SharedCutscenes.InstallHooks();
         CoopSaves.ExitedWorld += () => {
             // El host salió de su mundo (los personajes ya se recogieron al volver al menú): la partida se cierra
             if (_leaveOnMenu || Session is { IsHost: true }) {
@@ -181,6 +185,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Shades.Update(scene);
             Hud.Update(scene);
             BossBar.Update(scene);
+            Cutscenes.Update();
+            Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene : Features.PlayerStatus.Standing);
         } catch (Exception e) {
             Log.Error($"Error en la partida: {e}");
         }
@@ -388,6 +394,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     /// <summary>Cada capa deja la partida (las funciones del coop primero: usan las demás).</summary>
     private void DetachAll() {
+        Cutscenes.Detach();
         Actions.Detach();
         BossBar.Detach();
         Hud.Detach();
@@ -424,6 +431,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Hud.Attach(session, Party, Vitals, Players, Revive);
         BossBar.Attach();
         Actions.Attach(session, Revive);
+        Cutscenes.Attach(session, Revive);
         session.Connected += () => SetStatus($"Conectado como jugador {session.LocalId}");
         session.Disconnected += reason => {
             // Al salir uno mismo (Leave) la sesión ya no es la actual: nada que avisar
