@@ -64,6 +64,9 @@ internal sealed class EnemySync {
     /// <summary>Modo de prueba: cada efecto reproducido en una marioneta se registra.</summary>
     private static readonly bool TestMode = HKMultiplayer.Testing.TestDriver.IsEnabled();
 
+    /// <summary>Pruebas: avisos sin remitente reenviados de los que ya se apuntó de dónde vienen (una vez cada uno).</summary>
+    private static readonly HashSet<string> TracedForwards = new();
+
     /// <summary>Lo más a menudo que se reenvía el mismo aviso a un mismo enemigo (hay zonas que avisan cada frame).</summary>
     private const float EventForwardInterval = 0.25f;
 
@@ -230,6 +233,15 @@ internal sealed class EnemySync {
 
         public ushort PreviousController;
         public float LastSwitch;
+
+        /// <summary>
+        /// Enemigo del que cuelga este (la cabeza del Falso Caballero): lo mueve siempre el mismo PC que a él (ver
+        /// <see cref="AssignControllers"/>). Null si no cuelga de ninguno.
+        /// </summary>
+        public Enemy Parent;
+
+        /// <summary>Veces que se buscó (el padre puede apuntarse después que el hijo al entrar en la sala).</summary>
+        public int ParentChecks;
         public float ScannedAt;
 
         // Jefe dormido: su lógica principal, el estado en el que espera y si ya despertó. Si quiere despertar sin estar
@@ -1668,8 +1680,8 @@ internal sealed class EnemySync {
     private static readonly HashSet<string> ContinuousVariableActions = new() {
         "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatClamp", "FloatOperator", "IntAdd",
         "IntOperator", "IntClamp", "SetFloatValue", "SetIntValue",
-        // Con tiempo: empieza al entrar (el humo baja a 0 en medio segundo antes de acabar). Solo sin aviso al acabar: en la
-        // marioneta movería su lógica parada
+        // Con tiempo: empieza al entrar (el humo baja a 0 en medio segundo antes de acabar). Su aviso al acabar no se manda
+        // en la marioneta (movería su lógica parada): ver WithoutFinishEvent
         "EaseFloat"
     };
 
@@ -1682,8 +1694,9 @@ internal sealed class EnemySync {
             return true;
         }
 
-        if (action is HutongGames.PlayMaker.Actions.EaseFsmAction ease) {
-            return ease.finishEvent == null;
+        // Con aviso al acabar también: en la marioneta se hace sin él (ver WithoutFinishEvent)
+        if (action is HutongGames.PlayMaker.Actions.EaseFsmAction) {
+            return true;
         }
 
         if (!EveryFrameFields.TryGetValue(type, out var field)) {
@@ -2101,7 +2114,7 @@ internal sealed class EnemySync {
                 // Las que van con tiempo empiezan al entrar (con los números del original al entrar, que ya llegaron)
                 if (action is HutongGames.PlayMaker.Actions.EaseFsmAction) {
                     try {
-                        action.OnEnter();
+                        WithoutFinishEvent(action, action.OnEnter);
                     } catch (Exception e) {
                         Log.Warn($"Efecto continuo de {enemy.Root.name} ({state.Name}) no empezado: {e.Message}");
                     }
@@ -2111,6 +2124,26 @@ internal sealed class EnemySync {
             _runningEffects.Add(new RunningEffect {
                 Enemy = enemy, Fsm = fsmIndex, Actions = continuous
             });
+        }
+    }
+
+    /// <summary>
+    /// Hace una acción de la marioneta sin el aviso que manda al acabar (<c>EaseFloat</c>): ese aviso es de su lógica, que
+    /// está parada, y el PC que la mueve ya lo da. Así la marioneta también baja el vapor de la muerte del Falso Caballero
+    /// a 0 (antes se saltaba y el vapor se quedaba echando partículas quietas).
+    /// </summary>
+    private static void WithoutFinishEvent(HutongGames.PlayMaker.FsmStateAction action, Action run) {
+        if (action is not HutongGames.PlayMaker.Actions.EaseFsmAction ease || ease.finishEvent == null) {
+            run();
+            return;
+        }
+
+        var finish = ease.finishEvent;
+        ease.finishEvent = null;
+        try {
+            run();
+        } finally {
+            ease.finishEvent = finish;
         }
     }
 
@@ -2150,7 +2183,7 @@ internal sealed class EnemySync {
                         continue;
                     }
 
-                    action.OnUpdate();
+                    WithoutFinishEvent(action, action.OnUpdate);
                 }
             } catch (Exception e) {
                 Log.Warn($"Efecto continuo de {enemy.Root.name} no reproducido: {e.Message}");
@@ -2201,8 +2234,14 @@ internal sealed class EnemySync {
         var now = Time.unscaledTime;
         var roomOwner = _session.LocalId;
         _controlOut.Clear();
+        _childScratch.Clear();
         foreach (var enemy in _enemies) {
             if (enemy.Spawned || enemy.Root == null || enemy.Health == null || enemy.Health.isDead) {
+                continue;
+            }
+
+            if (ParentOf(enemy) != null) {
+                _childScratch.Add(enemy);
                 continue;
             }
 
@@ -2244,7 +2283,39 @@ internal sealed class EnemySync {
             }
         }
 
+        // Los que cuelgan de otro enemigo van con él: su lógica (parada en la marioneta) los mueve y los enciende. La
+        // cabeza del Falso Caballero, con vida propia, se repartía por distancia aparcada lejos del combate: el PC que
+        // movía al jefe la ponía en su sitio al aturdirlo, pero en ese PC era marioneta y no se le podía golpear
+        foreach (var child in _childScratch) {
+            var leader = ControllerOf(child.Parent, roomOwner);
+            if (leader != ControllerOf(child, roomOwner)) {
+                _controlOut.Add((child.Id, leader));
+                ApplyControl(child, leader);
+            }
+        }
+
         SendControlOut();
+    }
+
+    private readonly List<Enemy> _childScratch = new();
+
+    private const int MaxParentChecks = 20;
+
+    /// <summary>Enemigo vivo del que cuelga este en la jerarquía (se busca hasta encontrarlo, unas pocas veces).</summary>
+    private Enemy ParentOf(Enemy enemy) {
+        if (enemy.Parent == null && enemy.ParentChecks < MaxParentChecks) {
+            enemy.ParentChecks++;
+            for (var t = enemy.Root.transform.parent; t != null; t = t.parent) {
+                var health = t.GetComponent<HealthManager>();
+                if (health != null && _byHealth.TryGetValue(health, out var parent) && parent != enemy) {
+                    enemy.Parent = parent;
+                    break;
+                }
+            }
+        }
+
+        var p = enemy.Parent;
+        return p != null && p.Root != null && p.Health != null && !p.Health.isDead ? p : null;
     }
 
     /// <summary>
@@ -2558,6 +2629,10 @@ internal sealed class EnemySync {
                 var variable = variables.GameObjectVariables[v];
                 if (variable.Value == null && data.Objects[v].Kind != ObjectKind.None) {
                     variable.Value = Resolve(enemy, data.Objects[v]);
+                    // Lo que su lógica creó allí (no está en esta sala): se crea aquí como lo crea ella
+                    if (variable.Value == null && data.Objects[v].Kind == ObjectKind.Scene) {
+                        variable.Value = RecreateStored(fsm, variable.Name);
+                    }
                 }
             }
 
@@ -2963,6 +3038,56 @@ internal sealed class EnemySync {
             : default;
     }
 
+    /// <summary>
+    /// Al tomar un enemigo, un objeto solo visual que su lógica creó en el PC que lo movía y guardó en una variable (el
+    /// vapor de la muerte del Falso Caballero, <c>Death Smoke</c>, con <c>CreateObject</c>): en este PC no existe, y su
+    /// lógica, que sigue desde más adelante, ya no lo crea. Se crea con la misma acción. Antes la variable quedaba vacía:
+    /// el vapor no salía en este PC y en el otro se quedaba a medias, congelado.
+    /// </summary>
+    private static GameObject RecreateStored(PlayMakerFSM fsm, string variableName) {
+        foreach (var state in fsm.FsmStates) {
+            foreach (var action in state.Actions) {
+                HutongGames.PlayMaker.FsmGameObject store;
+                GameObject prefab;
+                switch (action) {
+                    case HutongGames.PlayMaker.Actions.CreateObject create:
+                        store = create.storeObject;
+                        prefab = create.gameObject.Value;
+                        break;
+                    case HutongGames.PlayMaker.Actions.SpawnObjectFromGlobalPool spawn:
+                        store = spawn.storeObject;
+                        prefab = spawn.gameObject.Value;
+                        break;
+                    default:
+                        continue;
+                }
+
+                if (store == null || store.IsNone || store.Name != variableName || prefab == null || IsGameplay(prefab)) {
+                    continue;
+                }
+
+                _spawningCopy = true;
+                try {
+                    action.Init(state);
+                    action.OnEnter();
+                } catch (Exception e) {
+                    Log.Warn($"{fsm.gameObject.name}/{fsm.FsmName}: no se pudo crear {variableName}: {e.Message}");
+                } finally {
+                    _spawningCopy = false;
+                }
+
+                if (store.Value != null) {
+                    Log.Info($"{fsm.gameObject.name}/{fsm.FsmName}: {variableName} lo creó su lógica en el otro PC; " +
+                             "se crea aquí al tomarlo");
+                }
+
+                return store.Value;
+            }
+        }
+
+        return null;
+    }
+
     private static GameObject Resolve(Enemy enemy, ObjectRef reference) {
         switch (reference.Kind) {
             case ObjectKind.Hero:
@@ -3235,7 +3360,10 @@ internal sealed class EnemySync {
         var rotation = Quaternion.Euler(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
         var scaleX = reader.ReadFloat();
         var scaleY = reader.ReadFloat();
-        if (sceneHash != _sceneHash || !_byId.TryGetValue(creatorId, out var creator) || !creator.Puppet ||
+        // Lo solo visual se crea aunque este PC ya mueva al creador: el aviso pudo llegar justo después de tomarlo (con
+        // retraso, la nube de la muerte del Falso Caballero no salía) y su lógica, que siguió desde más adelante, ya no
+        // lo crea. Lo de juego no: este PC ya mueve su lógica y lo que cree será el original
+        if (sceneHash != _sceneHash || !_byId.TryGetValue(creatorId, out var creator) || !creator.Puppet && id != 0 ||
             creator.Fsms == null || fsmIndex >= creator.Fsms.Length || creator.Fsms[fsmIndex] == null ||
             id != 0 && (id & SpawnedIdFlag) == 0) {
             return;
@@ -3289,7 +3417,8 @@ internal sealed class EnemySync {
 
         // La lógica de la marioneta lo apunta donde lo apunta la del original: sus efectos siguientes actúan sobre la
         // copia (p. ej. el Coleccionista mete el bicho en el tarro que acaba de lanzar)
-        if (store != null && !store.IsNone) {
+        // (solo en la marioneta: si este PC ya mueve al creador, su variable es de su propia lógica)
+        if (store != null && !store.IsNone && creator.Puppet) {
             store.Value = copy;
         }
 
@@ -4257,11 +4386,31 @@ internal sealed class EnemySync {
         }
     }
 
+    /// <summary>
+    /// Mientras se apagan o encienden las FSM de un enemigo al pasar a marioneta (o volver). PlayMaker les manda solo
+    /// <c>DISABLE</c> al apagarlas: no es un aviso de fuera y no se reenvía. Antes llegaba al PC que acababa de tomar el
+    /// enemigo y su lógica viva lo atendía: el Falso Caballero se quedaba quieto tras cada cambio de quién lo movía.
+    /// </summary>
+    private static bool _settingPuppet;
+
+    /// <summary>Aviso que PlayMaker manda a una FSM al apagarse su componente.</summary>
+    private const string PlayMakerDisableEvent = "DISABLE";
+
     /// <summary>Convierte un enemigo en marioneta (o lo devuelve a la normalidad).</summary>
     private static void SetPuppet(Enemy enemy, bool puppet) {
         if (enemy.Puppet == puppet || enemy.Root == null) {
             return;
         }
+
+        _settingPuppet = true;
+        try {
+            SetPuppetUnguarded(enemy, puppet);
+        } finally {
+            _settingPuppet = false;
+        }
+    }
+
+    private static void SetPuppetUnguarded(Enemy enemy, bool puppet) {
 
         enemy.Puppet = puppet;
         if (puppet) {
@@ -4670,7 +4819,7 @@ internal sealed class EnemySync {
 
             orig(self, fsmEvent, eventData);
             var sync = _active;
-            if (sync?._session == null || fsmEvent == null || _replaying || _playingFx || _spawningCopy ||
+            if (sync?._session == null || fsmEvent == null || _replaying || _playingFx || _spawningCopy || _settingPuppet ||
                 FsmStateSync.IsApplyingRemote || fsmEvent.Name == "FINISHED" ||
                 !sync._enemyFsms.TryGetValue(self, out var target) || !target.Enemy.Puppet) {
                 return;
@@ -4680,6 +4829,16 @@ internal sealed class EnemySync {
             var sender = eventData?.SentByFsm ?? HutongGames.PlayMaker.Fsm.EventData?.SentByFsm;
             if (sender != null && (sync._enemyFsms.ContainsKey(sender) || FsmStateSync.IsSharedController(sender))) {
                 return;
+            }
+
+            // DISABLE sin remitente es el que manda PlayMaker al apagarse la FSM en este PC (ver _settingPuppet)
+            if (sender == null && fsmEvent.Name == PlayMakerDisableEvent) {
+                return;
+            }
+
+            if (TestMode && sender == null && TracedForwards.Add(fsmEvent.Name)) {
+                Log.Info($"[TEST] aviso sin remitente a la marioneta {self.GameObjectName}/{self.Name}: {fsmEvent.Name}\n" +
+                         Environment.StackTrace);
             }
 
             sync.ForwardEvent(target.Enemy, target.Index, fsmEvent.Name);

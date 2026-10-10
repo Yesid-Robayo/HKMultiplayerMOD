@@ -146,6 +146,15 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     saca al Grimm que se inclina y habla). Solo muerto de verdad: el Hollow Knight pasa por vida negativa entre fases.
     Lo que su lógica suelta de sí al morir (`SetParent` sin padre: el cadáver del Hollow Knight) se suelta también en la
     marioneta y sus FSM pasan a funcionar solas en ese PC (allí es donde se absorbe el vacío para el final).
+    Al pasar a marioneta se apagan sus FSM y PlayMaker les manda `DISABLE` (`PlayMakerFSM.OnDisable`, sin remitente):
+    ese aviso no se reenvía. Antes llegaba al PC que acababa de tomar el enemigo y su lógica viva lo atendía; el Falso
+    Caballero (y cualquier enemigo con `DISABLE` en sus transiciones) se quedaba parado tras cada cambio de quién lo movía.
+    Un enemigo que cuelga de otro (la cabeza del Falso Caballero, `Head`, con vida propia) lo mueve siempre el mismo PC
+    que a su padre: se repartía por distancia aparcado fuera de la arena y, al aturdirse el jefe, su cabeza no se podía
+    golpear en el PC que movía al jefe. Al tomar un enemigo, si una variable de objeto apuntaba a algo que su lógica creó
+    en el otro PC (el vapor de la muerte del Falso Caballero, `Death Smoke`, con `CreateObject`), se crea aquí con esa
+    misma acción (`RecreateStored`). Y la marioneta repite también los `EaseFloat` con aviso al acabar, sin mandar el
+    aviso (`WithoutFinishEvent`): antes su vapor no bajaba a 0 y se quedaba con las partículas quietas.
     Las FSM de daño (`damages_enemy`, `damages_hero`) no se siguen: solo pasan el golpe al objeto que tocan y su
     `Send Event` se enviaba en cada contacto (los barriles del Falso Caballero, unos 257 por minuto) sin hacer nada.
   - Los efectos que su lógica repite cada frame mientras dura el estado también siguen en la marioneta
@@ -475,7 +484,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   girados), con su orbe de alma y su estado; sus máscaras sobre su cabeza 3 s al cambiarle la vida y flechas en el borde.
   Nunca pone una zona `NONE` (salas de paso del juego); mientras viaja en ciervo dice "viajando en ciervo".
 - **Barra del jefe** (`BossBar`): los jefes se apuntan al encenderse (`HealthManager.OnEnable`), con el nombre de su
-  entrada del diario; la vida máxima es la mayor vista. Con barras visibles, `Notice.SetLift` sube los avisos (abajo a
+  entrada del diario; la vida máxima es la mayor vista. Jefe (`Difficulty.IsBoss`, también para la vida extra) es quien
+  tiene estatua en el Salón de los Dioses (`unlockBossScene`) o aparece con 300 de vida o más; se decide una vez por
+  enemigo. Los de los sueños (Tirano de Almas, Príncipe Gris Zote) no tienen estatua y antes se quedaban sin barra. Con barras visibles, `Notice.SetLift` sube los avisos (abajo a
   la derecha) por encima de ellas: el de dos líneas pisaba la barra.
 - **Barras de enemigos** (`EnemyBars`, ajuste del host, apagado por defecto): como la barra del jefe, los enemigos que
   no son jefes se apuntan al encenderse; cada frame se dibuja una barra pequeña (hasta 16, creadas una vez) sobre los

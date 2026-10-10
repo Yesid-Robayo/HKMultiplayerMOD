@@ -251,9 +251,13 @@ internal sealed class TestDriver : MonoBehaviour {
                 // healthlist: todos los objetos con vida de la sala, con su padre y su huella (para ver repetidos)
                 foreach (var hm in FindObjectsByType<HealthManager>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
                     var t = hm.transform;
+                    var hmFlags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
                     Log.Info($"{Tag}vida {hm.name} padre={(t.parent != null ? t.parent.name : "-")} " +
                              $"activo={hm.gameObject.activeInHierarchy} hermano={t.GetSiblingIndex()} " +
-                             $"huella={HKMultiplayer.Game.Scene.ScenePaths.Hash(t):x8}");
+                             $"huella={HKMultiplayer.Game.Scene.ScenePaths.Hash(t):x8} hp={hm.hp} " +
+                             $"jefe={HKMultiplayer.Game.Features.Difficulty.IsBoss(hm)} " +
+                             $"escalaGG={typeof(HealthManager).GetField("hpScale", hmFlags)?.GetValue(hm) as UnityEngine.Object != null} " +
+                             $"buscadioses={typeof(HealthManager).GetField("showGodfinderIcon", hmFlags)?.GetValue(hm)}");
                 }
 
                 break;

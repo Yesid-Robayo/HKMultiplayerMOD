@@ -53,8 +53,34 @@ internal static class Difficulty {
         return (float) whole / damage;
     }
 
-    /// <summary>Si es un jefe (tiene estatua en el Salón de los Dioses).</summary>
-    public static bool IsBoss(HealthManager health) => UnlockBossSceneField?.GetValue(health) as Object != null;
+    /// <summary>Vida con la que aparece un jefe que no tiene estatua: ningún enemigo normal llega.</summary>
+    private const int BossStartHealth = 300;
+
+    /// <summary>Lo decidido para cada enemigo la primera vez que se miró (con la vida del principio).</summary>
+    private static readonly Dictionary<HealthManager, bool> BossCache = new();
+
+    /// <summary>
+    /// Si es un jefe: tiene estatua en el Salón de los Dioses (<c>unlockBossScene</c>) o aparece con mucha vida. Los de
+    /// los sueños (Tirano de Almas, Príncipe Gris Zote) no tienen estatua: se quedaban sin barra y sin la vida extra. Se
+    /// decide la primera vez que se mira (al encenderse, con la vida entera) y no cambia a mitad del combate.
+    /// </summary>
+    public static bool IsBoss(HealthManager health) {
+        if (health == null) {
+            return false;
+        }
+
+        if (BossCache.TryGetValue(health, out var boss)) {
+            return boss;
+        }
+
+        if (BossCache.Count > 1024) {
+            BossCache.Clear();
+        }
+
+        boss = UnlockBossSceneField?.GetValue(health) as Object != null || health.hp >= BossStartHealth;
+        BossCache[health] = boss;
+        return boss;
+    }
 
     /// <summary>Cuánta más vida tiene el enemigo: el daño que recibe se divide por esto.</summary>
     public static float Multiplier(HealthManager enemy) {

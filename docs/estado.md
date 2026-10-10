@@ -5,7 +5,7 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
 
 ## Versión
 
-- `main`: **0.20.2**, solo commits locales (no se sube nada sin que lo pida el usuario). M1 a M6 hechos y juntados;
+- `main`: **0.20.3**, solo commits locales (no se sube nada sin que lo pida el usuario). M1 a M6 hechos y juntados;
   no quedan ramas de agentes. Paquete para jugadores: `bash tools/package.sh` → `out/package/HKMultiplayer-<ver>.zip`.
 - Última pasada de las 16 rutas (0.20.1): 0 FALLO.
 
@@ -21,6 +21,19 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
 
 Se deja como está: la marioneta se dibuja unas centésimas en el pasado (para moverse suave aunque la red varíe); en
 lo que cae rápido (barriles) se nota un poco. Adelantarla haría que atravesara el suelo y diera saltos.
+
+## Pruebas del resto (0.20.3; copias B/C, F/G y D/E)
+
+| Qué | Resultado |
+|---|---|
+| Jefes de sueño: Hermano Perdido, Tirano de Almas (dos fases), Defensor Blanco, Príncipe Gris Zote | OK en vivo: entran los dos, el jefe es el mismo, muere, salen los dos juntos ("X ganó el sueño y sale: se sale con él") y el dato queda puesto en los dos. Arreglado: el Tirano y el Príncipe Gris no tenían barra ni vida extra (no tienen estatua; ahora también es jefe quien aparece con 300 de vida o más) |
+| Falso Caballero hasta el final, con golpes reales, red normal y red mala (120 ms, 30 ms, 2 %) | OK en vivo tras tres arreglos: el `DISABLE` que PlayMaker manda al apagar las FSM de la marioneta llegaba al PC que tomaba el jefe y lo dejaba parado; la cabeza (`Head`) se repartía aparte y no se podía golpear al aturdirlo; y una copia solo visual que llegaba justo después de tomar el jefe se descartaba |
+| Vapor naranja de la muerte del Falso Caballero | Arreglado por código, sin probar en vivo (lo pidió el usuario): no salía en un PC y en el otro se quedaba congelado si el jefe cambiaba de PC durante la muerte |
+| Revivir con 3 jugadores | OK en vivo (no hace falta: jugarán dos) |
+| Tiso | OK en vivo: en el otro PC se va enseguida, en el de quien cambia el dato sigue hasta volver a entrar |
+| Cloth, Zote tras el Rey Vengamosca | No aparecen en el mundo de prueba (sus condiciones no se cumplen): sin probar |
+| Cinemáticas: Mr. Mushroom y final D | Los dos ven la cinemática; Mr. Mushroom acaba con los dos en su banco. La vuelta a una sala de juego (finales de los Panteones) no se alcanzó |
+| Rutas `crossroads` y `greenpath` con los arreglos | 0 FALLO |
 
 ## Misiones de NPC (9 de octubre, tarde; copias B/C, rama `worktree-agent-a8f25163372f2f05e`)
 
@@ -294,17 +307,15 @@ README):
 
 ## Pendiente
 
-Sin probar (no se tocó el código; nada indica que falle):
-- La conversación con Zote tras el combate del Rey Vengamosca (mismo patrón que el rescate de Nido Profundo, que sí
-  se probó) y Zote en el Coliseo.
-- Los jefes de sueño aparte del Campeón Fallido y del Falso Caballero; que las puertas del sueño se abran a la vez al
-  ganar.
-- Volver de una cinemática que acaba en una sala de juego (va por `SceneTravel`, ya probado con "Ir con ...").
-- La entrada a la Radiancia por el camino del juego (una vez se trabó la escena de Hornet atando al Hollow Knight).
-- Cloth, Tiso y Menderbug (por análisis).
+Sin probar:
+- El vapor naranja de la muerte del Falso Caballero con el arreglo de 0.20.3 (ver arriba).
+- La conversación con Zote tras el Rey Vengamosca, Zote en el Coliseo y Cloth (no aparecen en el mundo de prueba).
+- Volver de una cinemática que acaba en una sala de juego (finales de los Panteones; va por `SceneTravel`).
+- La entrada a la Radiancia por el camino del juego (una vez se trabó la escena de Hornet atando al Hollow Knight;
+  pudo ser el `DISABLE` de los cambios de quién mueve al jefe, arreglado en 0.20.3).
+- Menderbug (por análisis).
 
-Solo en una sesión real de dos PCs: matar a un jefe con red mala, revivir con 3 o más jugadores e instalar desde el
-zip en un juego sin mods y jugar por internet.
+Solo en una sesión real de dos PCs: instalar desde el zip en un juego sin mods y jugar por internet.
 
 Limitación conocida: si un dato cambiado en otro PC hace aparecer a alguien que el juego destruyó al cargar la sala
 (otro sitio de Mr. Mushroom), no aparece hasta volver a entrar (lo destruido no se puede recuperar).
