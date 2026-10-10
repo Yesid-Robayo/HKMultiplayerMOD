@@ -472,9 +472,33 @@ public sealed class GameSession : INetListener, IDisposable {
     // Eventos de la red
     // =====================================================================================================
 
+    /// <summary>Largo máximo de un nombre de jugador.</summary>
+    public const int MaxNameLength = 24;
+
+    /// <summary>
+    /// Nombre de un jugador tal como se muestra a todos: sin caracteres de control (saltos de línea) ni '&lt;' y '&gt;'
+    /// (los textos de Unity entienden etiquetas como &lt;size=300&gt;: un nombre así taparía la pantalla de los demás), y
+    /// como mucho <see cref="MaxNameLength"/> caracteres. El host lo limpia antes de repartirlo; cada PC, al recibirlo.
+    /// </summary>
+    public static string CleanName(string name, int maxLength = MaxNameLength) {
+        var clean = new System.Text.StringBuilder(maxLength);
+        foreach (var c in name ?? string.Empty) {
+            if (clean.Length == maxLength) {
+                break;
+            }
+
+            if (!char.IsControl(c) && c != '<' && c != '>') {
+                clean.Append(c);
+            }
+        }
+
+        var result = clean.ToString().Trim();
+        return result.Length > 0 ? result : "?";
+    }
+
     void INetListener.OnConnected(NetConnection connection) {
         if (_server != null) {
-            var player = new SessionPlayer { Id = connection.Id, Name = connection.Name, Connection = connection };
+            var player = new SessionPlayer { Id = connection.Id, Name = CleanName(connection.Name), Connection = connection };
             connection.UserData = player;
 
             // Bienvenida: su id y quién está ya, con sus salas y dueños
@@ -590,7 +614,7 @@ public sealed class GameSession : INetListener, IDisposable {
                 };
                 for (var i = 0; i < count; i++) {
                     var player = new SessionPlayer {
-                        Id = reader.ReadUShort(), Name = reader.ReadString(64), Scene = reader.ReadString(128)
+                        Id = reader.ReadUShort(), Name = CleanName(reader.ReadString(64)), Scene = reader.ReadString(128)
                     };
                     _players[player.Id] = player;
                 }
@@ -611,7 +635,7 @@ public sealed class GameSession : INetListener, IDisposable {
                 break;
             }
             case MessageType.PlayerJoined: {
-                var player = new SessionPlayer { Id = reader.ReadUShort(), Name = reader.ReadString(64) };
+                var player = new SessionPlayer { Id = reader.ReadUShort(), Name = CleanName(reader.ReadString(64)) };
                 _players[player.Id] = player;
                 PlayerJoined?.Invoke(player);
                 break;

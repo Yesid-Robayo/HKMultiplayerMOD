@@ -468,7 +468,7 @@ internal sealed class Skins {
                 return null;
             }
 
-            var name = reader.ReadString();
+            var name = GameSession.CleanName(reader.ReadString(), 64);
             var files = new Dictionary<string, byte[]>();
             var total = 0;
             foreach (var file in SentFiles) {
@@ -563,7 +563,7 @@ internal sealed class Skins {
 
         if (_session.IsHost) {
             // De un jugador: se apunta y se reparte a los demás
-            var name = reader.ReadString(64);
+            var name = GameSession.CleanName(reader.ReadString(64), 64);
             var hash = reader.ReadString(64);
             if (hash.Length > 0 && !IsValidHash(hash)) {
                 return;
@@ -588,7 +588,7 @@ internal sealed class Skins {
 
         // Del host: la skin de un jugador
         var id = reader.ReadUShort();
-        var playerName = reader.ReadString(64);
+        var playerName = GameSession.CleanName(reader.ReadString(64), 64);
         var playerHash = reader.ReadString(64);
         if (from.Id != GameSession.HostPlayerId || playerHash.Length > 0 && !IsValidHash(playerHash)) {
             return;

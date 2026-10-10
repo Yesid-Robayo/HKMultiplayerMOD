@@ -172,3 +172,12 @@ Archivos instalados > Verificar integridad de los archivos del juego.
     misma versión del mod; y, por internet, que el host abrió el puerto UDP (punto 5).
   - Si Steam actualiza Hollow Knight a otra versión, el mod puede dejar de cargar hasta que salga
     una versión del mod para la nueva. Para volver al juego sin mods: punto 8.
+
+
+10. LICENCIA Y GARANTÍA
+----------------------
+
+HKMultiplayer tiene licencia MIT (LICENSE.txt). Se entrega tal cual, SIN NINGUNA GARANTÍA: úsalo bajo
+tu propia responsabilidad y haz copia de tus partidas antes de jugar. Es un proyecto no oficial de
+aficionados, sin relación con Team Cherry. Los componentes de terceros y sus licencias están en
+THIRD_PARTY_NOTICES.txt.

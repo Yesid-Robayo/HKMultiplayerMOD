@@ -2,6 +2,7 @@
 # Arma el paquete para jugadores: out/package/HKMultiplayer-<versión>.zip, con una carpeta HKMultiplayer-<versión>:
 #   HKMultiplayer Setup.bat                    el instalador (ventana para instalar, actualizar o desinstalar)
 #   LEEME.txt, README.txt                      instrucciones en español y en inglés (con la instalación a mano)
+#   LICENSE.txt, THIRD_PARTY_NOTICES.txt       licencia del mod y avisos de los componentes de terceros
 #   scripts/                                   el instalador en PowerShell y la versión del paquete
 #   files/hollow_knight_Data/Managed/          la Modding API compilada (vendor/modding-api/OutputFinal) y
 #                                              Mods/HKMultiplayer (el mod y su cifrado, BouncyCastle)
@@ -54,6 +55,9 @@ printf '%s\r\n' "$VERSION" > "$STAGE/scripts/version.txt"
 for readme in LEEME.txt README.txt; do
   sed "s/@VERSION@/$VERSION/g" "$ROOT/tools/installer/$readme" > "$STAGE/$readme"
 done
+# Licencia del mod y avisos de los componentes de terceros que van en el paquete (sus licencias MIT lo piden)
+sed 's/$/\r/' "$ROOT/LICENSE" > "$STAGE/LICENSE.txt"
+sed 's/$/\r/' "$ROOT/THIRD_PARTY_NOTICES.txt" > "$STAGE/THIRD_PARTY_NOTICES.txt"
 
 # Inventario con hashes
 (cd "$STAGE" && find ./files -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)

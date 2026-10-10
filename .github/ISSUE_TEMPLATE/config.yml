@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Problema de seguridad / Security problem
+    url: https://github.com/Yesid-Robayo/HKMultiplayerMOD/security/advisories/new
+    about: Avísalo en privado, no en un issue público. / Report it privately, not in a public issue.

@@ -556,7 +556,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         normalized.Length == RoomCode.Length ? normalized.Substring(0, 4) + "-" + normalized.Substring(4) : normalized;
 
     private static string SanitizeName(string name) {
-        name = (name ?? string.Empty).Trim();
-        return name.Length == 0 ? "Caballero" : name.Length > 24 ? name.Substring(0, 24) : name;
+        name = GameSession.CleanName(name);
+        return name == "?" ? "Caballero" : name;
     }
 }

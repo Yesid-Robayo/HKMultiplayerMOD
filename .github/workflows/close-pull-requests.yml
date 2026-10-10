@@ -1,0 +1,26 @@
+# Este proyecto no acepta pull requests: se cierran al abrirlos (o reabrirlos), con un mensaje.
+# pull_request_target corre con el código de main, nunca con el del pull request (no se descarga nada de él), así que
+# el permiso de escritura no lo puede usar el código de otra persona.
+name: Cerrar pull requests
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  close:
+    if: github.event.pull_request.user.login != github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cerrar con un mensaje
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr close "$NUMBER" --repo "$REPO" --comment "Gracias por el interés, pero este proyecto no acepta pull requests (ver CONTRIBUTING.md). Si encontraste un error o tienes una idea, abre un issue.
+
+          Thanks for your interest, but this project does not accept pull requests (see CONTRIBUTING.md). If you found a bug or have an idea, please open an issue."

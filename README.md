@@ -4,7 +4,7 @@
 
 **Mod cooperativo para Hollow Knight: juega el mundo entero con tus amigos, en red local o por internet.**
 
-![Versión](https://img.shields.io/badge/versión-0.21.0-7fb2ff)
+![Versión](https://img.shields.io/badge/versión-0.21.1-7fb2ff)
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
@@ -35,6 +35,7 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 - [Tecnología](#tecnología)
 - [Desarrollo](#desarrollo)
 - [Créditos](#créditos)
+- [Licencia y contribuciones](#licencia-y-contribuciones)
 
 ---
 
@@ -351,9 +352,25 @@ Modding API se edita `modding-api/` y se vuelve a ejecutar.
 
 ## Créditos
 
-- **[Hollow Knight](https://www.hollowknight.com/)** es de **Team Cherry**. Este mod no está afiliado a Team Cherry y
-  no incluye archivos del juego.
+- **[Hollow Knight](https://www.hollowknight.com/)** es de **Team Cherry**. Este mod es un proyecto no oficial de
+  aficionados y no está afiliado a Team Cherry. El repositorio no contiene archivos del juego; el paquete de jugadores,
+  como las versiones oficiales de la Modding API, incluye `Assembly-CSharp.dll` y `TeamCherry.Localization.dll` del
+  juego ya modificados por la Modding API.
 - **[Hollow Knight Modding API](https://github.com/hk-modding/api)** (MIT), con la adaptación a Unity 6 de
   [SFGrenade](https://github.com/SFGrenade/api).
-- **[MonoMod](https://github.com/MonoMod/MonoMod)** (MIT) y **[BouncyCastle](https://www.bouncycastle.org/)** (MIT).
+- **[MonoMod](https://github.com/MonoMod/MonoMod)**, **[Mono.Cecil](https://github.com/jbevain/cecil)**,
+  **[unity-scene-repacker](https://github.com/jakobhellermann/unity-scene-repacker)**,
+  **[BouncyCastle](https://www.bouncycastle.org/)** y **[Newtonsoft.Json](https://www.newtonsoft.com/json)**, todos MIT
+  (avisos completos en [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)).
 - Skins compatibles con **CustomKnight**.
+
+---
+
+## Licencia y contribuciones
+
+- El código de HKMultiplayer tiene licencia **[MIT](LICENSE)**. Se entrega **tal cual, sin ninguna garantía**: úsalo
+  bajo tu propia responsabilidad y haz copia de tus partidas. La Modding API de [`modding-api/`](modding-api) mantiene
+  su propia licencia MIT.
+- **No se aceptan *pull requests*** (se cierran automáticamente). Los errores y las ideas, en un *issue*; ver
+  [CONTRIBUTING.md](CONTRIBUTING.md).
+- Los problemas de seguridad se avisan en privado: [SECURITY.md](SECURITY.md).

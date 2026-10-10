@@ -1,0 +1,59 @@
+name: Error / Bug
+description: Algo no funciona como debería / Something doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por avisar. Si es un problema de seguridad, **no** lo pongas aquí: mira SECURITY.md.
+        Thanks for reporting. Security problems go through SECURITY.md, not here.
+  - type: input
+    id: version
+    attributes:
+      label: Versión del mod / Mod version
+      description: Sale en la lista de mods del menú principal y en el nombre del zip. / Shown in the main menu mod list and in the zip name.
+      placeholder: "0.21.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: role
+    attributes:
+      label: ¿Eras el host o el invitado? / Were you the host or the guest?
+      options:
+        - Host
+        - Invitado / Guest
+        - Los dos / Both
+    validations:
+      required: true
+  - type: dropdown
+    id: network
+    attributes:
+      label: Conexión / Connection
+      options:
+        - Misma red local / Same local network
+        - Internet
+        - VPN (Radmin, ZeroTier, Tailscale...)
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: Qué pasó / What happened
+      description: Qué esperabas, qué pasó y en qué sala o jefe. / What you expected, what happened, and where.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Cómo repetirlo / How to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+  - type: textarea
+    id: logs
+    attributes:
+      label: ModLog.txt y capturas / ModLog.txt and screenshots
+      description: |
+        Arrastra aquí tu ModLog.txt (C:\Users\<usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt) y capturas
+        de los dos PCs si puedes. / Drag your ModLog.txt and screenshots from both PCs here if you can.
