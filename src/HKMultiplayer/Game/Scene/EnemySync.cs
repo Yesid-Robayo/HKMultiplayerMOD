@@ -64,9 +64,6 @@ internal sealed class EnemySync {
     /// <summary>Modo de prueba: cada efecto reproducido en una marioneta se registra.</summary>
     private static readonly bool TestMode = HKMultiplayer.Testing.TestDriver.IsEnabled();
 
-    /// <summary>Pruebas: avisos sin remitente reenviados de los que ya se apuntó de dónde vienen (una vez cada uno).</summary>
-    private static readonly HashSet<string> TracedForwards = new();
-
     /// <summary>Lo más a menudo que se reenvía el mismo aviso a un mismo enemigo (hay zonas que avisan cada frame).</summary>
     private const float EventForwardInterval = 0.25f;
 
@@ -4834,11 +4831,6 @@ internal sealed class EnemySync {
             // DISABLE sin remitente es el que manda PlayMaker al apagarse la FSM en este PC (ver _settingPuppet)
             if (sender == null && fsmEvent.Name == PlayMakerDisableEvent) {
                 return;
-            }
-
-            if (TestMode && sender == null && TracedForwards.Add(fsmEvent.Name)) {
-                Log.Info($"[TEST] aviso sin remitente a la marioneta {self.GameObjectName}/{self.Name}: {fsmEvent.Name}\n" +
-                         Environment.StackTrace);
             }
 
             sync.ForwardEvent(target.Enemy, target.Index, fsmEvent.Name);
