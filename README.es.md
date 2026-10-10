@@ -4,7 +4,7 @@
 
 **Mod cooperativo para Hollow Knight: juega el mundo entero con tus amigos, en red local o por internet.**
 
-![Versión](https://img.shields.io/badge/versión-0.21.1-7fb2ff)
+![Versión](https://img.shields.io/badge/versión-0.21.2-7fb2ff)
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
@@ -154,7 +154,8 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
   Al ganar salen los dos; quien cae o muere sale solo. Jefes de sueño, Rey de las Pesadillas y Radiancia.
 - **Grimmchild**: si uno lo recibe, el otro también.
 - **Skins** compatibles con CustomKnight (*Pausa › Multijugador › Skin*): cuerpo, hechizos y efectos; se envían por la
-  red del mod en segundo plano sin retrasar los golpes, y se puede desactivar ver las de los demás.
+  red del mod en segundo plano sin retrasar los golpes (la primera vez; luego quedan en una caché y cargan al
+  momento), y se puede desactivar ver las de los demás.
 - **Compañeros** (*Pausa › Multijugador › Compañeros*): la vida y el alma de cada uno y dónde está, **dar geo**, **ir
   con él** (apareces a su lado, también en otra sala), **desatascarse** (al último suelo seguro) y **recargar la
   sala**.

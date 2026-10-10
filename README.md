@@ -4,7 +4,7 @@
 
 **A co-op mod for Hollow Knight: play the whole world with your friends, on your local network or over the internet.**
 
-![Version](https://img.shields.io/badge/version-0.21.1-7fb2ff)
+![Version](https://img.shields.io/badge/version-0.21.2-7fb2ff)
 ![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
@@ -154,7 +154,8 @@ world, see each other in real time and fight the same enemies and bosses togethe
   win, both leave; whoever falls or dies leaves alone. Dream bosses, the Nightmare King and the Radiance.
 - **Grimmchild**: if one player gets it, the other does too.
 - **Skins** compatible with CustomKnight (*Pause › Multiplayer › Skin*): body, spells and effects; sent through the
-  mod's own network in the background without delaying hits, and you can turn off seeing other players' skins.
+  mod's own network in the background without delaying hits (the first time; then they're kept in a cache and load
+  instantly), and you can turn off seeing other players' skins.
 - **Partners** (*Pause › Multiplayer › Partners*): each partner's health, soul and location, **give geo**, **go to**
   them (you appear next to them, even in another room), **unstuck** (back to the last safe ground) and **reload the
   room**.

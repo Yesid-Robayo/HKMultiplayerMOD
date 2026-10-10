@@ -266,6 +266,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     geo y los rompibles rotos (también los de FSM propia: `SceneObjectSync` los sigue con un id por su ruta en la sala,
     `fsm:...`, y quien entra los pone en su estado de "ya roto", sin animación). Lo que se pone así no cuenta como un
     golpe de ese PC y no se copia a los demás. Al guardar, lo activado en el mundo no vuelve atrás.
+  - Piedras de geo: cada golpe en vivo de un compañero se repite en los demás con su geo (estado `Check Direction` y,
+    el último, `Destroy`), así cada jugador de la sala recoge el suyo, como el resto del geo. Al entrar en una sala con
+    piedras ya golpeadas se ponen sin soltar geo.
   - Lo que crean los enemigos en combate (proyectiles, crías, invocaciones) se crea en los demás con la misma acción de
     su marioneta (mismo prefab). Si hace daño o tiene vida, es una copia que sigue al original hasta que desaparece; los
     efectos solo visuales del pool corren solos. Lo que crean al prepararse (cadáveres, piezas propias) no se replica.
@@ -555,12 +558,15 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   `AtlasRepair` para las hojas antiguas del HUD y el geo). Cada uno anuncia su skin (nombre y huella SHA-256 de los
   archivos que ven los demás) y quien no la tiene la pide al host, que la envía o se la pide a su dueño. Van por la
   conexión cifrada del mod como transferencia grande de **baja prioridad** (`NetConnection`: cola aparte, solo sin otras
-  transferencias pendientes, a unos 0,5 MB/s y con como mucho 48 mensajes sin confirmar, así los golpes y eventos no
-  esperan detrás de la skin). Máximo 32 MB, solo PNG de hasta 4096x4096; la huella se comprueba en otro hilo y todo
-  queda en memoria. Cuerpo con un bloque de propiedades por renderer; hechizos, amuletos y HUD propios en los
+  transferencias pendientes, hasta unos 2 MB/s, como mucho un tick de trozos de golpe (cada acuse cubre 64 paquetes) y
+  160 mensajes sin confirmar; si la latencia sube 60 ms sobre la más baja vista, baja a 0,25 MB/s, así los golpes y
+  eventos no esperan detrás de la skin). Máximo 32 MB, solo PNG de
+  hasta 4096x4096; la huella se comprueba en otro hilo. Las recibidas se guardan en `Mods/HKMultiplayer/SkinCache`
+  (`<huella>.hksk`, hasta 256 MB, se borran las usadas hace más tiempo): la siguiente partida con esa skin la lee de ahí
+  (comprobándola igual) y no la pide. Cuerpo con un bloque de propiedades por renderer; hechizos, amuletos y HUD propios en los
   materiales compartidos; efectos del compañero (sus copias bajo el avatar) con su skin. Crear la textura de una hoja de
   4096 cuesta 0,15-0,25 s (el juego descomprime el PNG en el hilo principal): se hace en pausa o al cambiar de sala (si
-  no llega ese momento en 60 s, fuera de un combate de jefe). Cada PC elige si ve las skins de los demás.
+  no llega ese momento en 3 s, fuera de un combate de jefe, con un tirón corto). Cada PC elige si ve las skins de los demás.
 - **Barra del jefe**: el nombre es el título con el que el juego presenta al jefe (hoja `Titles`, partes `_SUPER`,
   `_MAIN` y `_SUB`), buscado en los textos de sus FSM o en las palabras de su nombre; si no, el de su diario.
 

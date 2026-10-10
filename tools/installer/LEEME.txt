@@ -144,7 +144,9 @@ de los invitados se guardan dentro del mundo del host.
 
 Compatibles con CustomKnight. Pon cada skin (una carpeta con Knight.png) en
   <carpeta del juego>\hollow_knight_Data\Managed\Mods\HKMultiplayer\Skins
-y elígela en Pausa > Multijugador > Skin. Los demás la ven aunque no la tengan.
+y elígela en Pausa > Multijugador > Skin. Los demás la ven aunque no la tengan:
+la reciben solos al entrar a la partida (una skin grande tarda unos segundos la
+primera vez; después queda guardada en Mods\HKMultiplayer\SkinCache).
 
 
 8. DESINSTALAR

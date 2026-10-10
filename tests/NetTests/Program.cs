@@ -216,7 +216,7 @@ public static partial class Program {
         var pair = new Pair();
         pair.Network.Latency = 0.03;
         pair.ConnectOrFail();
-        var data = new byte[2 * 1024 * 1024];
+        var data = new byte[4 * 1024 * 1024];
         new Random(11).NextBytes(data);
         var watch = Stopwatch.StartNew();
         pair.Client.Connection.SendLarge(9, data, data.Length, true);

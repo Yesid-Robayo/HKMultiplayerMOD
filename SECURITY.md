@@ -28,7 +28,8 @@ Solo la última versión publicada en *Releases* recibe arreglos.
 - La conexión es directa entre los PCs: no hay servidores intermedios ni cuentas.
 - Lo que llega de otros jugadores se comprueba antes de usarlo: tamaños máximos de paquetes, textos y transferencias,
   nombres sin etiquetas de formato ni caracteres de control, archivos de personaje con nombres que no pueden salirse
-  de la carpeta del mundo y skins que solo se guardan en memoria.
+  de la carpeta del mundo y skins que solo se guardan como imágenes PNG comprobadas, en una caché con su huella como
+  nombre.
 
 ## Lo que no protege
 

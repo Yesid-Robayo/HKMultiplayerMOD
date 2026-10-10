@@ -59,16 +59,24 @@ public sealed class NetConnection : ReliableReceiver.ISink {
     private int _writing; // 0 = nada, 1 = fiable, 2 = no fiable
 
     /// <summary>
-    /// Ritmo de las transferencias grandes de baja prioridad (skins): unos 0,5 MB/s, para que no retrasen golpes ni
-    /// eventos.
+    /// Ritmo de las transferencias grandes de baja prioridad (skins): unos 2 MB/s mientras la latencia no sube. Si sube
+    /// (la subida del PC no da para tanto y los paquetes hacen cola en el router) baja a
+    /// <see cref="LowPriorityCongestedBytesPerSecond"/>, para que no retrasen golpes ni eventos.
     /// </summary>
-    public const int LowPriorityBytesPerSecond = 512 * 1024;
+    public const int LowPriorityBytesPerSecond = 2 * 1024 * 1024;
+
+    /// <summary>Ritmo de baja prioridad con la latencia alta (unos 0,25 MB/s).</summary>
+    public const int LowPriorityCongestedBytesPerSecond = 256 * 1024;
+
+    /// <summary>Cuánto puede subir la latencia sobre la más baja vista antes de frenar las transferencias de fondo.</summary>
+    private const double CongestionRttMargin = 0.06;
 
     /// <summary>
-    /// Trozos de baja prioridad que se dejan sin confirmar a la vez como mucho. El canal fiable es ordenado: un evento que
-    /// sale después de un trozo espera a que ese trozo llegue, así que se dejan pocos por delante.
+    /// Trozos de baja prioridad que se dejan sin confirmar a la vez como mucho (unos 160 KB: los 2 MB/s con 80 ms de
+    /// latencia). El canal fiable es ordenado: un evento que sale después de un trozo perdido espera a su reenvío, así
+    /// que no se dejan muchos más.
     /// </summary>
-    private const int LowPriorityMaxInFlight = 48;
+    private const int LowPriorityMaxInFlight = 160;
 
     // Transferencias grandes salientes y entrantes (las de baja prioridad, en su propia cola y a su ritmo)
     private readonly Queue<LargeOutgoing> _largeOut = new();
@@ -80,6 +88,7 @@ public sealed class NetConnection : ReliableReceiver.ISink {
 
     private double _lastReceive;
     private double _smoothedRtt = 0.1;
+    private double _minRtt = double.MaxValue;
 
     /// <summary>Dirección del otro extremo.</summary>
     public IPEndPoint EndPoint { get; }
@@ -242,9 +251,12 @@ public sealed class NetConnection : ReliableReceiver.ISink {
             _lowBudgetAt = now;
         }
 
-        // Presupuesto acumulado como mucho para una décima de segundo (sin ráfagas tras una pausa)
-        _lowBudget = System.Math.Min(_lowBudget + (now - _lowBudgetAt) * LowPriorityBytesPerSecond,
-            LowPriorityBytesPerSecond / 10.0);
+        // Presupuesto acumulado como mucho para un tick: cada acuse cubre los últimos 64 paquetes, y una ráfaga mayor (tras
+        // una pausa o un frame lento) se quedaría sin confirmar y se reenviaría. Con la latencia alta, más lento
+        var rate = _smoothedRtt > _minRtt + CongestionRttMargin
+            ? LowPriorityCongestedBytesPerSecond
+            : LowPriorityBytesPerSecond;
+        _lowBudget = System.Math.Min(_lowBudget + (now - _lowBudgetAt) * rate, (double) rate / NetConstants.TickRate);
         _lowBudgetAt = now;
         while (_largeOut.Count == 0 && _largeLow.Count > 0 && _lowBudget >= LargeChunkData &&
                _reliableSender.InFlight < LowPriorityMaxInFlight) {
@@ -452,6 +464,7 @@ public sealed class NetConnection : ReliableReceiver.ISink {
             var sample = now - _sentTime[slot];
             if (sample >= 0 && sample < 5) {
                 _smoothedRtt += (sample - _smoothedRtt) * 0.125;
+                _minRtt = System.Math.Min(_minRtt, sample);
             }
         }
 

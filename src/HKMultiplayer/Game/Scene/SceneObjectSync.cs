@@ -32,8 +32,8 @@ namespace HKMultiplayer.Game.Scene;
 /// </para>
 /// Los objetos que recoge cada uno (<see cref="CharacterData.IsIndividualItem"/>) quedan fuera.
 /// <para>
-/// También en directo: piedras de geo (cada golpe baja su contador "Hits" en todos; quien golpea se lleva su geo y los
-/// demás ven la piedra romperse) y estalactitas (el juego solo las suelta por el héroe local; cuando una cae en un PC,
+/// También en directo: piedras de geo (cada golpe baja su contador "Hits" en todos y suelta su geo en cada PC de la
+/// sala: cada jugador recoge el suyo) y estalactitas (el juego solo las suelta por el héroe local; cuando una cae en un PC,
 /// cae también en los demás de la sala).
 /// </para>
 /// </summary>
@@ -426,8 +426,9 @@ internal sealed class SceneObjectSync {
     }
 
     /// <summary>
-    /// Golpes que dio otro jugador. En directo se ve y se oye como aquí: el golpe (sonido, temblor, esquirlas) o la rotura;
-    /// sin soltar geo, que es de quien golpeó. Lo que llega al entrar en la sala solo deja la piedra como está.
+    /// Golpes que dio otro jugador. En directo se ve y se oye como aquí (el golpe con su sonido, temblor y esquirlas, o la
+    /// rotura) y la piedra suelta su geo también en este PC: cada jugador de la sala recoge el suyo (antes solo quien
+    /// golpeaba). Lo que llega al entrar en la sala solo deja la piedra como está, sin geo.
     /// </summary>
     private static void ApplyRockHits(Rock rock, int hits, bool live = false) {
         if (rock.Fsm == null || hits >= rock.Hits.Value) {
@@ -443,10 +444,10 @@ internal sealed class SceneObjectSync {
 
         if (rock.Hits.Value <= 0) {
             if (rock.Fsm.ActiveStateName != BrokenState && rock.Fsm.ActiveStateName != DestroyState) {
-                PlayRockState(rock, visible ? DestroyState : BrokenState);
+                PlayRockState(rock, visible ? DestroyState : BrokenState, dropGeo: visible);
             }
         } else if (visible && (rock.Fsm.ActiveStateName == "Idle" || rock.Fsm.ActiveStateName == "Gleam")) {
-            PlayRockState(rock, HitFeedbackState);
+            PlayRockState(rock, HitFeedbackState, dropGeo: true);
         }
     }
 
@@ -455,8 +456,16 @@ internal sealed class SceneObjectSync {
 
     private static readonly List<FsmStateAction> MutedActions = new();
 
-    /// <summary>Pone un estado de la piedra sin las acciones que lanzan geo (en sus estados encadenados tampoco).</summary>
-    private static void PlayRockState(Rock rock, string state) {
+    /// <summary>
+    /// Pone un estado de la piedra; sin <paramref name="dropGeo"/>, sin las acciones que lanzan geo (en sus estados
+    /// encadenados tampoco).
+    /// </summary>
+    private static void PlayRockState(Rock rock, string state, bool dropGeo = false) {
+        if (dropGeo) {
+            rock.Fsm.SetState(state);
+            return;
+        }
+
         foreach (var fsmState in rock.Fsm.FsmStates) {
             foreach (var action in fsmState.Actions) {
                 if (action.Enabled && action is FlingObjectsFromGlobalPool fling && fling.gameObject?.Value != null &&

@@ -22,11 +22,12 @@ namespace HKMultiplayer.Game.Features;
 /// <para>
 /// Red: cada jugador anuncia su skin al host (<see cref="SkinInfo"/>: nombre y huella de sus archivos) y el host la
 /// reparte. Los archivos van por la red del propio mod (cifrada, sin abrir otro puerto) como transferencia grande de
-/// baja prioridad (<see cref="NetConnection.LowPriorityBytesPerSecond"/>, unos 0,5 MB/s, con pocos trozos por delante de
-/// los mensajes normales): una skin no retrasa golpes ni eventos. Quien no tiene una skin la pide al host
+/// baja prioridad (<see cref="NetConnection.LowPriorityBytesPerSecond"/>, unos 2 MB/s y menos si sube la latencia, con
+/// pocos trozos por delante de los mensajes normales): una skin no retrasa golpes ni eventos. Quien no tiene una skin la
+/// busca en su caché (<c>Mods/HKMultiplayer/SkinCache</c>, por huella, hasta 256 MB) y si no está la pide al host
 /// (<see cref="SkinRequest"/>); el host se la envía si la tiene o se la pide a su dueño y la reenvía al llegar. Máximo
-/// 32 MB por skin; solo PNG de hasta 4096x4096; se comprueba la huella. Se guardan solo en memoria mientras dura la
-/// partida (nada se escribe en disco).
+/// 32 MB por skin; solo PNG de hasta 4096x4096; se comprueba la huella, también al leerla de la caché. En la caché solo
+/// se guarda el paquete recibido con un nombre que es su huella; nunca se ejecuta ni se abre fuera del mod.
 /// </para>
 /// <para>
 /// Dibujo (como la 0.7.3): el cuerpo de cada jugador lleva su skin con un bloque de propiedades en su renderer (no en
@@ -167,10 +168,10 @@ internal sealed class Skins {
     private float _waitingTextureSince = -1f;
 
     /// <summary>
-    /// Lo más que espera una textura a un momento sin juego; pasado esto se crea igualmente, salvo con un jefe en la
-    /// sala.
+    /// Lo más que espera una textura a un momento sin juego; pasado esto se crea igualmente (un tirón corto), salvo con
+    /// un jefe en la sala.
     /// </summary>
-    private const float TextureWaitSeconds = 60f;
+    private const float TextureWaitSeconds = 3f;
 
     private static List<string> _available = new();
     private static Dictionary<string, string> _folders = new(StringComparer.OrdinalIgnoreCase);
@@ -576,11 +577,13 @@ internal sealed class Skins {
                 }
             }
 
-            // Si el host aún no la tiene, se la pide a su dueño (para verla y para dársela a los demás)
-            if (hash.Length > 0 && !_skins.ContainsKey(hash) && from.Connection != null && _requested.Add(hash)) {
-                var writer = _session.BeginTo(from, SkinRequest);
-                writer.WriteString(hash);
-                _session.EndTo();
+            // Si el host aún no la tiene, la busca en la caché o se la pide a su dueño (para verla y dársela a los demás)
+            if (hash.Length > 0 && !_skins.ContainsKey(hash) && !_requested.Contains(hash)) {
+                if (TryLoadCached(hash)) {
+                    _requested.Add(hash);
+                } else {
+                    Request(hash);
+                }
             }
 
             return;
@@ -613,15 +616,18 @@ internal sealed class Skins {
             Forget(old);
         }
 
-        if (hash.Length > 0 && !_skins.ContainsKey(hash) && !_session.IsHost && ShowOthers && _requested.Add(hash)) {
-            // Se pide al host (llega en segundo plano)
+        if (hash.Length > 0 && !_skins.ContainsKey(hash) && !_session.IsHost && ShowOthers && !_requested.Contains(hash)) {
+            // De la caché si ya llegó en otra partida; si no, se pide al host (llega en segundo plano)
+            if (TryLoadCached(hash)) {
+                _requested.Add(hash);
+                return;
+            }
+
             if (HostSettings.Current.ShowNotices) {
                 Notice.Show(Lang.T($"Recibiendo la skin \"{name}\" de {player.Name}...", $"Receiving the skin '{name}' from {player.Name}..."), 4f);
             }
 
-            var writer = _session.Begin(SkinRequest);
-            writer.WriteString(hash);
-            _session.End();
+            Request(hash);
         }
     }
 
@@ -690,33 +696,147 @@ internal sealed class Skins {
         }
     }
 
-    /// <summary>Skins recibidas que se están comprobando en otro hilo (la huella de 20 MB cuesta).</summary>
-    private readonly List<(Task<Skin> Task, byte[] Data)> _unpacking = new();
+    /// <summary>
+    /// Skins recibidas o de la caché que se están comprobando en otro hilo (la huella de 20 MB cuesta). Las de la caché
+    /// llevan la huella esperada y leen sus datos en ese hilo.
+    /// </summary>
+    private readonly List<(Task<Skin> Task, byte[] Data, string Cached)> _unpacking = new();
 
     private void OnLarge(SessionPlayer from, byte kind, byte[] data) {
         if (kind != LargeSkin || _session == null) {
             return;
         }
 
-        _unpacking.Add((Task.Run(() => Unpack(data)), data));
+        _unpacking.Add((Task.Run(() => Unpack(data)), data, null));
     }
 
-    /// <summary>Termina las skins recibidas ya comprobadas.</summary>
+    /// <summary>Termina las skins recibidas (o leídas de la caché) ya comprobadas.</summary>
     private void FinishUnpacking() {
         for (var i = _unpacking.Count - 1; i >= 0; i--) {
-            var (task, data) = _unpacking[i];
+            var (task, data, cached) = _unpacking[i];
             if (!task.IsCompleted) {
                 continue;
             }
 
             _unpacking.RemoveAt(i);
-            if (_session != null) {
-                Received(task.IsFaulted ? null : task.Result, data);
+            if (_session == null) {
+                continue;
+            }
+
+            var skin = task.IsFaulted ? null : task.Result;
+            if (cached == null) {
+                Received(skin, data, true);
+            } else if (skin != null && skin.Hash == cached) {
+                Log.Info($"Skin {skin.Name} ({cached}) leída de la caché");
+                Received(skin, skin.Package, false);
+            } else {
+                // Archivo de la caché roto o cambiado: se borra y se pide por la red
+                Log.Warn($"La skin {cached} de la caché no es válida: se pide por la red");
+                DeleteCached(cached);
+                _requested.Remove(cached);
+                Request(cached);
             }
         }
     }
 
-    private void Received(Skin skin, byte[] data) {
+    // =====================================================================================================
+    // Caché en disco de las skins recibidas
+    // =====================================================================================================
+
+    /// <summary>
+    /// Carpeta donde se guardan las skins recibidas de los demás, por su huella: la siguiente partida con esa skin no
+    /// tiene que esperar a recibirla. Al leerlas se comprueban igual que las que llegan por la red.
+    /// </summary>
+    private static string CacheFolder =>
+        Path.Combine(Path.GetDirectoryName(typeof(Skins).Assembly.Location) ?? ".", "SkinCache");
+
+    /// <summary>Espacio máximo de la caché; al pasarlo se borran las skins usadas hace más tiempo.</summary>
+    private const long MaxCacheBytes = 256L * 1024 * 1024;
+
+    /// <summary>Archivo de la caché de una huella (ya comprobada: 32 caracteres hexadecimales).</summary>
+    private static string CachePath(string hash) => Path.Combine(CacheFolder, hash + ".hksk");
+
+    /// <summary>Si la skin está en la caché, la empieza a leer y comprobar en otro hilo.</summary>
+    private bool TryLoadCached(string hash) {
+        var path = CachePath(hash);
+        if (!IsValidHash(hash) || !File.Exists(path)) {
+            return false;
+        }
+
+        _unpacking.Add((Task.Run(() => {
+            // Se marca como usada ahora (para que sea la última en borrarse)
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+            var bytes = File.ReadAllBytes(path);
+            var skin = Unpack(bytes);
+            if (skin != null) {
+                skin.Package = bytes;
+            }
+
+            return skin;
+        }), null, hash));
+        return true;
+    }
+
+    /// <summary>Pide una skin que falta: el host a quien la lleva, los demás al host.</summary>
+    private void Request(string hash) {
+        if (_session == null || !_requested.Add(hash)) {
+            return;
+        }
+
+        if (!_session.IsHost) {
+            var request = _session.Begin(SkinRequest);
+            request.WriteString(hash);
+            _session.End();
+            return;
+        }
+
+        foreach (var player in _session.Players) {
+            if (player.Connection != null && _worn.TryGetValue(player.Id, out var worn) && worn.Hash == hash) {
+                var writer = _session.BeginTo(player, SkinRequest);
+                writer.WriteString(hash);
+                _session.EndTo();
+                return;
+            }
+        }
+    }
+
+    /// <summary>Guarda en la caché una skin recibida y comprobada (en otro hilo) y deja la caché en su tamaño.</summary>
+    private static void SaveCached(string hash, byte[] data) {
+        Task.Run(() => {
+            try {
+                Directory.CreateDirectory(CacheFolder);
+                var path = CachePath(hash);
+                var temporary = path + ".tmp";
+                File.WriteAllBytes(temporary, data);
+                if (File.Exists(path)) {
+                    File.Delete(path);
+                }
+
+                File.Move(temporary, path);
+                var files = new DirectoryInfo(CacheFolder).GetFiles("*.hksk")
+                    .OrderByDescending(f => f.LastWriteTimeUtc).ToList();
+                long total = 0;
+                foreach (var file in files) {
+                    total += file.Length;
+                    if (total > MaxCacheBytes && file.FullName != Path.GetFullPath(path)) {
+                        file.Delete();
+                    }
+                }
+            } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+                Log.Warn($"No se pudo guardar la skin {hash} en la caché: {e.Message}");
+            }
+        });
+    }
+
+    private static void DeleteCached(string hash) {
+        try {
+            File.Delete(CachePath(hash));
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+            // Se intentará otra vez la próxima
+        }
+    }
+
+    private void Received(Skin skin, byte[] data, bool fromNetwork) {
         if (skin == null) {
             Log.Warn("Llegó una skin que no es válida: se ignora");
             return;
@@ -736,7 +856,10 @@ internal sealed class Skins {
         if (!_skins.ContainsKey(skin.Hash)) {
             skin.Package = _session.IsHost ? data : null;
             _skins[skin.Hash] = skin;
-            Log.Info($"Skin recibida: {skin.Name} ({skin.Hash}, {data.Length / 1048576f:0.0} MB)");
+            if (fromNetwork) {
+                Log.Info($"Skin recibida: {skin.Name} ({skin.Hash}, {data.Length / 1048576f:0.0} MB)");
+                SaveCached(skin.Hash, data);
+            }
         }
 
         if (!_session.IsHost || !_waiting.TryGetValue(skin.Hash, out var waiting)) {
@@ -1123,7 +1246,7 @@ internal sealed class Skins {
     /// <summary>
     /// Crear la textura de una hoja de 4096x4096 lleva unos 0,15-0,25 s (el juego descomprime el PNG en el hilo principal):
     /// se hace cuando no se está jugando (cargando una sala, en pausa o sin caballero), así no da tirones. Mientras, ese
-    /// caballero se ve normal. Si en un rato no hay ese momento, se crea igualmente fuera de un combate de jefe.
+    /// caballero se ve normal. Si en unos segundos no hay ese momento, se crea igualmente fuera de un combate de jefe.
     /// </summary>
     private bool CanCreateTextureNow() {
         var gm = GameManager.instance;

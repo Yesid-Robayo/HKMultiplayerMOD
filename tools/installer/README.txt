@@ -144,7 +144,9 @@ characters are saved inside the host's world.
 
 Compatible with CustomKnight. Put each skin (a folder with Knight.png) in
   <game folder>\hollow_knight_Data\Managed\Mods\HKMultiplayer\Skins
-and pick it in Pause > Multiplayer > Skin. Other players see it even if they don't have it.
+and pick it in Pause > Multiplayer > Skin. Other players see it even if they don't have it:
+they get it automatically when they join (a large skin takes a few seconds the
+first time; then it's kept in Mods\HKMultiplayer\SkinCache).
 
 
 8. UNINSTALL
