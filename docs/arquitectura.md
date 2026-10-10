@@ -432,7 +432,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 
 ### Funciones del coop (`Game/Features/`)
 
-Diseño aprobado en [m5-diseno.md](m5-diseno.md). Cada función es una clase con `Attach`/`Detach` que engancha
+Decisiones aprobadas en [Decisiones de M5](#decisiones-de-m5). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
 mensajes nuevos van del 73 al 102 (el 98 es de `EnemySync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
@@ -613,6 +613,55 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   qué copias de amuletos y cuántos acompañantes del compañero hay encendidos. Ruta: `tests/routes/effects.route`.
 - Paquete para jugadores: `tools/manual-tests/installer-test.sh <zip>` (ver [Paquete e instalador](#paquete-e-instalador)).
 
+### Cómo probar (recordatorio)
+
+- Copias del juego en `test-instances/` (enlaces duros al juego de Steam; `ensure_instance` las crea): B/C para
+  pruebas sueltas (puerto 26950), D/E... para las rutas automáticas (27100+), F/G para el Coliseo y los jefes (27300),
+  H/I para la prueba del instalador (`installer-test.sh` las rehace desde cero). Instalar solo en las que se usan
+  (`bash tools/test-cycle.sh --only "f g"`) y cerrar solo esas (`stop_all F G`).
+- Órdenes útiles: `hero` (por qué un caballero no responde) y `regain`; `enemies` marca "oculto", "sin-caja" e
+  "(inactivo)"; `bosses` da la vida, si es marioneta y el estado de cada FSM del jefe; `tp x y` no fija el punto de
+  reaparición (`tp x y respawn` sí); `fsmgo` salta a un estado de un objeto con controlador; `healthlist` dice si cada
+  enemigo cuenta como jefe.
+- No usar `hitall` ni abusar de `hitenemy` para comprobar combates: quitan vida directamente, matan enemigos dormidos o
+  invulnerables, falsean el contador de las oleadas y pueden saltarse la lógica del jefe (la cabeza del Falso
+  Caballero). Mejor golpes de aguijón reales (`tools/manual-tests/colo-nail.sh`).
+- Los combates de jefe empiezan al entrar en su zona (`Battle Scene`): un `tp` a un sitio fuera de ella no los
+  despierta, y un `tp` junto al jefe puede dejar al caballero al otro lado de una pared.
+- Poner tiempo máximo a todas las esperas de los guiones de prueba (si no, se quedan colgados esperando a un juego
+  cerrado) y no lanzar dos guiones a la vez sobre las mismas copias.
+- Pruebas a mano del Coliseo en `tools/manual-tests/` (`fg-lib.sh`, `colo-natural.sh`, `colo-nail.sh` y
+  `oro-manual.sh`, Oro con los dos dentro de la arena).
+
+## Decisiones de M5
+
+Decisiones aprobadas por el usuario para M5 (las marcadas "elegido" las escogió él; el resto, las recomendadas).
+
+- **Base**: funciones en `Game/Features/` con `Attach`/`Detach`; `PartyState` con el estado de cada jugador (un caído
+  no cuenta para repartir enemigos ni para las esperas de combate); interfaz uGUI, nunca IMGUI.
+- **Revivir (elegido: Focus 2 s, 33 de alma)**: el caído queda tendido con "† Nombre" y su cámara sigue al compañero;
+  junto al cuerpo, mantener Focus a 2 unidades o menos; si golpean al que revive se pierde el progreso. Vuelve con 1
+  máscara y 2 s de invulnerabilidad. Sin límite de tiempo caído; sentarse en un banco revive a los caídos a su lado con
+  toda la vida; si caen todos, muerte normal para cada uno. En un sueño se cae y se revive dentro.
+- **Sombras (elegido: copia en cada PC)**: cada PC mueve su copia de la sombra del compañero; matarla hace que el
+  dueño recupere la suya (el host acepta solo el primer aviso). La de alguien desconectado no se ve.
+- **HUD del compañero**: arriba a la derecha (el usuario lo prefirió allí), con su nombre, máscaras y alma con los
+  sprites del juego y su estado; máscaras sobre su cabeza al cambiarle la vida; flechas en el borde; barra del jefe
+  abajo con su nombre.
+- **Cinemáticas**: finales, créditos y Mr. Mushroom a la vez para todos; saltar por votación ("Esperando a X para
+  saltar 1/2"); presentaciones de jefe con los dos quietos; al acabar, quien fue llevado vuelve a donde estaba.
+- **Ajustes del host** (Pausa › Multijugador), guardados por mundo; los invitados solo los ven. Por defecto: vida de
+  jefes 1,5× (elegido) solo con el compañero en la sala, enemigos 1×, daño recibido 1×; revivir sí (2 s, 33 de alma, 1
+  máscara, 2 s de invulnerabilidad, en el banco sí); nombres, vida del compañero, flechas, avisos y barra del jefe sí,
+  barras de enemigos no; regalar geo sí; ir con un compañero sí; saltar cinemáticas por votación. La vida extra divide
+  el daño en el PC que mueve al enemigo (las fases de los jefes dependen de su vida).
+- **Ir con un compañero** (pedido después): en *Compañeros*, al quitar la pausa aparece a su lado; no con alguien
+  caído, en un sueño, en una cinemática, cambiando de sala o en otro mundo.
+- **Sueños**: quien está en la misma sala entra con quien golpea la entrada; al ganar salen los dos; la caída de uno no
+  saca al otro. Grimmchild: si uno lo recibe, el otro también.
+- **Skins (elegido: sí, al final)**: compatibles con CustomKnight, enviadas por la red del mod en segundo plano (unos
+  0,5 MB/s, máximo 32 MB); cada PC elige si ve las de los demás.
+
 ## Idioma
 
 - Los textos del mod que ve el jugador van en el idioma del juego (`UI/Lang.cs`: `Lang.T("español", "inglés")`): en
@@ -661,80 +710,35 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
 | M5 | Funciones del coop (revivir, sombras, skins, panel...) | Igual o mejor que la 0.7.3 |
 | M6 | Instalador y paquete | Tu amigo lo instala y jugáis |
 
+## Comprobado en vivo
+
+Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial de git):
+
+- **Enemigos y jefes del juego base**: todos los combates de M3 (incluidos Mantis, Coliseo de Bronce, Plata y Oro
+  enteros), Grimm, el Tirano de Almas, el Hollow Knight y la Radiancia; el Falso Caballero hasta el final con golpes
+  reales, con red normal y con red mala (120 ms, 30 ms de variación, 2 % de pérdida).
+- **Sueños**: Campeón Fallido, Falso Caballero, Hermano Perdido, Tirano de Almas, Defensor Blanco, Príncipe Gris Zote y
+  Rey de las Pesadillas: entran los dos, el jefe es el mismo, salen juntos al ganar y el dato queda en los dos.
+- **Funciones del coop**: revivir (también con 3 jugadores), sombras, HUD, ajustes del host, cinemáticas con votación,
+  skins, ir con un compañero, recargar sala, regalar geo; misiones de NPC (Mr. Mushroom, Quirrel, Bretta, Zote en Nido
+  Profundo, Tiso, Myla, Hornet, la Compañía de Grimm); objetos de sala y rompibles; efectos y amuletos del compañero.
+- **Paquete**: instalar, actualizar y desinstalar en copias limpias (`installer-test.sh`); la ventana del instalador.
+
 ## Pendientes
 
-- **M3**: revisadas con `arenas` las salas de los jefes del juego base (sin sueños ni Panteones): solo los Mantis y el
-  Coliseo necesitaban controlador compartido; Señor Traidor, Caballero de la Colmena, Nosk y los Caballeros Vigía usan
-  un `Battle Scene` que ya se copia por cadena. Probados con los dos dañados: Cazador de Cristal (cristales), bichos de
-  cristal (láser), Madre Aspid (crías), Aspid primigenio (disparos), minero (pico), Uumuu (descargas), Coleccionista
-  (tarros y sus bichos, cuerpo, embestida), Caballero de la Colmena, Flukemarm (sus moscas) y Rey Mosca (él y sus
-  moscas). Mawlek espera a que estén los dos cerca para despertar. El Coliseo de Bronce se pasa entero, con todas sus
-  oleadas y Zote, igual en los dos. Comprobados en vivo (0.15.2):
-  - Cargador Musgoso: sale, embiste y daña a los dos (embestida y golpe agachado), cambia de PC sin cortar el combate
-    y al morir queda vencido en los dos.
-  - Gruzzer volátil: su cadáver explota al caer (`CorpseGoopExplode`, 1,7 s después de tocar el suelo) con
-    `Gas Explosion M`, que sí daña al caballero en el juego base; en coop daña a los dos (2 de daño a cada uno), lo
-    mate quien lo mate.
-  - Coliseo de Plata entero con la prueba sin atajos: todas las oleadas y Oblobbles iguales en los dos hasta el final.
-    La oleada del Grub Mimic espera a que alguien rompa su tarro con el aguijón (en la prueba lo hace el invitado); se
-    rompe en los dos y la oleada sigue.
-  - Shielded Fool, Sturdy Fool y Winged Fool dañan a los dos, también desde la marioneta.
-  Falta por ver en vivo:
-  - El Coliseo de Oro entero (Domadora de Dioses). Con la 0.16.1 los 137 enemigos del Oro recién cargado tienen el
-    mismo identificador y sitio en los dos PCs; la vuelta entera está pendiente. La prueba automática no basta: hay
-    oleadas que esperan a que el caballero se acerque a enemigos escondidos (magos, Mage Blob) y voladores que
-    esquivan el tajo, así que conviene jugarlo a mano.
-  - Que el arreglo de las zonas ("Hero Saver" de los Mage Blob, oleada 23 de Oro) desatasca la oleada en vivo.
-  - Una espera en "WaveCheck 5" del Coliseo de Bronce en la prueba automática: un minero que sale de debajo de la tierra
-    cuando el caballero se acerca, y en la prueba los caballeros no se mueven (jugando no debería pasar).
-  Grimm, los jefes de sueño, Hollow Knight y la Radiancia pasan a M5. El sonido del minero del Coliseo ya suena en el
-  PC que no lo mueve (comprobado en M5: tajo, lanzamiento del pico y voz al morir).
-- **M4** (hecho, con los amuletos del compañero): sin reproducir aún la muerte del compañero (su animación ya se ve en
-  su sprite, sin la cabeza ni el aguijón que salen despedidos; con revivir solo se ve al caer todos). El parpadeo de
-  invulnerabilidad, el aura de Defender's Crest, Dreamshield, el polvo al correr y saltar y los efectos azules ya
-  salen (ver "Efectos del otro jugador"). Sharp Shadow no tiene efecto propio: su dash es el dash sombra y sus
-  golpes a los enemigos se ven por `EnemyHitFx` (M3); comprobado en vivo contra un Zombie Runner de Crossroads_01,
-  con los acompañantes atacándolo a la vez.
-- **M5**: hecho, probado en vivo con dos copias:
-  - Cinemáticas: los finales A, B y C, Mr. Mushroom, los créditos y las pantallas del final (el llevado ve el mismo
-    vídeo a la vez), votación y vuelta al banco. Los vídeos de los finales y Mr. Mushroom no dejan saltar la primera
-    vez (es del juego): la votación se probó en los créditos y en las pantallas del final.
-  - Sueños completos (entrada juntos, caída y muerte de cada uno, victoria y salida de los dos): Campeón Fallido, Kin
-    Perdido, Defensor Blanco (su mensaje del final espera a que cada uno pulse), Zote el Poderoso y el Rey de las
-    Pesadillas. La entrada directa a la Radiancia sin el Corazón del Vacío.
-  - Skins: POPKnight y Pale King, cada una en un PC, vistas en el otro (cuerpo y hechizos), el HUD propio y el envío
-    sin tirones ni retrasos de golpes.
-  - Jefes de M5 comprobados en vivo con dos copias (0.18.3):
-    - Grimm: primer encuentro (los dos ven el diálogo; los dos quedan con `metGrimm` y Grimmchild), combate (espera
-      a que entren los dos, diálogos leídos por los dos, "Call Child" sigue en los dos) y el Grimm vencido sale en los
-      dos; quien no movía a Grimm habla con él y sube Grimmchild a nivel 3 (`killedGrimm` y el nivel en los dos).
-    - Tirano de Almas: espera a los dos para despertar, primera fase, el suelo se rompe en los dos, segunda fase
-      (también si cae solo quien no mueve al jefe), victoria y los dos salen tendidos junto al cuerpo.
-    - Hollow Knight: entrando desde el Atrio, las cadenas rotas entre los dos (dos cada uno) empiezan el combate en
-      los dos; las cuatro fases; el cadáver sale en los dos; absorber el vacío lleva a los dos al final A, los créditos
-      y al banco del Atrio.
-    - Radiancia: el desafío en su cartel empieza la presentación en los dos; combate, subida, golpe final (lo puede dar
-      quien no la mueve), final C compartido, créditos y banco.
-    - Hornet 1 y Mawlek siguen esperando a los dos.
-  Sin probar en vivo, o solo en parte:
-  - Radiancia por el camino del juego: tras la fase 4 del Hollow Knight con el Corazón del Vacío, Hornet lo ata; en la
-    prueba la lógica del Hollow Knight se quedó en "H Thread" (el hilo de Hornet, pieza del jefe, apagado en el PC que
-    lo movía) y no se pudo entrar golpeándolo con el aguijón onírico. La prueba entró directa al sueño (`goscene`).
-    Además ese camino depende del Corazón del Vacío de quien mueve al Hollow Knight en la fase 4 (su lógica lo mira).
-  - Radiancia y Hollow Knight: el jefe pasa al jugador más cercano también en sus secuencias finales; quien lo mueve en
-    ese momento es quien debe pulsar ataque en los últimos golpes de la Radiancia (la lógica escucha su botón).
-  - La entrada al Núcleo con `killedHollowKnight` ya puesto (la revisita) no se probó.
-  - No probado en vivo: revivir con 3 o más jugadores y el revivido parpadeando (la invulnerabilidad se pone con el
-    `StartInvulnerable` del juego).
-  Jefes que dependen de cinemáticas o de entrar juntos:
-  - **Grimm y el Rey de las Pesadillas**: antes hay que completar la misión de la Compañía (llamas, farol).
-  - **Jefes de sueño** (Campeón Fallido, Tirano de Almas, Kin Perdido, Zote el Poderoso, guerreros soñadores): se
-    entra con el aguijón onírico y cada jugador entraría por su cuenta; hay que llevar a los dos al sueño.
-  - **Hollow Knight y la Radiancia**: cinemáticas de entrada y final.
-- **M6** (hecho sobre 0.18.4): paquete, instalador, desinstalador y `LEEME.txt` con el nombre nuevo. Probado con
-  `tools/manual-tests/installer-test.sh` en copias limpias (`test-instances/h` e `i`), sin tocar el juego de Steam.
-  Falta: instalarlo en el PC de otro jugador desde el zip descargado y jugar por internet con el puerto abierto. La
-  copia "limpia" de la prueba no tiene la `Assembly-CSharp.dll` original del juego (en este PC no hay ninguna sin la
-  Modding API): usa otra versión parcheada en su lugar, que sirve para ver que el original se guarda y se devuelve.
-- **Pasto y telas al paso del compañero**: hecho (`PartnerGrass`, ver "Efectos del otro jugador"); comprobado en
-  Fungus1_01. Sin probar en las telas de la Ciudad de las Lágrimas.
+Sin probar:
+- La traducción al inglés dentro del juego (0.21.0) y el vapor naranja de la muerte del Falso Caballero (0.20.3).
+- La conversación con Zote tras el Rey Vengamosca, Zote en el Coliseo y Cloth (no aparecen en el mundo de prueba);
+  Menderbug (por análisis).
+- Volver de una cinemática que acaba en una sala de juego (finales de los Panteones; va por `SceneTravel`).
+- La entrada a la Radiancia por el camino del juego (una vez se trabó la escena de Hornet atando al Hollow Knight;
+  pudo ser el `DISABLE` de los cambios de quién mueve al jefe, arreglado en 0.20.3); la revisita del Núcleo.
+- Solo en una sesión real de dos PCs: instalar desde el zip en un juego sin mods y jugar por internet.
+
+Limitaciones conocidas:
+- Si un dato cambiado en otro PC hace aparecer a alguien que el juego destruyó al cargar la sala (otro sitio de
+  Mr. Mushroom), no aparece hasta volver a entrar.
+- El jefe ataca al caballero del PC que lo mueve, y lo mueve el jugador más cercano: cada cambio (como mucho cada 8 s)
+  corta su ataque. Es lo que hace que ataque a los dos.
+- La marioneta se dibuja unas centésimas en el pasado (para moverse suave): en lo que cae rápido se nota un poco.
+- Los nombres fijos de los menús del mod cambian de idioma al reiniciar el juego.
