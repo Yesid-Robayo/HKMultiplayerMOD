@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prueba del paquete para jugadores (tools/package.sh) sobre copias del juego dentro de test-instances, sin tocar el
-# juego de Steam: crea las copias, las deja como el juego sin mods, instala con instalar.bat pasándole la ruta, arranca
+# juego de Steam: crea las copias, las deja como el juego sin mods, instala con "HKMultiplayer Setup.bat" /install y la ruta, arranca
 # la copia, mira en su ModLog que carga el mod y el menú Multijugador, desinstala y comprueba que queda como estaba.
 #
 # Uso: HK_INSTANCES_DIR=<carpeta con la copia b> bash tools/manual-tests/installer-test.sh <zip> [letras]
@@ -91,12 +91,13 @@ same_snapshot() {
   return $ok
 }
 
-# Ejecuta instalar.bat o desinstalar.bat del paquete con la ruta de la copia (la pausa del final recibe una entrada vacía)
+# Ejecuta el instalador del paquete en la consola (/install o /uninstall) con la ruta de la copia (la pausa del final
+# recibe una entrada vacía)
 run_bat() {
-  local bat="$1" letter="$2" log="$3" wrapper
+  local mode="$1" letter="$2" log="$3" wrapper
   wrapper="$WORK/run-$letter.cmd"
-  printf '@echo off\r\ncall "%s" "%s" < nul\r\nexit /b %%errorlevel%%\r\n' \
-    "$(cygpath -w "$PKG/$bat")" "$(cygpath -w "$(_inst_dir "$letter")")" > "$wrapper"
+  printf '@echo off\r\ncall "%s" %s "%s" < nul\r\nexit /b %%errorlevel%%\r\n' \
+    "$(cygpath -w "$PKG/HKMultiplayer Setup.bat")" "$mode" "$(cygpath -w "$(_inst_dir "$letter")")" > "$wrapper"
   cmd.exe //c "$(cygpath -w "$wrapper")" > "$log" 2>&1
   local code=$?
   sed 's/^/    /' "$log"
@@ -141,19 +142,19 @@ for letter in $LETTERS; do
   prepare_copy "$letter" || continue
   snapshot "$letter" "$WORK/$letter-before"
 
-  echo "[$letter] instalar.bat"
-  run_bat instalar.bat "$letter" "$WORK/$letter-install.txt" || fail "[$letter] instalar.bat terminó con error"
+  echo "[$letter] instalar"
+  run_bat /install "$letter" "$WORK/$letter-install.txt" || fail "[$letter] la instalación terminó con error"
   snapshot "$letter" "$WORK/$letter-installed"
-  if same_snapshot "$WORK/$letter-before" "$WORK/$letter-installed" >/dev/null; then fail "[$letter] instalar.bat no cambió nada"; fi
+  if same_snapshot "$WORK/$letter-before" "$WORK/$letter-installed" >/dev/null; then fail "[$letter] la instalación no cambió nada"; fi
   [ -f "$(_inst_dir "$letter")/hollow_knight_Data/Managed/Mods/HKMultiplayer/HKMultiplayer.dll" ] || fail "[$letter] no está el mod"
   [ -d "$(_inst_dir "$letter")/hollow_knight_Data/Managed/Mods/HollowKnightCoop" ] && fail "[$letter] sigue el mod anterior"
 
   echo "[$letter] arrancando la copia"
   launch_and_check "$letter"
 
-  echo "[$letter] reinstalar (actualización) y desinstalar.bat"
-  run_bat instalar.bat "$letter" "$WORK/$letter-reinstall.txt" || fail "[$letter] la segunda instalación terminó con error"
-  run_bat desinstalar.bat "$letter" "$WORK/$letter-uninstall.txt" || fail "[$letter] desinstalar.bat terminó con error"
+  echo "[$letter] reinstalar (actualización) y desinstalar"
+  run_bat /install "$letter" "$WORK/$letter-reinstall.txt" || fail "[$letter] la segunda instalación terminó con error"
+  run_bat /uninstall "$letter" "$WORK/$letter-uninstall.txt" || fail "[$letter] la desinstalación terminó con error"
   snapshot "$letter" "$WORK/$letter-after"
   if same_snapshot "$WORK/$letter-before" "$WORK/$letter-after"; then
     echo "[$letter] tras desinstalar queda igual que antes de instalar"

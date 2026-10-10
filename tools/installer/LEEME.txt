@@ -9,21 +9,28 @@ Necesitas:
   - Hollow Knight 1.5.12620 en Windows (la versión actual de Steam).
   - Que todos los jugadores tengan instalada la MISMA versión de HKMultiplayer.
 
+El mod sale en el idioma del juego: en español si el juego está en español; en cualquier otro
+idioma, en inglés.
 
-1. INSTALAR
------------
+(English instructions: README.txt)
+
+
+1. INSTALAR (con el instalador)
+-------------------------------
 
   1. Cierra Hollow Knight.
   2. Descomprime el .zip entero en cualquier carpeta (clic derecho > Extraer todo). No lo ejecutes
      desde dentro del .zip.
-  3. Abre la carpeta y haz doble clic en "instalar.bat".
+  3. Abre la carpeta y haz doble clic en "HKMultiplayer Setup.bat".
+  4. Se abre el instalador. Comprueba que la carpeta del juego es la buena (si no la encuentra,
+     pulsa "Buscar…") y pulsa "Instalar".
 
 El instalador:
-  - Busca la carpeta del juego (Steam y las rutas típicas). Si no la encuentra, te pide la ruta:
-    en Steam, clic derecho en Hollow Knight > Administrar > Ver archivos locales, y copia la ruta
-    de la ventana que se abre. También puedes arrastrar la carpeta del juego sobre instalar.bat.
+  - Busca la carpeta del juego (Steam y las rutas típicas). Si hay varias, elige la tuya en la
+    lista. Para encontrarla a mano: en Steam, clic derecho en Hollow Knight > Administrar > Ver
+    archivos locales.
   - Guarda una copia de los archivos del juego que va a cambiar, en la carpeta
-    "HKMultiplayer-backup" dentro de la del juego. No la borres: la usa el desinstalador.
+    "HKMultiplayer-backup" dentro de la del juego. No la borres: la usa la desinstalación.
   - Instala la Modding API (la que carga los mods) y el mod.
   - Quita el mod anterior "HollowKnightCoop" si lo tenías: los dos usan la red a la vez y no
     pueden estar juntos.
@@ -32,14 +39,45 @@ El instalador:
 
 Después abre Hollow Knight desde Steam: en el menú principal aparece "Multijugador".
 
-Si Windows no deja escribir en la carpeta del juego, haz clic derecho en instalar.bat y elige
-"Ejecutar como administrador".
+Windows puede avisar al abrir "HKMultiplayer Setup.bat" ("¿Quieres ejecutar este archivo?" o
+"Windows protegió tu PC"): pasa con cualquier archivo descargado de internet que no esté firmado.
+Pulsa "Ejecutar" (o "Más información" > "Ejecutar de todas formas"). El instalador es un script de
+PowerShell que puedes leer en la carpeta "scripts"; si prefieres no usarlo, instala a mano (punto 2).
 
-Para actualizar a una versión nueva del mod, ejecuta el instalador del paquete nuevo: conserva la
-copia del juego de la primera instalación.
+Si Windows no deja escribir en la carpeta del juego, haz clic derecho en "HKMultiplayer Setup.bat"
+y elige "Ejecutar como administrador".
+
+Para actualizar a una versión nueva del mod, abre el instalador del paquete nuevo y pulsa
+"Actualizar": conserva la copia del juego de la primera instalación.
 
 
-2. HOSTEAR UN MUNDO (el que invita)
+2. INSTALAR A MANO (sin el instalador)
+--------------------------------------
+
+Si prefieres no usar el instalador, o no funciona en tu PC:
+
+  1. Cierra Hollow Knight.
+  2. Busca la carpeta del juego: en Steam, clic derecho en Hollow Knight > Administrar > Ver
+     archivos locales. Dentro está hollow_knight_Data\Managed.
+  3. Haz una copia de seguridad de la carpeta hollow_knight_Data\Managed entera (por ejemplo,
+     cópiala al escritorio). Así puedes volver atrás.
+  4. Si tienes la carpeta Managed\Mods, saca de ella los otros mods (sobre todo
+     "HollowKnightCoop", que no puede estar a la vez que este).
+  5. Copia el contenido de la carpeta "files\hollow_knight_Data\Managed" del paquete dentro de
+     <carpeta del juego>\hollow_knight_Data\Managed. Cuando Windows pregunte, elige "Reemplazar
+     los archivos en el destino".
+  6. Abre el juego: en el menú principal aparece "Multijugador".
+
+Si ya tienes instalada la Modding API para esta versión del juego (por ejemplo con Lumafly o
+Scarab), basta con copiar la carpeta "files\hollow_knight_Data\Managed\Mods\HKMultiplayer" del
+paquete a <carpeta del juego>\hollow_knight_Data\Managed\Mods.
+
+Para quitarlo a mano: borra la carpeta Managed\Mods\HKMultiplayer y devuelve la copia de
+seguridad de Managed (o en Steam: clic derecho en Hollow Knight > Propiedades > Archivos
+instalados > Verificar integridad de los archivos del juego).
+
+
+3. HOSTEAR UN MUNDO (el que invita)
 -----------------------------------
 
   1. Menú principal > Multijugador. Escribe tu nombre. El puerto es 26950 si no lo cambias.
@@ -53,10 +91,10 @@ copia del juego de la primera instalación.
 Qué dirección dar:
   - Misma casa (misma red o wifi): la IP que sale en Pausa > Multijugador (suele ser 192.168.x.x).
   - Por internet: tu IP pública. La ves buscando "cuál es mi IP" en el navegador. Además tienes que
-    abrir el puerto (punto 4).
+    abrir el puerto (punto 5).
 
 
-3. UNIRSE A UN MUNDO (el invitado)
+4. UNIRSE A UN MUNDO (el invitado)
 ----------------------------------
 
   1. Menú principal > Multijugador. Escribe tu nombre y el mismo puerto que el host (26950).
@@ -66,7 +104,7 @@ Tu personaje se guarda en el mundo del host, en su PC. Si vuelves a unirte a ese
 recuperas.
 
 
-4. JUGAR POR INTERNET: ABRIR EL PUERTO UDP (solo el host)
+5. JUGAR POR INTERNET: ABRIR EL PUERTO UDP (solo el host)
 ---------------------------------------------------------
 
 El juego usa el puerto 26950 por UDP (o el que pongas en Multijugador > Puerto).
@@ -87,7 +125,7 @@ como Radmin VPN, ZeroTier o Tailscale: el invitado se une con la IP que el progr
 En la misma red (misma casa) no hace falta abrir nada.
 
 
-5. DÓNDE SE GUARDAN LOS MUNDOS
+6. DÓNDE SE GUARDAN LOS MUNDOS
 ------------------------------
 
 Los mundos coop se guardan solo en el PC del host, en:
@@ -101,7 +139,7 @@ Los mundos coop van aparte de las 4 partidas normales del juego, que no se tocan
 de los invitados se guardan dentro del mundo del host.
 
 
-6. SKINS
+7. SKINS
 --------
 
 Compatibles con CustomKnight. Pon cada skin (una carpeta con Knight.png) en
@@ -109,12 +147,12 @@ Compatibles con CustomKnight. Pon cada skin (una carpeta con Knight.png) en
 y elígela en Pausa > Multijugador > Skin. Los demás la ven aunque no la tengan.
 
 
-7. DESINSTALAR
+8. DESINSTALAR
 --------------
 
-Cierra el juego y haz doble clic en "desinstalar.bat" (del mismo paquete). Deja el juego como
-estaba antes de instalar: devuelve los archivos originales, quita la Modding API y el mod, y
-devuelve a su sitio los mods apartados y el mod anterior si lo tenías.
+Cierra el juego, abre "HKMultiplayer Setup.bat" (del mismo paquete) y pulsa "Desinstalar". Deja el
+juego como estaba antes de instalar: devuelve los archivos originales, quita la Modding API y el
+mod, y devuelve a su sitio los mods apartados y el mod anterior si lo tenías.
 
 No borra tus mundos coop, tus partidas ni tus skins.
 
@@ -122,13 +160,15 @@ Si algo se queda mal, Steam lo arregla: clic derecho en Hollow Knight > Propieda
 Archivos instalados > Verificar integridad de los archivos del juego.
 
 
-8. SI ALGO FALLA
+9. SI ALGO FALLA
 ----------------
 
-  - No aparece "Multijugador" en el menú: vuelve a ejecutar instalar.bat. Si sigue sin salir, mira
-    el registro de la Modding API:
+  - El instalador no se abre: haz clic derecho en "HKMultiplayer Setup.bat" > "Ejecutar como
+    administrador", o instala a mano (punto 2).
+  - No aparece "Multijugador" en el menú: vuelve a instalar. Si sigue sin salir, mira el registro
+    de la Modding API:
       C:\Users\<tu usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt
   - El invitado no conecta: comprobad la dirección, el puerto y el código; que los dos tenéis la
-    misma versión del mod; y, por internet, que el host abrió el puerto UDP (punto 4).
+    misma versión del mod; y, por internet, que el host abrió el puerto UDP (punto 5).
   - Si Steam actualiza Hollow Knight a otra versión, el mod puede dejar de cargar hasta que salga
-    una versión del mod para la nueva. Para volver al juego sin mods: punto 7.
+    una versión del mod para la nueva. Para volver al juego sin mods: punto 8.

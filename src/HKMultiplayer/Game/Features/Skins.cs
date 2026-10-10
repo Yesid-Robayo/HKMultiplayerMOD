@@ -616,7 +616,7 @@ internal sealed class Skins {
         if (hash.Length > 0 && !_skins.ContainsKey(hash) && !_session.IsHost && ShowOthers && _requested.Add(hash)) {
             // Se pide al host (llega en segundo plano)
             if (HostSettings.Current.ShowNotices) {
-                Notice.Show($"Recibiendo la skin \"{name}\" de {player.Name}...", 4f);
+                Notice.Show(Lang.T($"Recibiendo la skin \"{name}\" de {player.Name}...", $"Receiving the skin '{name}' from {player.Name}..."), 4f);
             }
 
             var writer = _session.Begin(SkinRequest);
@@ -1101,7 +1101,7 @@ internal sealed class Skins {
     /// <summary>Para el panel: la skin propia y la de cada compañero (y si ya llegó).</summary>
     public string DescribeForPanel(GameSession session) {
         var text = new StringBuilder();
-        text.Append(_local != null ? $"Llevas «{_local.Name}»" : LocalSkinName.Length > 0 ? $"Cargando «{LocalSkinName}»..." : "Llevas el caballero normal");
+        text.Append(_local != null ? Lang.T($"Llevas «{_local.Name}»", $"You're wearing '{_local.Name}'") : LocalSkinName.Length > 0 ? Lang.T($"Cargando «{LocalSkinName}»...", $"Loading '{LocalSkinName}'...") : Lang.T("Llevas el caballero normal", "You're wearing the default knight"));
         foreach (var player in session.Players) {
             if (player.IsLocal) {
                 continue;
@@ -1109,11 +1109,11 @@ internal sealed class Skins {
 
             text.Append('\n').Append(player.Name).Append(": ");
             if (!_worn.TryGetValue(player.Id, out var worn) || worn.Hash.Length == 0) {
-                text.Append("normal");
+                text.Append(Lang.T("normal", "default"));
             } else if (!ShowOthers) {
-                text.Append($"«{worn.Name}» (no la ves: desactivado)");
+                text.Append(Lang.T($"«{worn.Name}» (no la ves: desactivado)", $"'{worn.Name}' (hidden: turned off)"));
             } else {
-                text.Append(_skins.ContainsKey(worn.Hash) ? $"«{worn.Name}»" : $"«{worn.Name}» (recibiéndola...)");
+                text.Append(_skins.ContainsKey(worn.Hash) ? Lang.T($"«{worn.Name}»", $"'{worn.Name}'") : Lang.T($"«{worn.Name}» (recibiéndola...)", $"'{worn.Name}' (receiving...)"));
             }
         }
 
@@ -1152,7 +1152,7 @@ internal sealed class Skins {
 
     public string Describe() {
         var text = new StringBuilder();
-        text.Append($"propia={(_local != null ? $"{_local.Name}/{_local.Hash}" : LocalSkinName.Length > 0 ? $"{LocalSkinName} (cargando)" : "normal")} " +
+        text.Append($"propia={(_local != null ? $"{_local.Name}/{_local.Hash}" : LocalSkinName.Length > 0 ? $"{LocalSkinName} (cargando)" : Lang.T("normal", "default"))} " +
                     $"ver las de los demás={ShowOthers} disponibles=[{string.Join(", ", Available)}] cargadas=[");
         foreach (var skin in _skins.Values) {
             text.Append($"{skin.Name}/{skin.Hash} texturas={skin.Textures.Count}; ");
@@ -1160,7 +1160,7 @@ internal sealed class Skins {
 
         text.Append("] llevan=[");
         foreach (var pair in _worn) {
-            text.Append($"{pair.Key}:{(pair.Value.Hash.Length > 0 ? pair.Value.Name : "normal")}" +
+            text.Append($"{pair.Key}:{(pair.Value.Hash.Length > 0 ? pair.Value.Name : Lang.T("normal", "default"))}" +
                         $"{(pair.Value.Hash.Length > 0 && !_skins.ContainsKey(pair.Value.Hash) ? " (sin recibir)" : string.Empty)}; ");
         }
 

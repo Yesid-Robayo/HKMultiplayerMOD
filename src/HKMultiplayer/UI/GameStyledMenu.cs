@@ -65,7 +65,7 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         GetComponent<MenuButtonList>()?.ClearSelectables();
 
         var back = Screen.controls.GetComponentInChildren<MenuButton>(true);
-        MakeCustom(back, "Volver", OnBack);
+        MakeCustom(back, Lang.T("Volver", "Back"), OnBack);
         back.cancelAction = CancelAction.CustomCancelAction;
         back.customCancelAction = _ => OnBack();
     }
@@ -469,7 +469,7 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         }
 
         if (!option.interactable) {
-            return $"(no se puede cambiar) {option.optionList[option.selectedOptionIndex]}";
+            return Lang.T($"(no se puede cambiar) {option.optionList[option.selectedOptionIndex]}", $"(cannot be changed) {option.optionList[option.selectedOptionIndex]}");
         }
 
         for (var i = 0; i < steps; i++) {

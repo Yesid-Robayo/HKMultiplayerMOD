@@ -62,7 +62,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         buttonObject.name = "MultiplayerButton";
         buttonObject.transform.SetSiblingIndex(startButton.transform.GetSiblingIndex() + 1);
         var button = buttonObject.GetComponent<MenuButton>();
-        MakeCustom(button, "Multijugador", () => Instance?.Open());
+        MakeCustom(button, Lang.T("Multijugador", "Multiplayer"), () => Instance?.Open());
         var buttonList = startButton.transform.parent.GetComponent<MenuButtonList>();
         if (buttonList != null) {
             buttonList.AddSelectable(button, 1);
@@ -72,7 +72,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         var listRect = (RectTransform) startButton.transform.parent;
         listRect.sizeDelta += new Vector2(0f, ((RectTransform) startButton.transform).sizeDelta.y + 40f);
 
-        Instance = CreateScreen<MultiplayerMenu>(ui, "MultiplayerMenuScreen", "Multijugador");
+        Instance = CreateScreen<MultiplayerMenu>(ui, "MultiplayerMenuScreen", Lang.T("Multijugador", "Multiplayer"));
         Instance.BuildPages();
         _mainMenuButton = button;
         Log.Info("Menú Multijugador añadido al menú principal");
@@ -82,16 +82,16 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         var settings = HKMultiplayerMod.Settings;
 
         var start = NewPage(StartPage);
-        AddText(start, "Juega con amigos en tu red o por internet.", 40);
+        AddText(start, Lang.T("Juega con amigos en tu red o por internet.", "Play with friends on your network or over the internet."), 40);
         AddSpace(start, 20);
-        _name = AddInput(start, "Tu nombre", settings.PlayerName, 24, InputField.ContentType.Standard);
-        _port = AddInput(start, "Puerto", settings.Port.ToString(), 5, InputField.ContentType.IntegerNumber);
+        _name = AddInput(start, Lang.T("Tu nombre", "Your name"), settings.PlayerName, 24, InputField.ContentType.Standard);
+        _port = AddInput(start, Lang.T("Puerto", "Port"), settings.Port.ToString(), 5, InputField.ContentType.IntegerNumber);
         AddSpace(start, 30);
-        AddButton(start, "Hostear un mundo", () => ShowPage(HostPage));
-        AddButton(start, "Unirse a un mundo", () => ShowPage(JoinPage));
+        AddButton(start, Lang.T("Hostear un mundo", "Host a world"), () => ShowPage(HostPage));
+        AddButton(start, Lang.T("Unirse a un mundo", "Join a world"), () => ShowPage(JoinPage));
 
         var host = NewPage(HostPage);
-        AddText(host, $"Elige un mundo coop (hasta {WorldStore.MaxWorlds}). Tus partidas normales no se tocan.", 36);
+        AddText(host, Lang.T($"Elige un mundo coop (hasta {WorldStore.MaxWorlds}). Tus partidas normales no se tocan.", $"Pick a coop world (up to {WorldStore.MaxWorlds}). Your normal saves are not touched."), 36);
         AddSpace(host, 10);
         _worldList = new GameObject("Worlds", typeof(RectTransform), typeof(VerticalLayoutGroup));
         _worldList.transform.SetParent(host.transform, false);
@@ -100,21 +100,21 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         listLayout.childControlWidth = true;
         listLayout.childForceExpandHeight = false;
         AddSpace(host, 10);
-        _newWorldButton = AddButton(host, "Nuevo mundo", () => ShowPage(NewWorldPage));
-        _limitText = AddText(host, $"Ya tienes {WorldStore.MaxWorlds} mundos: borra uno para crear otro.", 34);
+        _newWorldButton = AddButton(host, Lang.T("Nuevo mundo", "New world"), () => ShowPage(NewWorldPage));
+        _limitText = AddText(host, Lang.T($"Ya tienes {WorldStore.MaxWorlds} mundos: borra uno para crear otro.", $"You already have {WorldStore.MaxWorlds} worlds: delete one to create another."), 34);
         _hostStatus = AddText(host, string.Empty, 34);
         AddSpace(host, 10);
         // Dónde están los mundos: para hacer copias de seguridad o pasarlos a otro PC
-        var where = AddText(host, $"Los mundos se guardan en este PC, en:\n{WorldStore.Root.Replace('/', '\\')}", 30);
+        var where = AddText(host, Lang.T($"Los mundos se guardan en este PC, en:\n{WorldStore.Root.Replace('/', '\\')}", $"Worlds are saved on this PC, in:\n{WorldStore.Root.Replace('/', '\\')}"), 30);
         where.GetComponent<LayoutElement>().preferredHeight = 30 * 3.4f;
-        AddButton(host, "Abrir carpeta de los mundos", OpenWorldsFolder, fontSize: 34);
+        AddButton(host, Lang.T("Abrir carpeta de los mundos", "Open worlds folder"), OpenWorldsFolder, fontSize: 34);
 
         var newWorld = NewPage(NewWorldPage);
-        AddText(newWorld, "Un mundo coop empieza como una partida nueva y lo guarda tu PC.", 38);
+        AddText(newWorld, Lang.T("Un mundo coop empieza como una partida nueva y lo guarda tu PC.", "A coop world starts like a new game and is saved on your PC."), 38);
         AddSpace(newWorld, 20);
-        _newWorldName = AddInput(newWorld, "Nombre del mundo", string.Empty, 40, InputField.ContentType.Standard);
+        _newWorldName = AddInput(newWorld, Lang.T("Nombre del mundo", "World name"), string.Empty, 40, InputField.ContentType.Standard);
         AddSpace(newWorld, 30);
-        AddButton(newWorld, "Crear y hostear", () => {
+        AddButton(newWorld, Lang.T("Crear y hostear", "Create and host"), () => {
             var world = WorldStore.Create(_newWorldName.text);
             if (world == null) {
                 ShowPage(HostPage);
@@ -126,22 +126,22 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         });
 
         var join = NewPage(JoinPage);
-        AddText(join, "Pide al host su dirección y el código de la partida.", 38);
+        AddText(join, Lang.T("Pide al host su dirección y el código de la partida.", "Ask the host for their address and the game code."), 38);
         AddSpace(join, 20);
-        _address = AddInput(join, "Dirección del host", settings.LastAddress, 64, InputField.ContentType.Standard);
-        _code = AddInput(join, "Código", string.Empty, 9, InputField.ContentType.Custom);
+        _address = AddInput(join, Lang.T("Dirección del host", "Host address"), settings.LastAddress, 64, InputField.ContentType.Standard);
+        _code = AddInput(join, Lang.T("Código", "Code"), string.Empty, 9, InputField.ContentType.Custom);
         _code.onValidateInput = (_, _, c) => c == '-' || char.IsLetterOrDigit(c) ? char.ToUpperInvariant(c) : '\0';
         AddSpace(join, 30);
-        AddButton(join, "Unirse", Join);
+        AddButton(join, Lang.T("Unirse", "Join"), Join);
         _joinStatus = AddText(join, string.Empty, 34);
-        AddText(join, "Tu personaje se guarda en el mundo del host, en su PC (al volver a unirte lo recuperas).", 28);
+        AddText(join, Lang.T("Tu personaje se guarda en el mundo del host, en su PC (al volver a unirte lo recuperas).", "Your character is saved in the host's world, on their PC (you get it back when you join again)."), 28);
 
         var delete = NewPage(DeletePage);
         _deleteQuestion = AddText(delete, string.Empty, 44, title: true);
-        AddText(delete, "Se borra de este PC con todo su progreso y no se puede deshacer.", 36);
+        AddText(delete, Lang.T("Se borra de este PC con todo su progreso y no se puede deshacer.", "It is deleted from this PC with all its progress and cannot be undone."), 36);
         AddSpace(delete, 30);
-        AddButton(delete, "Cancelar", () => ShowPage(HostPage));
-        AddButton(delete, "Borrar para siempre", () => {
+        AddButton(delete, Lang.T("Cancelar", "Cancel"), () => ShowPage(HostPage));
+        AddButton(delete, Lang.T("Borrar para siempre", "Delete forever"), () => {
             if (_pendingDelete != null) {
                 WorldStore.Delete(_pendingDelete.Id);
                 _pendingDelete = null;
@@ -226,20 +226,20 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         var worlds = WorldStore.List();
         foreach (var world in worlds) {
             var label = world.IsNew
-                ? $"{world.Name}  ·  nuevo"
+                ? Lang.T($"{world.Name}  ·  nuevo", $"{world.Name}  ·  new")
                 : $"{world.Name}  ·  {FormatTime(world.PlayTime)}  ·  {AreaName(world.Area)}";
             var target = world;
             var row = AddRow(_worldList, world.Name, 84, 10);
             AddButton(row, label, () => UIManager.instance.StartCoroutine(HostRoutine(target)), 40, 1080);
-            AddButton(row, "Borrar", () => {
+            AddButton(row, Lang.T("Borrar", "Delete"), () => {
                 _pendingDelete = target;
-                _deleteQuestion.text = $"¿Borrar el mundo «{target.Name}»?";
+                _deleteQuestion.text = Lang.T($"¿Borrar el mundo «{target.Name}»?", $"Delete the world \"{target.Name}\"?");
                 ShowPage(DeletePage);
             }, 32, 240);
         }
 
         if (worlds.Count == 0) {
-            AddText(_worldList, "Aún no tienes mundos coop.", 36);
+            AddText(_worldList, Lang.T("Aún no tienes mundos coop.", "You don't have any coop worlds yet."), 36);
         }
 
         var full = worlds.Count >= WorldStore.MaxWorlds;
@@ -261,12 +261,12 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
 
         SaveFields();
         if (!TryPort(out var port)) {
-            _hostStatus.text = "El puerto no es válido";
+            _hostStatus.text = Lang.T("El puerto no es válido", "The port is not valid");
             yield break;
         }
 
         if (!CoopSaves.CanStart) {
-            _hostStatus.text = "Vuelve al menú principal para abrir un mundo coop";
+            _hostStatus.text = Lang.T("Vuelve al menú principal para abrir un mundo coop", "Go back to the main menu to open a coop world");
             yield break;
         }
 
@@ -295,12 +295,12 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
     private void Join() {
         SaveFields();
         if (!CoopSaves.CanStart) {
-            _joinStatus.text = "Únete desde el menú principal";
+            _joinStatus.text = Lang.T("Únete desde el menú principal", "Join from the main menu");
             return;
         }
 
         if (!TryPort(out var port)) {
-            _joinStatus.text = "El puerto no es válido";
+            _joinStatus.text = Lang.T("El puerto no es válido", "The port is not valid");
             return;
         }
 

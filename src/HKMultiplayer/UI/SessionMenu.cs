@@ -40,7 +40,7 @@ internal sealed class SessionMenu : GameStyledMenu {
     /// <summary>Cantidades de geo que se pueden dar (0 = todo).</summary>
     private static readonly int[] GeoAmounts = { 10, 50, 100, 200, 500, 0 };
 
-    private static readonly string[] GeoLabels = { "10", "50", "100", "200", "500", "Todo" };
+    private static readonly string[] GeoLabels = { "10", "50", "100", "200", "500", Lang.T("Todo", "All") };
     private const string ButtonName = "MultiplayerButton";
 
     private static PauseMenuButton _pauseButton;
@@ -126,7 +126,7 @@ internal sealed class SessionMenu : GameStyledMenu {
         buttonObject.name = ButtonName;
         buttonObject.transform.SetSiblingIndex(options.transform.GetSiblingIndex() + 1);
         RemoveLocalization(buttonObject);
-        buttonObject.GetComponentInChildren<Text>(true).text = "Multijugador";
+        buttonObject.GetComponentInChildren<Text>(true).text = Lang.T("Multijugador", "Multiplayer");
         _pauseButton = buttonObject.GetComponent<PauseMenuButton>();
 
         // Posiciones originales de los botones y adornos de la pausa (se separan para hacer sitio)
@@ -145,7 +145,7 @@ internal sealed class SessionMenu : GameStyledMenu {
         }
 
         buttonObject.SetActive(false);
-        Instance = CreateScreen<SessionMenu>(ui, "MultiplayerSessionScreen", "Multijugador");
+        Instance = CreateScreen<SessionMenu>(ui, "MultiplayerSessionScreen", Lang.T("Multijugador", "Multiplayer"));
         Instance.BuildPages();
         Log.Info("Multijugador añadido al menú de pausa");
     }
@@ -201,25 +201,25 @@ internal sealed class SessionMenu : GameStyledMenu {
         _code = AddText(main, string.Empty, 40);
         _address = AddText(main, string.Empty, 36);
         var row = AddRow(main, "Acciones", 84, 10);
-        AddButton(row, "Copiar código", CopyCode, 36, 520);
-        _showAddress = AddButton(row, "Mostrar mi IP", ToggleAddress, 36, 520);
+        AddButton(row, Lang.T("Copiar código", "Copy code"), CopyCode, 36, 520);
+        _showAddress = AddButton(row, Lang.T("Mostrar mi IP", "Show my IP"), ToggleAddress, 36, 520);
         AddSpace(main, 10);
-        AddText(main, "Jugadores", 40, title: true);
+        AddText(main, Lang.T("Jugadores", "Players"), 40, title: true);
         _players = AddText(main, string.Empty, 36);
         _players.GetComponent<LayoutElement>().preferredHeight = 150;
         _players.alignment = TextAnchor.UpperCenter;
         var pages = AddRow(main, "Páginas", 84, 10);
-        AddButton(pages, "Ajustes de la partida", () => ShowPage(SettingsPage), 36, 560);
-        AddButton(pages, "Compañeros", () => ShowPage(PartnersPage), 36, 420);
+        AddButton(pages, Lang.T("Ajustes de la partida", "Game settings"), () => ShowPage(SettingsPage), 36, 560);
+        AddButton(pages, Lang.T("Compañeros", "Partners"), () => ShowPage(PartnersPage), 36, 420);
         AddButton(pages, "Skin", () => ShowPage(SkinPage), 36, 260);
-        _leave = AddButton(main, "Cerrar partida", () => ShowPage(LeavePage));
+        _leave = AddButton(main, Lang.T("Cerrar partida", "Close game"), () => ShowPage(LeavePage));
 
         var leave = NewPage(LeavePage);
         _leaveQuestion = AddText(leave, string.Empty, 44, title: true);
         _leaveDetail = AddText(leave, string.Empty, 36);
         AddSpace(leave, 30);
-        AddButton(leave, "Cancelar", () => ShowPage(MainPage));
-        _leaveConfirm = AddButton(leave, "Cerrar partida", Leave);
+        AddButton(leave, Lang.T("Cancelar", "Cancel"), () => ShowPage(MainPage));
+        _leaveConfirm = AddButton(leave, Lang.T("Cerrar partida", "Close game"), Leave);
 
         BuildSettingsPages();
         BuildPartnersPage();
@@ -230,17 +230,17 @@ internal sealed class SessionMenu : GameStyledMenu {
     /// <summary>Skin propia y si se ven las de los demás (de este PC; se guardan en sus ajustes).</summary>
     private void BuildSkinPage() {
         var page = NewPage(SkinPage);
-        AddText(page, "Skins compatibles con CustomKnight: una carpeta con Knight.png (y, si quiere, los hechizos y el HUD)", 30);
-        _skinOption = AddOption(page, "Tu skin", _skinChoices, 0, index => {
+        AddText(page, Lang.T("Skins compatibles con CustomKnight: una carpeta con Knight.png (y, si quiere, los hechizos y el HUD)", "CustomKnight-compatible skins: a folder with Knight.png (and, optionally, the spells and the HUD)"), 30);
+        _skinOption = AddOption(page, Lang.T("Tu skin", "Your skin"), _skinChoices, 0, index => {
             Skins.SelectLocalSkin(index <= 0 || index >= _skinChoices.Length ? string.Empty : _skinChoices[index]);
             Refresh();
         });
-        _showSkinsOption = AddOption(page, "Ver las skins de los demás", new[] { "Sí", "No" },
+        _showSkinsOption = AddOption(page, Lang.T("Ver las skins de los demás", "Show other players' skins"), Lang.Spanish ? new[] { "Sí", "No" } : new[] { "Yes", "No" },
             Skins.ShowOthers ? 0 : 1, index => Skins.SetShowOthers(index == 0));
         _skinStatus = AddText(page, string.Empty, 30);
         _skinStatus.GetComponent<LayoutElement>().preferredHeight = 120;
         AddSpace(page, 6);
-        AddButton(page, "Abrir la carpeta de skins", Skins.OpenFolder, 36);
+        AddButton(page, Lang.T("Abrir la carpeta de skins", "Open skins folder"), Skins.OpenFolder, 36);
     }
 
     /// <summary>Lista de skins (puede cambiar con el juego abierto) y qué lleva cada uno.</summary>
@@ -251,7 +251,7 @@ internal sealed class SessionMenu : GameStyledMenu {
 
         var available = Skins.Available;
         var choices = new string[available.Count + 1];
-        choices[0] = "Normal";
+        choices[0] = Lang.T("Normal", "Default");
         for (var i = 0; i < available.Count; i++) {
             choices[i + 1] = available[i];
         }
@@ -283,28 +283,28 @@ internal sealed class SessionMenu : GameStyledMenu {
         }
 
         AddSpace(first, 6);
-        AddButton(first, "Más ajustes", () => ShowPage(MoreSettingsPage), 36);
+        AddButton(first, Lang.T("Más ajustes", "More settings"), () => ShowPage(MoreSettingsPage), 36);
         AddSpace(second, 6);
-        AddButton(second, "Ajustes anteriores", () => ShowPage(SettingsPage), 36);
+        AddButton(second, Lang.T("Ajustes anteriores", "Previous settings"), () => ShowPage(SettingsPage), 36);
     }
 
     /// <summary>Compañeros: su vida y alma, dar geo, ir con él, desatascarse y recargar la sala.</summary>
     private void BuildPartnersPage() {
         var page = NewPage(PartnersPage);
         _ownGeo = AddText(page, string.Empty, 34);
-        AddOption(page, "Geo a dar", GeoLabels, _geoIndex, index => _geoIndex = index);
+        AddOption(page, Lang.T("Geo a dar", "Geo to give"), GeoLabels, _geoIndex, index => _geoIndex = index);
         for (var i = 0; i < MaxPartnerRows; i++) {
             var row = i;
             _partnerTexts[i] = AddText(page, string.Empty, 32);
             _partnerRows[i] = AddRow(page, $"Compañero {i + 1}", 84, 10);
-            _partnerButtons[i] = AddButton(_partnerRows[i], "Dar geo", () => GiveGeo(row), 34, 520);
-            _goToButtons[i] = AddButton(_partnerRows[i], "Ir con", () => GoTo(row), 34, 520);
+            _partnerButtons[i] = AddButton(_partnerRows[i], Lang.T("Dar geo", "Give geo"), () => GiveGeo(row), 34, 520);
+            _goToButtons[i] = AddButton(_partnerRows[i], Lang.T("Ir con", "Go to"), () => GoTo(row), 34, 520);
         }
 
         AddSpace(page, 6);
         var help = AddRow(page, "Ayuda", 84, 10);
-        AddButton(help, "Desatascar", () => Resume(MultiplayerRunner.Instance.Actions.RequestUnstuck()), 36, 420);
-        AddButton(help, "Recargar sala", () => Resume(MultiplayerRunner.Instance.Actions.RequestReload()), 36, 420);
+        AddButton(help, Lang.T("Desatascar", "Unstuck"), () => Resume(MultiplayerRunner.Instance.Actions.RequestUnstuck()), 36, 420);
+        AddButton(help, Lang.T("Recargar sala", "Reload room"), () => Resume(MultiplayerRunner.Instance.Actions.RequestReload()), 36, 420);
         _partnersMessage = AddText(page, string.Empty, 30);
     }
 
@@ -317,7 +317,7 @@ internal sealed class SessionMenu : GameStyledMenu {
 
         var error = MultiplayerRunner.Instance.Actions.TryGiftGeo(_partnerIds[row], amount);
         var name = PartyState.Current?.Get(_partnerIds[row])?.Name ?? "?";
-        _partnersMessage.text = error ?? $"Le diste {amount} geo a {name}";
+        _partnersMessage.text = error ?? Lang.T($"Le diste {amount} geo a {name}", $"You gave {amount} geo to {name}");
         Refresh();
     }
 
@@ -431,22 +431,22 @@ internal sealed class SessionMenu : GameStyledMenu {
 
         var world = CoopSaves.ActiveWorld;
         _header.text = session.IsHost
-            ? world != null ? $"Mundo «{world.Name}»" : "Partida abierta"
-            : session.IsActive ? "Conectado a la partida" : "Conectando...";
-        _code.text = $"Código de la partida: {MultiplayerRunner.FormatCode(session.RoomCode)}";
+            ? world != null ? Lang.T($"Mundo «{world.Name}»", $"World \"{world.Name}\"") : Lang.T("Partida abierta", "Game open")
+            : session.IsActive ? Lang.T("Conectado a la partida", "Connected to the game") : Lang.T("Conectando...", "Connecting...");
+        _code.text = Lang.T($"Código de la partida: {MultiplayerRunner.FormatCode(session.RoomCode)}", $"Game code: {MultiplayerRunner.FormatCode(session.RoomCode)}");
         _address.text = session.IsHost
             ? _addressVisible
-                ? $"Tu IP: {MultiplayerRunner.LocalAddresses()}   ·   puerto {session.Port}"
-                : "Tu IP está oculta"
+                ? Lang.T($"Tu IP: {MultiplayerRunner.LocalAddresses()}   ·   puerto {session.Port}", $"Your IP: {MultiplayerRunner.LocalAddresses()}   ·   port {session.Port}")
+                : Lang.T("Tu IP está oculta", "Your IP is hidden")
             : string.Empty;
         _showAddress.gameObject.SetActive(session.IsHost);
-        SetButtonText(_showAddress, _addressVisible ? "Ocultar mi IP" : "Mostrar mi IP");
+        SetButtonText(_showAddress, _addressVisible ? Lang.T("Ocultar mi IP", "Hide my IP") : Lang.T("Mostrar mi IP", "Show my IP"));
 
         var text = new StringBuilder();
         foreach (var player in session.Players.OrderBy(p => p.Id)) {
             text.Append(player.Name);
             if (player.IsLocal) {
-                text.Append(" (tú)");
+                text.Append(Lang.T(" (tú)", " (you)"));
             }
 
             if (player.Id == Session.GameSession.HostPlayerId) {
@@ -460,13 +460,13 @@ internal sealed class SessionMenu : GameStyledMenu {
 
         _players.text = text.ToString().TrimEnd('\n');
 
-        var leaveText = session.IsHost ? "Cerrar partida" : "Salir de la partida";
+        var leaveText = session.IsHost ? Lang.T("Cerrar partida", "Close game") : Lang.T("Salir de la partida", "Leave game");
         SetButtonText(_leave, leaveText);
         SetButtonText(_leaveConfirm, leaveText);
-        _leaveQuestion.text = session.IsHost ? "¿Cerrar la partida?" : "¿Salir de la partida?";
+        _leaveQuestion.text = session.IsHost ? Lang.T("¿Cerrar la partida?", "Close the game?") : Lang.T("¿Salir de la partida?", "Leave the game?");
         _leaveDetail.text = session.IsHost
-            ? "Los demás jugadores se desconectarán. Tú sigues jugando en tu mundo."
-            : "Tu personaje se guarda en el mundo del host y vuelves al menú principal.";
+            ? Lang.T("Los demás jugadores se desconectarán. Tú sigues jugando en tu mundo.", "The other players will be disconnected. You keep playing in your world.")
+            : Lang.T("Tu personaje se guarda en el mundo del host y vuelves al menú principal.", "Your character is saved in the host's world and you go back to the main menu.");
         RefreshSettings(session.IsHost);
         RefreshPartners(session);
         RefreshSkins(session);
@@ -492,15 +492,15 @@ internal sealed class SessionMenu : GameStyledMenu {
         }
 
         var note = editable
-            ? "Se aplican a todos al momento y se guardan en este mundo"
-            : "Los decide el host: aquí solo se ven";
+            ? Lang.T("Se aplican a todos al momento y se guardan en este mundo", "They apply to everyone right away and are saved in this world")
+            : Lang.T("Los decide el host: aquí solo se ven", "The host decides them: here you can only see them");
         _settingsNote.text = note;
         _moreSettingsNote.text = note;
     }
 
     private void RefreshPartners(Session.GameSession session) {
         var pd = PlayerData.instance;
-        _ownGeo.text = pd != null ? $"Tu geo: {pd.geo}" : string.Empty;
+        _ownGeo.text = pd != null ? Lang.T($"Tu geo: {pd.geo}", $"Your geo: {pd.geo}") : string.Empty;
         var party = PartyState.Current;
         var vitals = MultiplayerRunner.Instance.Vitals;
         var row = 0;
@@ -513,19 +513,19 @@ internal sealed class SessionMenu : GameStyledMenu {
                 var entry = vitals.Get(member.Id);
                 var text = new StringBuilder(member.Name);
                 if (member.Status == PlayerStatus.Downed) {
-                    text.Append("  ·  caído");
+                    text.Append(Lang.T("  ·  caído", "  ·  down"));
                 } else if (entry != null) {
-                    text.Append($"  ·  {entry.Health}/{entry.MaxHealth} máscaras");
+                    text.Append(Lang.T($"  ·  {entry.Health}/{entry.MaxHealth} máscaras", $"  ·  {entry.Health}/{entry.MaxHealth} masks"));
                     if (entry.Blue > 0) {
-                        text.Append($" (+{entry.Blue} azules)");
+                        text.Append(Lang.T($" (+{entry.Blue} azules)", $" (+{entry.Blue} blue)"));
                     }
 
                     // Dónde está: en una cinemática la zona es "ninguna" (salía "None"); en un sueño, se dice así
-                    text.Append($"  ·  {entry.Soul} de alma  ·  ");
+                    text.Append(Lang.T($"  ·  {entry.Soul} de alma  ·  ", $"  ·  {entry.Soul} soul  ·  "));
                     text.Append(member.Status switch {
-                        PlayerStatus.Cutscene => "viendo una cinemática",
-                        PlayerStatus.Dream => "en un sueño",
-                        _ => entry.Zone == (byte) MapZone.NONE ? "cambiando de sala" : Zones.Name(entry.Zone)
+                        PlayerStatus.Cutscene => Lang.T("viendo una cinemática", "watching a cutscene"),
+                        PlayerStatus.Dream => Lang.T("en un sueño", "in a dream"),
+                        _ => entry.Zone == (byte) MapZone.NONE ? Lang.T("cambiando de sala", "changing rooms") : Zones.Name(entry.Zone)
                     });
                 }
 
@@ -533,9 +533,9 @@ internal sealed class SessionMenu : GameStyledMenu {
                 _partnerTexts[row].text = text.ToString();
                 _partnerTexts[row].gameObject.SetActive(true);
                 _partnerRows[row].SetActive(true);
-                SetButtonText(_partnerButtons[row], $"Dar geo a {member.Name}");
+                SetButtonText(_partnerButtons[row], Lang.T($"Dar geo a {member.Name}", $"Give geo to {member.Name}"));
                 SetButtonEnabled(_partnerButtons[row], HostSettings.Current.AllowGeoGifts);
-                SetButtonText(_goToButtons[row], $"Ir con {member.Name}");
+                SetButtonText(_goToButtons[row], Lang.T($"Ir con {member.Name}", $"Go to {member.Name}"));
                 SetButtonEnabled(_goToButtons[row], HostSettings.Current.AllowPartnerTravel);
                 row++;
             }
@@ -543,7 +543,7 @@ internal sealed class SessionMenu : GameStyledMenu {
 
         for (var i = row; i < MaxPartnerRows; i++) {
             _partnerTexts[i].gameObject.SetActive(i == 0);
-            _partnerTexts[i].text = i == 0 ? "No hay compañeros conectados" : string.Empty;
+            _partnerTexts[i].text = i == 0 ? Lang.T("No hay compañeros conectados", "No partners connected") : string.Empty;
             _partnerRows[i].SetActive(false);
         }
     }
@@ -552,7 +552,7 @@ internal sealed class SessionMenu : GameStyledMenu {
         var session = MultiplayerRunner.Instance?.Session;
         if (session != null) {
             GUIUtility.systemCopyBuffer = MultiplayerRunner.FormatCode(session.RoomCode);
-            Notice.Show("Código copiado", 2f);
+            Notice.Show(Lang.T("Código copiado", "Code copied"), 2f);
         }
     }
 

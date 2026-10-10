@@ -170,7 +170,7 @@ internal sealed class WorldSync {
         var writer = _session.Begin(Identify);
         writer.WriteString(HKMultiplayerMod.Settings.PlayerKey);
         _session.End();
-        JoinStatus = "Conectado. Recibiendo el mundo del host...";
+        JoinStatus = Lang.T("Conectado. Recibiendo el mundo del host...", "Connected. Receiving the host's world...");
     }
 
     private void ReceiveWorld(byte[] data) {
@@ -184,17 +184,17 @@ internal sealed class WorldSync {
             world = JsonConvert.DeserializeObject<SaveGameData>(Decompress(data, MaxWorldChars), WorldStore.SaveSettings);
         } catch (Exception e) when (e is JsonException or InvalidDataException) {
             Log.Error($"El mundo recibido no es válido: {e.Message}");
-            JoinStatus = "El mundo recibido no es válido";
+            JoinStatus = Lang.T("El mundo recibido no es válido", "The received world is not valid");
             return;
         }
 
         if (world?.playerData == null || world.sceneData == null) {
-            JoinStatus = "El mundo recibido no es válido";
+            JoinStatus = Lang.T("El mundo recibido no es válido", "The received world is not valid");
             return;
         }
 
         Log.Info($"Mundo del host recibido ({data.Length / 1024} KB)");
-        JoinStatus = "Entrando en el mundo...";
+        JoinStatus = Lang.T("Entrando en el mundo...", "Entering the world...");
         CoopSaves.StartGuest(world);
     }
 

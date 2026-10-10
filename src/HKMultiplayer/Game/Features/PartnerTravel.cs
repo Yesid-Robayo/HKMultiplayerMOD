@@ -150,7 +150,7 @@ internal sealed class PartnerTravel {
         }
 
         _wanted = targetId;
-        _wantedName = _party.Get(targetId)?.Name ?? "tu compañero";
+        _wantedName = _party.Get(targetId)?.Name ?? Lang.T("tu compañero", "your partner");
         _sentAt = -1f;
         _hasDestination = false;
         Log.Info($"Ir con {_wantedName}: al volver al juego");
@@ -160,30 +160,30 @@ internal sealed class PartnerTravel {
     /// <summary>Lo que impide ir con el compañero según lo que se sabe en este PC (null si nada).</summary>
     private string LocalError(ushort targetId) {
         if (_session == null || !_session.CanSend || _party == null) {
-            return "No estás conectado a ninguna partida";
+            return Lang.T("No estás conectado a ninguna partida", "You aren't connected to any game");
         }
 
         if (!HostSettings.Current.AllowPartnerTravel) {
-            return "El host desactivó ir con un compañero";
+            return Lang.T("El host desactivó ir con un compañero", "The host disabled going to a partner");
         }
 
         if (_revive != null && _revive.IsDowned) {
-            return "Estás caído: espera a que te revivan";
+            return Lang.T("Estás caído: espera a que te revivan", "You're down: wait to be revived");
         }
 
         if (_cutscenes != null && _cutscenes.Watching) {
-            return "Estás viendo una cinemática";
+            return Lang.T("Estás viendo una cinemática", "You're watching a cutscene");
         }
 
         if (_dreams != null && _dreams.InDream) {
-            return "Estás en un sueño: sal de él para ir con un compañero";
+            return Lang.T("Estás en un sueño: sal de él para ir con un compañero", "You're in a dream: leave it to go to a partner");
         }
 
         var gm = GameManager.instance;
         var hero = HeroController.instance;
         if (gm == null || hero == null || gm.IsInSceneTransition || hero.cState.transitioning || _travel.Active ||
             _revive != null && _revive.IsTraveling) {
-            return "Estás cambiando de sala: espera a llegar";
+            return Lang.T("Estás cambiando de sala: espera a llegar", "You're changing rooms: wait until you arrive");
         }
 
         var busy = BusyError(hero);
@@ -192,12 +192,12 @@ internal sealed class PartnerTravel {
         }
 
         if (!InSharedWorld()) {
-            return "Solo se puede ir con un compañero dentro del mismo mundo coop";
+            return Lang.T("Solo se puede ir con un compañero dentro del mismo mundo coop", "You can only go to a partner in the same coop world");
         }
 
         var target = _party.Get(targetId);
         if (target == null || target.Player == null || targetId == _session.LocalId) {
-            return target != null ? $"{target.Name} ya no está en la partida" : "Ese compañero ya no está en la partida";
+            return target != null ? Lang.T($"{target.Name} ya no está en la partida", $"{target.Name} is no longer in the game") : Lang.T("Ese compañero ya no está en la partida", "That partner is no longer in the game");
         }
 
         var name = target.Name;
@@ -219,23 +219,23 @@ internal sealed class PartnerTravel {
     private static string BusyError(HeroController hero) {
         var pd = PlayerData.instance;
         if (pd != null && pd.atBench) {
-            return "Estás sentado en un banco: levántate antes de ir con un compañero";
+            return Lang.T("Estás sentado en un banco: levántate antes de ir con un compañero", "You're sitting on a bench: get up before going to a partner");
         }
 
-        return hero.controlReqlinquished ? "Ahora no puedes moverte: inténtalo cuando recuperes el control" : null;
+        return hero.controlReqlinquished ? Lang.T("Ahora no puedes moverte: inténtalo cuando recuperes el control", "You can't move right now: try again when you regain control") : null;
     }
 
     private static string Describe(Refusal refusal, string name) => refusal switch {
-        Refusal.Disabled => "El host desactivó ir con un compañero",
-        Refusal.Gone => $"{name} ya no está en la partida",
-        Refusal.Downed => $"No se puede ir con {name}: está caído",
-        Refusal.Cutscene => $"No se puede ir con {name}: está viendo una cinemática",
-        Refusal.Dream => $"No se puede ir con {name}: está en un sueño",
-        Refusal.Changing => $"No se puede ir con {name}: está cambiando de sala (prueba en un momento)",
-        Refusal.OtherWorld => $"No se puede ir con {name}: está en otro mundo",
-        Refusal.Unreachable => $"No se puede ir con {name}: está en un sitio al que no se puede ir",
-        Refusal.RequesterDowned => "Estás caído: espera a que te revivan",
-        _ => $"No se puede ir con {name}"
+        Refusal.Disabled => Lang.T("El host desactivó ir con un compañero", "The host disabled going to a partner"),
+        Refusal.Gone => Lang.T($"{name} ya no está en la partida", $"{name} is no longer in the game"),
+        Refusal.Downed => Lang.T($"No se puede ir con {name}: está caído", $"Can't go to {name}: they're down"),
+        Refusal.Cutscene => Lang.T($"No se puede ir con {name}: está viendo una cinemática", $"Can't go to {name}: they're watching a cutscene"),
+        Refusal.Dream => Lang.T($"No se puede ir con {name}: está en un sueño", $"Can't go to {name}: they're in a dream"),
+        Refusal.Changing => Lang.T($"No se puede ir con {name}: está cambiando de sala (prueba en un momento)", $"Can't go to {name}: they're changing rooms (try again in a moment)"),
+        Refusal.OtherWorld => Lang.T($"No se puede ir con {name}: está en otro mundo", $"Can't go to {name}: they're in another world"),
+        Refusal.Unreachable => Lang.T($"No se puede ir con {name}: está en un sitio al que no se puede ir", $"Can't go to {name}: they're somewhere you can't go"),
+        Refusal.RequesterDowned => Lang.T("Estás caído: espera a que te revivan", "You're down: wait to be revived"),
+        _ => Lang.T($"No se puede ir con {name}", $"Can't go to {name}")
     };
 
     /// <summary>
@@ -287,7 +287,7 @@ internal sealed class PartnerTravel {
 
         if (Time.unscaledTime - _sentAt > ReplyTimeout) {
             Log.Warn($"Ir con {_wantedName}: sin respuesta");
-            Notice.Show($"{_wantedName} no respondió: inténtalo otra vez", 4f);
+            Notice.Show(Lang.T($"{_wantedName} no respondió: inténtalo otra vez", $"{_wantedName} didn't answer: try again"), 4f);
             Clear();
         }
     }
@@ -327,12 +327,12 @@ internal sealed class PartnerTravel {
         var gm = GameManager.instance;
         var name = _wantedName;
         if (_revive != null && _revive.IsDowned) {
-            Notice.Show("Estás caído: espera a que te revivan", 4f);
+            Notice.Show(Lang.T("Estás caído: espera a que te revivan", "You're down: wait to be revived"), 4f);
             return;
         }
 
         if (gm.IsInSceneTransition || hero.cState.transitioning || _travel.Active || _revive != null && _revive.IsTraveling) {
-            Notice.Show("Estás cambiando de sala: inténtalo al llegar", 4f);
+            Notice.Show(Lang.T("Estás cambiando de sala: inténtalo al llegar", "You're changing rooms: try again when you arrive"), 4f);
             return;
         }
 
@@ -352,12 +352,12 @@ internal sealed class PartnerTravel {
             }
 
             Log.Info($"Junto a {name} en la misma sala ({placed.x:0.0}, {placed.y:0.0})");
-            Notice.Show($"Estás junto a {name}", 3f);
+            Notice.Show(Lang.T($"Estás junto a {name}", $"You're next to {name}"), 3f);
             return;
         }
 
         if (!_travel.Begin(_destinationScene, target, _onArrival)) {
-            Notice.Show($"Ahora no se puede ir con {name}", 4f);
+            Notice.Show(Lang.T($"Ahora no se puede ir con {name}", $"Can't go to {name} right now"), 4f);
             return;
         }
 
@@ -373,7 +373,7 @@ internal sealed class PartnerTravel {
 
         var placed = Place(hero, target);
         Log.Info($"Junto a {_wantedName} en {_destinationScene} ({placed.x:0.0}, {placed.y:0.0})");
-        Notice.Show($"Estás junto a {_wantedName}", 3f);
+        Notice.Show(Lang.T($"Estás junto a {_wantedName}", $"You're next to {_wantedName}"), 3f);
         return placed;
     }
 

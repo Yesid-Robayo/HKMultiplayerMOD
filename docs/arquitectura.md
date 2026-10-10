@@ -613,17 +613,32 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   qué copias de amuletos y cuántos acompañantes del compañero hay encendidos. Ruta: `tests/routes/effects.route`.
 - Paquete para jugadores: `tools/manual-tests/installer-test.sh <zip>` (ver [Paquete e instalador](#paquete-e-instalador)).
 
+## Idioma
+
+- Los textos del mod que ve el jugador van en el idioma del juego (`UI/Lang.cs`: `Lang.T("español", "inglés")`): en
+  español si el juego está en español (`TeamCherry.Localization.Language.CurrentLanguage() == LanguageCode.ES`); en
+  cualquier otro, en inglés. Se mira cada vez que se pide un texto: avisos, estados, HUD y textos que se refrescan
+  cambian en cuanto se cambia el idioma; las etiquetas fijas de los menús se ponen al crearlos (al abrir el juego). Los
+  ajustes del host (`HostOption`) guardan los dos idiomas y eligen al mostrarse. Los nombres de jefes y zonas salen de
+  los textos del propio juego. Los registros (`ModLog.txt`) siguen en español.
+
 ## Paquete e instalador
 
 - `tools/package.sh` compila en Release y arma `out/package/HKMultiplayer-<versión>.zip` con una carpeta
-  `HKMultiplayer-<versión>`: `instalar.bat`, `desinstalar.bat` y `LEEME.txt` (instrucciones para jugadores) en la raíz,
-  los scripts de PowerShell en `scripts/` (con `version.txt`), lo que se copia al juego en `files/` (la Modding API de
+  `HKMultiplayer-<versión>`: `HKMultiplayer Setup.bat`, `LEEME.txt` y `README.txt` (instrucciones para jugadores en
+  español y en inglés, con la instalación a mano) en la raíz, los scripts de PowerShell en `scripts/` (con `version.txt`), lo que se copia al juego en `files/` (la Modding API de
   `vendor/modding-api/OutputFinal` sin su README, y `Mods/HKMultiplayer` con el mod, su `.pdb` y BouncyCastle) y
   `SHA256SUMS.txt`. Del juego solo van los dos ensamblados que parchea la Modding API (`Assembly-CSharp.dll` y
   `TeamCherry.Localization.dll`). Fuentes del instalador en `tools/installer/`.
-- `instalar.bat` (→ `scripts/install.ps1`): carpeta del juego pasada (también arrastrada sobre el .bat) o buscada
-  (registro de Steam, `libraryfolders.vdf`, desinstalación de Steam, rutas típicas en los discos locales, GOG); si hay
-  varias pregunta, si no hay ninguna pide la ruta. Exige Unity 6 (`UnityPlayer.dll` 6000.x) y `TeamCherry.TK2D.dll`:
+- `HKMultiplayer Setup.bat` (→ `scripts/setup.ps1`): sin argumentos abre una ventana de WinForms con el aspecto de los
+  menús del juego (carpeta del juego con lista y *Buscar…*, estado de la instalación, *Instalar*/*Actualizar*,
+  *Desinstalar*, *Instrucciones* y el registro de lo que hace); con `/install` o `/uninstall` y la ruta trabaja en la
+  consola (lo usa `installer-test.sh`). Los textos van en el idioma de Windows (`common.ps1`: `L "español" "inglés"`).
+  El .bat abre PowerShell minimizado y `setup.ps1` esconde su consola al abrir la ventana: con `-WindowStyle Hidden` en
+  la orden (combinación que algunos antivirus vigilan) se veía igual, pero parecía sospechoso.
+  `install.ps1` y `uninstall.ps1` solo definen `Invoke-Install` e `Invoke-Uninstall`, que escriben por `Write-Out` en la
+  ventana o en la consola. Carpeta del juego pasada (también arrastrada sobre el .bat) o buscada (registro de Steam,
+  `libraryfolders.vdf`, desinstalación de Steam, rutas típicas en los discos locales, GOG). Exige Unity 6 (`UnityPlayer.dll` 6000.x) y `TeamCherry.TK2D.dll`:
   con otra versión del juego la Modding API lo dejaría sin arrancar. Solo bloquea si hay un `hollow_knight.exe`
   abierto desde esa carpeta (otras copias no molestan).
 - Cada cambio se apunta en `<juego>\HKMultiplayer-backup\manifest.txt` antes de hacerlo: `added-dir`, `added`,
@@ -631,7 +646,7 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   la copia porque también abre la red) y `moved` (otros mods apartados a `Mods\Disabled`). Volver a instalar es una
   actualización: lo ya apuntado no se vuelve a copiar, así que la copia sigue siendo la del juego antes de la primera
   instalación.
-- `desinstalar.bat` (→ `scripts/uninstall.ps1`) recorre el manifiesto al revés. De `Mods\HKMultiplayer` solo deja
+- La desinstalación (`uninstall.ps1`) recorre el manifiesto al revés. De `Mods\HKMultiplayer` solo deja
   `Skins` si tiene algo; las carpetas añadidas se borran si quedan vacías. Si algo no se pudo devolver, conserva la
   copia y remite a "Verificar integridad" de Steam. Sin manifiesto (mod puesto a mano) quita solo el mod.
 

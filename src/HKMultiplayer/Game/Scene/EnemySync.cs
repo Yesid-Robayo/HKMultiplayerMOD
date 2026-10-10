@@ -7,6 +7,7 @@ using HKMultiplayer.Session;
 using HKMultiplayer.Util;
 using UnityEngine;
 using UnitySceneManager = UnityEngine.SceneManagement.SceneManager;
+using HKMultiplayer.UI;
 
 namespace HKMultiplayer.Game.Scene;
 
@@ -2922,7 +2923,7 @@ internal sealed class EnemySync {
             if (OthersInScene() && !EveryoneNear(enemy) && !InBattleScene(enemy)) {
                 if (now >= enemy.NextWaitNotice) {
                     enemy.NextWaitNotice = now + 4f;
-                    HKMultiplayer.UI.Notice.Show($"Esperando a {MissingNear(enemy)} para empezar el combate", 3.5f);
+                    HKMultiplayer.UI.Notice.Show(Lang.T($"Esperando a {MissingNear(enemy)} para empezar el combate", $"Waiting for {MissingNear(enemy)} to start the fight"), 3.5f);
                 }
 
                 continue;
@@ -2988,10 +2989,10 @@ internal sealed class EnemySync {
 
         var hero = HeroController.instance;
         if (hero != null && ((Vector2) (hero.transform.position - position)).sqrMagnitude > WakeRange * WakeRange) {
-            names.Add("ti");
+            names.Add(Lang.T("ti", "you"));
         }
 
-        return names.Count > 0 ? string.Join(", ", names) : "los demás";
+        return names.Count > 0 ? string.Join(", ", names) : Lang.T("los demás", "the others");
     }
 
     /// <summary>Si la FSM es de un enemigo que mueve este PC (su lógica funciona aquí, no es una marioneta).</summary>

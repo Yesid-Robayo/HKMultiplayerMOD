@@ -8,6 +8,7 @@ using Modding;
 using Modding.Patches;
 using Newtonsoft.Json;
 using UnityEngine;
+using HKMultiplayer.UI;
 
 namespace HKMultiplayer.Game.World;
 
@@ -107,7 +108,7 @@ public static class WorldStore {
 
         name = (name ?? string.Empty).Trim();
         if (name.Length == 0) {
-            name = "Mundo coop";
+            name = Lang.T("Mundo coop", "Coop world");
         }
 
         if (name.Length > 40) {

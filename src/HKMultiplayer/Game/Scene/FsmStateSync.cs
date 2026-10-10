@@ -6,6 +6,7 @@ using HKMultiplayer.Session;
 using HKMultiplayer.Util;
 using HutongGames.PlayMaker;
 using UnityEngine;
+using HKMultiplayer.UI;
 
 namespace HKMultiplayer.Game.Scene;
 
@@ -1443,7 +1444,7 @@ internal sealed class FsmStateSync {
     }
 
     /// <summary>Principio del aviso de espera (para quitarlo en cuanto empieza el combate).</summary>
-    private const string WaitNotice = "Esperando a ";
+    private static string WaitNotice => Lang.T("Esperando a ", "Waiting for ");
 
     /// <summary>Combate retenido: empieza cuando están todos dentro; si este caballero sale, se olvida (al volver a
     /// entrar la zona avisa otra vez).</summary>
@@ -1470,7 +1471,7 @@ internal sealed class FsmStateSync {
         if (!EveryoneInside(item)) {
             if (now >= item.NextWaitNotice) {
                 item.NextWaitNotice = now + 4f;
-                HKMultiplayer.UI.Notice.Show($"{WaitNotice}{MissingNames(item)} para empezar el combate", 3.5f);
+                HKMultiplayer.UI.Notice.Show(Lang.T($"{WaitNotice}{MissingNames(item)} para empezar el combate", $"{WaitNotice}{MissingNames(item)} to start the fight"), 3.5f);
             }
 
             return;
@@ -1496,7 +1497,7 @@ internal sealed class FsmStateSync {
             }
         }
 
-        return names.Count > 0 ? string.Join(", ", names) : "los demás";
+        return names.Count > 0 ? string.Join(", ", names) : Lang.T("los demás", "the others");
     }
 
     /// <summary>Hace el cambio de estado retenido si el objeto sigue en el estado desde el que se pidió.</summary>

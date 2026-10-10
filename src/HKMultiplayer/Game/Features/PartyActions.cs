@@ -69,23 +69,23 @@ internal sealed class PartyActions {
         var pd = PlayerData.instance;
         var hero = HeroController.instance;
         if (_session == null || !_session.CanSend) {
-            return "No estás conectado a ninguna partida";
+            return Lang.T("No estás conectado a ninguna partida", "You aren't connected to any game");
         }
 
         if (!HostSettings.Current.AllowGeoGifts) {
-            return "El host desactivó regalar geo";
+            return Lang.T("El host desactivó regalar geo", "The host disabled geo gifts");
         }
 
         if (pd == null || hero == null) {
-            return "Ahora no se puede regalar geo";
+            return Lang.T("Ahora no se puede regalar geo", "You can't gift geo right now");
         }
 
         if (amount <= 0) {
-            return "Elige cuánto geo dar";
+            return Lang.T("Elige cuánto geo dar", "Choose how much geo to give");
         }
 
         if (pd.geo < amount) {
-            return $"No tienes {amount} geo (tienes {pd.geo})";
+            return Lang.T($"No tienes {amount} geo (tienes {pd.geo})", $"You don't have {amount} geo (you have {pd.geo})");
         }
 
         hero.TakeGeo(amount);
@@ -110,7 +110,7 @@ internal sealed class PartyActions {
             Log.Info($"{from.Name} regala {amount} geo a {target.Name}");
             SendGeo(targetId, from.Name, amount, refund: false);
         } else {
-            SendGeo(from.Id, target?.Name ?? "tu compañero", amount, refund: true);
+            SendGeo(from.Id, target?.Name ?? Lang.T("tu compañero", "your partner"), amount, refund: true);
         }
     }
 
@@ -145,7 +145,7 @@ internal sealed class PartyActions {
         GiveGeo(amount);
         // La devolución responde a lo que hizo el jugador: se avisa siempre; el regalo, si el host deja los avisos
         if (refund || HostSettings.Current.ShowNotices) {
-            Notice.Show(refund ? $"No se pudo dar el geo a {name}: se te devolvió" : $"{name} te regaló {amount} geo", 5f);
+            Notice.Show(refund ? Lang.T($"No se pudo dar el geo a {name}: se te devolvió", $"Couldn't give the geo to {name}: it was returned to you") : Lang.T($"{name} te regaló {amount} geo", $"{name} gave you {amount} geo"), 5f);
         }
         Log.Info(refund ? $"Geo devuelto ({amount})" : $"{name} regaló {amount} geo");
     }
@@ -166,7 +166,7 @@ internal sealed class PartyActions {
     /// <summary>Desatascarse al quitar la pausa. Devuelve el error o null.</summary>
     public string RequestUnstuck() {
         if (_revive != null && _revive.IsDowned) {
-            return "Estás caído: espera a que te revivan";
+            return Lang.T("Estás caído: espera a que te revivan", "You're down: wait to be revived");
         }
 
         _pending = Pending.Unstuck;
@@ -176,7 +176,7 @@ internal sealed class PartyActions {
     /// <summary>Recargar la sala al quitar la pausa. Devuelve el error o null.</summary>
     public string RequestReload() {
         if (_revive != null && _revive.IsDowned) {
-            return "Estás caído: espera a que te revivan";
+            return Lang.T("Estás caído: espera a que te revivan", "You're down: wait to be revived");
         }
 
         _pending = Pending.Reload;
@@ -206,7 +206,7 @@ internal sealed class PartyActions {
         if (action == Pending.Reload) {
             Log.Info("Recargar sala desde el panel");
             if (_revive == null || !_revive.ReloadCurrentRoom()) {
-                Notice.Show("Ahora no se puede recargar la sala", 3f);
+                Notice.Show(Lang.T("Ahora no se puede recargar la sala", "You can't reload the room right now"), 3f);
             }
 
             return;
@@ -221,6 +221,6 @@ internal sealed class PartyActions {
             body.linearVelocity = Vector2.zero;
         }
 
-        Notice.Show("Volviste al último suelo seguro", 3f);
+        Notice.Show(Lang.T("Volviste al último suelo seguro", "You went back to the last safe ground"), 3f);
     }
 }

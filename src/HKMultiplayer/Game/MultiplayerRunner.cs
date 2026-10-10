@@ -191,8 +191,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         _sceneReloaded = false;
         if (_announceCode && scene.Length > 0 && session.IsHost) {
             _announceCode = false;
-            Notice.Show($"Partida abierta  ·  Código {FormatCode(session.RoomCode)}\n" +
-                        "Lo tienes en Pausa › Multijugador", 12f);
+            Notice.Show(Lang.T($"Partida abierta  ·  Código {FormatCode(session.RoomCode)}\n", $"Game open  ·  Code {FormatCode(session.RoomCode)}\n") +
+                        Lang.T("Lo tienes en Pausa › Multijugador", "It's in Pause › Multiplayer"), 12f);
         }
 
         // Un fallo en la sincronización de la sala no debe dejar sin enviar los paquetes de este frame (con varios
@@ -273,7 +273,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         try {
             transport = new UdpTransport(port);
         } catch (SocketException e) {
-            SetStatus($"No se pudo abrir el puerto {port}: {e.Message}");
+            SetStatus(Lang.T($"No se pudo abrir el puerto {port}: {e.Message}", $"Couldn't open port {port}: {e.Message}"));
             return false;
         }
 
@@ -283,19 +283,19 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Log.Info);
         Wire(Session);
         _announceCode = true;
-        SetStatus($"Partida abierta en el puerto {port}. Código: {FormatCode(code)}");
+        SetStatus(Lang.T($"Partida abierta en el puerto {port}. Código: {FormatCode(code)}", $"Game open on port {port}. Code: {FormatCode(code)}"));
         return true;
     }
 
     /// <summary>Hostea un mundo coop: abre la partida y carga el mundo (desde el menú principal).</summary>
     public bool HostWorld(CoopWorldInfo world, string name, int port, string roomCode = null) {
         if (world == null) {
-            SetStatus("No hay mundo que abrir");
+            SetStatus(Lang.T("No hay mundo que abrir", "There is no world to open"));
             return false;
         }
 
         if (!CoopSaves.CanStart) {
-            SetStatus("Vuelve al menú principal para abrir un mundo coop");
+            SetStatus(Lang.T("Vuelve al menú principal para abrir un mundo coop", "Go back to the main menu to open a coop world"));
             return false;
         }
 
@@ -305,7 +305,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
         if (!CoopSaves.Start(world)) {
             Leave();
-            SetStatus($"No se pudo abrir el mundo {world.Name}");
+            SetStatus(Lang.T($"No se pudo abrir el mundo {world.Name}", $"Couldn't open the world {world.Name}"));
             return false;
         }
 
@@ -328,7 +328,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Leave();
         var code = RoomCode.Normalize(roomCode ?? string.Empty);
         if (!RoomCode.IsValid(code)) {
-            SetStatus("El código no es válido: son 8 letras o números, como ABCD-EFGH");
+            SetStatus(Lang.T("El código no es válido: son 8 letras o números, como ABCD-EFGH", "The code is not valid: it is 8 letters or numbers, like ABCD-EFGH"));
             return false;
         }
 
@@ -342,7 +342,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         }
 
         if (ip == null) {
-            SetStatus($"No se encontró la dirección '{address}'");
+            SetStatus(Lang.T($"No se encontró la dirección '{address}'", $"Address '{address}' not found"));
             return false;
         }
 
@@ -350,7 +350,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         try {
             transport = new UdpTransport(0);
         } catch (SocketException e) {
-            SetStatus($"No se pudo abrir la red: {e.Message}");
+            SetStatus(Lang.T($"No se pudo abrir la red: {e.Message}", $"Couldn't open the network: {e.Message}"));
             return false;
         }
 
@@ -358,7 +358,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Session = GameSession.Join(WithTestNetwork(transport), new IPEndPoint(ip, port), code, SanitizeName(name),
             HKMultiplayerMod.Version, Log.Info);
         Wire(Session);
-        SetStatus($"Conectando con {ip}:{port}...");
+        SetStatus(Lang.T($"Conectando con {ip}:{port}...", $"Connecting to {ip}:{port}..."));
         return true;
     }
 
@@ -437,7 +437,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Session = null;
         DetachAll();
         session.Dispose();
-        SetStatus(session.IsHost ? "Partida cerrada" : "Desconectado");
+        SetStatus(session.IsHost ? Lang.T("Partida cerrada", "Game closed") : Lang.T("Desconectado", "Disconnected"));
     }
 
     /// <summary>Cada capa deja la partida (las funciones del coop primero: usan las demás).</summary>
@@ -494,7 +494,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Travel.Attach(session, Party, Revive, Dreams, Cutscenes);
         Grimmchild.Attach(session);
         Skins.Attach(session, Players);
-        session.Connected += () => SetStatus($"Conectado como jugador {session.LocalId}");
+        session.Connected += () => SetStatus(Lang.T($"Conectado como jugador {session.LocalId}", $"Connected as player {session.LocalId}"));
         session.Disconnected += reason => {
             // Al salir uno mismo (Leave) la sesión ya no es la actual: nada que avisar
             if (Session != session) {
@@ -514,13 +514,13 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         session.PlayerJoined += player => {
             Log.Info($"{player.Name} se unió a la partida");
             if (Features.HostSettings.Current.ShowNotices) {
-                Notice.Show($"{player.Name} se unió a la partida");
+                Notice.Show(Lang.T($"{player.Name} se unió a la partida", $"{player.Name} joined the game"));
             }
         };
         session.PlayerLeft += player => {
             Log.Info($"{player.Name} salió de la partida");
             if (Features.HostSettings.Current.ShowNotices) {
-                Notice.Show($"{player.Name} salió de la partida");
+                Notice.Show(Lang.T($"{player.Name} salió de la partida", $"{player.Name} left the game"));
             }
         };
     }
@@ -531,12 +531,12 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     }
 
     private static string DescribeDisconnect(DisconnectReason reason) => reason switch {
-        DisconnectReason.Closed => "El host cerró la partida",
-        DisconnectReason.Timeout => "Se perdió la conexión con el host",
-        DisconnectReason.WrongCode => "Código incorrecto o host no encontrado",
-        DisconnectReason.VersionMismatch => "El host tiene otra versión del mod",
-        DisconnectReason.Full => "La partida está llena",
-        _ => "El host rechazó la conexión"
+        DisconnectReason.Closed => Lang.T("El host cerró la partida", "The host closed the game"),
+        DisconnectReason.Timeout => Lang.T("Se perdió la conexión con el host", "Lost connection to the host"),
+        DisconnectReason.WrongCode => Lang.T("Código incorrecto o host no encontrado", "Wrong code or host not found"),
+        DisconnectReason.VersionMismatch => Lang.T("El host tiene otra versión del mod", "The host has a different version of the mod"),
+        DisconnectReason.Full => Lang.T("La partida está llena", "The game is full"),
+        _ => Lang.T("El host rechazó la conexión", "The host refused the connection")
     };
 
     /// <summary>Direcciones IPv4 de este PC en la red local (las que debe usar el compañero para unirse).</summary>

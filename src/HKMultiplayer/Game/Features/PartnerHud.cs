@@ -272,11 +272,11 @@ internal sealed class PartnerHud {
         if (statusKey != slot.StatusKey) {
             slot.StatusKey = statusKey;
             slot.Status.text = statusKey switch {
-                1000 => "caído",
-                1001 => "viendo una cinemática",
-                1002 => "en un sueño",
-                1003 => "viajando en ciervo",
-                >= 0 => $"en {Zones.Name((byte) statusKey)}",
+                1000 => Lang.T("caído", "down"),
+                1001 => Lang.T("viendo una cinemática", "watching a cutscene"),
+                1002 => Lang.T("en un sueño", "in a dream"),
+                1003 => Lang.T("viajando en ciervo", "riding the stag"),
+                >= 0 => Lang.T($"en {Zones.Name((byte) statusKey)}", $"in {Zones.Name((byte) statusKey)}"),
                 _ => string.Empty
             };
         }

@@ -1,11 +1,7 @@
-﻿# Desinstalador de HKMultiplayer (se ejecuta desde desinstalar.bat).
-# Deshace, en orden inverso, lo que apuntó el instalador en HKMultiplayer-backup\manifest.txt: devuelve los archivos
+﻿# Desinstalación de HKMultiplayer (la carga setup.ps1, que la llama desde la ventana o desde la consola).
+# Deshace, en orden inverso, lo que apuntó la instalación en HKMultiplayer-backup\manifest.txt: devuelve los archivos
 # originales, borra los añadidos, devuelve los mods apartados y el mod anterior, y borra la copia. Los mundos coop y
 # las partidas (en AppData\LocalLow) no se tocan; las skins que haya en Mods\HKMultiplayer\Skins se quedan.
-param([string]$GameDir)
-
-$ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'common.ps1')
 
 # Borra las subcarpetas vacías y luego la carpeta si quedó vacía. Devuelve $true si la borró.
 function Remove-EmptyTree([string]$path) {
@@ -28,12 +24,9 @@ function Remove-ModFolder([string]$modDir) {
     return -not (Remove-EmptyTree $modDir)
 }
 
-function Main {
-    Write-Host '=== HKMultiplayer: desinstalación ===' -ForegroundColor Cyan
-    Write-Host ''
-
-    $game = Resolve-GameDir $GameDir
-    Write-Host "Carpeta del juego: $game"
+# Desinstala de la carpeta del juego. Devuelve $true si el juego quedó como estaba; lanza una excepción si algo falla.
+function Invoke-Uninstall([string]$game) {
+    Write-Note ((L 'Carpeta del juego: ' 'Game folder: ') + $game)
     Assert-GameClosed $game
 
     $backupDir = Join-Path $game $BackupName
@@ -43,18 +36,18 @@ function Main {
     if (-not (Test-Path -LiteralPath $manifest)) {
         # Instalado a mano (sin el instalador): solo se puede quitar el mod
         if (-not (Test-Path -LiteralPath $modDir)) {
-            Write-Host "No encontré HKMultiplayer instalado en esta carpeta (ni la copia $BackupName)." -ForegroundColor Yellow
-            return
+            Write-Warn (L "No encontré HKMultiplayer instalado en esta carpeta (ni la copia $BackupName)." "HKMultiplayer isn't installed in this folder (and there is no $BackupName copy).")
+            return $false
         }
         $keptSkins = Remove-ModFolder $modDir
-        Write-Host ''
-        Write-Host 'Mod quitado. No había copia del instalador, así que la Modding API sigue instalada.' -ForegroundColor Yellow
-        Write-Host 'Para dejar el juego original: Steam > clic derecho en Hollow Knight > Propiedades > Archivos instalados > Verificar integridad.' -ForegroundColor Yellow
-        if ($keptSkins) { Write-Host "Tus skins siguen en: $(Join-Path $modDir 'Skins')" }
-        return
+        Write-Warn (L 'Mod quitado. No había copia del instalador, así que la Modding API sigue instalada.' "Mod removed. There was no installer backup, so the Modding API is still installed.")
+        Write-Warn (L 'Para dejar el juego original: Steam > clic derecho en Hollow Knight > Propiedades > Archivos instalados > Verificar integridad.' `
+                'To get the original game back: Steam > right-click Hollow Knight > Properties > Installed Files > Verify integrity.')
+        if ($keptSkins) { Write-Note ((L 'Tus skins siguen en: ' 'Your skins are still in: ') + (Join-Path $modDir 'Skins')) }
+        return $false
     }
 
-    Write-Step 'Deshaciendo los cambios del instalador...'
+    Write-Step (L 'Deshaciendo los cambios de la instalación...' 'Undoing the install changes...')
     $lines = @(Get-Content -LiteralPath $manifest | Where-Object { $_ -and -not $_.StartsWith('#') })
     [array]::Reverse($lines)
     $problems = New-Object System.Collections.Generic.List[string]
@@ -75,14 +68,14 @@ function Main {
                     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
                     Copy-Item -LiteralPath $copy -Destination $target -Force
                 } else {
-                    $problems.Add("falta la copia de $($parts[1])")
+                    $problems.Add((L "falta la copia de $($parts[1])" "the backup of $($parts[1]) is missing"))
                 }
             }
             'added-dir' {
                 if ($target -ieq $modDir) {
                     $keptSkins = Remove-ModFolder $modDir
                 } elseif (-not (Remove-EmptyTree $target) -and -not $keptSkins) {
-                    Write-Warn "Se deja $($parts[1]): tiene archivos que no puso el instalador."
+                    Write-Warn (L "Se deja $($parts[1]): tiene archivos que no puso el instalador." "$($parts[1]) is kept: it has files the installer didn't put there.")
                 }
             }
             'moved' {
@@ -91,7 +84,7 @@ function Main {
                     Move-Item -LiteralPath $from -Destination $target
                     $restoredMods++
                 } elseif (-not (Test-Path -LiteralPath $target)) {
-                    $problems.Add("no está $($parts[2]) para devolverlo a su sitio")
+                    $problems.Add((L "no está $($parts[2]) para devolverlo a su sitio" "$($parts[2]) is not there to move it back"))
                 }
             }
             'old-mod' {
@@ -100,32 +93,25 @@ function Main {
                     Move-Item -LiteralPath $stored -Destination $target
                     $restoredOldMod = $true
                 } elseif (-not (Test-Path -LiteralPath $target)) {
-                    $problems.Add("falta la copia del mod anterior ($($parts[2]))")
+                    $problems.Add((L "falta la copia del mod anterior ($($parts[2]))" "the backup of the old mod is missing ($($parts[2]))"))
                 }
             }
-            default { $problems.Add("línea desconocida en el manifiesto: $line") }
+            default { $problems.Add((L "línea desconocida en el manifiesto: $line" "unknown manifest line: $line")) }
         }
     }
 
-    Write-Host ''
-    if ($problems.Count -gt 0) {
-        Write-Host 'Desinstalado, pero algo no se pudo devolver:' -ForegroundColor Yellow
-        foreach ($problem in $problems) { Write-Warn $problem }
-        Write-Host "Se conserva la copia en $backupDir. Para dejar el juego original del todo: Steam > Hollow Knight > Propiedades > Archivos instalados > Verificar integridad." -ForegroundColor Yellow
-    } else {
+    $clean = $problems.Count -eq 0
+    if ($clean) {
         Remove-Item -LiteralPath $backupDir -Recurse -Force
-        Write-Host 'Desinstalado: el juego vuelve a estar como antes de instalar HKMultiplayer.' -ForegroundColor Green
+    } else {
+        Write-Warn (L 'Algo no se pudo devolver:' 'Something could not be restored:')
+        foreach ($problem in $problems) { Write-Warn "- $problem" }
+        Write-Warn (L "Se conserva la copia en $backupDir. Para dejar el juego original del todo: Steam > Hollow Knight > Propiedades > Archivos instalados > Verificar integridad." `
+                "The backup in $backupDir is kept. To get the original game back completely: Steam > Hollow Knight > Properties > Installed Files > Verify integrity.")
     }
-    if ($restoredOldMod) { Write-Host "El mod anterior ($OldModName) vuelve a estar instalado, como antes." }
-    if ($restoredMods -gt 0) { Write-Host "Mods apartados a Mods\Disabled que vuelven a su sitio: $restoredMods." }
-    if ($keptSkins) { Write-Host "Tus skins siguen en: $(Join-Path $modDir 'Skins')" }
-    Write-Host 'Tus mundos coop y tus partidas no se han tocado.'
-}
-
-try {
-    Main
-} catch {
-    Write-Host ''
-    Write-Host "No se pudo desinstalar: $(Get-ErrorText $_)" -ForegroundColor Red
-    exit 1
+    if ($restoredOldMod) { Write-Note (L "El mod anterior ($OldModName) vuelve a estar instalado, como antes." "The old mod ($OldModName) is installed again, as before.") }
+    if ($restoredMods -gt 0) { Write-Note (L "Mods apartados a Mods\Disabled que vuelven a su sitio: $restoredMods." "Mods moved back from Mods\Disabled: $restoredMods.") }
+    if ($keptSkins) { Write-Note ((L 'Tus skins siguen en: ' 'Your skins are still in: ') + (Join-Path $modDir 'Skins')) }
+    Write-Note (L 'Tus mundos coop y tus partidas no se han tocado.' 'Your coop worlds and saves were not touched.')
+    return $clean
 }

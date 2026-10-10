@@ -438,7 +438,7 @@ internal sealed class SharedCutscenes {
     /// </summary>
     private void RefreshOverlay() {
         SetOverlay(_current != null && _votes > 0 && _watchers > 1 && _votes < _watchers
-            ? $"Esperando a {_waitingFor} para saltar {_votes}/{_watchers}"
+            ? Lang.T($"Esperando a {_waitingFor} para saltar {_votes}/{_watchers}", $"Waiting for {_waitingFor} to skip {_votes}/{_watchers}")
             : string.Empty);
     }
 
@@ -492,12 +492,12 @@ internal sealed class SharedCutscenes {
             var id = reader.ReadUShort();
             foreach (var player in _session.Players) {
                 if (player.Id == id) {
-                    text.Append(text.Length > 0 ? ", " : string.Empty).Append(player.IsLocal ? "ti" : player.Name);
+                    text.Append(text.Length > 0 ? ", " : string.Empty).Append(player.IsLocal ? Lang.T("ti", "you") : player.Name);
                 }
             }
         }
 
-        _waitingFor = text.Length > 0 ? text.ToString() : "los demás";
+        _waitingFor = text.Length > 0 ? text.ToString() : Lang.T("los demás", "the others");
         RefreshOverlay();
     }
 

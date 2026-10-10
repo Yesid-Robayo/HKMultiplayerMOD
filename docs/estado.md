@@ -5,7 +5,7 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
 
 ## Versión
 
-- `main`: **0.20.3**, solo commits locales (no se sube nada sin que lo pida el usuario). M1 a M6 hechos y juntados;
+- `main`: **0.21.0**, solo commits locales (no se sube nada sin que lo pida el usuario). M1 a M6 hechos y juntados;
   no quedan ramas de agentes. Paquete para jugadores: `bash tools/package.sh` → `out/package/HKMultiplayer-<ver>.zip`.
 - Última pasada de las 16 rutas (0.20.1): 0 FALLO.
 
@@ -21,6 +21,17 @@ aprobó para M5, en [m5-diseno.md](m5-diseno.md).
 
 Se deja como está: la marioneta se dibuja unas centésimas en el pasado (para moverse suave aunque la red varíe); en
 lo que cae rápido (barriles) se nota un poco. Adelantarla haría que atravesara el suelo y diera saltos.
+
+## Idioma e instalador (0.21.0)
+
+- El mod va en el idioma del juego: español si el juego está en español, inglés en cualquier otro (ver
+  [arquitectura.md](arquitectura.md), Idioma). Sin probar en el juego (lo pidió el usuario): compila y las pruebas
+  unitarias pasan.
+- Un solo instalador, `HKMultiplayer Setup.bat`: ventana en el idioma de Windows para instalar, actualizar y
+  desinstalar; en la consola con `/install` o `/uninstall`. Comprobado que la ventana se abre (captura); la instalación
+  en sí no se volvió a ejecutar (`tools/manual-tests/installer-test.sh` ya usa el lanzador nuevo).
+- Instrucciones en `LEEME.txt` (español) y `README.txt` (inglés), con la instalación a mano y el aviso de Windows al
+  abrir un archivo descargado.
 
 ## Pruebas del resto (0.20.3; copias B/C, F/G y D/E)
 

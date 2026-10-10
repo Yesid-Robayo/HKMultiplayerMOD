@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Arma el paquete para jugadores: out/package/HKMultiplayer-<versión>.zip, con una carpeta HKMultiplayer-<versión>:
-#   instalar.bat, desinstalar.bat, LEEME.txt   lo que usa el jugador
-#   scripts/                                   instalador y desinstalador (PowerShell) y la versión del paquete
+#   HKMultiplayer Setup.bat                    el instalador (ventana para instalar, actualizar o desinstalar)
+#   LEEME.txt, README.txt                      instrucciones en español y en inglés (con la instalación a mano)
+#   scripts/                                   el instalador en PowerShell y la versión del paquete
 #   files/hollow_knight_Data/Managed/          la Modding API compilada (vendor/modding-api/OutputFinal) y
 #                                              Mods/HKMultiplayer (el mod y su cifrado, BouncyCastle)
 #   SHA256SUMS.txt                             hashes de files/: el instalador comprueba el paquete y lo copiado
@@ -46,11 +47,13 @@ for file in "${MOD_FILES[@]}"; do
   cp "$BUILD_DIR/$file" "$MANAGED/Mods/$MOD_NAME/"
 done
 
-# Instalador, desinstalador e instrucciones
-cp "$ROOT/tools/installer/instalar.bat" "$ROOT/tools/installer/desinstalar.bat" "$STAGE/"
+# Instalador e instrucciones (en español y en inglés)
+cp "$ROOT/tools/installer/setup.bat" "$STAGE/HKMultiplayer Setup.bat"
 cp "$ROOT/tools/installer/"*.ps1 "$STAGE/scripts/"
 printf '%s\r\n' "$VERSION" > "$STAGE/scripts/version.txt"
-sed "s/@VERSION@/$VERSION/g" "$ROOT/tools/installer/LEEME.txt" > "$STAGE/LEEME.txt"
+for readme in LEEME.txt README.txt; do
+  sed "s/@VERSION@/$VERSION/g" "$ROOT/tools/installer/$readme" > "$STAGE/$readme"
+done
 
 # Inventario con hashes
 (cd "$STAGE" && find ./files -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)

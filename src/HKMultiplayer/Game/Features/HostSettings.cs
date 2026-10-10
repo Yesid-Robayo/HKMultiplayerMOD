@@ -14,19 +14,33 @@ namespace HKMultiplayer.Game.Features;
 internal sealed class HostOption {
     public readonly int Index;
     public readonly string Key;
-    public readonly string Label;
     public readonly float[] Values;
-    public readonly string[] Labels;
     public readonly int Default;
 
-    public HostOption(int index, string key, string label, float[] values, string[] labels, int defaultIndex) {
+    private readonly string _label;
+    private readonly string _labelEnglish;
+    private readonly string[] _labels;
+    private readonly string[] _labelsEnglish;
+
+    /// <summary>
+    /// Textos en español y en inglés (los de los valores en inglés pueden faltar: son los mismos, como "2 s"). Se elige
+    /// al mostrarlos, con el idioma del juego.
+    /// </summary>
+    public HostOption(int index, string key, string label, string labelEnglish, float[] values, string[] labels,
+        string[] labelsEnglish, int defaultIndex) {
         Index = index;
         Key = key;
-        Label = label;
+        _label = label;
+        _labelEnglish = labelEnglish;
         Values = values;
-        Labels = labels;
+        _labels = labels;
+        _labelsEnglish = labelsEnglish ?? labels;
         Default = defaultIndex;
     }
+
+    public string Label => UI.Lang.T(_label, _labelEnglish);
+
+    public string[] Labels => UI.Lang.Spanish ? _labels : _labelsEnglish;
 
     /// <summary>Posición del valor más parecido (para leer valores guardados).</summary>
     public int Nearest(float value) {
@@ -62,69 +76,70 @@ internal sealed class HostSettings {
     private const string FileName = "settings.json";
 
     private static readonly string[] YesNo = { "Sí", "No" };
+    private static readonly string[] YesNoEnglish = { "Yes", "No" };
     private static readonly float[] YesNoValues = { 1f, 0f };
 
     // ---- Dificultad ----
-    public static readonly HostOption BossHealthOption = new(0, "bossHealth", "Vida de los jefes",
-        new[] { 1f, 1.25f, 1.5f, 2f, 2.5f, 3f }, new[] { "1×", "1,25×", "1,5×", "2×", "2,5×", "3×" }, 2);
+    public static readonly HostOption BossHealthOption = new(0, "bossHealth", "Vida de los jefes", "Boss health",
+        new[] { 1f, 1.25f, 1.5f, 2f, 2.5f, 3f }, new[] { "1×", "1,25×", "1,5×", "2×", "2,5×", "3×" }, new[] { "1×", "1.25×", "1.5×", "2×", "2.5×", "3×" }, 2);
 
-    public static readonly HostOption EnemyHealthOption = new(1, "enemyHealth", "Vida de los enemigos",
-        new[] { 1f, 1.25f, 1.5f, 2f }, new[] { "1×", "1,25×", "1,5×", "2×" }, 0);
+    public static readonly HostOption EnemyHealthOption = new(1, "enemyHealth", "Vida de los enemigos", "Enemy health",
+        new[] { 1f, 1.25f, 1.5f, 2f }, new[] { "1×", "1,25×", "1,5×", "2×" }, new[] { "1×", "1.25×", "1.5×", "2×" }, 0);
 
-    public static readonly HostOption PartnerInRoomOption = new(2, "onlyWithPartner", "Más vida solo con compañero en la sala",
-        YesNoValues, YesNo, 0);
+    public static readonly HostOption PartnerInRoomOption = new(2, "onlyWithPartner", "Más vida solo con compañero en la sala", "Extra health only with a partner in the room",
+        YesNoValues, YesNo, YesNoEnglish, 0);
 
-    public static readonly HostOption DamageTakenOption = new(3, "damageTaken", "Daño recibido",
-        new[] { 0.5f, 1f, 1.5f, 2f }, new[] { "0,5×", "1×", "1,5×", "2×" }, 1);
+    public static readonly HostOption DamageTakenOption = new(3, "damageTaken", "Daño recibido", "Damage taken",
+        new[] { 0.5f, 1f, 1.5f, 2f }, new[] { "0,5×", "1×", "1,5×", "2×" }, new[] { "0.5×", "1×", "1.5×", "2×" }, 1);
 
     // ---- Revivir ----
-    public static readonly HostOption ReviveOption = new(4, "revive", "Revivir", YesNoValues, YesNo, 0);
+    public static readonly HostOption ReviveOption = new(4, "revive", "Revivir", "Revive", YesNoValues, YesNo, YesNoEnglish, 0);
 
-    public static readonly HostOption ReviveSecondsOption = new(5, "reviveSeconds", "Tiempo para revivir",
-        new[] { 1f, 2f, 3f, 5f }, new[] { "1 s", "2 s", "3 s", "5 s" }, 1);
+    public static readonly HostOption ReviveSecondsOption = new(5, "reviveSeconds", "Tiempo para revivir", "Time to revive",
+        new[] { 1f, 2f, 3f, 5f }, new[] { "1 s", "2 s", "3 s", "5 s" }, null, 1);
 
-    public static readonly HostOption ReviveSoulOption = new(6, "reviveSoul", "Alma para revivir",
-        new[] { 0f, 33f, 66f, 99f }, new[] { "0", "33", "66", "99" }, 1);
+    public static readonly HostOption ReviveSoulOption = new(6, "reviveSoul", "Alma para revivir", "Soul to revive",
+        new[] { 0f, 33f, 66f, 99f }, new[] { "0", "33", "66", "99" }, null, 1);
 
-    public static readonly HostOption ReviveMasksOption = new(7, "reviveMasks", "Máscaras al revivir",
-        new[] { 1f, 2f, 3f, 0f }, new[] { "1", "2", "3", "Todas" }, 0);
+    public static readonly HostOption ReviveMasksOption = new(7, "reviveMasks", "Máscaras al revivir", "Masks on revive",
+        new[] { 1f, 2f, 3f, 0f }, new[] { "1", "2", "3", "Todas" }, new[] { "1", "2", "3", "All" }, 0);
 
-    public static readonly HostOption ReviveInvulnerableOption = new(8, "reviveInvulnerable", "Invulnerable al revivir",
-        new[] { 1f, 2f, 3f, 5f }, new[] { "1 s", "2 s", "3 s", "5 s" }, 1);
+    public static readonly HostOption ReviveInvulnerableOption = new(8, "reviveInvulnerable", "Invulnerable al revivir", "Invulnerable after revive",
+        new[] { 1f, 2f, 3f, 5f }, new[] { "1 s", "2 s", "3 s", "5 s" }, null, 1);
 
-    public static readonly HostOption ReviveAtBenchOption = new(9, "reviveAtBench", "Revivir en el banco del compañero",
-        YesNoValues, YesNo, 0);
+    public static readonly HostOption ReviveAtBenchOption = new(9, "reviveAtBench", "Revivir en el banco del compañero", "Revive at a partner's bench",
+        YesNoValues, YesNo, YesNoEnglish, 0);
 
     // ---- Pantalla ----
-    public static readonly HostOption ShowNamesOption = new(10, "showNames", "Nombres", YesNoValues, YesNo, 0);
+    public static readonly HostOption ShowNamesOption = new(10, "showNames", "Nombres", "Names", YesNoValues, YesNo, YesNoEnglish, 0);
 
-    public static readonly HostOption ShowPartnerHealthOption = new(11, "showPartnerHealth", "Vida del compañero",
-        YesNoValues, YesNo, 0);
+    public static readonly HostOption ShowPartnerHealthOption = new(11, "showPartnerHealth", "Vida del compañero", "Partner health",
+        YesNoValues, YesNo, YesNoEnglish, 0);
 
-    public static readonly HostOption ShowArrowsOption = new(12, "showArrows", "Flechas hacia el compañero",
-        YesNoValues, YesNo, 0);
+    public static readonly HostOption ShowArrowsOption = new(12, "showArrows", "Flechas hacia el compañero", "Arrows to partners",
+        YesNoValues, YesNo, YesNoEnglish, 0);
 
-    public static readonly HostOption ShowNoticesOption = new(13, "showNotices", "Avisos", YesNoValues, YesNo, 0);
+    public static readonly HostOption ShowNoticesOption = new(13, "showNotices", "Avisos", "Notices", YesNoValues, YesNo, YesNoEnglish, 0);
 
-    public static readonly HostOption ShowBossBarOption = new(14, "showBossBar", "Barra del jefe", YesNoValues, YesNo, 0);
+    public static readonly HostOption ShowBossBarOption = new(14, "showBossBar", "Barra del jefe", "Boss bar", YesNoValues, YesNo, YesNoEnglish, 0);
 
     /// <summary>Barra de vida pequeña sobre los enemigos heridos (no los jefes, que tienen la suya). Desactivada por defecto.</summary>
-    public static readonly HostOption ShowEnemyBarsOption = new(15, "showEnemyBars", "Barras de enemigos", YesNoValues,
-        YesNo, 1);
+    public static readonly HostOption ShowEnemyBarsOption = new(15, "showEnemyBars", "Barras de enemigos", "Enemy bars", YesNoValues,
+        YesNo, YesNoEnglish, 1);
 
     // ---- Permisos ----
-    public static readonly HostOption GeoGiftsOption = new(16, "geoGifts", "Regalar geo", YesNoValues, YesNo, 0);
+    public static readonly HostOption GeoGiftsOption = new(16, "geoGifts", "Regalar geo", "Gift geo", YesNoValues, YesNo, YesNoEnglish, 0);
 
     /// <summary>Si cada jugador puede ir junto a un compañero desde el panel ("Ir con ...") para desatascarse.</summary>
-    public static readonly HostOption PartnerTravelOption = new(17, "partnerTravel", "Permitir ir con un compañero",
-        YesNoValues, YesNo, 0);
+    public static readonly HostOption PartnerTravelOption = new(17, "partnerTravel", "Permitir ir con un compañero", "Allow going to a partner",
+        YesNoValues, YesNo, YesNoEnglish, 0);
 
     /// <summary>
     /// Cómo se salta una cinemática compartida: cuando todos los que la ven votan saltarla, o en cuanto la salta
     /// cualquiera (para todos).
     /// </summary>
-    public static readonly HostOption SkipCutscenesOption = new(18, "skipCutscenes", "Saltar cinemáticas",
-        new[] { 0f, 1f }, new[] { "Votación", "Cualquiera" }, 0);
+    public static readonly HostOption SkipCutscenesOption = new(18, "skipCutscenes", "Saltar cinemáticas", "Skip cutscenes",
+        new[] { 0f, 1f }, new[] { "Votación", "Cualquiera" }, new[] { "Vote", "Anyone" }, 0);
 
     /// <summary>Todos, en el orden del mensaje y del panel (su posición es su <see cref="HostOption.Index"/>).</summary>
     public static readonly HostOption[] Options = {

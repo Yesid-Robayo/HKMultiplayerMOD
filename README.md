@@ -8,7 +8,7 @@ Proyecto escrito desde cero, pensado para dos jugadores (vale para algunos más)
 sigue: [docs/estado.md](docs/estado.md). El diseño detallado está en
 [docs/arquitectura.md](docs/arquitectura.md).
 
-**Versión actual: 0.20.3** · Hitos M1 a M6 terminados (ver [Estado](#estado)).
+**Versión actual: 0.21.0** · Hitos M1 a M6 terminados (ver [Estado](#estado)).
 
 ---
 
@@ -178,17 +178,21 @@ Se ven y se oyen las acciones del compañero con los mismos efectos del juego, a
 
 Para jugadores hay un paquete, `HKMultiplayer-<versión>.zip`, con la Modding API para Hollow Knight 1.5.12620, el mod
 y un instalador. Las instrucciones para jugadores (instalar, hostear, unirse, abrir el puerto UDP, dónde se guardan los
-mundos, desinstalar) van en el `LEEME.txt` del paquete.
+mundos, desinstalar e instalar a mano) van en el `LEEME.txt` (español) y el `README.txt` (inglés) del paquete.
 
-1. Cerrar el juego, descomprimir el zip entero y hacer doble clic en `instalar.bat` (también se puede arrastrar la
-   carpeta del juego encima o pasarla: `instalar.bat "D:\Juegos\Hollow Knight"`).
+1. Cerrar el juego, descomprimir el zip entero y hacer doble clic en `HKMultiplayer Setup.bat`: se abre una ventana
+   (en español o en inglés según el idioma de Windows) con *Instalar*/*Actualizar*, *Desinstalar* e *Instrucciones*.
+   También se puede arrastrar la carpeta del juego encima, o usarlo en la consola:
+   `"HKMultiplayer Setup.bat" /install "D:\Juegos\Hollow Knight"` (o `/uninstall`).
 2. Abrir Hollow Knight desde Steam: en el menú principal aparece *Multijugador*.
 
-Qué hace `instalar.bat`:
+El mod sale en el idioma del juego: en español si el juego está en español; en cualquier otro, en inglés.
+
+Qué hace la instalación:
 
 - Busca la carpeta del juego: la que se le pasa; si no, Steam (registro, bibliotecas de `libraryfolders.vdf` y la
-  desinstalación de Steam) y rutas típicas en cada disco (`SteamLibrary`, GOG...). Si encuentra varias pregunta cuál, y
-  si no encuentra ninguna pide la ruta.
+  desinstalación de Steam) y rutas típicas en cada disco (`SteamLibrary`, GOG...). En la ventana, si encuentra varias
+  se elige en la lista y si no encuentra ninguna se busca con *Buscar…*.
 - Comprueba que el juego es la versión 1.5.12620 (Unity 6) y que está cerrado, y que los archivos del paquete están
   completos (`SHA256SUMS.txt`).
 - Guarda en `<juego>\HKMultiplayer-backup` una copia de cada archivo que reemplaza y apunta cada cambio en
