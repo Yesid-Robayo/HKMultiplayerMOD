@@ -40,24 +40,24 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 
 ## Funciones
 
-- **Mundos coop**: hasta 4 mundos propios, guardados en el PC del host, aparte de tus partidas normales.
-- **Conexión**: red local o internet, con código de partida y todo cifrado, sin Steam ni servidores intermedios.
-- **Jugadores**: el compañero se ve en tiempo real con su nombre, animaciones, ataques, hechizos y amuletos.
-- **Enemigos y jefes**: los mismos en todos los PCs (misma vida, mismos golpes, misma muerte); los jefes esperan a
+- <img src="docs/icons/globe.svg" width="16" height="16" alt=""> **Mundos coop**: hasta 4 mundos propios, guardados en el PC del host, aparte de tus partidas normales.
+- <img src="docs/icons/lock.svg" width="16" height="16" alt=""> **Conexión**: red local o internet, con código de partida y todo cifrado, sin Steam ni servidores intermedios.
+- <img src="docs/icons/users.svg" width="16" height="16" alt=""> **Jugadores**: el compañero se ve en tiempo real con su nombre, animaciones, ataques, hechizos y amuletos.
+- <img src="docs/icons/sword.svg" width="16" height="16" alt=""> **Enemigos y jefes**: los mismos en todos los PCs (misma vida, mismos golpes, misma muerte); los jefes esperan a
   que estéis los dos.
-- **Mundo compartido**: progreso, palancas, puertas, paredes rotas, ascensores, rejas, cofres y misiones de NPC, a la
+- <img src="docs/icons/map.svg" width="16" height="16" alt=""> **Mundo compartido**: progreso, palancas, puertas, paredes rotas, ascensores, rejas, cofres y misiones de NPC, a la
   vez.
-- **Revivir**: si caes con un compañero en pie, quedas tendido y te revive manteniendo Focus junto a tu cuerpo.
-- **Sueños y cinemáticas**: entráis juntos a los sueños; los finales y los créditos se ven a la vez y se saltan por
+- <img src="docs/icons/heart.svg" width="16" height="16" alt=""> **Revivir**: si caes con un compañero en pie, quedas tendido y te revive manteniendo Focus junto a tu cuerpo.
+- <img src="docs/icons/moon.svg" width="16" height="16" alt=""> **Sueños y cinemáticas**: entráis juntos a los sueños; los finales y los créditos se ven a la vez y se saltan por
   votación.
-- **Skins**: compatibles con CustomKnight; los demás ven la tuya aunque no la tengan.
-- **Panel en pausa**: ajustes del host, vida de los compañeros, dar geo, ir con un compañero, desatascarse y recargar
+- <img src="docs/icons/palette.svg" width="16" height="16" alt=""> **Skins**: compatibles con CustomKnight; los demás ven la tuya aunque no la tengan.
+- <img src="docs/icons/sliders.svg" width="16" height="16" alt=""> **Panel en pausa**: ajustes del host, vida de los compañeros, dar geo, ir con un compañero, desatascarse y recargar
   la sala.
-- **Idiomas**: el mod sale en el idioma del juego (español, o inglés en cualquier otro idioma).
-- **Instalador**: una ventana para instalar, actualizar y desinstalar, que deja el juego como estaba.
+- <img src="docs/icons/languages.svg" width="16" height="16" alt=""> **Idiomas**: el mod sale en el idioma del juego (español, o inglés en cualquier otro idioma).
+- <img src="docs/icons/package.svg" width="16" height="16" alt=""> **Instalador**: una ventana para instalar, actualizar y desinstalar, que deja el juego como estaba.
 
 <details>
-<summary><b>Partida y conexión</b></summary>
+<summary><img src="docs/icons/lock.svg" width="18" height="18" alt=""> <b>Partida y conexión</b></summary>
 
 - **Mundos coop** propios: hasta 4, guardados en el PC del host, en
   `C:\Users\<usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\HKMultiplayer\Mundos` (una carpeta por mundo). Son
@@ -77,7 +77,7 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 </details>
 
 <details>
-<summary><b>Jugadores y efectos del compañero</b></summary>
+<summary><img src="docs/icons/users.svg" width="18" height="18" alt=""> <b>Jugadores y efectos del compañero</b></summary>
 
 - Se ve al compañero en tiempo real, con su **nombre encima**, sus animaciones y su orientación, con movimiento suave
   (interpolación que se adapta a la conexión).
@@ -98,7 +98,7 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 </details>
 
 <details>
-<summary><b>Enemigos y jefes</b></summary>
+<summary><img src="docs/icons/sword.svg" width="18" height="18" alt=""> <b>Enemigos y jefes</b></summary>
 
 - Cada enemigo lo mueve el PC del jugador **más cercano** y ataca a los dos. Su vida, sus golpes y su muerte son los
   mismos en todos los PCs; los golpes de cualquiera le quitan vida en todos.
@@ -118,7 +118,7 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 </details>
 
 <details>
-<summary><b>Mundo compartido</b></summary>
+<summary><img src="docs/icons/map.svg" width="18" height="18" alt=""> <b>Mundo compartido</b></summary>
 
 - **Progreso compartido en directo**: habilidades de movimiento y hechizos, jefes vencidos, puertas, palancas, paredes
   rotas, salas visitadas y mapas.
@@ -137,7 +137,7 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 </details>
 
 <details>
-<summary><b>Funciones del coop</b></summary>
+<summary><img src="docs/icons/heart.svg" width="18" height="18" alt=""> <b>Funciones del coop</b></summary>
 
 - **Revivir**: al morir con un compañero en pie no se muere, se cae. El cuerpo queda tendido con "† Nombre" y la
   cámara del caído sigue a su compañero. El compañero recibe un aviso y una flecha hacia el cuerpo; junto a él,
@@ -221,7 +221,7 @@ Windows puede avisar al abrir un archivo descargado de internet: pulsa *Ejecutar
 todas formas*). El instalador es un script de PowerShell que puedes leer en la carpeta `scripts` del paquete.
 
 <details>
-<summary><b>Qué hace el instalador</b></summary>
+<summary><img src="docs/icons/package.svg" width="18" height="18" alt=""> <b>Qué hace el instalador</b></summary>
 
 - Busca la carpeta del juego (Steam, sus bibliotecas y las rutas típicas); si hay varias, la eliges en la lista, y si
   no la encuentra, con *Buscar…*.
