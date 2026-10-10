@@ -261,7 +261,7 @@ lista completa de pendientes está al final de la arquitectura.
 | `tests/` | Pruebas del transporte fuera del juego y rutas de prueba del coop (`tests/routes/`). |
 | `tools/` | Compilar e instalar (`test-cycle.sh`), pruebas con dos copias (`mp-test-lib.sh`), rutas automáticas (`run-routes.sh`), paquete e instalador. |
 | `docs/` | Diseño y notas. |
-| `modding-api/` | Código de la Modding API (hk-modding/api, licencia MIT) modificada para Hollow Knight 1.5.12620 (Unity 6). Sin los archivos del juego (`Vanilla/`) ni lo que genera al compilar. |
+| `modding-api/` | Código de la Modding API (hk-modding/api, licencia MIT) para Hollow Knight 1.5.12620 (Unity 6): rama `hk-beta-branch-unity-6-update` de `SFGrenade/api` (PR hk-modding/api#164, commit `468f579`) con cambios propios (p. ej. `-modlog <nombre>` en `Logger.cs`). Sin los archivos del juego (`Vanilla/`) ni lo que genera al compilar. |
 | `lib/` | *(solo local, no se sube; lo rehace `tools/setup-dev.sh`)* DLL del juego y de la Modding API para compilar. |
 | `vendor/` | *(solo local, no se sube; lo rehace `tools/setup-dev.sh`)* Modding API compilada para el paquete. |
 | `test-instances/` | *(solo local, no se sube)* Copias del juego para probar con dos jugadores en el mismo PC. |
