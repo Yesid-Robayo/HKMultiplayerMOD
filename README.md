@@ -18,7 +18,7 @@ guide is `README.txt` inside the release package.*
 > [!WARNING]
 > **Versión beta.** Casi todo se ha probado jugando con dos copias del juego en el mismo PC, pero todavía no se ha
 > jugado una partida larga entre dos PCs por internet, y algunas partes no se han probado del todo (ver
-> [Estado de las pruebas](#-estado-de-las-pruebas)). **Puede tener errores.** Haz una copia de tus partidas antes de
+> [Estado de las pruebas](#estado-de-las-pruebas)). **Puede tener errores.** Haz una copia de tus partidas antes de
 > jugar y, si algo falla, cuéntalo en un *issue* con una captura y tu `ModLog.txt`.
 
 Un jugador **hostea** un mundo coop y sus compañeros **se unen** con la dirección del host y el código de la partida:
@@ -27,35 +27,37 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 
 ## Índice
 
-- [Funciones](#-funciones)
-- [Estado de las pruebas](#-estado-de-las-pruebas)
-- [Instalar](#-instalar)
-- [Cómo jugar](#-cómo-jugar)
-- [Ajustes de la partida](#%EF%B8%8F-ajustes-de-la-partida)
-- [Tecnología](#-tecnología)
-- [Desarrollo](#-desarrollo)
-- [Créditos](#-créditos)
+- [Funciones](#funciones)
+- [Estado de las pruebas](#estado-de-las-pruebas)
+- [Instalar](#instalar)
+- [Cómo jugar](#cómo-jugar)
+- [Ajustes de la partida](#ajustes-de-la-partida)
+- [Tecnología](#tecnología)
+- [Desarrollo](#desarrollo)
+- [Créditos](#créditos)
 
 ---
 
-## ✨ Funciones
+## Funciones
 
-| | |
-|---|---|
-| 🌍 **Mundos coop** | Hasta 4 mundos propios, guardados en el PC del host, aparte de tus partidas normales. |
-| 🔒 **Conexión** | Red local o internet, con código de partida y todo cifrado. Sin Steam ni servidores intermedios. |
-| 👥 **Jugadores** | El compañero se ve en tiempo real con su nombre, animaciones, ataques, hechizos y amuletos. |
-| ⚔️ **Enemigos y jefes** | Los mismos en todos los PCs: misma vida, mismos golpes, misma muerte. Los jefes esperan a que estéis los dos. |
-| 🗺️ **Mundo compartido** | Progreso, palancas, puertas, paredes rotas, ascensores, rejas, cofres y misiones de NPC, a la vez. |
-| ❤️ **Revivir** | Si caes con un compañero en pie, quedas tendido y te revive manteniendo Focus junto a tu cuerpo. |
-| 🌙 **Sueños y cinemáticas** | Entráis juntos a los sueños; los finales y créditos se ven a la vez y se saltan por votación. |
-| 🎨 **Skins** | Compatibles con CustomKnight; los demás ven la tuya aunque no la tengan. |
-| 🛠️ **Panel en pausa** | Ajustes del host, vida de los compañeros, dar geo, ir con un compañero, desatascarse y recargar la sala. |
-| 🌐 **Idiomas** | El mod sale en el idioma del juego: español, o inglés en cualquier otro idioma. |
-| 📦 **Instalador** | Una ventana para instalar, actualizar y desinstalar, que deja el juego como estaba. |
+- **Mundos coop**: hasta 4 mundos propios, guardados en el PC del host, aparte de tus partidas normales.
+- **Conexión**: red local o internet, con código de partida y todo cifrado, sin Steam ni servidores intermedios.
+- **Jugadores**: el compañero se ve en tiempo real con su nombre, animaciones, ataques, hechizos y amuletos.
+- **Enemigos y jefes**: los mismos en todos los PCs (misma vida, mismos golpes, misma muerte); los jefes esperan a
+  que estéis los dos.
+- **Mundo compartido**: progreso, palancas, puertas, paredes rotas, ascensores, rejas, cofres y misiones de NPC, a la
+  vez.
+- **Revivir**: si caes con un compañero en pie, quedas tendido y te revive manteniendo Focus junto a tu cuerpo.
+- **Sueños y cinemáticas**: entráis juntos a los sueños; los finales y los créditos se ven a la vez y se saltan por
+  votación.
+- **Skins**: compatibles con CustomKnight; los demás ven la tuya aunque no la tengan.
+- **Panel en pausa**: ajustes del host, vida de los compañeros, dar geo, ir con un compañero, desatascarse y recargar
+  la sala.
+- **Idiomas**: el mod sale en el idioma del juego (español, o inglés en cualquier otro idioma).
+- **Instalador**: una ventana para instalar, actualizar y desinstalar, que deja el juego como estaba.
 
 <details>
-<summary><b>🌍 Partida y conexión</b></summary>
+<summary><b>Partida y conexión</b></summary>
 
 - **Mundos coop** propios: hasta 4, guardados en el PC del host, en
   `C:\Users\<usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\HKMultiplayer\Mundos` (una carpeta por mundo). Son
@@ -75,7 +77,7 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 </details>
 
 <details>
-<summary><b>👥 Jugadores y efectos del compañero</b></summary>
+<summary><b>Jugadores y efectos del compañero</b></summary>
 
 - Se ve al compañero en tiempo real, con su **nombre encima**, sus animaciones y su orientación, con movimiento suave
   (interpolación que se adapta a la conexión).
@@ -96,7 +98,7 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 </details>
 
 <details>
-<summary><b>⚔️ Enemigos y jefes</b></summary>
+<summary><b>Enemigos y jefes</b></summary>
 
 - Cada enemigo lo mueve el PC del jugador **más cercano** y ataca a los dos. Su vida, sus golpes y su muerte son los
   mismos en todos los PCs; los golpes de cualquiera le quitan vida en todos.
@@ -116,7 +118,7 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 </details>
 
 <details>
-<summary><b>🗺️ Mundo compartido</b></summary>
+<summary><b>Mundo compartido</b></summary>
 
 - **Progreso compartido en directo**: habilidades de movimiento y hechizos, jefes vencidos, puertas, palancas, paredes
   rotas, salas visitadas y mapas.
@@ -135,7 +137,7 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 </details>
 
 <details>
-<summary><b>❤️ Funciones del coop</b></summary>
+<summary><b>Funciones del coop</b></summary>
 
 - **Revivir**: al morir con un compañero en pie no se muere, se cae. El cuerpo queda tendido con "† Nombre" y la
   cámara del caído sigue a su compañero. El compañero recibe un aviso y una flecha hacia el cuerpo; junto a él,
@@ -161,16 +163,35 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 
 ---
 
-## 🧪 Estado de las pruebas
+## Estado de las pruebas
 
 Las pruebas se hacen con dos (o tres) copias del juego en el mismo PC, con un modo de prueba del mod y rutas
 automáticas que recorren el mundo comprobando que los dos ven lo mismo.
 
-| | Qué |
-|---|---|
-| ✅ **Probado jugando** | Conexión, mundos y personajes de los invitados · enemigos de todas las zonas · jefes: Mamá Gruz, Falso Caballero (también con mala conexión), Hornet, Mawlek, Maestro de Almas, Defensor del Estiércol, Nosk, Vasija Rota, Guardián de Cristal, Señores Mantis, Uumuu, Coleccionista, Señor Traidor, Caballeros Vigía, Grimm, Tirano de Almas, Hollow Knight y Radiancia · Coliseo de Bronce, Plata y Oro · sueños: Campeón Fallido, Falso Caballero, Hermano Perdido, Tirano de Almas, Defensor Blanco, Príncipe Gris Zote y Rey de las Pesadillas · revivir, sombras, HUD, ajustes del host, cinemáticas, skins, ir con un compañero · misiones de NPC · instalador y desinstalador |
-| ⚠️ **Probado en parte** | Caballero de la Colmena, Flukemarm, Cargador Musgoso y Rey Mosca (mueren en los dos; falta verlos atacar) · el rescate de Zote (el combate sí, la conversación no) |
-| ❓ **Sin probar** | La traducción al inglés dentro del juego · el vapor naranja de la muerte del Falso Caballero (arreglado sin volver a probar) · Cloth y Menderbug · la entrada a la Radiancia por el camino del juego · volver de las cinemáticas de los Panteones · **una partida entre dos PCs por internet** |
+Probado jugando:
+
+- Conexión, mundos coop y personajes de los invitados.
+- Enemigos de todas las zonas.
+- Jefes: Mamá Gruz, Falso Caballero (también con mala conexión), Hornet, Mawlek, Maestro de Almas, Defensor del
+  Estiércol, Nosk, Vasija Rota, Guardián de Cristal, Señores Mantis, Uumuu, Coleccionista, Señor Traidor, Caballeros
+  Vigía, Grimm, Tirano de Almas, Hollow Knight y Radiancia.
+- Coliseo de los Tontos: Bronce, Plata y Oro.
+- Sueños: Campeón Fallido, Falso Caballero, Hermano Perdido, Tirano de Almas, Defensor Blanco, Príncipe Gris Zote y Rey
+  de las Pesadillas.
+- Revivir, sombras, HUD del compañero, ajustes del host, cinemáticas, skins, ir con un compañero y misiones de NPC.
+- Instalar, actualizar y desinstalar.
+
+Probado en parte:
+
+- Caballero de la Colmena, Flukemarm, Cargador Musgoso y Rey Mosca: mueren en los dos PCs, pero falta verlos atacar.
+- El rescate de Zote: el combate sí, la conversación de después no.
+
+Sin probar:
+
+- Una partida entre dos PCs por internet.
+- La traducción al inglés dentro del juego.
+- El vapor naranja de la muerte del Falso Caballero (arreglado sin volver a probarlo).
+- Cloth y Menderbug, la entrada a la Radiancia por el camino del juego y la vuelta de las cinemáticas de los Panteones.
 
 Limitaciones conocidas:
 
@@ -185,7 +206,7 @@ La lista completa está en [docs/arquitectura.md](docs/arquitectura.md#pendiente
 
 ---
 
-## 📦 Instalar
+## Instalar
 
 > [!NOTE]
 > Necesitas **Hollow Knight 1.5.12620 en Windows** (la versión actual de Steam). Todos los jugadores tienen que tener
@@ -219,7 +240,7 @@ todas formas*). El instalador es un script de PowerShell que puedes leer en la c
 
 ---
 
-## 🎮 Cómo jugar
+## Cómo jugar
 
 1. **Host**: menú principal › *Multijugador* › *Hostear un mundo* › *Nuevo mundo* (o elige uno) › *Crear y hostear*.
    Pasa a tus compañeros tu **IP**, el **puerto** (26950) y el **código** que sale en pantalla (también en
@@ -230,7 +251,7 @@ todas formas*). El instalador es un script de PowerShell que puedes leer en la c
 
 ---
 
-## ⚙️ Ajustes de la partida
+## Ajustes de la partida
 
 Los decide el host en *Pausa › Multijugador › Ajustes de la partida*, se guardan en cada mundo y los invitados los ven
 al momento sin poder cambiarlos.
@@ -254,7 +275,7 @@ al momento sin poder cambiarlos.
 
 ---
 
-## 🔧 Tecnología
+## Tecnología
 
 | Componente | Para qué se usa |
 |---|---|
@@ -271,7 +292,7 @@ al momento sin poder cambiarlos.
 
 ---
 
-## 💻 Desarrollo
+## Desarrollo
 
 <details>
 <summary><b>Estructura del repositorio</b></summary>
@@ -328,7 +349,7 @@ Modding API se edita `modding-api/` y se vuelve a ejecutar.
 
 ---
 
-## 🙏 Créditos
+## Créditos
 
 - **[Hollow Knight](https://www.hollowknight.com/)** es de **Team Cherry**. Este mod no está afiliado a Team Cherry y
   no incluye archivos del juego.
