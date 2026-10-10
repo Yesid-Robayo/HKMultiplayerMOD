@@ -1,0 +1,53 @@
+name: docs
+
+on:
+  push:
+    branches: [ master, docs ]
+
+jobs:
+  docfx:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [windows]
+        archive-ref: [main]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+      - name: Checkout `docs` branch
+        uses: actions/checkout@v7
+        with:
+          ref: docs
+          path: docs
+
+      - name: Read Versions
+        run: |
+          HKV=$(cat ./hollowknight.version)
+          echo "HK_VERSION=$HKV" >> $GITHUB_ENV
+      - name: Checkout Binaries
+        uses: actions/checkout@v7
+        with:
+          repository: hk-modding/hk-binary-archives
+          ref: ${{ matrix.archive-ref }}
+          ssh-key: ${{ secrets.BINARY_ARCHIVE_DEPLOY_KEY }}
+          sparse-checkout: |
+            ${{ env.HK_VERSION }}/managed.${{ matrix.platform }}.tar.gz
+          sparse-checkout-cone-mode: false
+          path: ./hk-binary-archives
+          persist-credentials: false
+      - name: Unpack Archive
+        run: |
+          mkdir Vanilla
+          cd ./Vanilla
+          tar -xzf ../hk-binary-archives/${{ env.HK_VERSION }}/managed.${{ matrix.platform }}.tar.gz
+
+      - name: Build docs
+        uses: nunit/docfx-action@v4.1.0
+        with:
+          args: docs/docfx.json
+      - name: Publish
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: DocFX
+          force_orphan: true

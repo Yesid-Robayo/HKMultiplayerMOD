@@ -202,19 +202,19 @@ Qué hace la instalación:
 - Copia la Modding API y el mod, y comprueba lo copiado.
 - Instalar otra versión encima es una actualización: conserva la copia de la primera instalación.
 
-`desinstalar.bat` deshace el manifiesto al revés: devuelve los originales, borra lo añadido y devuelve a su sitio los
+*Desinstalar* deshace el manifiesto al revés: devuelve los originales, borra lo añadido y devuelve a su sitio los
 mods apartados y el mod anterior. El juego queda como estaba; los mundos coop, las partidas y las skins no se tocan.
 
 ### Armar el paquete
 
 `bash tools/package.sh` compila el mod en Release y deja `out/package/HKMultiplayer-<versión>.zip`. Necesita la
-Modding API compilada en `vendor/modding-api/OutputFinal` (solo local). Dentro del zip, una carpeta
+Modding API compilada en `vendor/modding-api/OutputFinal` (la deja `tools/setup-dev.sh`). Dentro del zip, una carpeta
 `HKMultiplayer-<versión>`:
 
 | Ruta | Contenido |
 |---|---|
-| `instalar.bat`, `desinstalar.bat`, `LEEME.txt` | Lo que usa el jugador (fuentes en `tools/installer/`). |
-| `scripts/` | `install.ps1`, `uninstall.ps1`, `common.ps1` y `version.txt`. |
+| `HKMultiplayer Setup.bat`, `LEEME.txt`, `README.txt` | Lo que usa el jugador (fuentes en `tools/installer/`). |
+| `scripts/` | `setup.ps1` (ventana y consola), `install.ps1`, `uninstall.ps1`, `common.ps1` y `version.txt`. |
 | `files/hollow_knight_Data/Managed/` | La Modding API (todo `OutputFinal` salvo su README). |
 | `files/hollow_knight_Data/Managed/Mods/HKMultiplayer/` | `HKMultiplayer.dll` y `.pdb`, y `BouncyCastle.Cryptography.dll` (cifrado). |
 | `SHA256SUMS.txt` | Hashes de `files/`. |
@@ -261,20 +261,29 @@ lista completa de pendientes está al final de la arquitectura.
 | `tests/` | Pruebas del transporte fuera del juego y rutas de prueba del coop (`tests/routes/`). |
 | `tools/` | Compilar e instalar (`test-cycle.sh`), pruebas con dos copias (`mp-test-lib.sh`), rutas automáticas (`run-routes.sh`), paquete e instalador. |
 | `docs/` | Diseño y notas. |
-| `lib/` | *(solo local, no se sube)* DLL del juego y de la Modding API para compilar. |
-| `vendor/` | *(solo local, no se sube)* Modding API compilada para el paquete. |
+| `modding-api/` | Código de la Modding API (hk-modding/api, licencia MIT) modificada para Hollow Knight 1.5.12620 (Unity 6). Sin los archivos del juego (`Vanilla/`) ni lo que genera al compilar. |
+| `lib/` | *(solo local, no se sube; lo rehace `tools/setup-dev.sh`)* DLL del juego y de la Modding API para compilar. |
+| `vendor/` | *(solo local, no se sube; lo rehace `tools/setup-dev.sh`)* Modding API compilada para el paquete. |
 | `test-instances/` | *(solo local, no se sube)* Copias del juego para probar con dos jugadores en el mismo PC. |
 
 Las DLL del juego son de Team Cherry y no se incluyen en el repositorio.
 
-### Compilar
+### Compilar (también en otro PC)
 
-1. Copiar a `lib/` las DLL de `hollow_knight_Data/Managed` del juego con la Modding API instalada
-   (`Assembly-CSharp.dll`, `MMHOOK_*.dll`, `PlayMaker.dll`, `UnityEngine.*.dll`, `TeamCherry.*.dll`,
-   `MonoMod.*.dll`, `Newtonsoft.Json.dll`, `netstandard.dll`...).
-2. `bash tools/test-cycle.sh` compila (.NET Framework 4.7.2) e instala en las copias de prueba;
+Necesitas Hollow Knight 1.5.12620 instalado, el SDK de .NET (`dotnet`) y Git Bash. Las DLL del juego no van en el
+repositorio (son de Team Cherry): se sacan del juego instalado.
+
+1. Clonar el repositorio.
+2. `bash tools/setup-dev.sh ["C:/ruta/a/Hollow Knight"]` (por defecto, la carpeta de Steam). Copia la carpeta
+   `Managed` del juego **sin modificar** a `modding-api/Vanilla`, compila la Modding API de `modding-api/` y deja
+   `vendor/modding-api/OutputFinal` y `lib/`. Si el juego ya tiene la Modding API, usa los originales que guardó el
+   instalador (`HKMultiplayer-backup`); si no los hay, avisa: en Steam, *Verificar integridad de los archivos del
+   juego* y volver a ejecutarlo.
+3. `bash tools/test-cycle.sh` compila el mod (.NET Framework 4.7.2) e instala en las copias de prueba;
    `bash tools/test-cycle.sh --game` también en el juego.
-3. Pruebas del transporte: `dotnet run --project tests/NetTests`.
+4. Pruebas del transporte: `dotnet run --project tests/NetTests`.
+
+Para cambiar la Modding API se edita `modding-api/` y se vuelve a ejecutar `tools/setup-dev.sh`.
 
 ### Probar con dos jugadores en un PC
 

@@ -1,7 +1,16 @@
-# Binarios y datos del juego (propiedad de Team Cherry) y de la Modding API compilada: solo en local
+# Binarios y datos del juego (propiedad de Team Cherry) y de la Modding API compilada: solo en local (los rehace
+# tools/setup-dev.sh a partir del juego instalado)
 lib/
 vendor/
 test-instances/
+
+# Modding API (código en modding-api/, sí se sube): sin el juego ni lo que se genera al compilarla
+modding-api/Vanilla/
+modding-api/override/
+modding-api/OutputFinal/
+modding-api/*/Output/
+modding-api/*/packages/
+modding-api/Examples/HollowKnightManaged/
 
 # Compilación y paquetes
 out/

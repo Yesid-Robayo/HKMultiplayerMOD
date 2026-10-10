@@ -1,0 +1,190 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <RootNamespace>Modding</RootNamespace>
+        <AssemblyName>Assembly-CSharp.mm</AssemblyName>
+        <TargetFramework>net472</TargetFramework>
+        <!--<TargetFramework>netstandard2.1</TargetFramework>-->
+        <AssemblyTitle>Hollow Knight - Mod API Enabled</AssemblyTitle>
+        <Product>Modding API</Product>
+        <Copyright>Copyright © 2026</Copyright>
+        <OutputPath>bin/$(Configuration)/</OutputPath>
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+        <RestorePackagesPath>packages</RestorePackagesPath>
+        <LangVersion>latest</LangVersion>
+        <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+        <FrameworkPathOverride>$(MSBuildProjectDirectory)/../Vanilla</FrameworkPathOverride>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Files Include="../Vanilla/*" />
+
+        <BuildDir Include="$(TargetDir)" />
+
+        <Dependencies Include="$(TargetDir)MMHOOK_Assembly-CSharp.dll" />
+        <Dependencies Include="$(TargetDir)MMHOOK_PlayMaker.dll" />
+        <Dependencies Include="$(TargetDir)MonoMod.Utils.dll" />
+        <Dependencies Include="$(TargetDir)Mono.Cecil.dll" />
+        <Dependencies Include="$(TargetDir)Mono.Cecil.Rocks.dll" />
+        <Dependencies Include="$(TargetDir)Mono.Cecil.Pdb.dll" />
+        <Dependencies Include="$(TargetDir)MonoMod.RuntimeDetour.dll" />
+        <Dependencies Include="$(TargetDir)MonoMod.Backports.dll" />
+        <Dependencies Include="$(TargetDir)MonoMod.Core.dll" />
+        <Dependencies Include="$(TargetDir)MonoMod.ILHelpers.dll" />
+        <Dependencies Include="$(TargetDir)MonoMod.Iced.dll" />
+        <Dependencies Include="$(TargetDir)System.ValueTuple.dll" />
+        <Dependencies Include="$(TargetDir)MMHOOK_TeamCherry.BuildBot.dll" />
+        <Dependencies Include="$(TargetDir)MMHOOK_TeamCherry.Cinematics.dll" />
+        <Dependencies Include="$(TargetDir)MMHOOK_TeamCherry.Localization.dll" />
+        <Dependencies Include="$(TargetDir)MMHOOK_TeamCherry.NestedFadeGroup.dll" />
+        <Dependencies Include="$(TargetDir)MMHOOK_TeamCherry.SharedUtils.dll" />
+        <Dependencies Include="$(TargetDir)MMHOOK_TeamCherry.TK2D.dll" />
+    </ItemGroup>
+
+    <PropertyGroup>
+        <OutputDir>../OutputFinal</OutputDir>
+        <!-- todo macOS -->
+        <GamePath Condition="'$(OS)' == 'Windows_NT'">C:/Program Files (x86)/Steam/steamapps/common/Hollow Knight</GamePath>
+        <GamePath Condition="'$(OS)' != 'Windows_NT'">$(HOME)/.local/share/Steam/steamapps/common/Hollow Knight</GamePath>
+        <CopyDir>$(GamePath)/hollow_knight_Data/Managed</CopyDir>
+
+        <Mono Condition="$(OS) == WINDOWS_NT" />
+        <Mono Condition="$(OS) != WINDOWS_NT">mono</Mono>
+    </PropertyGroup>
+
+    <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+        <Delete Condition="Exists('$(OutputDir)')" Files="$(OutputDir)" />
+
+        <Copy SkipUnchangedFiles="true" SourceFiles="@(Files)" DestinationFolder="@(BuildDir)" />
+
+        <Exec WorkingDirectory="@(BuildDir)" Command="$(Mono) &quot;$(MSBuildProjectDirectory)/../PrePatcher/Output/PrePatcher.exe&quot; Assembly-CSharp.dll Assembly-CSharp-patched.dll" />
+        <Copy SkipUnchangedFiles="true" SourceFiles="$(TargetDir)Assembly-CSharp-patched.dll" DestinationFiles="$(TargetDir)Assembly-CSharp.dll" />
+
+        <Delete Condition="Exists('MONOMODDED_TeamCherry.Localization.dll')" Files="MONOMODDED_TeamCherry.Localization.dll" />
+        <Exec WorkingDirectory="@(BuildDir)" Command="$(Mono) &quot;$(TargetDir)MonoMod.Patcher.exe&quot; TeamCherry.Localization.dll" />
+        <!-- because we patch in a value we'll reference in assembly-csharp -->
+        <Copy SkipUnchangedFiles="true" SourceFiles="$(TargetDir)MONOMODDED_TeamCherry.Localization.dll" DestinationFiles="$(TargetDir)TeamCherry.Localization.dll" />
+
+        <Delete Condition="Exists('MONOMODDED_Assembly-CSharp.dll')" Files="MONOMODDED_Assembly-CSharp.dll" />
+        <Exec WorkingDirectory="@(BuildDir)" Command="$(Mono) &quot;$(TargetDir)MonoMod.Patcher.exe&quot; Assembly-CSharp.dll" />
+
+        <Exec WorkingDirectory="@(BuildDir)" Command="$(Mono) &quot;$(MSBuildProjectDirectory)/../PostPatcher/Output/PostPatcher.exe&quot; MONOMODDED_Assembly-CSharp.dll Assembly-CSharp-postpatched.dll" />
+        <Copy SkipUnchangedFiles="true" SourceFiles="$(TargetDir)Assembly-CSharp-postpatched.dll" DestinationFiles="$(TargetDir)MONOMODDED_Assembly-CSharp.dll" />
+
+        <!-- Generate Hooks !-->
+        <Exec Condition="!Exists('$(TargetDir)MMHOOK_Assembly-CSharp.dll')" WorkingDirectory="@(BuildDir)" Command="$(Mono) &quot;$(TargetDir)MonoMod.RuntimeDetour.HookGen.exe&quot; --private Assembly-CSharp.dll" />
+        <Exec Condition="!Exists('$(TargetDir)MMHOOK_Playmaker.dll')" WorkingDirectory="@(BuildDir)" Command="$(Mono) &quot;$(TargetDir)MonoMod.RuntimeDetour.HookGen.exe&quot; --private PlayMaker.dll" />
+        <Exec Condition="!Exists('$(TargetDir)MMHOOK_TeamCherry.BuildBot.dll')" WorkingDirectory="@(BuildDir)" Command="$(Mono) &quot;$(TargetDir)MonoMod.RuntimeDetour.HookGen.exe&quot; --private TeamCherry.BuildBot.dll" />
+        <Exec Condition="!Exists('$(TargetDir)MMHOOK_TeamCherry.Cinematics.dll')" WorkingDirectory="@(BuildDir)" Command="$(Mono) &quot;$(TargetDir)MonoMod.RuntimeDetour.HookGen.exe&quot; --private TeamCherry.Cinematics.dll" />
+        <Exec Condition="!Exists('$(TargetDir)MMHOOK_TeamCherry.Localization.dll')" WorkingDirectory="@(BuildDir)" Command="$(Mono) &quot;$(TargetDir)MonoMod.RuntimeDetour.HookGen.exe&quot; --private TeamCherry.Localization.dll" />
+        <Exec Condition="!Exists('$(TargetDir)MMHOOK_TeamCherry.NestedFadeGroup.dll')" WorkingDirectory="@(BuildDir)" Command="$(Mono) &quot;$(TargetDir)MonoMod.RuntimeDetour.HookGen.exe&quot; --private TeamCherry.NestedFadeGroup.dll" />
+        <Exec Condition="!Exists('$(TargetDir)MMHOOK_TeamCherry.SharedUtils.dll')" WorkingDirectory="@(BuildDir)" Command="$(Mono) &quot;$(TargetDir)MonoMod.RuntimeDetour.HookGen.exe&quot; --private TeamCherry.SharedUtils.dll" />
+        <Exec Condition="!Exists('$(TargetDir)MMHOOK_TeamCherry.TK2D.dll')" WorkingDirectory="@(BuildDir)" Command="$(Mono) &quot;$(TargetDir)MonoMod.RuntimeDetour.HookGen.exe&quot; --private TeamCherry.TK2D.dll" />
+    </Target>
+
+    <Target Name="SetupExamples" AfterTargets="PostBuildEvent" Condition="'$(SetupExamples)' == 'true'">
+        <RemoveDir Directories="../Examples/HollowKnightManaged/" />
+        <MakeDir Directories="../Examples/HollowKnightManaged/" />
+        <!-- Copy the vanilla files. -->
+        <Copy SourceFiles="@(Files)" DestinationFolder="../Examples/HollowKnightManaged/" />
+        <!-- Copy the API and the documentation -->
+        <Copy SourceFiles="$(TargetDir)MONOMODDED_Assembly-CSharp.dll" DestinationFiles="../Examples/HollowKnightManaged/Assembly-CSharp.dll" />
+        <Copy SourceFiles="$(TargetDir)Assembly-CSharp.mm.xml" DestinationFiles="../Examples/HollowKnightManaged/Assembly-CSharp.xml" />
+        <Copy SourceFiles="$(TargetDir)MONOMODDED_TeamCherry.Localization.dll" DestinationFiles="../Examples/HollowKnightManaged/TeamCherry.Localization.dll" />
+        <Copy SourceFiles="$(TargetDir)TeamCherry.Localization.mm.xml" DestinationFiles="../Examples/HollowKnightManaged/TeamCherry.Localization.xml" />
+
+        <!-- Copy the dependencies for the API and hooks for mods -->
+        <Copy SourceFiles="@(Dependencies)" DestinationFolder="../Examples/HollowKnightManaged/" />
+    </Target>
+
+    <Target Name="OutputFinal" AfterTargets="PostBuild">
+        <!-- Cleanup -->
+        <RemoveDir Directories="$(OutputDir)/" />
+
+        <!-- Make the output directory -->
+        <MakeDir Directories="$(OutputDir)/" />
+
+        <!-- Copy the API, the documentation, and the README. -->
+        <Copy SourceFiles="../README.ModdingApi.md" DestinationFiles="$(OutputDir)/README.md" />
+        <Copy SourceFiles="$(TargetDir)MONOMODDED_Assembly-CSharp.dll" DestinationFiles="$(OutputDir)/Assembly-CSharp.dll" />
+        <Copy SourceFiles="$(TargetDir)Assembly-CSharp.mm.xml" DestinationFiles="$(OutputDir)/Assembly-CSharp.xml" />
+        <Copy SourceFiles="$(TargetDir)MONOMODDED_TeamCherry.Localization.dll" DestinationFiles="$(OutputDir)/TeamCherry.Localization.dll" />
+        <Copy SourceFiles="$(TargetDir)TeamCherry.Localization.mm.xml" DestinationFiles="$(OutputDir)/TeamCherry.Localization.xml" />
+
+        <!-- Copy the dependencies for the API and hooks for mods -->
+        <Copy SourceFiles="@(Dependencies)" DestinationFolder="$(OutputDir)" />
+
+        <PropertyGroup>
+            <NativeLibPrefix Condition="'$(RuntimeIdentifier)' == 'win-x64'" />
+            <NativeLibExtension Condition="'$(RuntimeIdentifier)' == 'win-x64'">.dll</NativeLibExtension>
+            <NativeLibPrefix Condition=" '$(RuntimeIdentifier)' == 'linux-x64'">lib</NativeLibPrefix>
+            <NativeLibExtension Condition=" '$(RuntimeIdentifier)' == 'linux-x64'">.so</NativeLibExtension>
+            <NativeLibPrefix Condition=" '$(RuntimeIdentifier)' == 'osx-x64'">lib</NativeLibPrefix>
+            <NativeLibExtension Condition=" '$(RuntimeIdentifier)' == 'osx-x64'">.dylib</NativeLibExtension>
+        </PropertyGroup>
+
+        <Warning Condition="'$(RuntimeIdentifier)' == ''" Text="Runtime identifier unknown, pass `--runtime win-x64` to include native dependencies" />
+        <!-- on .NET 5 and up, msbuild can automatically copy the relevant files from /runtimes/$RID/native/library.{dll,so,dylib}. Unfortunately, we're on net472 -->
+        <Copy Condition="'$(RuntimeIdentifier)' != ''" SourceFiles="$(Pkgunityscenerepacker)/runtimes/$(RuntimeIdentifier)/native/$(NativeLibPrefix)unityscenerepacker$(NativeLibExtension)" DestinationFolder="$(OutputDir)" />
+    </Target>
+
+    <Target Name="CopyOutputAfterFinal" AfterTargets="OutputFinal" Condition="'$(CopyDir)' != ''">
+        <ItemGroup>
+            <OutputFiles Include="$(OutputDir)\**\*" />
+        </ItemGroup>
+        <Copy SourceFiles="@(OutputFiles)" DestinationFolder="$(CopyDir)" />
+    </Target>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+        <DebugType>full</DebugType>
+        <DocumentationFile>bin\$(Configuration)\Assembly-CSharp.mm.xml</DocumentationFile>
+    </PropertyGroup>
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+        <DebugType>pdbonly</DebugType>
+        <DocumentationFile>bin\$(Configuration)\Assembly-CSharp.mm.xml</DocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="MonoMod.RuntimeDetour" Version="25.3.6">
+            <IncludeAssets>all</IncludeAssets>
+        </PackageReference>
+
+        <PackageReference Include="unityscenerepacker" Version="2.4.0" GeneratePathProperty="true" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../TeamCherry.Localization/TeamCherry.Localization.csproj">
+            <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
+        </ProjectReference>
+        <ProjectReference Include="../PrePatcher/PrePatcher.csproj">
+            <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+        </ProjectReference>
+        <ProjectReference Include="../PostPatcher/PostPatcher.csproj">
+            <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+        </ProjectReference>
+        <ProjectReference Include="..\MonoMod.Patcher\MonoMod.Patcher.csproj" />
+        <ProjectReference Include="..\MonoMod.RuntimeDetour.HookGen\MonoMod.RuntimeDetour.HookGen.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="logo.png" />
+        <!-- generated using https://github.com/jakobhellermann/unity-scene-repacker/blob/main/examples/export_monobehaviour_typetrees.rs -->
+        <EmbeddedResource Include="monobehaviour-typetree-dump.lz4" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="../Vanilla/Assembly-CSharp.dll" />
+        <Reference Include="../Vanilla/TeamCherry.*.dll" />
+        <!--<Reference Include="../Vanilla/mscorlib.dll"/>-->
+        <Reference Include="../override/mscorlib.dll" />
+        <Reference Include="../Vanilla/netstandard.dll" />
+        <Reference Include="../Vanilla/Newtonsoft.Json.dll" />
+        <Reference Include="../Vanilla/PlayMaker.dll" />
+        <Reference Include="../Vanilla/UnityEngine.dll" />
+        <Reference Include="../Vanilla/UnityEngine.*.dll" />
+
+        <Reference Include="../Vanilla/Unity.*.dll" />
+        <Reference Include="../Vanilla/Mono.*.dll" />
+        <Reference Include="../Vanilla/System.dll" />
+        <Reference Include="../Vanilla/System.*.dll" />
+    </ItemGroup>
+</Project>

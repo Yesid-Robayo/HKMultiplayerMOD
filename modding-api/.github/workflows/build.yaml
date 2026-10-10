@@ -1,0 +1,95 @@
+name: build
+
+on:
+  workflow_call:
+    secrets:
+      BINARY_ARCHIVE_DEPLOY_KEY:
+        description: Deploy key to read from the binary archive repository.
+        required: true
+    inputs:
+      ref:
+        description: The ref to checkout.
+        required: true
+        type: string
+      upload-artifact:
+        description: Whether artifacts should be uploaded.
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [windows, macos, linux]
+        archive-ref: [main]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      
+      - name: Read Versions
+        run: |
+          HKV=$(cat ./hollowknight.version)
+          echo "HK_VERSION=$HKV" >> $GITHUB_ENV
+      
+      - name: Checkout Binaries
+        uses: actions/checkout@v7
+        with:
+          repository: hk-modding/hk-binary-archives
+          ref: ${{ matrix.archive-ref }}
+          ssh-key: ${{ secrets.BINARY_ARCHIVE_DEPLOY_KEY }}
+          sparse-checkout: |
+            ${{ env.HK_VERSION }}/managed.${{ matrix.platform }}.tar.gz
+          sparse-checkout-cone-mode: false
+          path: ./hk-binary-archives
+          persist-credentials: false
+      
+      - name: Unpack Archive
+        run: |
+          mkdir Vanilla
+          cd ./Vanilla
+          tar -xzf ../hk-binary-archives/${{ env.HK_VERSION }}/managed.${{ matrix.platform }}.tar.gz
+
+      - name: Set RID
+        run: |
+          case "${{ matrix.platform }}" in
+            windows) echo "RID=win-x64" >> $GITHUB_ENV ;;
+            linux) echo "RID=linux-x64" >> $GITHUB_ENV ;;
+            macos) echo "RID=osx-x64" >> $GITHUB_ENV ;;
+          esac
+      
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.x
+      - name: Setup MSBuild
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y mono-devel
+      - name: Restore Dependencies
+        run: |
+          dotnet restore
+      - name: Build PrePatcher & PostPatcher
+        run: |
+          dotnet build PrePatcher -o PrePatcher/Output -p:Configuration=Release
+          dotnet build PostPatcher -o PostPatcher/Output -p:Configuration=Release
+      - name: Build TC assembly patches
+        run: |
+          dotnet build TeamCherry.Localization --runtime $RID -p:Configuration=Release
+      - name: Build Assembly-CSharp
+        run: |
+          dotnet build Assembly-CSharp --runtime $RID -p:Configuration=Release
+      - name: Merge osx dylibs
+        if: matrix.platform == 'macos'
+        run: |
+          wget https://github.com/konoui/lipo/releases/download/v0.9.4/lipo_linux_amd64 -O lipo
+          chmod +x lipo
+          ./lipo -output libunityscenerepacker.dylib -create ./Assembly-CSharp/packages/unityscenerepacker/2.4.0/runtimes/osx-*/native/libunityscenerepacker.dylib
+          mv libunityscenerepacker.dylib OutputFinal/
+      - name: Upload Binary
+        if: inputs.upload-artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: build.${{ matrix.platform }}
+          path: ./OutputFinal/
