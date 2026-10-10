@@ -1,7 +1,22 @@
-# Contribuir
+# Contributing · Contribuir
 
-*English: this project does not accept pull requests; they are closed automatically. Bug reports and ideas are
-welcome as issues.*
+[English](#english) · [Español](#español)
+
+## English
+
+Thanks for your interest. HKMultiplayer is developed by a single person and **does not accept *pull requests***: they
+are closed automatically when opened.
+
+What does help a lot:
+
+- **Reporting bugs** in an *issue* ("Bug" template): what happened, how to reproduce it, the mod version and, if you
+  can, a screenshot and your `ModLog.txt` (`C:\Users\<your user>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt`).
+- **Suggesting ideas** in an *issue*.
+- **Security problems**: not in an *issue*; see [SECURITY.md](SECURITY.md).
+
+The code is [MIT](LICENSE) licensed: you can make your own copy and modify it under that license.
+
+## Español
 
 Gracias por el interés. HKMultiplayer lo desarrolla una sola persona y **no acepta *pull requests***: se cierran
 automáticamente al abrirlos.

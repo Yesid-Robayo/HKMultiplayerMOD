@@ -1,9 +1,46 @@
-# Seguridad
+# Security · Seguridad
 
-*English: please report security problems privately through **Security › Report a vulnerability** on GitHub, not in
-a public issue.*
+[English](#english) · [Español](#español)
 
-## Cómo avisar de un problema de seguridad
+## English
+
+### How to report a security problem
+
+If you find a security flaw (for example, a way to join a game without the code, to read or change what is sent, to
+make another player's game run something or write files outside its folder, or to crash their game over the network),
+**do not post it in an *issue***. Use GitHub's private report:
+
+1. The repository's **Security** tab.
+2. **Report a vulnerability**.
+3. Describe what happens, how to reproduce it and with which mod version.
+
+Only the author will see it. You will get an answer as soon as possible and, once it is fixed, a new version will be
+released.
+
+### Supported versions
+
+Only the latest version published in *Releases* receives fixes.
+
+### What the mod protects
+
+- Only someone who knows the game's **code** can join it (8 characters generated at random with a cryptographic
+  generator).
+- Everything sent is **encrypted and authenticated** (X25519, HKDF-SHA256 with the game code and ChaCha20-Poly1305 on
+  every packet); altered or replayed packets are discarded.
+- The connection goes directly between the PCs: there are no relay servers or accounts.
+- What arrives from other players is checked before it is used: maximum sizes for packets, texts and transfers, names
+  without formatting tags or control characters, character files with names that cannot escape the world's folder,
+  and skins that are only stored as verified PNG images, in a cache named by their hash.
+
+### What it does not protect
+
+- Players in a game trust each other: whoever has the code can, for example, change the world's shared progress. Share
+  the code only with people you want to let in.
+- To play over the internet the host opens a UDP port on their router; close it when you are not using it.
+
+## Español
+
+### Cómo avisar de un problema de seguridad
 
 Si encuentras un fallo de seguridad (por ejemplo, una forma de entrar en una partida sin el código, de leer o cambiar
 lo que se envía, de hacer que el juego de otro jugador ejecute algo o escriba archivos fuera de su sitio, o de colgarle
@@ -15,11 +52,11 @@ el juego desde la red), **no lo publiques en un *issue***. Usa el aviso privado 
 
 Solo lo verá el autor. Se responderá lo antes posible y, una vez arreglado, se publicará una versión nueva.
 
-## Versiones con soporte
+### Versiones con soporte
 
 Solo la última versión publicada en *Releases* recibe arreglos.
 
-## Qué protege el mod
+### Qué protege el mod
 
 - Solo entra en una partida quien conoce su **código** (8 caracteres generados al azar con un generador
   criptográfico).
@@ -31,7 +68,7 @@ Solo la última versión publicada en *Releases* recibe arreglos.
   de la carpeta del mundo y skins que solo se guardan como imágenes PNG comprobadas, en una caché con su huella como
   nombre.
 
-## Lo que no protege
+### Lo que no protege
 
 - Los jugadores de una partida confían entre sí: quien tiene el código puede, por ejemplo, cambiar el progreso
   compartido del mundo. Comparte el código solo con quien quieras que entre.
