@@ -2,375 +2,377 @@
 
 # HKMultiplayer
 
-**Mod cooperativo para Hollow Knight: juega el mundo entero con tus amigos, en red local o por internet.**
+**A co-op mod for Hollow Knight: play the whole world with your friends, on your local network or over the internet.**
 
-![Versión](https://img.shields.io/badge/versión-0.21.1-7fb2ff)
-![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
+![Version](https://img.shields.io/badge/version-0.21.1-7fb2ff)
+![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
-![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
-![Idiomas](https://img.shields.io/badge/idiomas-español%20%7C%20english-7ddc8f)
+![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
+![Languages](https://img.shields.io/badge/languages-english%20%7C%20español-7ddc8f)
 
-*English: a co-op mod for Hollow Knight 1.5.12620. The mod and the installer are available in English; the player
-guide is `README.txt` inside the release package.*
+**English** · [Español](README.es.md)
 
 </div>
 
 > [!WARNING]
-> **Versión beta.** Casi todo se ha probado jugando con dos copias del juego en el mismo PC, pero todavía no se ha
-> jugado una partida larga entre dos PCs por internet, y algunas partes no se han probado del todo (ver
-> [Estado de las pruebas](#-estado-de-las-pruebas)). **Puede tener errores.** Haz una copia de tus partidas antes de
-> jugar y, si algo falla, cuéntalo en un *issue* con una captura y tu `ModLog.txt`.
+> **Beta.** Almost everything has been tested by playing with two copies of the game on the same PC, but no long
+> session between two PCs over the internet has been played yet, and some parts are not fully tested (see
+> [Testing status](#-testing-status)). **It may have bugs.** Back up your saves before playing and, if something goes
+> wrong, open an *issue* with a screenshot and your `ModLog.txt`.
 
-Un jugador **hostea** un mundo coop y sus compañeros **se unen** con la dirección del host y el código de la partida:
-comparten el mundo, se ven en tiempo real y pelean juntos contra los mismos enemigos y jefes. Está pensado para dos
-jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hollow Knight.
+One player **hosts** a coop world and their friends **join** with the host's address and the game code: you share the
+world, see each other in real time and fight the same enemies and bosses together. It is designed for two players
+(more can join) and written from scratch on top of the Hollow Knight Modding API.
 
-## Índice
+## Contents
 
-- [Funciones](#-funciones)
-- [Estado de las pruebas](#-estado-de-las-pruebas)
-- [Instalar](#-instalar)
-- [Cómo jugar](#-cómo-jugar)
-- [Ajustes de la partida](#%EF%B8%8F-ajustes-de-la-partida)
-- [Tecnología](#-tecnología)
-- [Desarrollo](#-desarrollo)
-- [Créditos](#-créditos)
-- [Licencia y contribuciones](#-licencia-y-contribuciones)
-
----
-
-## ✨ Funciones
-
-- 🌍 **Mundos coop**: hasta 4 mundos propios, guardados en el PC del host, aparte de tus partidas normales.
-- 🔒 **Conexión**: red local o internet, con código de partida y todo cifrado, sin Steam ni servidores intermedios.
-- 👥 **Jugadores**: el compañero se ve en tiempo real con su nombre, animaciones, ataques, hechizos y amuletos.
-- ⚔️ **Enemigos y jefes**: los mismos en todos los PCs (misma vida, mismos golpes, misma muerte); los jefes esperan a
-  que estéis los dos.
-- 🗺️ **Mundo compartido**: progreso, palancas, puertas, paredes rotas, ascensores, rejas, cofres y misiones de NPC, a la
-  vez.
-- ❤️ **Revivir**: si caes con un compañero en pie, quedas tendido y te revive manteniendo Focus junto a tu cuerpo.
-- 🌙 **Sueños y cinemáticas**: entráis juntos a los sueños; los finales y los créditos se ven a la vez y se saltan por
-  votación.
-- 🎨 **Skins**: compatibles con CustomKnight; los demás ven la tuya aunque no la tengan.
-- 🛠️ **Panel en pausa**: ajustes del host, vida de los compañeros, dar geo, ir con un compañero, desatascarse y recargar
-  la sala.
-- 🌐 **Idiomas**: el mod sale en el idioma del juego (español, o inglés en cualquier otro idioma).
-- 📦 **Instalador**: una ventana para instalar, actualizar y desinstalar, que deja el juego como estaba.
-
-<details>
-<summary><b>🌍 Partida y conexión</b></summary>
-
-- **Mundos coop** propios: hasta 4, guardados en el PC del host, en
-  `C:\Users\<usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\HKMultiplayer\Mundos` (una carpeta por mundo). Son
-  aparte de las 4 ranuras del juego, que nunca se tocan. Desde el menú se crean, se hostean y se borran, y la página de
-  hostear tiene un botón para abrir esa carpeta (copias de seguridad o pasarlos a otro PC).
-- **Hostear y unirse** desde el menú principal (*Multijugador*): el host abre su mundo y comparte su **dirección**, el
-  **puerto** (26950 por defecto) y el **código de la partida** (formato `ABCD-EFGH`). Botones para copiar el código y
-  mostrar u ocultar la IP.
-- Funciona en **red local y por internet** (en internet el host abre el puerto UDP en su router o usáis una VPN de red
-  local como Radmin VPN, ZeroTier o Tailscale).
-- **Personaje de cada invitado** guardado en el mundo del host: se envía en los bancos, cada 30 segundos y al salir.
-  Al volver a unirte, recuperas tu personaje. Si el host cierra la partida, primero recoge los de los invitados.
-- **Avisos** en pantalla: código de la partida, quién entra y sale, desconexiones y esperas de combate.
-- **Panel en pausa** (*Pausa › Multijugador*): jugadores conectados con su ping, código, IP y cerrar o salir de la
-  partida; *Ajustes de la partida*, *Compañeros* y *Skin*.
-
-</details>
-
-<details>
-<summary><b>👥 Jugadores y efectos del compañero</b></summary>
-
-- Se ve al compañero en tiempo real, con su **nombre encima**, sus animaciones y su orientación, con movimiento suave
-  (interpolación que se adapta a la conexión).
-- **Inventario propio** de cada uno: vida, alma, geo, máscaras y vasijas, aguijón y artes, amuletos y muescas, llaves,
-  reliquias, mapas, esencia, compras, banco y sombra.
-- Se ven y se oyen sus acciones con los efectos del juego:
-  - **Tajos del aguijón** (de lado, arriba, abajo y en la pared), más grandes con Mark of Pride y Longnail y con el
-    color de Fury of the Fallen.
-  - **Artes del aguijón**: carga, Great Slash, Dash Slash y Cyclone Slash.
-  - **Hechizos**: Vengeful Spirit y Shade Soul, Desolate Dive y Descending Dark, Howling Wraiths y Abyss Shriek.
-  - **Movimiento**: dash y Shade Dash, doble salto, salto de pared, Crystal Heart, polvo al correr y saltar.
-  - **Curación**, **aguijón onírico**, **golpes recibidos** y parpadeo de invulnerabilidad.
-  - **Amuletos y acompañantes**: Grubberfly's Elegy, Flukenest, Defender's Crest (y su aura), Thorns of Agony,
-    Dreamshield, Sharp Shadow, Glowing Womb, Weaversong y Grimmchild.
-  - El pasto y las telas se mueven a su paso.
-- Los efectos son solo visuales: el daño real va por los golpes de cada uno.
-
-</details>
-
-<details>
-<summary><b>⚔️ Enemigos y jefes</b></summary>
-
-- Cada enemigo lo mueve el PC del jugador **más cercano** y ataca a los dos. Su vida, sus golpes y su muerte son los
-  mismos en todos los PCs; los golpes de cualquiera le quitan vida en todos.
-- **Proyectiles, crías e invocaciones** se crean en todos y dañan a todos (disparos, cristales, láseres, orbes del
-  Maestro de Almas, bolas de Mawlek, agujas de Hornet, tarros del Coleccionista, barriles del Falso Caballero...).
-- **Efectos y sonidos** de los enemigos, impactos, música de jefe, **nombre del jefe** al despertar y **barra de vida
-  del jefe** con su nombre en el idioma del juego.
-- **Piezas y trampas** de los jefes iguales en todos: el rayo del Guardián de Cristal y sus torretas, la aguja de
-  Hornet, la cabeza del Falso Caballero...
-- **Arenas por oleadas**: Señores Mantis, Coliseo de los Tontos (Bronce, Plata y Oro), Caballeros Vigía...
-- **Los combates de jefe esperan a que estéis los dos**, con un aviso de a quién se espera; mientras, el jefe es
-  invulnerable. Los **diálogos antes de un combate** los ven los dos y cada uno espera a que el otro termine de leer.
-- **Presentaciones de jefe** con los dos caballeros quietos, que recuperan el control a la vez.
-- Si el jefe cambia de PC a mitad del combate (porque el otro está más cerca), sigue donde iba.
-- Los enemigos muertos siguen muertos al volver a la sala, hasta descansar en un banco (como en el juego).
-
-</details>
-
-<details>
-<summary><b>🗺️ Mundo compartido</b></summary>
-
-- **Progreso compartido en directo**: habilidades de movimiento y hechizos, jefes vencidos, puertas, palancas, paredes
-  rotas, salas visitadas y mapas.
-- **Objetos de sala**: palancas, interruptores, puertas, paredes y suelos que se rompen, piedras de geo, rompibles,
-  pasto, enredaderas, tarros de larva, estalactitas, letreros y decorados con su propia lógica.
-- **Ascensores**: los mueve quien los usa y el otro lo ve moverse igual.
-- **Rejas de batalla de un solo sentido**: si se cierran con uno dentro, el otro puede entrar a ayudar pero no salir.
-- **Cofres**: si uno lo abre, el otro lo ve abierto; lo que sueltan es de cada uno.
-- **Objetos individuales** (objetos brillantes, fragmentos de máscara y vasija, orbes de sueño): lo que recoge uno no
-  desaparece para el otro.
-- **Misiones de NPC**: Mr. Mushroom, Quirrel, Bretta, Zote, Tiso, Myla, Hornet, el Forjaguijones, la Compañía de
-  Grimm... El personaje avanza o se va en los dos PCs y la misión no avanza dos veces.
-- **Peligros animados al mismo ritmo** (sierras y pinchos del Palacio Blanco y del Camino del Dolor).
-- Quien entra en una sala la encuentra como está: lo activado, lo roto, los enemigos muertos y los combates en marcha.
-
-</details>
-
-<details>
-<summary><b>❤️ Funciones del coop</b></summary>
-
-- **Revivir**: al morir con un compañero en pie no se muere, se cae. El cuerpo queda tendido con "† Nombre" y la
-  cámara del caído sigue a su compañero. El compañero recibe un aviso y una flecha hacia el cuerpo; junto a él,
-  **manteniendo Focus 2 s** y gastando 33 de alma, lo revive con 1 máscara. Si el compañero se sienta en un banco, los
-  caídos reviven a su lado con toda la vida. Si caen todos, cada uno muere de forma normal.
-- **Sombras compartidas**: cada uno ve la sombra del compañero y puede matarla; el dueño recupera su geo y su alma
-  aunque esté en otra sala.
-- **HUD del compañero** arriba a la derecha (nombre, máscaras, alma y dónde está), sus máscaras sobre su cabeza al
-  cambiarle la vida y **flechas** en el borde de la pantalla hacia el compañero y los cuerpos.
-- **Barras de enemigos** opcionales sobre cada enemigo herido.
-- **Cinemáticas compartidas**: los finales, los créditos y Mr. Mushroom se ven a la vez aunque estéis en salas
-  distintas; se saltan cuando todos votan ("Esperando a X para saltar 1/2").
-- **Sueños compartidos**: si uno entra en un sueño con el aguijón onírico, el compañero de la misma sala entra con él.
-  Al ganar salen los dos; quien cae o muere sale solo. Jefes de sueño, Rey de las Pesadillas y Radiancia.
-- **Grimmchild**: si uno lo recibe, el otro también.
-- **Skins** compatibles con CustomKnight (*Pausa › Multijugador › Skin*): cuerpo, hechizos y efectos; se envían por la
-  red del mod en segundo plano sin retrasar los golpes, y se puede desactivar ver las de los demás.
-- **Compañeros** (*Pausa › Multijugador › Compañeros*): la vida y el alma de cada uno y dónde está, **dar geo**, **ir
-  con él** (apareces a su lado, también en otra sala), **desatascarse** (al último suelo seguro) y **recargar la
-  sala**.
-
-</details>
+- [Features](#-features)
+- [Testing status](#-testing-status)
+- [Install](#-install)
+- [How to play](#-how-to-play)
+- [Game settings](#%EF%B8%8F-game-settings)
+- [Technology](#-technology)
+- [Development](#-development)
+- [Credits](#-credits)
+- [License and contributions](#-license-and-contributions)
 
 ---
 
-## 🧪 Estado de las pruebas
+## ✨ Features
 
-Las pruebas se hacen con dos (o tres) copias del juego en el mismo PC, con un modo de prueba del mod y rutas
-automáticas que recorren el mundo comprobando que los dos ven lo mismo.
+- 🌍 **Coop worlds**: up to 4 worlds of your own, saved on the host's PC, separate from your normal saves.
+- 🔒 **Connection**: local network or internet, with a game code and everything encrypted, no Steam or relay servers.
+- 👥 **Players**: you see your partner in real time with their name, animations, attacks, spells and charms.
+- ⚔️ **Enemies and bosses**: the same on every PC (same health, same hits, same death); bosses wait until you are both
+  there.
+- 🗺️ **Shared world**: progress, levers, doors, broken walls, elevators, gates, chests and NPC quests, all at once.
+- ❤️ **Revive**: if you fall while a partner is still standing, you lie down and they revive you by holding Focus next
+  to your body.
+- 🌙 **Dreams and cutscenes**: you enter dreams together; endings and credits play at the same time and are skipped by
+  vote.
+- 🎨 **Skins**: CustomKnight-compatible; others see yours even if they don't have it.
+- 🛠️ **Pause panel**: host settings, your partners' health, give geo, go to a partner, unstuck and reload the room.
+- 🌐 **Languages**: the mod follows the game's language (Spanish, or English for any other language).
+- 📦 **Installer**: a window to install, update and uninstall, which leaves the game as it was.
 
-✅ **Probado jugando:**
+<details>
+<summary><b>🌍 Game and connection</b></summary>
 
-- Conexión, mundos coop y personajes de los invitados.
-- Enemigos de todas las zonas.
-- Jefes: Mamá Gruz, Falso Caballero (también con mala conexión), Hornet, Mawlek, Maestro de Almas, Defensor del
-  Estiércol, Nosk, Vasija Rota, Guardián de Cristal, Señores Mantis, Uumuu, Coleccionista, Señor Traidor, Caballeros
-  Vigía, Grimm, Tirano de Almas, Hollow Knight y Radiancia.
-- Coliseo de los Tontos: Bronce, Plata y Oro.
-- Sueños: Campeón Fallido, Falso Caballero, Hermano Perdido, Tirano de Almas, Defensor Blanco, Príncipe Gris Zote y Rey
-  de las Pesadillas.
-- Revivir, sombras, HUD del compañero, ajustes del host, cinemáticas, skins, ir con un compañero y misiones de NPC.
-- Instalar, actualizar y desinstalar.
+- **Coop worlds** of your own: up to 4, saved on the host's PC in
+  `C:\Users\<user>\AppData\LocalLow\Team Cherry\Hollow Knight\HKMultiplayer\Mundos` (one folder per world). They are
+  separate from the game's 4 save slots, which are never touched. You create, host and delete them from the menu, and
+  the hosting page has a button to open that folder (for backups or to move a world to another PC).
+- **Host and join** from the main menu (*Multiplayer*): the host opens a world and shares their **address**, the
+  **port** (26950 by default) and the **game code** (`ABCD-EFGH` format). Buttons to copy the code and show or hide the
+  IP.
+- Works on a **local network and over the internet** (over the internet the host opens the UDP port on their router,
+  or you use a virtual LAN such as Radmin VPN, ZeroTier or Tailscale).
+- **Each guest's character** is saved in the host's world: it is sent at benches, every 30 seconds and when leaving.
+  When you join again you get your character back. If the host closes the game, guests' characters are collected
+  first.
+- **On-screen notices**: the game code, who joins and leaves, disconnections and fight waits.
+- **Pause panel** (*Pause › Multiplayer*): connected players with their ping, the code, the IP and close or leave the
+  game; *Game settings*, *Partners* and *Skin*.
 
-⚠️ **Probado en parte:**
+</details>
 
-- Caballero de la Colmena, Flukemarm, Cargador Musgoso y Rey Mosca: mueren en los dos PCs, pero falta verlos atacar.
-- El rescate de Zote: el combate sí, la conversación de después no.
+<details>
+<summary><b>👥 Players and partner effects</b></summary>
 
-❓ **Sin probar:**
+- You see your partner in real time, with their **name above them**, their animations and facing, with smooth movement
+  (interpolation that adapts to the connection).
+- **Each player has their own inventory**: health, soul, geo, masks and vessels, nail and nail arts, charms and
+  notches, keys, relics, maps, essence, purchases, bench and shade.
+- Their actions are seen and heard with the game's own effects:
+  - **Nail slashes** (side, up, down and on walls), bigger with Mark of Pride and Longnail and colored by Fury of the
+    Fallen.
+  - **Nail arts**: charge, Great Slash, Dash Slash and Cyclone Slash.
+  - **Spells**: Vengeful Spirit and Shade Soul, Desolate Dive and Descending Dark, Howling Wraiths and Abyss Shriek.
+  - **Movement**: dash and Shade Dash, double jump, wall jump, Crystal Heart, dust when running and jumping.
+  - **Healing**, **Dream Nail**, **hits taken** and the invulnerability blink.
+  - **Charms and companions**: Grubberfly's Elegy, Flukenest, Defender's Crest (and its aura), Thorns of Agony,
+    Dreamshield, Sharp Shadow, Glowing Womb, Weaversong and Grimmchild.
+  - Grass and cloth move as they walk past.
+- Effects are visual only: real damage comes from each player's own hits.
 
-- Una partida entre dos PCs por internet.
-- La traducción al inglés dentro del juego.
-- El vapor naranja de la muerte del Falso Caballero (arreglado sin volver a probarlo).
-- Cloth y Menderbug, la entrada a la Radiancia por el camino del juego y la vuelta de las cinemáticas de los Panteones.
+</details>
 
-Limitaciones conocidas:
+<details>
+<summary><b>⚔️ Enemies and bosses</b></summary>
 
-- El jefe ataca al jugador cuyo PC lo mueve, que es el más cercano. Cada cambio de PC (como mucho cada 8 s) corta su
-  ataque, y por eso ataca a los dos.
-- El compañero y los enemigos que mueve otro PC se dibujan unas centésimas en el pasado, para que se muevan suave. En
-  lo que cae muy rápido se nota un poco.
-- Si un compañero cambia algo que hace aparecer a un personaje que el juego quitó al cargar tu sala, no aparece hasta
-  que vuelvas a entrar.
+- Each enemy is run by the PC of the **nearest** player and attacks everyone. Its health, attacks and death are the
+  same on every PC; anyone's hits take its health on all of them.
+- **Projectiles, spawns and summons** are created on every PC and hurt everyone (shots, crystals, lasers, Soul Master
+  orbs, Mawlek balls, Hornet's needle, the Collector's jars, the False Knight's barrels...).
+- **Enemy effects and sounds**, hit effects, boss music, the **boss name** when it wakes up and a **boss health bar**
+  with its name in the game's language.
+- **Boss parts and traps** match on every PC: the Crystal Guardian's laser and ceiling turrets, Hornet's needle, the
+  False Knight's head...
+- **Wave arenas**: Mantis Lords, the Colosseum of Fools (Bronze, Silver and Gold), Watcher Knights...
+- **Boss fights wait until you are both there**, with a notice saying who is missing; meanwhile the boss is
+  invulnerable. **Dialogues before a fight** are shown to both players, and each waits for the other to finish reading.
+- **Boss introductions** keep both knights still and give control back at the same time.
+- If a boss moves to another PC mid-fight (because the other player got closer), it carries on where it was.
+- Dead enemies stay dead when you come back to the room, until you rest at a bench (as in the game).
 
-La lista completa está en [docs/arquitectura.md](docs/arquitectura.md#pendientes).
+</details>
+
+<details>
+<summary><b>🗺️ Shared world</b></summary>
+
+- **Live shared progress**: movement abilities and spells, defeated bosses, doors, levers, broken walls, visited rooms
+  and maps.
+- **Room objects**: levers, switches, doors, breakable walls and floors, geo rocks, breakables, grass, vines, grub jars,
+  stalactites, signs and props with their own logic.
+- **Elevators**: run by whoever uses them; the other player sees them move the same way.
+- **One-way battle gates**: if they close with one player inside, the other can come in to help but not leave.
+- **Chests**: if one player opens one, the other sees it open; what drops is for each player.
+- **Individual items** (shiny items, mask shards, vessel fragments, dream orbs): what one player picks up doesn't
+  disappear for the other.
+- **NPC quests**: Mr. Mushroom, Quirrel, Bretta, Zote, Tiso, Myla, Hornet, the Nailsmith, the Grimm Troupe... The NPC
+  moves on or leaves on both PCs and the quest never advances twice.
+- **Animated hazards in sync** (the White Palace and Path of Pain saws and spikes).
+- Whoever enters a room finds it as it is: what's activated, what's broken, dead enemies and fights in progress.
+
+</details>
+
+<details>
+<summary><b>❤️ Co-op features</b></summary>
+
+- **Revive**: if you die while a partner is standing, you don't die, you go down. Your body lies on the floor with
+  "† Name" and your camera follows your partner. They get a notice and an arrow to your body; next to it, **holding
+  Focus for 2 s** and spending 33 soul revives you with 1 mask. If your partner sits at a bench, downed players revive
+  next to them with full health. If everyone goes down, each player dies normally.
+- **Shared shades**: everyone sees their partner's shade and can kill it; its owner gets their geo and soul back even
+  in another room.
+- **Partner HUD** at the top right (name, masks, soul and where they are), their masks above their head when their
+  health changes, and **arrows** at the edge of the screen pointing to partners and bodies.
+- Optional **enemy health bars** above each damaged enemy.
+- **Shared cutscenes**: endings, credits and Mr. Mushroom play at the same time even in different rooms; they are
+  skipped when everyone votes ("Waiting for X to skip 1/2").
+- **Shared dreams**: if one player enters a dream with the Dream Nail, a partner in the same room enters too. When you
+  win, both leave; whoever falls or dies leaves alone. Dream bosses, the Nightmare King and the Radiance.
+- **Grimmchild**: if one player gets it, the other does too.
+- **Skins** compatible with CustomKnight (*Pause › Multiplayer › Skin*): body, spells and effects; sent through the
+  mod's own network in the background without delaying hits, and you can turn off seeing other players' skins.
+- **Partners** (*Pause › Multiplayer › Partners*): each partner's health, soul and location, **give geo**, **go to**
+  them (you appear next to them, even in another room), **unstuck** (back to the last safe ground) and **reload the
+  room**.
+
+</details>
 
 ---
 
-## 📦 Instalar
+## 🧪 Testing status
+
+Testing uses two (or three) copies of the game on the same PC, with the mod's test mode and automated routes that walk
+through the world checking that both players see the same thing.
+
+✅ **Tested by playing:**
+
+- Connection, coop worlds and guests' characters.
+- Enemies in every area.
+- Bosses: Gruz Mother, False Knight (also on a bad connection), Hornet, Brooding Mawlek, Soul Master, Dung Defender,
+  Nosk, Broken Vessel, Crystal Guardian, Mantis Lords, Uumuu, The Collector, Traitor Lord, Watcher Knights, Grimm, Soul
+  Tyrant, Hollow Knight and the Radiance.
+- Colosseum of Fools: Bronze, Silver and Gold.
+- Dreams: Failed Champion, Lost Kin, Soul Tyrant, White Defender, Grey Prince Zote and the Nightmare King.
+- Revive, shades, partner HUD, host settings, cutscenes, skins, go to a partner and NPC quests.
+- Install, update and uninstall.
+
+⚠️ **Partially tested:**
+
+- Hive Knight, Flukemarm, Massive Moss Charger and Vengefly King: they die on both PCs, but their attacks still need
+  checking.
+- Zote's rescue: the fight yes, the conversation afterwards no.
+
+❓ **Not tested yet:**
+
+- A session between two PCs over the internet.
+- The English translation inside the game.
+- The orange steam of the False Knight's death (fixed without retesting).
+- Cloth and Menderbug, entering the Radiance through the game's normal path, and returning from the Godhome cutscenes.
+
+Known limitations:
+
+- A boss attacks the player whose PC runs it, which is the nearest one. Each change of PC (at most every 8 s) cuts its
+  current attack; that's what makes it attack both players.
+- Your partner and the enemies run by another PC are drawn a few hundredths of a second in the past so they move
+  smoothly. Very fast falling objects show it a little.
+- If a partner changes something that makes an NPC appear that the game removed when your room loaded, it won't appear
+  until you re-enter.
+
+The full list (in Spanish) is in [docs/arquitectura.md](docs/arquitectura.md#pendientes).
+
+---
+
+## 📦 Install
 
 > [!NOTE]
-> Necesitas **Hollow Knight 1.5.12620 en Windows** (la versión actual de Steam). Todos los jugadores tienen que tener
-> **la misma versión** de HKMultiplayer.
+> You need **Hollow Knight 1.5.12620 on Windows** (the current Steam version). All players must have **the same
+> version** of HKMultiplayer.
 
-1. Descarga `HKMultiplayer-<versión>.zip` de la página de [*Releases*](../../releases).
-2. Cierra el juego, **descomprime el zip entero** y haz doble clic en **`HKMultiplayer Setup.bat`**.
-3. En la ventana que se abre, comprueba la carpeta del juego y pulsa **Instalar**.
-4. Abre Hollow Knight desde Steam: en el menú principal aparece **Multijugador**.
+1. Download `HKMultiplayer-<version>.zip` from the [*Releases*](../../releases) page.
+2. Close the game, **extract the whole zip** and double-click **`HKMultiplayer Setup.bat`**.
+3. In the window that opens, check the game folder and click **Install**.
+4. Open Hollow Knight from Steam: **Multiplayer** appears in the main menu.
 
-Windows puede avisar al abrir un archivo descargado de internet: pulsa *Ejecutar* (o *Más información › Ejecutar de
-todas formas*). El instalador es un script de PowerShell que puedes leer en la carpeta `scripts` del paquete.
+Windows may warn you when opening a file downloaded from the internet: click *Run* (or *More info › Run anyway*). The
+installer is a PowerShell script you can read in the package's `scripts` folder.
 
 <details>
-<summary><b>Qué hace el instalador</b></summary>
+<summary><b>What the installer does</b></summary>
 
-- Busca la carpeta del juego (Steam, sus bibliotecas y las rutas típicas); si hay varias, la eliges en la lista, y si
-  no la encuentra, con *Buscar…*.
-- Comprueba que el juego es la versión 1.5.12620 y que está cerrado, y que el paquete está completo (`SHA256SUMS.txt`).
-- Guarda en `<juego>\HKMultiplayer-backup` una copia de cada archivo que cambia y lo apunta todo en `manifest.txt`.
-- Quita el mod anterior **HollowKnightCoop** si está y aparta los demás mods a `Mods\Disabled` (los hechos para otra
-  versión de la Modding API pueden romper el juego).
-- Copia la Modding API y el mod, y comprueba lo copiado. Instalar una versión nueva encima es una actualización.
-- **Desinstalar** deshace todo al revés: el juego queda como estaba. Tus mundos coop, partidas y skins no se tocan.
-- También funciona en la consola: `"HKMultiplayer Setup.bat" /install "D:\Juegos\Hollow Knight"` (o `/uninstall`).
+- Finds the game folder (Steam, its libraries and the usual paths); if there are several, you pick one from the list,
+  and if none is found, you use *Browse…*.
+- Checks that the game is version 1.5.12620 and closed, and that the package is complete (`SHA256SUMS.txt`).
+- Saves a copy of every file it changes in `<game>\HKMultiplayer-backup` and records everything in `manifest.txt`.
+- Removes the old **HollowKnightCoop** mod if present and moves other mods to `Mods\Disabled` (mods built for another
+  Modding API version can break the game).
+- Copies the Modding API and the mod, and verifies the copy. Installing a new version on top is an update.
+- **Uninstall** undoes everything in reverse: the game is left as it was. Your coop worlds, saves and skins are not
+  touched.
+- It also works from the console: `"HKMultiplayer Setup.bat" /install "D:\Games\Hollow Knight"` (or `/uninstall`).
 
 </details>
 
-¿Prefieres no usar el instalador? El `LEEME.txt` (español) y el `README.txt` (inglés) del paquete explican la
-**instalación a mano**, cómo abrir el puerto y qué hacer si algo falla.
+Rather not use the installer? The package's `README.txt` (English) and `LEEME.txt` (Spanish) explain the **manual
+installation**, how to open the port and what to do if something fails.
 
 ---
 
-## 🎮 Cómo jugar
+## 🎮 How to play
 
-1. **Host**: menú principal › *Multijugador* › *Hostear un mundo* › *Nuevo mundo* (o elige uno) › *Crear y hostear*.
-   Pasa a tus compañeros tu **IP**, el **puerto** (26950) y el **código** que sale en pantalla (también en
-   *Pausa › Multijugador*).
-2. **Invitado**: menú principal › *Multijugador* › *Unirse a un mundo*, con la dirección, el puerto y el código.
-3. **Por internet**: el host abre el puerto **UDP 26950** en su router (o usáis Radmin VPN, ZeroTier o Tailscale). En
-   la misma casa no hace falta abrir nada.
+1. **Host**: main menu › *Multiplayer* › *Host a world* › *New world* (or pick one) › *Create and host*. Give your
+   friends your **IP**, the **port** (26950) and the **code** shown on screen (also in *Pause › Multiplayer*).
+2. **Guest**: main menu › *Multiplayer* › *Join a world*, with the address, the port and the code.
+3. **Over the internet**: the host opens **UDP port 26950** on their router (or you use Radmin VPN, ZeroTier or
+   Tailscale). On the same home network you don't need to open anything.
 
 ---
 
-## ⚙️ Ajustes de la partida
+## ⚙️ Game settings
 
-Los decide el host en *Pausa › Multijugador › Ajustes de la partida*, se guardan en cada mundo y los invitados los ven
-al momento sin poder cambiarlos.
+The host sets them in *Pause › Multiplayer › Game settings*; they are saved with each world and guests see them right
+away without being able to change them.
 
-| Ajuste | Valores | Por defecto |
+| Setting | Values | Default |
 |---|---|---|
-| Vida de los jefes | 1× · 1,25× · 1,5× · 2× · 2,5× · 3× | 1,5× |
-| Vida de los enemigos | 1× · 1,25× · 1,5× · 2× | 1× |
-| Más vida solo con compañero en la sala | Sí · No | Sí |
-| Daño recibido | 0,5× · 1× · 1,5× · 2× | 1× |
-| Revivir | Sí · No | Sí |
-| Tiempo para revivir | 1 · 2 · 3 · 5 s | 2 s |
-| Alma para revivir | 0 · 33 · 66 · 99 | 33 |
-| Máscaras al revivir | 1 · 2 · 3 · Todas | 1 |
-| Invulnerable al revivir | 1 · 2 · 3 · 5 s | 2 s |
-| Revivir en el banco del compañero | Sí · No | Sí |
-| Nombres · Vida del compañero · Flechas · Avisos · Barra del jefe | Sí · No | Sí |
-| Barras de enemigos | Sí · No | No |
-| Regalar geo · Permitir ir con un compañero | Sí · No | Sí |
-| Saltar cinemáticas | Votación · Cualquiera | Votación |
+| Boss health | 1× · 1.25× · 1.5× · 2× · 2.5× · 3× | 1.5× |
+| Enemy health | 1× · 1.25× · 1.5× · 2× | 1× |
+| Extra health only with a partner in the room | Yes · No | Yes |
+| Damage taken | 0.5× · 1× · 1.5× · 2× | 1× |
+| Revive | Yes · No | Yes |
+| Time to revive | 1 · 2 · 3 · 5 s | 2 s |
+| Soul to revive | 0 · 33 · 66 · 99 | 33 |
+| Masks on revive | 1 · 2 · 3 · All | 1 |
+| Invulnerable after revive | 1 · 2 · 3 · 5 s | 2 s |
+| Revive at a partner's bench | Yes · No | Yes |
+| Names · Partner health · Arrows to partners · Notices · Boss bar | Yes · No | Yes |
+| Enemy bars | Yes · No | No |
+| Gift geo · Allow going to a partner | Yes · No | Yes |
+| Skip cutscenes | Vote · Anyone | Vote |
 
 ---
 
-## 🔧 Tecnología
+## 🔧 Technology
 
-| Componente | Para qué se usa |
+| Component | Used for |
 |---|---|
-| **Hollow Knight Modding API** (Unity 6) | Carga del mod y ganchos del juego. Versión modificada para 1.5.12620, incluida en [`modding-api/`](modding-api). |
-| **MonoMod** | Ganchos sobre el código del juego (`MMHOOK_*.dll`, `MonoMod.RuntimeDetour`). |
-| **PlayMaker** | Lectura y control de las máquinas de estados del juego: enemigos, jefes, ascensores, rejas, arenas, diálogos. |
-| **BouncyCastle** | Cifrado: X25519, HKDF-SHA256 con el código de la partida y ChaCha20-Poly1305 en cada paquete. |
-| **Unity UI** | Menús con el estilo del juego, avisos y HUD del compañero (con los sprites del HUD del juego). |
+| **Hollow Knight Modding API** (Unity 6) | Loading the mod and hooking the game. A modified version for 1.5.12620, included in [`modding-api/`](modding-api). |
+| **MonoMod** | Hooks into the game's code (`MMHOOK_*.dll`, `MonoMod.RuntimeDetour`). |
+| **PlayMaker** | Reading and driving the game's state machines: enemies, bosses, elevators, gates, arenas, dialogues. |
+| **BouncyCastle** | Encryption: X25519, HKDF-SHA256 with the game code and ChaCha20-Poly1305 on every packet. |
+| **Unity UI** | Menus in the game's style, notices and the partner HUD (with the game's own HUD sprites). |
 
-- **Red propia sobre UDP**: canales fiable y no fiable, transferencias grandes troceadas (el mundo al unirse), latido y
-  desconexión limpia, sin memoria nueva por paquete para no provocar tirones.
-- **Seguridad**: solo entra quien conoce el código de la partida; todo viaja cifrado y autenticado.
-- **Sin servicios externos**: la conexión es directa entre los PCs.
+- **Custom networking over UDP**: reliable and unreliable channels, chunked large transfers (the world when joining),
+  heartbeat and clean disconnects, with no per-packet allocations to avoid stutters.
+- **Security**: only people who know the game code can join; everything is encrypted and authenticated.
+- **No external services**: players connect directly to each other.
 
 ---
 
-## 💻 Desarrollo
+## 💻 Development
+
+> [!NOTE]
+> Code identifiers are in English; code comments, logs and the design notes in `docs/` are in Spanish.
 
 <details>
-<summary><b>Estructura del repositorio</b></summary>
+<summary><b>Repository layout</b></summary>
 
-| Carpeta | Contenido |
+| Folder | Contents |
 |---|---|
-| `src/HKMultiplayer/Net/` | Transporte UDP, canales, cifrado y código de partida (sin Unity, se prueba fuera del juego). |
-| `src/HKMultiplayer/Session/` | Sesión: host y unirse, jugadores, salas y dueño de cada sala, reparto de mensajes. |
-| `src/HKMultiplayer/Game/Players/` | Estado de los jugadores, interpolación, avatares del compañero y sus efectos. |
-| `src/HKMultiplayer/Game/World/` | Mundos coop, guardado, personajes de los invitados, progreso compartido y misiones de NPC. |
-| `src/HKMultiplayer/Game/Features/` | Funciones del coop: estado de cada jugador, ajustes del host, revivir, sombras, HUD, barras, regalar geo, ir con un compañero, sueños, cinemáticas, skins. |
-| `src/HKMultiplayer/Game/Scene/` | Objetos de sala, rompibles, ascensores y rejas, controladores de batalla, enemigos y jefes, peligros animados. |
-| `src/HKMultiplayer/UI/` | Menús, avisos, idioma y el lienzo del HUD del coop. |
-| `src/HKMultiplayer/Testing/` | Modo de prueba: órdenes por archivo para probar con varias copias del juego. |
-| `modding-api/` | Código de la Modding API (hk-modding/api, MIT) para Unity 6: rama `hk-beta-branch-unity-6-update` de `SFGrenade/api` (PR hk-modding/api#164, commit `468f579`) con cambios propios. Sin los archivos del juego. |
-| `tests/` | Pruebas del transporte fuera del juego y rutas de prueba del coop (`tests/routes/`). |
-| `tools/` | Preparar el PC (`setup-dev.sh`), compilar e instalar (`test-cycle.sh`), pruebas con varias copias, rutas automáticas, paquete e instalador. |
-| `docs/` | [Arquitectura](docs/arquitectura.md): diseño, decisiones, pruebas y pendientes. |
-| `lib/`, `vendor/`, `test-instances/` | *(solo local, no se suben)* DLL del juego y de la Modding API, y copias del juego para probar. |
+| `src/HKMultiplayer/Net/` | UDP transport, channels, encryption and game codes (no Unity, tested outside the game). |
+| `src/HKMultiplayer/Session/` | Session: hosting and joining, players, rooms and each room's owner, message routing. |
+| `src/HKMultiplayer/Game/Players/` | Player state, interpolation, partner avatars and their effects. |
+| `src/HKMultiplayer/Game/World/` | Coop worlds, saving, guests' characters, shared progress and NPC quests. |
+| `src/HKMultiplayer/Game/Features/` | Co-op features: player status, host settings, revive, shades, HUD, bars, geo gifts, going to a partner, dreams, cutscenes, skins. |
+| `src/HKMultiplayer/Game/Scene/` | Room objects, breakables, elevators and gates, battle controllers, enemies and bosses, animated hazards. |
+| `src/HKMultiplayer/UI/` | Menus, notices, language and the co-op HUD canvas. |
+| `src/HKMultiplayer/Testing/` | Test mode: file-driven commands to test with several copies of the game. |
+| `modding-api/` | Modding API source (hk-modding/api, MIT) for Unity 6: the `hk-beta-branch-unity-6-update` branch of `SFGrenade/api` (PR hk-modding/api#164, commit `468f579`) with our own changes. No game files. |
+| `tests/` | Transport tests outside the game and co-op test routes (`tests/routes/`). |
+| `tools/` | PC setup (`setup-dev.sh`), build and install (`test-cycle.sh`), multi-copy tests, automated routes, package and installer. |
+| `docs/` | [Architecture](docs/arquitectura.md) (Spanish): design, decisions, testing and pending work. |
+| `lib/`, `vendor/`, `test-instances/` | *(local only, not committed)* Game and Modding API DLLs, and game copies for testing. |
 
-Las DLL del juego son de Team Cherry y no están en el repositorio: se sacan del juego instalado.
+The game's DLLs belong to Team Cherry and are not in the repository: they are taken from your installed game.
 
 </details>
 
-### Compilar (también en otro PC)
+### Building (also on another PC)
 
-Necesitas Hollow Knight 1.5.12620 instalado, el SDK de .NET (`dotnet`) y Git Bash.
+You need Hollow Knight 1.5.12620 installed, the .NET SDK (`dotnet`) and Git Bash.
 
 ```bash
 git clone https://github.com/Yesid-Robayo/HKMultiplayerMOD.git
 cd HKMultiplayerMOD
-bash tools/setup-dev.sh "C:/Program Files (x86)/Steam/steamapps/common/Hollow Knight"   # una vez
-bash tools/test-cycle.sh            # compila el mod e instala en las copias de prueba (--game: también en el juego)
-dotnet run --project tests/NetTests # pruebas del transporte
-bash tools/package.sh               # paquete para jugadores: out/package/HKMultiplayer-<versión>.zip
+bash tools/setup-dev.sh "C:/Program Files (x86)/Steam/steamapps/common/Hollow Knight"   # once
+bash tools/test-cycle.sh            # builds the mod and installs it in the test copies (--game: also in the game)
+dotnet run --project tests/NetTests # transport tests
+bash tools/package.sh               # player package: out/package/HKMultiplayer-<version>.zip
 ```
 
-`setup-dev.sh` copia la carpeta `Managed` del juego **sin modificar** a `modding-api/Vanilla`, compila la Modding API
-y deja `lib/` y `vendor/`. Si el juego ya tiene la Modding API, usa los originales que guardó el instalador
-(`HKMultiplayer-backup`); si no los hay, pide verificar la integridad de los archivos del juego en Steam. Para cambiar la
-Modding API se edita `modding-api/` y se vuelve a ejecutar.
+`setup-dev.sh` copies the game's **unmodified** `Managed` folder to `modding-api/Vanilla`, builds the Modding API and
+fills `lib/` and `vendor/`. If the game already has the Modding API, it uses the originals saved by the installer
+(`HKMultiplayer-backup`); if there are none, it asks you to verify the game files in Steam. To change the Modding API,
+edit `modding-api/` and run it again.
 
-### Probar
+### Testing
 
-- **Dos jugadores en un PC**: `tools/mp-test-lib.sh` abre dos copias del juego (`test-instances/b` y `c`) en modo de
-  prueba y les manda órdenes por archivo: hostear y unirse, ir a una sala, moverse, golpear, capturas de las dos a la
-  vez, estado de enemigos y objetos, mala conexión simulada (`netsim`)... Órdenes en
+- **Two players on one PC**: `tools/mp-test-lib.sh` opens two copies of the game (`test-instances/b` and `c`) in test
+  mode and sends them commands through a file: host and join, go to a room, move, attack, screenshots from both at
+  once, enemy and object state, simulated bad connection (`netsim`)... Commands are listed in
   [docs/arquitectura.md](docs/arquitectura.md#pruebas).
-- **Rutas automáticas**: `bash tools/run-routes.sh` recorre el juego por zonas con un host y un invitado y comprueba en
-  cada sala que los dos ven lo mismo (`--pairs 3` reparte las zonas entre 3 pares). Formato:
+- **Automated routes**: `bash tools/run-routes.sh` walks through the game area by area with a host and a guest and
+  checks in every room that both see the same thing (`--pairs 3` splits the areas between 3 pairs). Format:
   [tests/routes/README.md](tests/routes/README.md).
-- **Instalador**: `bash tools/manual-tests/installer-test.sh <zip>` instala, arranca, desinstala y compara en copias
-  limpias, sin tocar el juego de Steam.
+- **Installer**: `bash tools/manual-tests/installer-test.sh <zip>` installs, launches, uninstalls and compares on clean
+  copies, without touching the Steam game.
 
 ---
 
-## 🙏 Créditos
+## 🙏 Credits
 
-- **[Hollow Knight](https://www.hollowknight.com/)** es de **Team Cherry**. Este mod es un proyecto no oficial de
-  aficionados y no está afiliado a Team Cherry. El repositorio no contiene archivos del juego; el paquete de jugadores,
-  como las versiones oficiales de la Modding API, incluye `Assembly-CSharp.dll` y `TeamCherry.Localization.dll` del
-  juego ya modificados por la Modding API.
-- **[Hollow Knight Modding API](https://github.com/hk-modding/api)** (MIT), con la adaptación a Unity 6 de
+- **[Hollow Knight](https://www.hollowknight.com/)** is by **Team Cherry**. This mod is an unofficial fan project and is
+  not affiliated with Team Cherry. The repository contains no game files; like the official Modding API releases, the
+  player package includes the game's `Assembly-CSharp.dll` and `TeamCherry.Localization.dll` already patched by the
+  Modding API.
+- **[Hollow Knight Modding API](https://github.com/hk-modding/api)** (MIT), with the Unity 6 port by
   [SFGrenade](https://github.com/SFGrenade/api).
 - **[MonoMod](https://github.com/MonoMod/MonoMod)**, **[Mono.Cecil](https://github.com/jbevain/cecil)**,
   **[unity-scene-repacker](https://github.com/jakobhellermann/unity-scene-repacker)**,
-  **[BouncyCastle](https://www.bouncycastle.org/)** y **[Newtonsoft.Json](https://www.newtonsoft.com/json)**, todos MIT
-  (avisos completos en [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)).
-- Skins compatibles con **CustomKnight**.
+  **[BouncyCastle](https://www.bouncycastle.org/)** and **[Newtonsoft.Json](https://www.newtonsoft.com/json)**, all MIT
+  (full notices in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)).
+- Skins compatible with **CustomKnight**.
 
 ---
 
-## 📄 Licencia y contribuciones
+## 📄 License and contributions
 
-- El código de HKMultiplayer tiene licencia **[MIT](LICENSE)**. Se entrega **tal cual, sin ninguna garantía**: úsalo
-  bajo tu propia responsabilidad y haz copia de tus partidas. La Modding API de [`modding-api/`](modding-api) mantiene
-  su propia licencia MIT.
-- **No se aceptan *pull requests*** (se cierran automáticamente). Los errores y las ideas, en un *issue*; ver
+- HKMultiplayer's code is licensed under the **[MIT License](LICENSE)**. It is provided **as is, without any
+  warranty**: use it at your own risk and back up your saves. The Modding API in [`modding-api/`](modding-api) keeps its
+  own MIT license.
+- **Pull requests are not accepted** (they are closed automatically). Bugs and ideas go in an *issue*; see
   [CONTRIBUTING.md](CONTRIBUTING.md).
-- Los problemas de seguridad se avisan en privado: [SECURITY.md](SECURITY.md).
+- Security problems are reported privately: [SECURITY.md](SECURITY.md).
