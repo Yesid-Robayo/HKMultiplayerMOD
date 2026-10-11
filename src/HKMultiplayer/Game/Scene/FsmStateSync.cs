@@ -102,6 +102,9 @@ internal sealed class FsmStateSync {
 
     private const string ChallengeIdle = "Idle 2";
 
+    /// <summary>Aviso que manda el cartel al aceptar el desafío (a los tronos y a la reja de Deepnest).</summary>
+    private const string ChallengeEvent = "MLORD CHALLENGE";
+
     /// <summary>
     /// Objetos con controlador: principio del nombre del objeto y nombre de su FSM. Además de ascensores y rejas, los
     /// controladores de batalla que no son enemigos (los tronos y la batalla de los Señores Mantis: quién acepta el
@@ -188,6 +191,9 @@ internal sealed class FsmStateSync {
 
         // Controlador de batalla (o lo que mueve con sus avisos): quien entra tarde se pone en su estado
         public bool Battle;
+
+        /// <summary>Estados a los que llega sin el aviso del desafío (ver <see cref="AfterChallenge"/>); se calculan al usarlos.</summary>
+        public HashSet<string> BeforeChallenge;
 
         // Combate de jefe que su zona quiso empezar sin estar todos dentro: el aviso, para darlo cuando entren
         public string PendingStart;
@@ -985,9 +991,11 @@ internal sealed class FsmStateSync {
     /// pidan sus acciones corta las acciones siguientes (igual que en el PC de origen) y se retiene.
     /// </summary>
     private static void ApplyRemoteState(Tracked item, string state) {
-        // Solo un controlador de batalla: antes cualquier cadena de otro PC (una palanca de la Aldea Mantis) apagaba el
-        // cartel para desafiar a los Señores Mantis sin que hubiera combate
-        if (item.Battle) {
+        // Solo un controlador de batalla, y en un estado de después del desafío: antes cualquier cadena de otro PC (una
+        // palanca de la Aldea Mantis) apagaba el cartel sin que hubiera combate, y también la reja de Deepnest al cerrarse
+        // cuando alguien entra en la sala o los tronos al pasar el control: tras morir contra los Señores Mantis, al volver
+        // nadie podía desafiarlos
+        if (item.Battle && AfterChallenge(item, state)) {
             CloseChallengePrompts();
         }
 
@@ -1009,6 +1017,48 @@ internal sealed class FsmStateSync {
 
             DisabledActions.Clear();
         }
+    }
+
+    /// <summary>
+    /// Si la FSM solo llega a ese estado después del aviso del desafío (los tronos levantándose, la reja de Deepnest en
+    /// "Challenge"). Los estados a los que llega sin él (su reposo, la reja que se cierra al entrar alguien, la jaula) no
+    /// son un combate.
+    /// </summary>
+    private static bool AfterChallenge(Tracked item, string state) {
+        var fsm = item.Fsm.Fsm;
+        if (item.BeforeChallenge == null) {
+            var before = new HashSet<string>();
+            var queue = new Queue<string>();
+            if (fsm.StartState is { Length: > 0 } start) {
+                before.Add(start);
+                queue.Enqueue(start);
+            }
+
+            void Reach(FsmTransition transition) {
+                if (transition.EventName != ChallengeEvent && transition.ToState is { Length: > 0 } to && before.Add(to)) {
+                    queue.Enqueue(to);
+                }
+            }
+
+            foreach (var transition in fsm.GlobalTransitions) {
+                Reach(transition);
+            }
+
+            while (queue.Count > 0) {
+                var current = fsm.GetState(queue.Dequeue());
+                if (current == null) {
+                    continue;
+                }
+
+                foreach (var transition in current.Transitions) {
+                    Reach(transition);
+                }
+            }
+
+            item.BeforeChallenge = before;
+        }
+
+        return !item.BeforeChallenge.Contains(state);
     }
 
     /// <summary>

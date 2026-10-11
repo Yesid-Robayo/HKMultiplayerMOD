@@ -187,6 +187,14 @@ internal sealed class SnapshotBuffer {
         ref var b = ref _items[1];
         result = a;
         if (Distance(a, b) > TeleportDistance) {
+            // Pasado el salto, el estado nuevo aunque no lleguen más (se quedan dos para seguir la velocidad y no se
+            // descarta el anterior). Antes se quedaba en el de antes del salto hasta que llegara otro: un Mantis Lord
+            // que se va y se esconde no cambia y no envía nada, y en el otro PC su último cuadro (la raya al irse) se
+            // quedaba visible y quieto hasta que volvía a aparecer
+            if (render >= b.Tick) {
+                result = b;
+            }
+
             return true;
         }
 

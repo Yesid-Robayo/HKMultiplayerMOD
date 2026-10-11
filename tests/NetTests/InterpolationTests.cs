@@ -16,6 +16,7 @@ public static partial class Program {
         Run("Interpolación: suave con 30 ms de variación y 5% de pérdida", () => InterpolationSmooth(0.04, 0.03, 0.05, 144));
         Run("Interpolación: suave a 60 fps con frames irregulares", () => InterpolationSmooth(0.01, 0.01, 0.02, 60, 0.4));
         Run("Interpolación: un salto (cambio de puerta) no se interpola", InterpolationTeleport);
+        Run("Interpolación: un salto como último estado se aplica sin esperar a otro", InterpolationTeleportLast);
         Run("Interpolación: desordenados y repetidos", InterpolationOutOfOrder);
     }
 
@@ -101,6 +102,25 @@ public static partial class Program {
                 Assert(state.X == 0f || state.X == 50f, $"posición intermedia en el salto: {state.X}");
             }
         }
+    }
+
+    /// <summary>
+    /// Un enemigo que salta a su escondite y se oculta deja de enviar (no cambia): el salto es el último estado que llega.
+    /// Pasado su momento hay que dibujarlo ya, no quedarse con el de antes del salto.
+    /// </summary>
+    private static void InterpolationTeleportLast() {
+        var buffer = new SnapshotBuffer();
+        for (uint tick = 1; tick <= 60; tick++) {
+            buffer.Add(new PlayerSnapshot { Tick = tick, X = 0f, Y = 0f, Visible = true }, tick / 60.0 + 0.01);
+        }
+
+        buffer.Add(new PlayerSnapshot { Tick = 61, X = 50f, Y = 0f, Visible = false }, 61 / 60.0 + 0.01);
+        PlayerSnapshot state = default;
+        for (var time = 0.9; time < 2.5; time += 0.004) {
+            buffer.Sample(time, out state);
+        }
+
+        Assert(state.X == 50f && !state.Visible, $"se quedó antes del salto: x={state.X} visible={state.Visible}");
     }
 
     private static void InterpolationOutOfOrder() {

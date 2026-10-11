@@ -681,6 +681,11 @@ internal sealed class TestDriver : MonoBehaviour {
                 // SpriteRenderer cuyo objeto, sprite o textura contiene el texto (p. ej. "orb" para el orbe de alma)
                 StartCoroutine(WatchSprites(ParseFloat(args[1]), string.Join(" ", args.Skip(2))));
                 break;
+            case "tk2dwatch":
+                // tk2dwatch <segundos> <objeto>: cada cambio de animación, cuadro, visibilidad o posición (más de media
+                // unidad) de un sprite tk2d y de sus hijos con sprite (al final del frame)
+                StartCoroutine(WatchTk2d(ParseFloat(args[1]), string.Join(" ", args.Skip(2))));
+                break;
             case "scenetrace":
                 // scenetrace <segundos>: sala, cambio de sala y posición del caballero cada 0,2 s
                 StartCoroutine(TraceScenes(ParseFloat(args[1])));
@@ -1341,6 +1346,52 @@ internal sealed class TestDriver : MonoBehaviour {
                 Log.Info($"{Tag}sprite {Time.unscaledTime - start:0.000} s {renderer.transform.parent?.name}/{renderer.name} " +
                          $"{(shown ? "visible" : "oculto")} = {sprite?.name ?? "-"} ({sprite?.texture.name ?? "-"}) " +
                          $"frame={Time.frameCount}");
+            }
+        }
+    }
+
+    private static IEnumerator WatchTk2d(float seconds, string name) {
+        var root = GameObject.Find(name);
+        if (root == null) {
+            Log.Warn($"{Tag}no existe '{name}'");
+            yield break;
+        }
+
+        var sprites = root.GetComponentsInChildren<tk2dSprite>(true);
+        var last = new string[sprites.Length];
+        var lastPosition = new Vector3[sprites.Length];
+        var start = Time.unscaledTime;
+        var endOfFrame = new WaitForEndOfFrame();
+        while (Time.unscaledTime - start < seconds) {
+            yield return endOfFrame;
+            for (var i = 0; i < sprites.Length; i++) {
+                var sprite = sprites[i];
+                if (sprite == null) {
+                    continue;
+                }
+
+                var renderer = sprite.GetComponent<MeshRenderer>();
+                var shown = renderer != null && renderer.enabled && sprite.gameObject.activeInHierarchy;
+                var animator = sprite.GetComponent<tk2dSpriteAnimator>();
+                var clip = animator != null && animator.CurrentClip != null ? animator.CurrentClip.name : "-";
+                // Un sprite sin colección (el cadáver aún sin preparar) falla al pedir su cuadro
+                string frame;
+                try {
+                    frame = sprite.CurrentSprite?.name ?? "-";
+                } catch (Exception) {
+                    frame = "?";
+                }
+
+                var now = $"{(shown ? "visible" : "oculto")} {clip}#{(animator != null && animator.CurrentClip != null ? animator.CurrentFrame : -1)} {frame}";
+                var position = sprite.transform.position;
+                if (now == last[i] && (position - lastPosition[i]).sqrMagnitude < 0.25f) {
+                    continue;
+                }
+
+                last[i] = now;
+                lastPosition[i] = position;
+                Log.Info($"{Tag}tk2d {Time.unscaledTime - start:0.000} s {sprite.name} {now} pos=({position.x:0.0}, " +
+                         $"{position.y:0.0})");
             }
         }
     }

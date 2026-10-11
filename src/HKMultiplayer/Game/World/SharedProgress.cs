@@ -85,10 +85,10 @@ internal sealed class SharedProgress {
 
     /// <summary>
     /// Se puso un dato del mundo (sí/no o número) con lo que llegó de otro PC, ya en la partida, con el valor que tenía
-    /// antes (los sí/no, 0 o 1): los personajes de misión de la sala que lo miran vuelven a comprobarlo
+    /// antes (los sí/no, 0 o 1) y si es un sí/no: los personajes de misión de la sala que lo miran vuelven a comprobarlo
     /// (<see cref="QuestNpcSync"/>).
     /// </summary>
-    public Action<string, int> RemoteFieldChanged;
+    public Action<string, int, bool> RemoteFieldChanged;
 
     static SharedProgress() {
         MessageRoutes.Register(WorldChange, Route.Server, reliable: true);
@@ -456,7 +456,7 @@ internal sealed class SharedProgress {
                     }
 
                     if (wasSet != flag) {
-                        RemoteFieldChanged?.Invoke(BoolFields[change.Index].Name, wasSet ? 1 : 0);
+                        RemoteFieldChanged?.Invoke(BoolFields[change.Index].Name, wasSet ? 1 : 0, true);
                     }
 
                     break;
@@ -468,7 +468,7 @@ internal sealed class SharedProgress {
                     }
 
                     if (previous != change.Value) {
-                        RemoteFieldChanged?.Invoke(IntFields[change.Index].Name, previous);
+                        RemoteFieldChanged?.Invoke(IntFields[change.Index].Name, previous, false);
                     }
 
                     break;

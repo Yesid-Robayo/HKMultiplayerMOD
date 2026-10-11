@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using HKMultiplayer.Session;
 using HKMultiplayer.Util;
 using HutongGames.PlayMaker;
 using UnityEngine;
@@ -16,6 +17,10 @@ namespace HKMultiplayer.Game.World;
 /// al cargar la sala: "¿estoy en este sitio?", "¿ya me rescataron?") vuelven a empezar con el valor nuevo, como si se
 /// cargara la sala. El personaje desaparece o cambia también en este PC. Si este jugador está en una conversación o
 /// una cinemática (su caballero sin control), se espera a que acabe.</item>
+/// <item>Salvo si el dato es un sí/no y lo cambió un compañero que está en esta misma sala (habló con el personaje
+/// delante de este jugador): en su PC el personaje se queda hasta volver a entrar (Bretta tras rescatarla), y aquí
+/// también. Antes se iba en este PC a mitad de la conversación del otro. Un número no (Mr. Mushroom): hablar otra vez
+/// con la copia que se quedara avanzaría la misión dos veces.</item>
 /// <item>Una misión no avanza dos veces por la misma conversación: si los dos hablan a la vez con su copia del personaje
 /// y el otro avanza la misión mientras este jugador habla, la lógica de su personaje no cambia otra vez ese número del
 /// mundo, y lo lee con el valor que tenía al empezar la conversación (dice lo mismo que le dijo al otro). Si no, la
@@ -29,6 +34,8 @@ internal sealed class QuestNpcSync {
 
     private static QuestNpcSync _active;
     private static bool _hooked;
+
+    private GameSession _session;
 
     private string _scene = string.Empty;
 
@@ -55,6 +62,12 @@ internal sealed class QuestNpcSync {
     private readonly List<string> _pending = new();
 
     /// <summary>
+    /// Sí/no que cambió un compañero que estaba en esta sala: los personajes que lo miran se quedan como en su PC (ver
+    /// <see cref="KeptInRoom"/>).
+    /// </summary>
+    private readonly HashSet<string> _changedHere = new();
+
+    /// <summary>
     /// Componentes <c>DeactivateIfPlayerdata*</c> que apagaron su objeto al encenderse (al cargar la sala): solo esos se
     /// vuelven a encender si el dato cambia. Se apuntan antes de que esta clase vea la sala nueva, así que no se vacía al
     /// cambiar de sala (los de salas descargadas se quitan al buscar los de la nueva).
@@ -64,8 +77,9 @@ internal sealed class QuestNpcSync {
     /// <summary>Campos de texto de cada tipo de acción que lee datos de la partida (se calculan una vez por tipo).</summary>
     private static readonly Dictionary<Type, FieldInfo[]> ReadFields = new();
 
-    public void Attach() {
+    public void Attach(GameSession session) {
         _active = this;
+        _session = session;
         InstallHooks();
         Clear();
     }
@@ -75,6 +89,7 @@ internal sealed class QuestNpcSync {
             _active = null;
         }
 
+        _session = null;
         Clear();
     }
 
@@ -84,6 +99,7 @@ internal sealed class QuestNpcSync {
         _toggles.Clear();
         _remoteChangedAt.Clear();
         _pending.Clear();
+        _changedHere.Clear();
         _conversationStart = -1f;
         _beforeRemote.Clear();
     }
@@ -96,12 +112,18 @@ internal sealed class QuestNpcSync {
     /// El progreso compartido acaba de poner un dato del mundo con lo que llegó de otro PC (<paramref name="before"/>: el
     /// valor que tenía; en los sí/no, 0 o 1).
     /// </summary>
-    public void OnRemoteChange(string field, int before) {
+    public void OnRemoteChange(string field, int before, bool isBool) {
         if (_scene.Length == 0) {
             return;
         }
 
         _remoteChangedAt[field] = Time.unscaledTime;
+        if (isBool && PartnerInRoom()) {
+            _changedHere.Add(field);
+        } else {
+            _changedHere.Remove(field);
+        }
+
         if (_conversationStart >= 0f && !_beforeRemote.ContainsKey(field)) {
             _beforeRemote[field] = before;
         }
@@ -170,6 +192,12 @@ internal sealed class QuestNpcSync {
                 continue;
             }
 
+            if (KeptInRoom(field, fsm)) {
+                Log.Info($"{fsm.gameObject.name}/{fsm.FsmName}: {field} lo cambió un compañero en esta sala; se queda " +
+                         "como en su PC hasta volver a entrar");
+                continue;
+            }
+
             var start = fsm.Fsm.StartState;
             Log.Info($"{fsm.gameObject.name}/{fsm.FsmName}: {field} cambió en otro PC, se comprueba otra vez como al " +
                      $"cargar la sala ({fsm.ActiveStateName} → {start})");
@@ -220,10 +248,38 @@ internal sealed class QuestNpcSync {
                 continue;
             }
 
+            // Un personaje no se apaga delante de este jugador si el otro habló con él aquí (ver KeptInRoom)
+            if (!target.Value && _changedHere.Contains(field) && IsNpcObject(go)) {
+                continue;
+            }
+
             Log.Info($"{go.name}: {field} cambió en otro PC, se {(target.Value ? "enciende" : "apaga")} como al cargar la sala");
             TurnedOffAtLoad.Remove(toggle);
             go.SetActive(target.Value);
         }
+    }
+
+    /// <summary>
+    /// Si el personaje se queda sin volver a comprobarse: el sí/no lo cambió un compañero en esta sala, hablando con su
+    /// copia delante de este jugador. En su PC el juego no lo vuelve a mirar hasta cargar la sala (Bretta sigue ahí tras
+    /// rescatarla); aquí tampoco, o se iba a mitad de su conversación. La campana del ciervo sí: es lo que el otro abrió.
+    /// </summary>
+    private bool KeptInRoom(string field, PlayMakerFSM fsm) =>
+        _changedHere.Contains(field) && Array.IndexOf(RecheckAlways, fsm.FsmName) < 0 && IsNpc(fsm);
+
+    /// <summary>Si otro jugador está en la misma sala que este.</summary>
+    private bool PartnerInRoom() {
+        if (_session == null) {
+            return false;
+        }
+
+        foreach (var player in _session.Players) {
+            if (!player.IsLocal && player.Scene == _scene) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // =====================================================================================================

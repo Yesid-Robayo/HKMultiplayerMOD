@@ -68,7 +68,10 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 - **Ritmo fijo** (60 Hz por defecto, adaptable si la conexión se congestiona). Cada tick se toma una "foto" del estado
   local y se envía solo lo que cambió.
 - **Jugadores**: posición, orientación, animación (clip y fotograma), sala, vida. En los demás juegos se dibujan con
-  un búfer de interpolación (pequeño retraso adaptativo y extrapolación corta si un paquete se retrasa).
+  un búfer de interpolación (pequeño retraso adaptativo y extrapolación corta si un paquete se retrasa). Un salto
+  (más de 4 unidades entre dos estados) no se interpola: se dibuja el de antes hasta su momento y luego el nuevo, aunque
+  no llegue ninguno más. Antes se esperaba a un tercero: un Mantis Lord que se va y se esconde deja de enviar (no
+  cambia), y en el otro PC el último cuadro de su salida (la raya) se quedaba visible y quieto hasta que reaparecía.
 - **Mundos coop** (`Game/World/`): partidas aparte de las 4 ranuras del juego, guardadas en el PC del host
   (`HKMultiplayer/Mundos/<id>/`, máximo 4). Mientras se juega uno, la carga y el guardado del juego se redirigen al
   mundo y el juego cree estar en la ranura -1 (que su guardado rechaza), así que nunca escribe en una partida normal.
@@ -128,8 +131,11 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
       conversación (`GetInt`): cada uno lee el mismo texto. Un cambio de antes de la conversación no cuenta (hablar otra
       vez con un personaje que se queda sigue avanzando su diálogo). Antes, si uno hablaba con Mr. Mushroom y luego el
       otro con su copia, `mrMushroomState` subía dos y se saltaba un sitio.
-    - En el PC de quien habla el personaje hace lo del juego (Bretta o Tiso siguen ahí hasta volver a entrar); en el otro
-      se va enseguida, como si se cargara la sala.
+    - En el PC de quien habla el personaje hace lo del juego (Bretta o Tiso siguen ahí hasta volver a entrar). En el
+      otro, si el dato es un sí/no y quien habló está en la misma sala, también se queda hasta volver a entrar (antes
+      Bretta desaparecía delante del otro a mitad de la conversación). Si quien lo cambió está en otra sala, o es un
+      número (Mr. Mushroom: hablar con la copia que se quedara avanzaría la misión dos veces), se va enseguida, como si
+      se cargara la sala.
 - **Enemigos y objetos de sala**:
   - Cada enemigo lo mueve el PC del jugador más cercano, porque su lógica solo ataca al caballero de su PC. Lo reparte
     el dueño de la sala; cambia solo si el otro está claramente más cerca (4 unidades) y hace un rato del último cambio
@@ -239,7 +245,11 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     igual en todos. Lo que mueven con avisos a todos (jaula, suelos, puertas) va igual que ellos, y quien entra a mitad
     del combate se pone al día con su estado. En las copias no se hacen las llamadas al caballero (devolverle el control,
     girarlo), salvo la que fija dónde reaparece tras los pinchos (el Coliseo la pone en una plataforma antes de sacarlos;
-    sin ella, el caballero del otro PC reaparecía en la entrada de la sala), y el cartel para desafiar se apaga en los demás PCs al llegar un estado de un controlador de batalla (antes con cualquier cadena de otro PC: una palanca de la Aldea Mantis lo apagaba sin combate) (si no, se podría desafiar otra vez a mitad del
+    sin ella, el caballero del otro PC reaparecía en la entrada de la sala), y el cartel para desafiar se apaga en los demás PCs al llegar un estado de un controlador de batalla al que solo se
+    llega con el aviso del desafío (`MLORD CHALLENGE`: los tronos levantándose). Antes bastaba cualquier cadena de otro
+    PC (una palanca de la Aldea Mantis) o cualquier estado de un controlador de batalla (la reja de Deepnest se cierra
+    cuando alguien entra, los tronos al pasar el control): tras morir contra los Señores Mantis, al volver nadie podía
+    desafiarlos (si no, se podría desafiar otra vez a mitad del
     combate y ese caballero se quedaría sin control). Las órdenes de esos controladores a un enemigo no se reenvían:
     ya las da su copia en el PC que lo mueve. Los avisos de una copia a otro objeto con controlador (p. ej. el `SPAWN`
     con 1 s de retraso que la batalla del Coliseo manda a sus jaulas, que llega fuera de la aplicación del estado) no
@@ -950,6 +960,11 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   los enemigos de `Crossroads_07` y el de sus rocas cae en el mismo sitio en los dos PCs (a 0,1-0,3; una pieza que rebota
   en el borde de una cornisa puede quedarse arriba en un PC y caer en el otro). Quirrel: hablarle en el templo y en el
   santuario de Sendero Verde no lo quita al otro, y en la Estación de la Reina está igual en los dos.
+- **0.24.1** (copias D y E, 11 oct 2026), de la segunda partida real: el host habla con Bretta en `Fungus2_23` y en el
+  invitado sigue en la sala (`brettaRescued` llega, no se vuelve a comprobar); al volver a entrar ya no está. En
+  `Fungus2_15` el invitado entra con el host dentro y el cartel no se apaga; el host desafía y en el invitado se apaga
+  al levantarse los tronos. En el PC que copia al Mantis Lord, al irse se oculta en el mismo cuadro que en el que lo
+  mueve y sigue oculto lo mismo (~0,4 s; antes el último cuadro de la salida se quedaba ~0,36 s más en local).
 
 ## Pendientes
 

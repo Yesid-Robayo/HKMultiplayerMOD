@@ -614,7 +614,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         SceneObjects.Attach(session);
         Enemies.Attach(session, Players);
         MovingObjects.Attach(session, Players);
-        QuestNpcs.Attach();
+        QuestNpcs.Attach(session);
         Breakables.Attach(session);
         Hazards.Attach(session);
         Features.HostSettings.Current.Attach(session);
