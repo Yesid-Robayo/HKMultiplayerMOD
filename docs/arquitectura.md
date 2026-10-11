@@ -764,7 +764,8 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   dueño de la sala.
 - Funciones del coop: `settings` (ajustes que rigen), `party` (revivir y estado de cada jugador), `partnermap` (lo
   enviado al mapa y, de cada compañero, su sala, su punto y si su icono se ve), `vitals`, `shades`,
-  `killshade` (mata la copia de la sombra de un compañero), `bossbar`, `focus <s>` (Focus simulado), `tpbody`, `heal`
+  `killshade` (mata la copia de la sombra de un compañero), `killobj <objeto>` (muere por `HealthManager.Die`, p. ej. la
+  sombra propia), `tk2dwatch <s> <objeto>` (cada cambio de animación, cuadro y visibilidad de sus sprites tk2d), `bossbar`, `focus <s>` (Focus simulado), `tpbody`, `heal`
   (vida llena por la vía del juego: `pdset maxHealth` no redibuja el HUD del juego y el mini-HUD lo mostraría distinto),
   `soul <n>`, `mppage <partida|ajustes|ajustes2|compañeros>`, `mpoption <etiqueta>|<pasos>`, `mpoptions`,
   `spriteof <objeto>`, `sprites <colección>|<texto>`, `collections <texto>`, `hudsprite`, `hudrot` y `clips <texto>`.
@@ -827,7 +828,10 @@ Decisiones aprobadas por el usuario para M5 (las marcadas "elegido" las escogió
   máscara y 2 s de invulnerabilidad. Sin límite de tiempo caído; sentarse en un banco revive a los caídos a su lado con
   toda la vida; si caen todos, muerte normal para cada uno. En un sueño se cae y se revive dentro.
 - **Sombras (elegido: copia en cada PC)**: cada PC mueve su copia de la sombra del compañero; matarla hace que el
-  dueño recupere la suya (el host acepta solo el primer aviso). La de alguien desconectado no se ve.
+  dueño recupere la suya (el host acepta solo el primer aviso). La de alguien desconectado no se ve. La copia se quita
+  sin pasar por su muerte, así que al matarla se devuelve la música como hace su estado `Killed` (el audio a "Away"):
+  su zona de música (`Music Control`) la había puesto en "Close" y seguía sonando la de sombra. Si la sombra propia
+  sigue cerca con su música puesta, se deja.
 - **HUD del compañero**: arriba a la derecha (el usuario lo prefirió allí), con su nombre, máscaras y alma con los
   sprites del juego y su estado; máscaras sobre su cabeza al cambiarle la vida; flechas en el borde; barra del jefe
   abajo con su nombre.
@@ -974,7 +978,8 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   Ascensores de `Town` (`Mines Exit Lift`) y de `Room_Town_Stag_Station` (`Stag Lift`): el invitado se sube, baja y en
   el host baja a la vez; el host lo sube después desde abajo y en el invitado sube igual. Enemigos de `Crossroads_01`
   muertos: el invitado se sienta en el banco de `Town` y al volver están todos; muertos otra vez, mueren los dos y al
-  volver están todos.
+  volver están todos. En `Town`, el invitado mata su sombra y luego la copia de la del host: la música de sombra vuelve
+  a la normal ("La música de la sombra vuelve a la normal").
 
 ## Pendientes
 

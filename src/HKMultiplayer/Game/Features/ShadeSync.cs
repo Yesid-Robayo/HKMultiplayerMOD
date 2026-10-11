@@ -363,12 +363,49 @@ internal sealed class ShadeSync {
         state.Copy = null;
         // Hasta que el dueño confirme, no se vuelve a crear
         state.HasShade = false;
+        RestoreMusic(shade);
         Object.Destroy(shade);
         Log.Info($"Copia de la sombra de {NameOf(state.Owner)} derrotada aquí");
         if (_session != null && _session.CanSend) {
             var writer = _session.Begin(ShadeKilled);
             writer.WriteUShort(state.Owner);
             _session.End();
+        }
+    }
+
+    /// <summary>
+    /// La música vuelve a la normal, como en la muerte de la sombra (su estado "Killed" pasa el audio a "Away"). Al
+    /// acercarse, la zona de música de la sombra (su hijo "Music Control") lo pasa a "Close" y solo lo devuelve al salir
+    /// de ella o al morir la sombra; la copia se destruye sin pasar por su muerte y la música de sombra seguía sonando.
+    /// Si otra sombra cercana (la propia) tiene su música puesta, se deja.
+    /// </summary>
+    private static void RestoreMusic(GameObject shade) {
+        foreach (var fsm in PlayMakerFSM.FsmList) {
+            if (fsm != null && fsm.FsmName == "Music Control" && fsm.ActiveStateName == "Shade" &&
+                !fsm.transform.IsChildOf(shade.transform)) {
+                return;
+            }
+        }
+
+        foreach (var fsm in shade.GetComponents<PlayMakerFSM>()) {
+            if (fsm.FsmName != "Shade Control") {
+                continue;
+            }
+
+            foreach (var state in fsm.FsmStates) {
+                if (state.Name != "Killed") {
+                    continue;
+                }
+
+                foreach (var action in state.Actions) {
+                    if (action is HutongGames.PlayMaker.Actions.TransitionToAudioSnapshot transition &&
+                        transition.snapshot.Value is UnityEngine.Audio.AudioMixerSnapshot snapshot) {
+                        snapshot.TransitionTo(transition.transitionTime.Value);
+                        Log.Info("La música de la sombra vuelve a la normal");
+                        return;
+                    }
+                }
+            }
         }
     }
 

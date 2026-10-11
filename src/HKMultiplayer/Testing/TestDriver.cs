@@ -334,6 +334,17 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "killobj":
+                // killobj <objeto>: muere por la vía normal del juego (HealthManager.Die), como de un aguijonazo
+                var killTarget = GameObject.Find(string.Join(" ", args.Skip(1)));
+                var killHealth = killTarget != null ? killTarget.GetComponent<HealthManager>() : null;
+                if (killHealth == null) {
+                    Log.Warn($"{Tag}no existe '{string.Join(" ", args.Skip(1))}' con HealthManager");
+                } else {
+                    killHealth.Die(null, AttackTypes.Nail, true);
+                }
+
+                break;
             case "findobj":
                 // findobj <texto>: objetos de la sala cuyo nombre lo contiene, con sus componentes
                 var needle = string.Join(" ", args.Skip(1));
