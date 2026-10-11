@@ -229,7 +229,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     por los estados que llegan, una vez cada uno, aplicados dentro de la ejecución de su FSM. Si no, los estados con
     efectos fuera del objeto (el ascensor voltea la dirección de su palanca al llegar) se harían dos veces. Solo
     "usarlo" da el control: un aviso que le cambia el estado (no los avisos a todos que no le hacen nada, como el título
-    de la zona). Si el controlador se va de la sala (p. ej. muere), quien se queda pasa a serlo; quien entra o vuelve
+    de la zona), o, en los que arrancan al pisarlos, su propio choque con el caballero de este PC encima. Son todos los
+    que tienen la FSM `Lift Control` (antes solo los `Ruins Lift` de la Ciudad: el de Bocasucia a la Cumbre de Cristal y
+    el de la estación del ciervo de Bocasucia se movían solo en el PC de quien los usaba). Si el controlador se va de la sala (p. ej. muere), quien se queda pasa a serlo; quien entra o vuelve
     espera a oír al controlador antes de tomarlo, y si su objeto está en otro estado se pone al día (una reja cerrada
     allí se cierra aquí con su animación y su colisión).
   - Rejas de batalla y de jefes: si una se cierra con un jugador dentro, el otro puede entrar a ayudar pero no salir
@@ -965,6 +967,8 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   `Fungus2_15` el invitado entra con el host dentro y el cartel no se apaga; el host desafía y en el invitado se apaga
   al levantarse los tronos. En el PC que copia al Mantis Lord, al irse se oculta en el mismo cuadro que en el que lo
   mueve y sigue oculto lo mismo (~0,4 s; antes el último cuadro de la salida se quedaba ~0,36 s más en local).
+  Ascensores de `Town` (`Mines Exit Lift`) y de `Room_Town_Stag_Station` (`Stag Lift`): el invitado se sube, baja y en
+  el host baja a la vez; el host lo sube después desde abajo y en el invitado sube igual.
 
 ## Pendientes
 

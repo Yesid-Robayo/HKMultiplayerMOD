@@ -113,7 +113,9 @@ internal sealed class FsmStateSync {
     /// avanza igual en todos, y lo que decide al azar lo decide un solo PC.
     /// </summary>
     private static readonly (string Name, string Fsm)[] Targets = {
-        ("Ruins Lift", LiftFsm),
+        // Todos los ascensores, se llamen como se llamen: antes solo los de la Ciudad de las Lágrimas ("Ruins Lift"), y
+        // el de Bocasucia a la Cumbre de Cristal ("Mines Exit Lift") se movía solo en el PC de quien lo usaba
+        ("", LiftFsm),
         ("Battle Gate", GateFsm),
         (DreamGateName, DreamGateFsm),
         (DreamGateName, DreamGatePhase2Fsm),
@@ -1228,6 +1230,14 @@ internal sealed class FsmStateSync {
             }
         }
 
+        // Un ascensor que arranca al pisarlo (el de Bocasucia a la Cumbre de Cristal): el choque lo nota la FSM con el
+        // caballero de este PC, que va encima. Lo mueve este PC; si no, la copia retenía el arranque y no se movía
+        if ((sender == null || sender == fsm) && fsm.Name == LiftFsm && item.LocalAboard && !IsController(item) &&
+            SentByContact(fsm, fsmEvent.Name)) {
+            TakeControl(item, $"{fsmEvent.Name}: su caballero se subió");
+            return true;
+        }
+
         // Los propios del objeto (llegadas, esperas...): si es una copia, el cambio de estado que pidan se retiene
         if (sender == null || sender == fsm || fsmEvent.Name == "FINISHED") {
             return true;
@@ -1269,6 +1279,27 @@ internal sealed class FsmStateSync {
 
         TakeControl(item, $"{fsmEvent.Name} de {sender.GameObjectName}/{sender.Name}");
         return true;
+    }
+
+    /// <summary>Si en el estado actual ese evento lo manda un choque o una zona (el caballero que lo toca).</summary>
+    private static bool SentByContact(Fsm fsm, string eventName) {
+        var state = fsm.ActiveState;
+        if (state == null) {
+            return false;
+        }
+
+        foreach (var action in state.Actions) {
+            var sent = action switch {
+                HutongGames.PlayMaker.Actions.Collision2dEvent collision => collision.sendEvent,
+                HutongGames.PlayMaker.Actions.Trigger2dEvent trigger => trigger.sendEvent,
+                _ => null
+            };
+            if (sent != null && sent.Name == eventName) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Si el evento cambia el estado de la FSM desde donde está (transición del estado o global).</summary>
