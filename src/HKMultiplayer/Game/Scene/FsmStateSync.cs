@@ -1188,8 +1188,11 @@ internal sealed class FsmStateSync {
             return true;
         }
 
+        // (salvo si aquí la cadena también es propia: en una arena cada PC cuenta las muertes de sus enemigos y los dos
+        // acaban el combate a la vez; cada uno veía la cadena del otro, ignoraba su propio BG OPEN y las rejas de la
+        // arena de los Ogros Hongo no se abrían en ninguno)
         if (_byFsm.TryGetValue(sender, out var source) && source.CopyTransitions &&
-            Time.unscaledTime < source.RemoteChainUntil) {
+            Time.unscaledTime < source.RemoteChainUntil && !source.LocalChain) {
             return false;
         }
 

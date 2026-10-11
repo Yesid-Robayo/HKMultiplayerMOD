@@ -121,7 +121,7 @@ internal sealed class EnemySync {
     private const float SwitchMargin = 4f;
 
     /// <summary>Tiempo mínimo entre cambios de quién mueve un enemigo (más en los jefes: cada cambio corta su ataque).</summary>
-    private const float SwitchInterval = 3f;
+    private const float SwitchInterval = 5f;
 
     private const float BossSwitchInterval = 8f;
 
@@ -461,6 +461,9 @@ internal sealed class EnemySync {
         public ushort StateIndex;
         public byte ActionIndex;
         public uint Id;
+
+        /// <summary>Nombre del prefab (el otro PC lo busca si su acción lo toma de una variable que allí está vacía).</summary>
+        public string Prefab;
     }
 
     private readonly PendingSpawn[] _pendingSpawns = new PendingSpawn[MaxPendingSpawns];
@@ -1765,7 +1768,8 @@ internal sealed class EnemySync {
     /// <summary>Acciones visuales que la marioneta también hace (además del sonido): no deciden nada de su lógica.</summary>
     private static readonly HashSet<string> EffectActions = new() {
         "ActivateGameObject", "PlayParticleEmitter", "StopParticleEmitter", "SetParticleEmission", "SetParticleEmissionRate",
-        "SetParticleEmissionSpeed", "SpawnRandomObjects", "FlingObjectsFromGlobalPool", "SendEventByName", "CreateObject",
+        "SetParticleEmissionSpeed", "SpawnRandomObjects", "FlingObjectsFromGlobalPool", "FlingObjectsFromGlobalPoolVel",
+        "SendEventByName", "CreateObject",
         // Los escombros que caen del techo al empezar el combate del Falso Caballero: piedras de su propio pool, que su
         // lógica enciende y lanza (solo se ven)
         "ActivateAllChildren", "SpawnFromPool",
@@ -1815,8 +1819,13 @@ internal sealed class EnemySync {
             case HutongGames.PlayMaker.Actions.SpawnRandomObjectsOverTime overTime:
                 return overTime.gameObject.Value != null && !IsGeo(overTime.gameObject.Value) &&
                        !IsGameplay(overTime.gameObject.Value);
+            // Lo lanzado que hace daño llega como copia del original (ver _flinging): si la marioneta lo lanzaba también,
+            // cada PC tenía sus propios proyectiles con otras trayectorias al azar, que dañaban aparte
             case HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPool fling:
-                return fling.gameObject.Value != null && !IsGeo(fling.gameObject.Value);
+                return fling.gameObject.Value != null && !IsGeo(fling.gameObject.Value) && !IsGameplay(fling.gameObject.Value);
+            case HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolVel flingVel:
+                return flingVel.gameObject.Value != null && !IsGeo(flingVel.gameObject.Value) &&
+                       !IsGameplay(flingVel.gameObject.Value);
             case HutongGames.PlayMaker.Actions.CreateObject create:
                 return create.gameObject.Value != null && !IsGameplay(create.gameObject.Value);
             case HutongGames.PlayMaker.Actions.SendEventByName send:
@@ -2202,9 +2211,12 @@ internal sealed class EnemySync {
         for (var i = _runningEffects.Count - 1; i >= 0; i--) {
             var running = _runningEffects[i];
             var enemy = running.Enemy;
-            // Su FSM pudo quedar suelta (funciona sola en este PC: ya hace sus efectos)
+            // Su FSM pudo quedar suelta (funciona sola en este PC: ya hace sus efectos). Muerto por la vía normal o
+            // apagado ya no llegan más estados que lo acaben: el efecto se quedaba pegado (salvo una muerte que va por su
+            // lógica, como el vapor del Falso Caballero, que sí sigue enviando sus estados)
             if (!enemy.Puppet || enemy.Root == null || !_byId.TryGetValue(enemy.Id, out var tracked) || tracked != enemy ||
-                enemy.Detached != null && enemy.Detached.Contains(enemy.Fsms[running.Fsm])) {
+                enemy.Detached != null && enemy.Detached.Contains(enemy.Fsms[running.Fsm]) ||
+                !enemy.Root.activeInHierarchy || enemy.Health != null && enemy.Health.isDead && !enemy.Dying) {
                 _runningEffects.RemoveAt(i);
                 continue;
             }
@@ -2692,6 +2704,9 @@ internal sealed class EnemySync {
 
             var states = fsm.Fsm.States;
             if (data.State < states.Length && fsm.Fsm.ActiveState != states[data.State]) {
+                // Lo que crea ese estado al entrar ya lo creó el PC que lo movía (sus disparos siguen en el aire): si se
+                // repetía, el enemigo atacaba dos veces cada vez que cambiaba de PC a mitad de un ataque
+                MuteSpawns(states[data.State]);
                 try {
                     fsm.Fsm.SetState(states[data.State].Name);
                 } catch (Exception e) {
@@ -2703,6 +2718,8 @@ internal sealed class EnemySync {
                     } catch (Exception again) {
                         Log.Warn($"{enemy.Root.name} tampoco pudo empezar de nuevo: {again.Message}");
                     }
+                } finally {
+                    UnmuteSpawns();
                 }
             }
         }
@@ -3202,6 +3219,67 @@ internal sealed class EnemySync {
     private uint NextSpawnedId() =>
         SpawnedIdFlag | (uint) (_session.LocalId & 0x7F) << 24 | (++_spawnCounter & 0xFFFFFF);
 
+    private static readonly List<HutongGames.PlayMaker.FsmStateAction> MutedSpawns = new();
+
+    /// <summary>Apaga un momento las acciones del estado que crean o lanzan objetos.</summary>
+    private static void MuteSpawns(HutongGames.PlayMaker.FsmState state) {
+        foreach (var action in state.Actions) {
+            if (action.Enabled && action is HutongGames.PlayMaker.Actions.SpawnObjectFromGlobalPool or
+                    HutongGames.PlayMaker.Actions.CreateObject or HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPool) {
+                action.Enabled = false;
+                MutedSpawns.Add(action);
+            }
+        }
+    }
+
+    private static void UnmuteSpawns() {
+        foreach (var action in MutedSpawns) {
+            action.Enabled = true;
+        }
+
+        MutedSpawns.Clear();
+    }
+
+    /// <summary>El prefab que usa una acción de crear (o null).</summary>
+    private static GameObject SpawnPrefab(HutongGames.PlayMaker.FsmStateAction action) => action switch {
+        HutongGames.PlayMaker.Actions.SpawnObjectFromGlobalPool spawn => spawn.gameObject?.Value,
+        HutongGames.PlayMaker.Actions.CreateObject create => create.gameObject?.Value,
+        _ => null
+    };
+
+    /// <summary>
+    /// Un objeto que conoce la lógica del enemigo, por su nombre: en sus variables o en lo que ponen sus acciones
+    /// `SetGameObject` (los prefabs que elige antes de crear).
+    /// </summary>
+    private static GameObject FindKnownObject(Enemy enemy, string name) {
+        if (enemy.Fsms == null) {
+            return null;
+        }
+
+        foreach (var fsm in enemy.Fsms) {
+            if (fsm == null) {
+                continue;
+            }
+
+            foreach (var variable in fsm.FsmVariables.GameObjectVariables) {
+                if (variable.Value != null && variable.Value.name == name) {
+                    return variable.Value;
+                }
+            }
+
+            foreach (var state in fsm.FsmStates) {
+                foreach (var action in state.Actions) {
+                    if (action is HutongGames.PlayMaker.Actions.SetGameObject set && set.gameObject?.Value != null &&
+                        set.gameObject.Value.name == name) {
+                        return set.gameObject.Value;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
     private void OnSpawned(HutongGames.PlayMaker.FsmStateAction action, GameObject spawned, bool pooled) {
         if (_spawningCopy || _takingOver || spawned == null || _session == null || !_session.CanSend ||
             !_enemyFsms.TryGetValue(action.Fsm, out var creator) || creator.Enemy.Puppet || !OthersInScene()) {
@@ -3236,7 +3314,7 @@ internal sealed class EnemySync {
 
         _pendingSpawns[_pendingSpawnCount++] = new PendingSpawn {
             Object = spawned, CreatorId = creator.Enemy.Id, FsmIndex = creator.Index, StateIndex = (ushort) stateIndex,
-            ActionIndex = (byte) actionIndex, Id = id
+            ActionIndex = (byte) actionIndex, Id = id, Prefab = SpawnPrefab(action)?.name ?? string.Empty
         };
     }
 
@@ -3270,6 +3348,7 @@ internal sealed class EnemySync {
             writer.WriteByte(pending.FsmIndex);
             writer.WriteUShort(pending.StateIndex);
             writer.WriteByte(pending.ActionIndex);
+            writer.WriteString(pending.Prefab);
             writer.WriteUInt(pending.Id);
             writer.WriteFloat(position.x);
             writer.WriteFloat(position.y);
@@ -3400,9 +3479,38 @@ internal sealed class EnemySync {
         RegisterFsms(enemy);
         if (puppet) {
             SetPuppet(enemy, true);
+            // Sin vida propia, un aguijonazo no pasa por HealthManager.Hit: su caja avisa aquí (el escupitajo del Gulka)
+            if (health == null && root.GetComponent<Collider2D>() != null && root.GetComponent<NailCatcher>() == null) {
+                root.AddComponent<NailCatcher>();
+            }
         }
 
         return enemy;
+    }
+
+    /// <summary>
+    /// Un aguijonazo de este jugador tocó una copia sin vida propia (lo que crean los enemigos): si su lógica, parada
+    /// aquí, esperaba ese golpe (devolver el escupitajo del Gulka), el aviso va al PC que la mueve. Antes no llegaba.
+    /// </summary>
+    internal static void OnNailTouch(GameObject root) {
+        var sync = _active;
+        if (sync?._session == null) {
+            return;
+        }
+
+        foreach (var enemy in sync._enemies) {
+            if (enemy.Root == root) {
+                if (TestMode) {
+                    Log.Info($"[TEST] aguijonazo a {root.name} (marioneta={enemy.Puppet})");
+                }
+
+                if (enemy.Puppet) {
+                    sync.ForwardNailTriggers(enemy, root);
+                }
+
+                return;
+            }
+        }
     }
 
     private void OnSpawn(SessionPlayer from, PacketReader reader) {
@@ -3411,6 +3519,7 @@ internal sealed class EnemySync {
         var fsmIndex = reader.ReadByte();
         var stateIndex = reader.ReadUShort();
         var actionIndex = reader.ReadByte();
+        var prefabName = reader.ReadString(128);
         var id = reader.ReadUInt();
         var position = new Vector3(reader.ReadFloat(), reader.ReadFloat(), 0f);
         var rotation = Quaternion.Euler(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
@@ -3446,8 +3555,25 @@ internal sealed class EnemySync {
                 pooled = false;
                 store = create.storeObject;
                 break;
+            case HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPool fling:
+                prefab = fling.gameObject.Value;
+                pooled = true;
+                store = null;
+                break;
+            case HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolVel flingVel:
+                prefab = flingVel.gameObject.Value;
+                pooled = true;
+                store = null;
+                break;
             default:
                 return;
+        }
+
+        // El prefab puede venir de una variable que ponen estados anteriores (el Elder Baldur elige en "Goop" o "Roller"
+        // qué escupe y "Fire" saca del pool {Projectile}): en la marioneta esos estados no pasan, la variable seguía
+        // vacía y no se creaba nada (el otro no veía sus disparos ni sus crías). Se busca por su nombre
+        if (prefabName.Length > 0 && (prefab == null || prefab.name != prefabName)) {
+            prefab = FindKnownObject(creator, prefabName) ?? prefab;
         }
 
         if (prefab == null) {
@@ -3712,6 +3838,7 @@ internal sealed class EnemySync {
         }
 
         if (!enemy.Puppet) {
+            PrepareRemoteNail(enemy, enemy.Fsms[fsmIndex], eventName, from);
             enemy.Fsms[fsmIndex].SendEvent(eventName);
             return;
         }
@@ -4935,12 +5062,41 @@ internal sealed class EnemySync {
     private static readonly System.Reflection.FieldInfo JarEnemyField = typeof(SpawnJarControl).GetField("enemyToSpawn",
         System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
 
+    /// <summary>Acción de lanzar objetos que se está ejecutando (para seguir lo que saca del pool).</summary>
+    private static HutongGames.PlayMaker.FsmStateAction _flinging;
+
     private static void InstallHooks() {
         if (_hooked) {
             return;
         }
 
         _hooked = true;
+        // Lo que lanzan las acciones Fling (el vómito de los Ogros Hongo): no lo guardan en ninguna variable, así que se
+        // sigue lo que sacan del pool mientras se ejecutan. Lo que hace daño va a los demás como copia del original
+        On.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPool.OnEnter += (orig, self) => {
+            _flinging = self;
+            try {
+                orig(self);
+            } finally {
+                _flinging = null;
+            }
+        };
+        On.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolVel.OnEnter += (orig, self) => {
+            _flinging = self;
+            try {
+                orig(self);
+            } finally {
+                _flinging = null;
+            }
+        };
+        On.ObjectPool.Spawn_GameObject_Transform_Vector3_Quaternion += (orig, prefab, parent, position, rotation) => {
+            var spawned = orig(prefab, parent, position, rotation);
+            if (_flinging != null && spawned != null && IsGameplay(spawned)) {
+                _active?.OnSpawned(_flinging, spawned, pooled: true);
+            }
+
+            return spawned;
+        };
         On.HealthManager.Hit += (orig, self, hit) => {
             var sync = _active;
             if (_playingFx || sync == null || !sync._byHealth.TryGetValue(self, out var enemy) || !enemy.Puppet) {
@@ -5080,19 +5236,104 @@ internal sealed class EnemySync {
 
         for (var i = 0; i < enemy.Fsms.Length && i <= byte.MaxValue; i++) {
             var fsm = enemy.Fsms[i];
-            var state = fsm != null && !fsm.enabled && fsm.gameObject == struck ? fsm.Fsm.ActiveState : null;
-            if (state == null) {
+            if (fsm == null || fsm.enabled || fsm.gameObject != struck) {
                 continue;
             }
 
-            foreach (var action in state.Actions) {
-                if (action is HutongGames.PlayMaker.Actions.Trigger2dEvent trigger &&
-                    trigger.trigger != PlayMakerUnity2d.Trigger2DType.OnTriggerExit2D &&
-                    trigger.collideTag?.Value == "Nail Attack" && !string.IsNullOrEmpty(trigger.sendEvent?.Name)) {
-                    Log.Info($"{enemy.Root.name}/{fsm.FsmName}: {trigger.sendEvent.Name} por un aguijonazo de este PC, al PC que lo mueve");
-                    ForwardEvent(enemy, (byte) i, trigger.sendEvent.Name);
+            // La copia de algo creado en combate nace parada en su estado inicial, no en el del original (el escupitajo
+            // del Gulka espera el golpe en "Idle"): se mira en todos sus estados. El PC que la mueve solo lo atiende si
+            // en su estado de ahora lo espera
+            var states = enemy.Spawned ? fsm.FsmStates : new[] { fsm.Fsm.ActiveState };
+            var sent = false;
+            foreach (var state in states) {
+                if (state == null || sent) {
+                    continue;
+                }
+
+                foreach (var action in state.Actions) {
+                    // (también la variante por capa: el escupitajo del Gulka se devuelve de un aguijonazo con ella)
+                    if (NailTrigger(action, out var eventName, out _)) {
+                        Log.Info($"{enemy.Root.name}/{fsm.FsmName}: {eventName} por un aguijonazo de este PC, al PC que lo mueve");
+                        ForwardEvent(enemy, (byte) i, eventName);
+                        sent = true;
+                        break;
+                    }
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Si la acción espera un aguijonazo en su caja (Trigger2dEvent o Trigger2dEventLayer con la etiqueta "Nail Attack"):
+    /// su aviso y la variable donde guarda el objeto que la golpeó.
+    /// </summary>
+    private static bool NailTrigger(HutongGames.PlayMaker.FsmStateAction action, out string eventName,
+        out HutongGames.PlayMaker.FsmGameObject store) {
+        eventName = null;
+        store = null;
+        switch (action) {
+            case HutongGames.PlayMaker.Actions.Trigger2dEvent trigger
+                when trigger.trigger != PlayMakerUnity2d.Trigger2DType.OnTriggerExit2D &&
+                     trigger.collideTag?.Value == "Nail Attack":
+                eventName = trigger.sendEvent?.Name;
+                store = trigger.storeCollider;
+                break;
+            case HutongGames.PlayMaker.Actions.Trigger2dEventLayer layer
+                when layer.trigger != PlayMakerUnity2d.Trigger2DType.OnTriggerExit2D &&
+                     layer.collideTag?.Value == "Nail Attack":
+                eventName = layer.sendEvent?.Name;
+                store = layer.storeCollider;
+                break;
+        }
+
+        return action.Enabled && !string.IsNullOrEmpty(eventName);
+    }
+
+    private static GameObject _remoteNail;
+    private static HutongGames.PlayMaker.FsmFloat _remoteNailDirection;
+
+    /// <summary>
+    /// Antes de atender aquí un aguijonazo que dio otro jugador en su PC: la lógica guarda el objeto que la golpeó y lee
+    /// de su FSM `damages_enemy` hacia dónde iba el golpe (el Gulka devuelve así su escupitajo). Ese golpe no existe en
+    /// este PC: se le da un aguijón de referencia (apagado, sin caja) con la dirección del golpe, deducida de dónde
+    /// estaba ese caballero (a la derecha, izquierda, arriba o abajo del enemigo). Si no, salía siempre hacia la
+    /// derecha, al revés si se golpeaba desde la derecha.
+    /// </summary>
+    private void PrepareRemoteNail(Enemy enemy, PlayMakerFSM fsm, string eventName, SessionPlayer from) {
+        var state = fsm.Fsm.ActiveState;
+        if (state == null || !TryGetPlayerPosition(from.Id, out var hitter)) {
+            return;
+        }
+
+        foreach (var action in state.Actions) {
+            if (!NailTrigger(action, out var name, out var store) || name != eventName || store == null || store.IsNone) {
+                continue;
+            }
+
+            if (_remoteNail == null || _remoteNailDirection == null) {
+                if (_remoteNail != null) {
+                    UnityEngine.Object.Destroy(_remoteNail);
+                }
+
+                var nail = new GameObject("HKMultiplayer aguijón remoto");
+                nail.SetActive(false);
+                UnityEngine.Object.DontDestroyOnLoad(nail);
+                var nailFsm = nail.AddComponent<PlayMakerFSM>();
+                // Apagado no pasa por su Awake: su Fsm se crea aquí (como en el editor)
+                nailFsm.Reset();
+                nailFsm.FsmName = "damages_enemy";
+                var direction = new HutongGames.PlayMaker.FsmFloat("direction");
+                nailFsm.FsmVariables.FloatVariables = new[] { direction };
+                _remoteNail = nail;
+                _remoteNailDirection = direction;
+            }
+
+            var target = enemy.Transform.position;
+            var dx = target.x - hitter.x;
+            var dy = target.y - hitter.y;
+            _remoteNailDirection.Value = Mathf.Abs(dy) > Mathf.Abs(dx) ? (dy > 0f ? 90f : 270f) : (dx > 0f ? 0f : 180f);
+            _remoteNail.transform.position = hitter;
+            store.Value = _remoteNail;
         }
     }
 
@@ -5302,5 +5543,14 @@ internal sealed class EnemySync {
 
         position = default;
         return false;
+    }
+}
+
+/// <summary>Avisa de los aguijonazos de este jugador que tocan una copia sin vida propia (ver EnemySync.OnNailTouch).</summary>
+internal sealed class NailCatcher : MonoBehaviour {
+    private void OnTriggerEnter2D(Collider2D other) {
+        if (other.CompareTag("Nail Attack")) {
+            EnemySync.OnNailTouch(gameObject);
+        }
     }
 }

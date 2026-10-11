@@ -116,7 +116,8 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 - **Enemigos y objetos de sala**:
   - Cada enemigo lo mueve el PC del jugador más cercano, porque su lógica solo ataca al caballero de su PC. Lo reparte
     el dueño de la sala; cambia solo si el otro está claramente más cerca (4 unidades) y hace un rato del último cambio
-    (3 s; 8 s en los jefes, cada cambio corta su ataque). Ese PC lo hace funcionar normal y envía su estado (transform,
+    (5 s; 8 s en los jefes, cada cambio corta su ataque: con 3 s y los dos cerca, un caballero de musgo podía volver a
+    empezar su estado cada pocos segundos sin llegar a atacar). Ese PC lo hace funcionar normal y envía su estado (transform,
     animación, profundidad, activo, vida, daño al tocarlo) con detección de cambios sin crear objetos.
   - No cambia de PC mientras va rápido (más de 9 unidades/s entre dos repartos: embistiendo o lanzándose). El Moss
     Charger embiste a 15 y cruzaba de un jugador al otro: pasaba al otro PC a mitad de la embestida, su lógica seguía
@@ -124,6 +125,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     lógica atendió `ZERO HP` en este PC, o el PC que lo mueve avisó de que allí ya murió), mientras quien lo mueve siga
     en la sala. La muerte del Falso Caballero va por su cabeza y su cuerpo nunca queda muerto en su `HealthManager`: el
     cuerpo pasaba al otro PC a mitad de su muerte (`Cough`), seguía dañando y las rejas no se abrían.
+  - Al tomarlo, su lógica sigue desde el estado en que iba (`SetState`), pero sin las acciones de ese estado que crean o
+    lanzan objetos: ya las hizo el PC que lo movía y sus disparos siguen en el aire. Si se repetían, cada cambio de PC
+    a mitad de un ataque era un ataque doble.
   - Los de un caído o de quien está en pausa pasan enseguida a otro, también los apagados: en una marioneta, apagado
     es solo lo último que envió quien la movía, y antes se saltaban; con un invitado caído junto a los enemigos que
     movía, el dueño creía que los movía el caído y el caído que el dueño, y quedaban quietos en los dos. Además el
@@ -171,6 +175,8 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     aviso (`WithoutFinishEvent`): antes su vapor no bajaba a 0 y se quedaba con las partículas quietas.
     Las FSM de daño (`damages_enemy`, `damages_hero`) no se siguen: solo pasan el golpe al objeto que tocan y su
     `Send Event` se enviaba en cada contacto (los barriles del Falso Caballero, unos 257 por minuto) sin hacer nada.
+  - Un efecto continuo de una marioneta se acaba si el enemigo muere por la vía normal o se apaga: ya no llegan más
+    estados que lo acaben y se quedaba pegado (salvo una muerte que va por su lógica, `Dying`).
   - Los efectos que su lógica repite cada frame mientras dura el estado también siguen en la marioneta
     (`EnemySync.UpdateRunningEffects`): partículas con `everyFrame`, salpicaduras continuas (`SpawnBloodTime`,
     `SpawnRandomObjectsOverTime`) y, si el estado tiene alguno, las cuentas con sus números que usan (`FloatAdd`,
@@ -304,6 +310,19 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     velocidad y dirección con `SetFsmFloat`/`SetFsmBool` justo después de salir, avanza igual en cada PC, echa sus
     chorros (que dañan al caballero de ese PC) y se acaba en la pared. Lo creado en combate no tiene tiempo de
     preparación: sus efectos (los barriles al romperse) cuentan desde que sale.
+  - El aviso lleva también el nombre del prefab: si la acción lo toma de una variable que ponen estados anteriores (el
+    Elder Baldur elige en `Goop` o `Roller` qué escupe y `Fire` saca `{Projectile}` del pool), en la marioneta esa
+    variable seguía vacía y no se creaba nada: el otro no veía sus disparos ni sus crías. Se busca por su nombre entre
+    las variables y los `SetGameObject` de su lógica.
+  - Lo que lanzan las acciones `FlingObjectsFromGlobalPool` y `…Vel` y hace daño (el vómito de los Ogros Hongo) también
+    va como copia del original: se sigue lo que sacan del pool mientras se ejecutan. Antes la variante `Vel` no salía en
+    el otro PC, y la otra se lanzaba aparte en la marioneta, con otras trayectorias al azar y dañando por su cuenta. Lo
+    solo visual lo lanza cada PC.
+  - Devolver de un aguijonazo lo que crean (el escupitajo del Gulka, `Spike Ball`): la copia no tiene vida, así que un
+    `NailCatcher` en su caja avisa del aguijonazo; como nace parada en su estado inicial, se busca la espera del golpe
+    (`Trigger2dEvent` o `Trigger2dEventLayer` con "Nail Attack") en todos sus estados. El PC que la mueve le pone como
+    objeto que la golpeó un aguijón de referencia (apagado, con una FSM `damages_enemy`) con la dirección del golpe,
+    deducida de dónde estaba ese caballero: su lógica la devuelve hacia ahí.
   - Los tarros del Coleccionista sueltan su bicho con su propio código. Solo lo suelta el tarro original: el PC que
     lo tiene lo sigue como algo creado en combate (se reconoce al encenderse junto a su tarro) y los demás crean una
     copia que lo sigue; las copias del tarro van vacías y se rompen sin soltar nada. Una copia que acaba sola no borra
@@ -661,6 +680,8 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   (vida llena por la vía del juego: `pdset maxHealth` no redibuja el HUD del juego y el mini-HUD lo mostraría distinto),
   `soul <n>`, `mppage <partida|ajustes|ajustes2|compañeros>`, `mpoption <etiqueta>|<pasos>`, `mpoptions`,
   `spriteof <objeto>`, `sprites <colección>|<texto>`, `collections <texto>`, `hudsprite`, `hudrot` y `clips <texto>`.
+  `nailtouch <objeto>` hace como si el aguijón de este jugador tocara esa copia sin vida propia (devolver el escupitajo
+  del Gulka). Los golpes al caballero dicen si quien pega se veía, y los pasos de cadenas de otro PC se registran.
   `spritewatch <s> <texto>` registra cada cambio del sprite dibujado (al final del frame) de los `SpriteRenderer` cuyo
   objeto, sprite o textura contiene el texto (p. ej. `soul_orb` para el orbe del HUD). `enemies` da también el giro y
   la velocidad de cada enemigo, y `hazards` los Goam con su estado y cuánto llevan en su espera.
@@ -818,15 +839,18 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   capullo de savia de `Fungus2_15` roto por el invitado se rompe en el host y cada uno tiene sus mariposas; en la
   misma sala, una palanca golpeada por el invitado ya no apaga el cartel para desafiar a los Señores Mantis del host.
   El Musgoso Volátil de `Fungus1_01` y sus esporas se ven en el otro PC. Rutas `crossroads` y `greenpath` sin fallos.
+  Después: los disparos y las crías del Elder Baldur de `Crossroads_11_alt` salen en el invitado; un aguijonazo del
+  invitado a la copia del escupitajo del Gulka (`nailtouch`) lo devuelve en el host; el vómito de los Ogros Hongo de
+  `Fungus2_05` se ve en el otro PC y, con los dos acabando el combate a la vez, las rejas se abren en los dos.
 
 ## Pendientes
 
 Sin probar:
-- De 0.24.0, vistos en la partida real y sin arreglar todavía: el escupitajo del Gulka (`Spike Ball`) "al revés" (un
-  aguijonazo a la copia no llega al PC que la mueve: su `NAIL` es un `Trigger2dEventLayer`, y allí la dirección sale
-  de un `Nail Object` que no tiene); que el Moss Charger pegue antes de salir (no se reproduce: todos los golpes son con
-  él visible); caballeros de musgo con escudo que se quedan quietos; lo que lanzan los Ogros Hongo y su arena (la de
-  la muesca) que no se abre.
+- De 0.24.0, vistos en la partida real y sin reproducir en las copias: que el Moss Charger pegue antes de salir (todos
+  los golpes son con él visible); los caballeros de musgo B y C de las arenas, que se quedaban quietos (no existen en
+  el mundo de prueba); que los `Mushroom Baby` dañen (no aparecen en el mundo de prueba; los `Fungoon Baby` sí dañan
+  también en el juego normal); efectos que se quedan pegados (la curación del compañero, cortada o no, acaba bien).
+  Devolver el escupitajo del Gulka con un aguijonazo físico (probado con `nailtouch`, no con el choque).
 - Las escenas de recoger una habilidad (la visión de la Capa de Polilla) solo las ve quien la recoge: la habilidad es
   del mundo, así que al otro le llega ya puesta y al recogerla él el juego no pone la escena.
 - De 0.23.0: todo entre dos PCs reales. En la partida real el invitado dijo que revivir no le gastaba alma; en las

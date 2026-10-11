@@ -649,6 +649,15 @@ internal sealed class TestDriver : MonoBehaviour {
                 ScreenCapture.CaptureScreenshot(path);
                 Log.Info($"{Tag}captura -> {path}");
                 break;
+            case "nailtouch":
+                // nailtouch <objeto>: como si el aguijón de este jugador tocara esa copia (sin vida propia)
+                var touched = GameObject.Find(string.Join(" ", args.Skip(1)));
+                Log.Info($"{Tag}aguijón simulado a {(touched != null ? touched.name : "nada")}");
+                if (touched != null) {
+                    HKMultiplayer.Game.Scene.EnemySync.OnNailTouch(touched);
+                }
+
+                break;
             case "spritewatch":
                 // spritewatch <segundos> <texto>: cada cambio del sprite dibujado (al final del frame) de los
                 // SpriteRenderer cuyo objeto, sprite o textura contiene el texto (p. ej. "orb" para el orbe de alma)
