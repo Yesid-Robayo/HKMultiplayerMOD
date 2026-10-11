@@ -122,7 +122,11 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Si quien lo mueve está fuera de su zona de alerta (la variable `Alert Range` de su lógica, o un hijo "Alert
     Range...", ampliada con el tamaño de la caja del caballero) y otro jugador está dentro, pasa a ese: su lógica solo
     ataca a un caballero dentro de la zona. El Rey Vengamosca se iba a esperar a su sitio (`Lurk`) siguiendo al más
-    cercano, fuera de la zona, mientras el otro peleaba dentro, y se quedaba mucho rato sin atacar.
+    cercano, fuera de la zona, mientras el otro peleaba dentro, y se quedaba mucho rato sin atacar. Con los dos
+    dentro, el otro tiene que estar 8 más cerca (no 4) para quitárselo: el Rey vuela a 13 de su caballero, quedaba más
+    cerca del otro y pasaba de uno a otro sin parar.
+  - El traspaso lleva también lo que llevaba esperando su estado (`Wait` o `WaitRandom`), y al tomarlo la espera sigue
+    por ahí: cada cambio de PC empezaba de cero los 3-4 s del Rey Vengamosca antes de atacar.
   - El Moss Charger sale de la tierra a 14 del caballero de su PC y ya al salir daña: si ese punto cae encima de otro
     jugador, sale por el otro lado de su caballero (girado y embistiendo hacia el otro lado), si ese lado está en su
     zona y libre.
@@ -862,7 +866,8 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   `Fungus2_05` se ve en el otro PC y, con los dos acabando el combate a la vez, las rejas se abren en los dos. Los
   Charged Lumafly de `Fungus3_26` están en el mismo sitio en los dos PCs; la capa de Polilla de `Fungus1_04` sigue para
   el host cuando el invitado ya tiene la habilidad (también al recargar la sala); tocar un Shrumeling de `Fungus2_28`
-  ya no hace retroceder ni da invulnerabilidad.
+  ya no hace retroceder ni da invulnerabilidad; el Rey Vengamosca, con los dos en el suelo de su arena, ataca cada
+  pocos segundos (embestidas e invocaciones) y casi no cambia de PC.
 
 ## Pendientes
 

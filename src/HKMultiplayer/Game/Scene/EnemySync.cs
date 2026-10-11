@@ -120,6 +120,9 @@ internal sealed class EnemySync {
     /// <summary>El otro jugador tiene que estar al menos esto más cerca para que el enemigo pase a su PC.</summary>
     private const float SwitchMargin = 4f;
 
+    /// <summary>El margen cuando los dos están dentro de su zona de alerta (ver AssignControllers).</summary>
+    private const float ZoneSwitchMargin = 8f;
+
     /// <summary>Tiempo mínimo entre cambios de quién mueve un enemigo (más en los jefes: cada cambio corta su ataque).</summary>
     private const float SwitchInterval = 5f;
 
@@ -390,6 +393,9 @@ internal sealed class EnemySync {
         public Vector2 Velocity;
         public float Gravity;
         public RigidbodyType2D BodyType;
+
+        /// <summary>Lo que llevaba su estado esperando (Wait o WaitRandom; 0 si no espera).</summary>
+        public float Waited;
 
         /// <summary>Si estaba encendido en el PC que lo movía.</summary>
         public bool Active;
@@ -2347,8 +2353,12 @@ internal sealed class EnemySync {
                 }
             }
 
+            // Dentro de su zona, el otro tiene que estar bastante más cerca para quitárselo: el Rey Vengamosca vuela a 13
+            // de su caballero y quedaba más cerca del otro, pasaba a él, volaba hacia ese y volvía a quedar más cerca del
+            // primero; cada cambio lo hacía esperar otra vez para atacar y se quedaba en el aire
+            var margin = zone != null && currentInZone && nearestInZone ? ZoneSwitchMargin : SwitchMargin;
             if (nearest != current && (currentDown || nearestInZone && !currentInZone ||
-                                       currentDistance - nearestDistance > SwitchMargin)) {
+                                       currentDistance - nearestDistance > margin)) {
                 _controlOut.Add((enemy.Id, nearest));
                 ApplyControl(enemy, nearest);
             }
@@ -2384,7 +2394,7 @@ internal sealed class EnemySync {
         }
 
         var bounds = zone.bounds;
-        bounds.Expand(new Vector3(1f, 2.6f, 0f));
+        bounds.Expand(new Vector3(2f, 4f, 0f));
         return bounds.Contains(new Vector3(position.x, position.y, bounds.center.z));
     }
 
@@ -2563,6 +2573,7 @@ internal sealed class EnemySync {
             writer.WriteByte((byte) fsmCount);
             var stateIndex = fsm != null && fsm.Fsm.ActiveState != null ? Array.IndexOf(fsm.Fsm.States, fsm.Fsm.ActiveState) : -1;
             writer.WriteUShort(stateIndex < 0 ? ushort.MaxValue : (ushort) stateIndex);
+            writer.WriteFloat(fsm != null ? WaitedInState(fsm.Fsm.ActiveState) : 0f);
             var variables = fsm != null ? fsm.FsmVariables : null;
             var ints = variables?.IntVariables;
             var intCount = ints == null ? 0 : Math.Min(ints.Length, MaxHandoverVars);
@@ -2628,6 +2639,7 @@ internal sealed class EnemySync {
         var index = reader.ReadByte();
         var count = reader.ReadByte();
         var state = reader.ReadUShort();
+        var waited = reader.ReadFloat();
         var ints = new int[reader.ReadByte()];
         for (var v = 0; v < ints.Length; v++) {
             ints[v] = reader.ReadInt();
@@ -2676,7 +2688,7 @@ internal sealed class EnemySync {
 
         enemy.Handover[index] = new HandoverFsm {
             State = state, Ints = ints, Floats = floats, Bools = bools, Objects = objects, HasBody = hasBody, Velocity = velocity, Gravity = gravity,
-            BodyType = bodyType, Active = active, Look = look, Damage = damage, Detached = detached
+            BodyType = bodyType, Active = active, Look = look, Damage = damage, Detached = detached, Waited = waited
         };
         if (index == count - 1) {
             enemy.HandoverReady = true;
@@ -2786,6 +2798,9 @@ internal sealed class EnemySync {
                 } finally {
                     UnmuteSpawns();
                 }
+
+                // La espera de ese estado sigue por donde iba allí (si no, cada cambio de PC la empezaba de cero)
+                KeepWaited(fsm.Fsm.ActiveState, data.Waited);
             }
         }
 
@@ -3283,6 +3298,47 @@ internal sealed class EnemySync {
     /// </summary>
     private uint NextSpawnedId() =>
         SpawnedIdFlag | (uint) (_session.LocalId & 0x7F) << 24 | (++_spawnCounter & 0xFFFFFF);
+
+    private static readonly System.Reflection.FieldInfo WaitTimerField =
+        typeof(HutongGames.PlayMaker.Actions.Wait).GetField("timer", AnyInstance);
+
+    private static readonly System.Reflection.FieldInfo WaitRandomTimerField =
+        typeof(HutongGames.PlayMaker.Actions.WaitRandom).GetField("timer", AnyInstance);
+
+    /// <summary>Lo que lleva esperando la espera del estado (la primera Wait o WaitRandom), o 0.</summary>
+    private static float WaitedInState(HutongGames.PlayMaker.FsmState state) {
+        if (state == null) {
+            return 0f;
+        }
+
+        foreach (var action in state.Actions) {
+            switch (action) {
+                case HutongGames.PlayMaker.Actions.Wait { Enabled: true, realTime: false } wait:
+                    return WaitTimerField?.GetValue(wait) is float t ? t : 0f;
+                case HutongGames.PlayMaker.Actions.WaitRandom { Enabled: true, realTime: false } random:
+                    return WaitRandomTimerField?.GetValue(random) is float r ? r : 0f;
+            }
+        }
+
+        return 0f;
+    }
+
+    private static void KeepWaited(HutongGames.PlayMaker.FsmState state, float waited) {
+        if (state == null || waited <= 0f) {
+            return;
+        }
+
+        foreach (var action in state.Actions) {
+            switch (action) {
+                case HutongGames.PlayMaker.Actions.Wait { Enabled: true, realTime: false } wait:
+                    WaitTimerField?.SetValue(wait, waited);
+                    return;
+                case HutongGames.PlayMaker.Actions.WaitRandom { Enabled: true, realTime: false } random:
+                    WaitRandomTimerField?.SetValue(random, waited);
+                    return;
+            }
+        }
+    }
 
     private static readonly List<HutongGames.PlayMaker.FsmStateAction> MutedSpawns = new();
 
