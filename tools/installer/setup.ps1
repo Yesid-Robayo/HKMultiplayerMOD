@@ -119,6 +119,21 @@ function New-Button([string]$text, [int]$x, [int]$y, [int]$width, [bool]$primary
     }
     $button.FlatAppearance.MouseOverBackColor = $colorAccent
     $button.FlatAppearance.MouseDownBackColor = $colorAccentDark
+    # Desactivado, Windows pinta el texto en un gris oscuro que casi no se lee sobre el fondo: se vuelve a dibujar el
+    # botón con el texto en blanco (ForeColor no cuenta en un botón desactivado)
+    $button.Add_Paint({
+        param($sender, $e)
+        if ($sender.Enabled) { return }
+        $bounds = $sender.ClientRectangle
+        $back = New-Object System.Drawing.SolidBrush($sender.BackColor)
+        $e.Graphics.FillRectangle($back, $bounds)
+        $back.Dispose()
+        $pen = New-Object System.Drawing.Pen($sender.FlatAppearance.BorderColor)
+        $e.Graphics.DrawRectangle($pen, 0, 0, $bounds.Width - 1, $bounds.Height - 1)
+        $pen.Dispose()
+        $flags = [System.Windows.Forms.TextFormatFlags]::HorizontalCenter -bor [System.Windows.Forms.TextFormatFlags]::VerticalCenter -bor [System.Windows.Forms.TextFormatFlags]::SingleLine
+        [System.Windows.Forms.TextRenderer]::DrawText($e.Graphics, $sender.Text, $sender.Font, $bounds, [System.Drawing.Color]::White, $flags)
+    })
     return $button
 }
 

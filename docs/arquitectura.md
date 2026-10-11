@@ -707,7 +707,9 @@ Decisiones aprobadas por el usuario para M5 (las marcadas "elegido" las escogió
 - `HKMultiplayer Setup.bat` (→ `scripts/setup.ps1`): sin argumentos abre una ventana de WinForms con el aspecto de los
   menús del juego (carpeta del juego con lista y *Buscar…*, estado de la instalación, *Instalar*/*Actualizar*,
   *Desinstalar*, *Instrucciones* y el registro de lo que hace); con `/install` o `/uninstall` y la ruta trabaja en la
-  consola (lo usa `installer-test.sh`). Los textos van en el idioma de Windows (`common.ps1`: `L "español" "inglés"`).
+  consola (lo usa `installer-test.sh`). Un botón desactivado (*Desinstalar* sin nada instalado, *Instalar* sin carpeta
+  del juego) se vuelve a dibujar con el texto en blanco: Windows lo pinta en un gris oscuro que no se leía sobre el
+  fondo, y `ForeColor` no cuenta en un botón desactivado. Los textos van en el idioma de Windows (`common.ps1`: `L "español" "inglés"`).
   El .bat abre PowerShell minimizado y `setup.ps1` esconde su consola al abrir la ventana: con `-WindowStyle Hidden` en
   la orden (combinación que algunos antivirus vigilan) se veía igual, pero parecía sospechoso.
   `install.ps1` y `uninstall.ps1` solo definen `Invoke-Install` e `Invoke-Uninstall`, que escriben por `Write-Out` en la
