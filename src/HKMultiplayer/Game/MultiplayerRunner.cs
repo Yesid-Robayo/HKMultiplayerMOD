@@ -82,6 +82,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Skins: la propia y las de los demás.</summary>
     public Features.Skins Skins { get; } = new();
 
+    /// <summary>Compañeros en el mapa abierto.</summary>
+    public Features.PartnerMap PartnerMap { get; } = new();
+
     /// <summary>El jugador salió de un mundo ajeno: al llegar al menú se deja la partida.</summary>
     private bool _leaveOnMenu;
 
@@ -109,6 +112,32 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     /// <summary>Lo más que espera el host los personajes de los invitados antes de cerrar.</summary>
     private const float CollectTimeout = 4f;
+
+    /// <summary>Partida a la que se unió el invitado por última vez (a la que se reconecta).</summary>
+    private sealed class JoinTarget {
+        public string Address;
+        public int Port;
+        public string RoomCode;
+        public string Name;
+    }
+
+    private JoinTarget _lastJoin;
+
+    /// <summary>
+    /// Reconexión automática del invitado que perdió la conexión con el host: cuántos intentos van (0: no se está
+    /// reconectando). Cada intento espera a estar en el menú principal, donde se puede volver a cargar el mundo.
+    /// </summary>
+    private int _reconnectAttempts;
+
+    private float _nextReconnectAt;
+
+    private const int MaxReconnectAttempts = 12;
+
+    /// <summary>Pausa entre un intento fallido y el siguiente (cada intento espera además hasta 10 s al host).</summary>
+    private const float ReconnectDelay = 5f;
+
+    /// <summary>Si se está intentando volver a la partida del host.</summary>
+    public bool IsReconnecting => _reconnectAttempts > 0;
 
     private void Awake() {
         Instance = this;
@@ -161,6 +190,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     }
 
     private void Update() {
+        UpdateReconnect();
         CoopSaves.Update();
         MultiplayerMenu.EnsureInstalled();
         SessionMenu.UpdateInstalled(Session != null);
@@ -226,6 +256,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Presentations.Update();
             Dreams.Update(scene);
             Grimmchild.Update(scene);
+            PartnerMap.Update(scene);
             Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene
                 : Dreams.InDream ? Features.PlayerStatus.Dream
                 : InStagTravel() ? Features.PlayerStatus.StagTravel : Features.PlayerStatus.Standing,
@@ -268,7 +299,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     /// <summary>Hostea en <paramref name="port"/>. Con <paramref name="roomCode"/> nulo se genera uno al azar.</summary>
     public bool Host(string name, int port, string roomCode = null) {
-        Leave();
+        CancelReconnect();
+        CloseSession();
         UdpTransport transport;
         try {
             transport = new UdpTransport(port);
@@ -325,7 +357,12 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     /// <summary>Se une a la partida de <paramref name="address"/>.</summary>
     public bool Join(string address, int port, string roomCode, string name) {
-        Leave();
+        CancelReconnect();
+        return StartJoin(address, port, roomCode, name);
+    }
+
+    private bool StartJoin(string address, int port, string roomCode, string name) {
+        CloseSession();
         var code = RoomCode.Normalize(roomCode ?? string.Empty);
         if (!RoomCode.IsValid(code)) {
             SetStatus(Lang.T("El código no es válido: son 8 letras o números, como ABCD-EFGH", "The code is not valid: it is 8 letters or numbers, like ABCD-EFGH"));
@@ -355,6 +392,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         }
 
         transport.Error += message => Log.Warn($"Red: {message}");
+        _lastJoin = new JoinTarget { Address = address, Port = port, RoomCode = code, Name = name };
         Session = GameSession.Join(WithTestNetwork(transport), new IPEndPoint(ip, port), code, SanitizeName(name),
             HKMultiplayerMod.Version, Log.Info);
         Wire(Session);
@@ -427,8 +465,13 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             : GameManager.ReturnToMainMenuSaveModes.DontSave));
     }
 
-        /// <summary>Sale de la partida (o la cierra si es el host).</summary>
+    /// <summary>Sale de la partida (o la cierra si es el host). También deja de intentar reconectar.</summary>
     public void Leave() {
+        CancelReconnect();
+        CloseSession();
+    }
+
+    private void CloseSession() {
         if (Session == null) {
             return;
         }
@@ -442,6 +485,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     /// <summary>Cada capa deja la partida (las funciones del coop primero: usan las demás).</summary>
     private void DetachAll() {
+        PartnerMap.Detach();
         Skins.Detach();
         Grimmchild.Detach();
         Dreams.Detach();
@@ -466,6 +510,81 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         QuestNpcs.Detach();
         Breakables.Detach();
         Hazards.Detach();
+    }
+
+    // =====================================================================================================
+    // Reconexión automática
+    // =====================================================================================================
+
+    /// <summary>
+    /// El invitado perdió la conexión: si se cortó por tiempo (el host no responde, no porque cerrara la partida), se
+    /// intenta volver a entrar. Un intento que falla por tiempo deja programado el siguiente; cualquier otro motivo
+    /// (código, versión, partida llena o cerrada) termina los intentos.
+    /// </summary>
+    private void OnGuestDisconnected(DisconnectReason reason, bool wasConnected) {
+        if (reason != DisconnectReason.Timeout || _lastJoin == null) {
+            if (_reconnectAttempts > 0) {
+                _reconnectAttempts = 0;
+                Notice.Show(Lang.T("No se pudo volver a la partida: ", "Couldn't get back into the game: ") + DescribeDisconnect(reason), 8f);
+            }
+
+            return;
+        }
+
+        // Un primer intento de unirse que no llegó al host no se repite solo
+        if (!wasConnected && _reconnectAttempts == 0) {
+            return;
+        }
+
+        if (_reconnectAttempts >= MaxReconnectAttempts) {
+            _reconnectAttempts = 0;
+            Notice.Show(Lang.T("No se pudo volver a la partida: el host no responde", "Couldn't get back into the game: the host isn't responding"), 8f);
+            return;
+        }
+
+        if (_reconnectAttempts == 0) {
+            Notice.Show(Lang.T("Se perdió la conexión con el host: reconectando...\nEsc para cancelar",
+                "Lost connection to the host: reconnecting...\nEsc to cancel"), 6f);
+        }
+
+        _reconnectAttempts++;
+        _nextReconnectAt = Time.unscaledTime + ReconnectDelay;
+    }
+
+    private void UpdateReconnect() {
+        if (_reconnectAttempts == 0) {
+            return;
+        }
+
+        // Esc cancela en el menú principal (en la partida es la pausa)
+        if (CoopSaves.CanStart && Input.GetKeyDown(KeyCode.Escape)) {
+            CancelReconnect();
+            Notice.Show(Lang.T("Reconexión cancelada", "Reconnection cancelled"), 4f);
+            return;
+        }
+
+        // Se intenta desde el menú principal (el mundo del host solo se puede cargar ahí) y sin otra partida en marcha
+        if (Session != null || !CoopSaves.CanStart || Time.unscaledTime < _nextReconnectAt) {
+            return;
+        }
+
+        var target = _lastJoin;
+        _nextReconnectAt = float.MaxValue;
+        Log.Info($"Reconectando con el host (intento {_reconnectAttempts} de {MaxReconnectAttempts})");
+        Notice.Show(Lang.T($"Reconectando con el host (intento {_reconnectAttempts} de {MaxReconnectAttempts})...\nEsc para cancelar",
+            $"Reconnecting to the host (attempt {_reconnectAttempts} of {MaxReconnectAttempts})...\nEsc to cancel"), 12f);
+        if (!StartJoin(target.Address, target.Port, target.RoomCode, target.Name)) {
+            _reconnectAttempts = 0;
+            Notice.Show(Lang.T("No se pudo volver a la partida: ", "Couldn't get back into the game: ") + StatusMessage, 8f);
+        }
+    }
+
+    private void CancelReconnect() {
+        if (_reconnectAttempts > 0) {
+            Log.Info("Se deja de intentar reconectar");
+        }
+
+        _reconnectAttempts = 0;
     }
 
     private void Wire(GameSession session) {
@@ -494,7 +613,16 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Travel.Attach(session, Party, Revive, Dreams, Cutscenes);
         Grimmchild.Attach(session);
         Skins.Attach(session, Players);
-        session.Connected += () => SetStatus(Lang.T($"Conectado como jugador {session.LocalId}", $"Connected as player {session.LocalId}"));
+        PartnerMap.Attach(session, Revive);
+        var connected = false;
+        session.Connected += () => {
+            connected = true;
+            SetStatus(Lang.T($"Conectado como jugador {session.LocalId}", $"Connected as player {session.LocalId}"));
+            if (_reconnectAttempts > 0) {
+                _reconnectAttempts = 0;
+                Notice.Show(Lang.T("Reconectado con el host: entrando en el mundo...", "Reconnected to the host: entering the world..."), 6f);
+            }
+        };
         session.Disconnected += reason => {
             // Al salir uno mismo (Leave) la sesión ya no es la actual: nada que avisar
             if (Session != session) {
@@ -509,6 +637,11 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             if (CoopSaves.ActiveWorld != null && !CoopSaves.IsHostWorld && HeroController.instance != null) {
                 Notice.Show(DescribeDisconnect(reason), 6f);
                 ReturnToMenu(save: false);
+            }
+
+            // Después del aviso de desconexión: si se va a reconectar, su aviso lo sustituye
+            if (!session.IsHost) {
+                OnGuestDisconnected(reason, connected);
             }
         };
         session.PlayerJoined += player => {

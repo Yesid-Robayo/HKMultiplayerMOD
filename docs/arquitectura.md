@@ -438,7 +438,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 Decisiones aprobadas en [Decisiones de M5](#decisiones-de-m5). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
-mensajes nuevos van del 73 al 102 (el 98 es de `EnemySync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
+mensajes nuevos van del 73 al 103 (el 98 es de `EnemySync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
 juego (16:9; con otra proporción el juego deja franjas) y escala con su alto como el HUD del juego; las piezas se crean
 una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
 
@@ -446,10 +446,10 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   lo reparte entero al cambiar y a quien entra. Un caído no cuenta para repartir enemigos (`EnemySync.AssignControllers`:
   los suyos pasan enseguida a quien sigue en pie), ni para las esperas de los combates de jefe (`MissingNear`,
   `EveryoneInside`), ni para los diálogos (`AllConvoDone`), y su avatar no se dibuja.
-- **Ajustes del host** (`HostSettings`, mensaje 73 con versión de formato, ahora la 2): dificultad (vida de jefes 1,5×
+- **Ajustes del host** (`HostSettings`, mensaje 73 con versión de formato, ahora la 3): dificultad (vida de jefes 1,5×
   por defecto, solo con el compañero en la sala; enemigos; daño recibido), revivir (sí/no, tiempo, alma, máscaras,
-  invulnerabilidad, en el banco), pantalla (nombres, vida del compañero, flechas, avisos, barra del jefe, barras de
-  enemigos) y permisos (regalar geo, ir con un compañero, saltar cinemáticas). Se guardan en `settings.json` de cada
+  invulnerabilidad, en el banco), pantalla (nombres, vida del compañero, flechas, compañeros en el mapa, avisos, barra
+  del jefe, barras de enemigos) y permisos (regalar geo, ir con un compañero, saltar cinemáticas). Se guardan en `settings.json` de cada
   mundo (por nombre de clave: los que falten en un archivo viejo quedan por defecto) y se envían al cambiar y a quien
   entra. La vida extra se hace dividiendo el daño en `HealthManager.TakeDamage` en el PC que mueve al enemigo
   (`Difficulty`; las marionetas reciben los golpes con multiplicador 0); un jefe es lo que tiene `unlockBossScene`. El
@@ -463,7 +463,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   unió, salió, cayó, sombra recuperada, regalo de geo, Grimmchild, skin); los que responden a lo que hace uno
   (devoluciones, "Ir con ...", esperas de combate) salen siempre.
 - **Revivir** (`Revive`, mensajes 75 a 80): `HeroController.Die` se sustituye por la caída si hay alguien en pie (en un
-  sueño, solo si está en el mismo; en los Panteones, nunca). El caído envía `Downed` (sala y suelo bajo él); el host
+  sueño, solo si está en el mismo; en los Panteones, nunca). El caído envía `Downed` (sala y suelo bajo él; si debajo no hay `Terrain` en 100 unidades, si ese suelo toca un
+  `DamageHero` de peligro o si murió por un peligro, su `hazardRespawnLocation`: el cuerpo tiene que quedar donde el
+  compañero pueda estar de pie a su lado, y antes un caído en el aire sobre un pozo quedaba flotando); el host
   le asigna el compañero en pie al que seguir. El caballero del caído se oculta (sin colisión, sin gravedad,
   invencible, sin control; se reaplica cada frame) y, tras la animación de muerte, se pega al avatar del compañero, con
   las zonas de cámara emuladas; si el compañero cambia de sala, viaja detrás de él y entra por la misma puerta que él
@@ -499,6 +501,19 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   "Hollow Shade" para que `EnemySync` no la comparta) que lee los datos del dueño (`GetPlayerDataInt`/`String`). Su
   muerte no va por la vía normal: avisa al host, que acepta el primer aviso y pide al dueño que mate la suya (si no está
   en su sala, se crea un momento junto a él).
+- **Compañeros en el mapa** (`PartnerMap`, mensaje 103, no fiable, a todos): cada jugador envía 4 veces por segundo
+  la sala del mapa y su punto en ella de 0 a 1, con la cuenta de `GameMap.Update` para la brújula (los campos privados
+  `sceneWidth`, `sceneHeight` y `originOffsetX/Y`; en una sala que no sale en el mapa, `inRoom`, la puerta por la que
+  se entró). Así quien lo recibe no necesita las medidas de una sala que no tiene cargada: busca la sala por nombre
+  entre los hijos de las zonas del mapa y pone ahí una copia de `compassIcon` (sin FSM), azul, o roja con lo último
+  enviado de pie si el jugador está caído. Se ve con el mapa abierto (`flamePins` activo: lo encienden el mapa del
+  inventario y el rápido, y lo apaga `CloseQuickMap`), sin necesitar el Wayward Compass, salvo en sueños, el Palacio
+  Blanco y los Panteones (donde el juego tampoco muestra la brújula). Sin noticias en 3 s, el icono se quita.
+- **Reconexión automática** (`MultiplayerRunner`): si el invitado pierde la conexión por tiempo después de haber
+  entrado (no si el host cierra, ni por código, versión o partida llena), vuelve al menú como antes y, ya en el menú
+  principal (el mundo solo se carga ahí), se vuelve a unir con la misma dirección, código y nombre: hasta 12 intentos,
+  5 s después de que falle cada uno (cada intento espera hasta 10 s al host). Al conectar, el host le envía el mundo
+  con su personaje como a cualquiera que entra. *Esc* en el menú principal, unirse, hostear o salir lo cancelan.
 - **Compañeros** (`PartyActions`, mensajes 85 y 86): regalo de geo validado por el host (o devuelto), desatascarse y
   recargar la sala al quitar la pausa.
 - **Ir con un compañero** (`PartnerTravel`, mensajes 99 a 102): quien lo pide desde el panel lo envía al quitar la
@@ -658,7 +673,8 @@ Decisiones aprobadas por el usuario para M5 (las marcadas "elegido" las escogió
   saltar 1/2"); presentaciones de jefe con los dos quietos; al acabar, quien fue llevado vuelve a donde estaba.
 - **Ajustes del host** (Pausa › Multijugador), guardados por mundo; los invitados solo los ven. Por defecto: vida de
   jefes 1,5× (elegido) solo con el compañero en la sala, enemigos 1×, daño recibido 1×; revivir sí (2 s, 33 de alma, 1
-  máscara, 2 s de invulnerabilidad, en el banco sí); nombres, vida del compañero, flechas, avisos y barra del jefe sí,
+  máscara, 2 s de invulnerabilidad, en el banco sí); nombres, vida del compañero, flechas, compañeros en el mapa, avisos
+  y barra del jefe sí,
   barras de enemigos no; regalar geo sí; ir con un compañero sí; saltar cinemáticas por votación. La vida extra divide
   el daño en el PC que mueve al enemigo (las fases de los jefes dependen de su vida).
 - **Ir con un compañero** (pedido después): en *Compañeros*, al quitar la pausa aparece a su lado; no con alguien
@@ -734,6 +750,9 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
 
 Sin probar:
 - La traducción al inglés dentro del juego (0.21.0) y el vapor naranja de la muerte del Falso Caballero (0.20.3).
+- Lo de 0.22.0: los compañeros en el mapa (sitio del icono, que se vea y se quite con el mapa del inventario y el
+  rápido), la reconexión automática (cortar la red del host a mitad de partida) y el cuerpo en suelo seguro (morir en
+  el aire sobre un pozo, o con el suelo de debajo con pinchos o ácido).
 - La conversación con Zote tras el Rey Vengamosca, Zote en el Coliseo y Cloth (no aparecen en el mundo de prueba);
   Menderbug (por análisis).
 - Volver de una cinemática que acaba en una sala de juego (finales de los Panteones; va por `SceneTravel`).

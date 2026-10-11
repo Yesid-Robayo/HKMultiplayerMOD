@@ -4,7 +4,7 @@
 
 **A co-op mod for Hollow Knight: play the whole world with your friends, on your local network or over the internet.**
 
-![Version](https://img.shields.io/badge/version-0.21.2-7fb2ff)
+![Version](https://img.shields.io/badge/version-0.22.0-7fb2ff)
 ![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
@@ -70,6 +70,9 @@ world, see each other in real time and fight the same enemies and bosses togethe
 - **Each guest's character** is saved in the host's world: it is sent at benches, every 30 seconds and when leaving.
   When you join again you get your character back. If the host closes the game, guests' characters are collected
   first.
+- **Automatic reconnection**: if a guest loses the connection to the host (not when the host closes the game), they
+  go back to the main menu and try to get back in on their own, up to 12 times, and load the world again with their
+  character. *Esc* in the main menu cancels it.
 - **On-screen notices**: the game code, who joins and leaves, disconnections and fight waits.
 - **Pause panel** (*Pause › Multiplayer*): connected players with their ping, the code, the IP and close or leave the
   game; *Game settings*, *Partners* and *Skin*.
@@ -142,11 +145,15 @@ world, see each other in real time and fight the same enemies and bosses togethe
 - **Revive**: if you die while a partner is standing, you don't die, you go down. Your body lies on the floor with
   "† Name" and your camera follows your partner. They get a notice and an arrow to your body; next to it, **holding
   Focus for 2 s** and spending 33 soul revives you with 1 mask. If your partner sits at a bench, downed players revive
-  next to them with full health. If everyone goes down, each player dies normally.
+  next to them with full health. If everyone goes down, each player dies normally. If you die where nobody could
+  stand next to you (in the air over a pit, on spikes or in acid), your body lies on the last safe ground, where the
+  game respawns you after a hazard.
 - **Shared shades**: everyone sees their partner's shade and can kill it; its owner gets their geo and soul back even
   in another room.
 - **Partner HUD** at the top right (name, masks, soul and where they are), their masks above their head when their
   health changes, and **arrows** at the edge of the screen pointing to partners and bodies.
+- **Partners on the map**: with the map open, each partner shows up as a blue compass where they are (no Wayward
+  Compass needed), and red where they fell if they are down.
 - Optional **enemy health bars** above each damaged enemy.
 - **Shared cutscenes**: endings, credits and Mr. Mushroom play at the same time even in different rooms; they are
   skipped when everyone votes ("Waiting for X to skip 1/2").
@@ -191,6 +198,7 @@ through the world checking that both players see the same thing.
 
 - A session between two PCs over the internet.
 - The English translation inside the game.
+- Partners on the map, automatic reconnection and the body on safe ground (0.22.0).
 - The orange steam of the False Knight's death (fixed without retesting).
 - Cloth and Menderbug, entering the Radiance through the game's normal path, and returning from the Godhome cutscenes.
 

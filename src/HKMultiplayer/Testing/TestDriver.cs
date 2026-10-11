@@ -730,6 +730,10 @@ internal sealed class TestDriver : MonoBehaviour {
                 // Estado de revivir: caído, cuerpo, viaje, progreso y estado de cada jugador
                 Log.Info($"{Tag}revivir {runner.Revive.Describe()}");
                 break;
+            case "partnermap":
+                // Compañeros en el mapa: lo último enviado y, de cada compañero, su sala, su punto y si su icono se ve
+                Log.Info($"{Tag}mapa {runner.PartnerMap.Describe()}");
+                break;
             case "goto":
                 // goto <nombre>|#<id>: "Ir con ..." como desde el panel (se hace al jugar, sin pausa). Con #<id> se pide
                 // aunque ese jugador ya no esté (como un panel que aún lo mostraba)

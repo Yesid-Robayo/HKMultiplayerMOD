@@ -4,7 +4,7 @@
 
 **Mod cooperativo para Hollow Knight: juega el mundo entero con tus amigos, en red local o por internet.**
 
-![Versión](https://img.shields.io/badge/versión-0.21.2-7fb2ff)
+![Versión](https://img.shields.io/badge/versión-0.22.0-7fb2ff)
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
@@ -70,6 +70,9 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
   local como Radmin VPN, ZeroTier o Tailscale).
 - **Personaje de cada invitado** guardado en el mundo del host: se envía en los bancos, cada 30 segundos y al salir.
   Al volver a unirte, recuperas tu personaje. Si el host cierra la partida, primero recoge los de los invitados.
+- **Reconexión automática**: si un invitado pierde la conexión con el host (no si el host cierra la partida), vuelve
+  al menú principal e intenta volver a entrar solo, hasta 12 veces, y carga otra vez el mundo con su personaje. *Esc*
+  en el menú principal lo cancela.
 - **Avisos** en pantalla: código de la partida, quién entra y sale, desconexiones y esperas de combate.
 - **Panel en pausa** (*Pausa › Multijugador*): jugadores conectados con su ping, código, IP y cerrar o salir de la
   partida; *Ajustes de la partida*, *Compañeros* y *Skin*.
@@ -142,11 +145,15 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 - **Revivir**: al morir con un compañero en pie no se muere, se cae. El cuerpo queda tendido con "† Nombre" y la
   cámara del caído sigue a su compañero. El compañero recibe un aviso y una flecha hacia el cuerpo; junto a él,
   **manteniendo Focus 2 s** y gastando 33 de alma, lo revive con 1 máscara. Si el compañero se sienta en un banco, los
-  caídos reviven a su lado con toda la vida. Si caen todos, cada uno muere de forma normal.
+  caídos reviven a su lado con toda la vida. Si caen todos, cada uno muere de forma normal. Si mueres donde nadie
+  podría ponerse a tu lado (en el aire sobre un pozo, en pinchos o en ácido), el cuerpo queda en el último suelo
+  seguro, donde el juego te hace reaparecer tras un peligro.
 - **Sombras compartidas**: cada uno ve la sombra del compañero y puede matarla; el dueño recupera su geo y su alma
   aunque esté en otra sala.
 - **HUD del compañero** arriba a la derecha (nombre, máscaras, alma y dónde está), sus máscaras sobre su cabeza al
   cambiarle la vida y **flechas** en el borde de la pantalla hacia el compañero y los cuerpos.
+- **Compañeros en el mapa**: con el mapa abierto, cada compañero sale como una brújula azul donde está (sin necesitar
+  el Wayward Compass), y en rojo donde cayó si está caído.
 - **Barras de enemigos** opcionales sobre cada enemigo herido.
 - **Cinemáticas compartidas**: los finales, los créditos y Mr. Mushroom se ven a la vez aunque estéis en salas
   distintas; se saltan cuando todos votan ("Esperando a X para saltar 1/2").
@@ -191,6 +198,7 @@ automáticas que recorren el mundo comprobando que los dos ven lo mismo.
 
 - Una partida entre dos PCs por internet.
 - La traducción al inglés dentro del juego.
+- Los compañeros en el mapa, la reconexión automática y el cuerpo en suelo seguro (0.22.0).
 - El vapor naranja de la muerte del Falso Caballero (arreglado sin volver a probarlo).
 - Cloth y Menderbug, la entrada a la Radiancia por el camino del juego y la vuelta de las cinemáticas de los Panteones.
 

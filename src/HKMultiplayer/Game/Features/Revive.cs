@@ -440,7 +440,7 @@ internal sealed class Revive {
         }
 
         var scene = UnitySceneManager.GetActiveScene().name;
-        var position = _lastHazardType > 1 ? (Vector3) PlayerData.instance.hazardRespawnLocation : GroundBelow(hero);
+        var position = BodyPosition(hero, _lastHazardType);
         Log.Info($"Caído en {scene} ({position.x:0.0}, {position.y:0.0})");
         EnterDowned(scene, position);
         SendDowned(scene, position);
@@ -502,14 +502,33 @@ internal sealed class Revive {
     }
 
     /// <summary>
-    /// Posición del cuerpo: el suelo justo debajo de donde cayó. Si muere en el aire, el cuerpo quedaría flotando y el
-    /// compañero no podría quedarse a su lado manteniendo Focus (en el aire no se puede).
+    /// Posición del cuerpo, que tiene que quedar donde el compañero pueda quedarse de pie a su lado manteniendo Focus (en
+    /// el aire, sobre pinchos o en ácido no se puede): el suelo justo debajo de donde cayó. Si murió por un peligro
+    /// (pinchos, ácido, un pozo), si debajo no hay suelo (cayó sobre un pozo) o si ese suelo es un peligro, el cuerpo
+    /// queda en el último sitio seguro, donde el juego hace reaparecer tras un peligro.
     /// </summary>
-    private static Vector3 GroundBelow(HeroController hero) {
+    private static Vector3 BodyPosition(HeroController hero, int hazardType) {
+        var safe = (Vector3) PlayerData.instance.hazardRespawnLocation;
+        safe.z = hero.transform.position.z;
+        if (hazardType > 1) {
+            return safe;
+        }
+
+        if (!GroundBelow(hero, out var ground) || InHazard(hero, ground)) {
+            Log.Info("El cuerpo no tiene suelo seguro debajo: queda en el último sitio seguro");
+            return safe;
+        }
+
+        return ground;
+    }
+
+    /// <summary>El suelo justo debajo del caballero (con sus pies apoyados), si lo hay.</summary>
+    private static bool GroundBelow(HeroController hero, out Vector3 ground) {
         var position = hero.transform.position;
+        ground = position;
         var collider = hero.GetComponent<Collider2D>();
         if (collider == null) {
-            return position;
+            return true;
         }
 
         var feetOffset = position.y - collider.bounds.min.y;
@@ -518,8 +537,30 @@ internal sealed class Revive {
             mask = 1 << 8;
         }
 
-        var hit = Physics2D.Raycast(new Vector2(position.x, collider.bounds.min.y + 0.1f), Vector2.down, 50f, mask);
-        return hit.collider == null ? position : new Vector3(position.x, hit.point.y + feetOffset, position.z);
+        var hit = Physics2D.Raycast(new Vector2(position.x, collider.bounds.min.y + 0.1f), Vector2.down, 100f, mask);
+        if (hit.collider == null) {
+            return false;
+        }
+
+        ground = new Vector3(position.x, hit.point.y + feetOffset, position.z);
+        return true;
+    }
+
+    /// <summary>Si el caballero, puesto en <paramref name="position"/>, tocaría un peligro (pinchos, ácido...).</summary>
+    private static bool InHazard(HeroController hero, Vector3 position) {
+        var collider = hero.GetComponent<Collider2D>();
+        var size = collider != null ? (Vector2) collider.bounds.size : new Vector2(0.5f, 1.2f);
+        var center = (Vector2) position + (collider != null
+            ? (Vector2) (collider.bounds.center - hero.transform.position)
+            : Vector2.zero);
+        foreach (var other in Physics2D.OverlapBoxAll(center, size, 0f)) {
+            var damage = other.GetComponent<DamageHero>();
+            if (damage != null && damage.hazardType > 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void EnterDowned(string scene, Vector3 position) {
