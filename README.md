@@ -153,7 +153,7 @@ world, see each other in real time and fight the same enemies and bosses togethe
 - **Partner HUD** at the top right (name, masks, soul and where they are), their masks above their head when their
   health changes, and **arrows** at the edge of the screen pointing to partners and bodies.
 - **Partners on the map**: with the map open, each partner shows up as a blue compass where they are (no Wayward
-  Compass needed), and red where they fell if they are down.
+  Compass needed), and red on their body if they are down.
 - Optional **enemy health bars** above each damaged enemy.
 - **Shared cutscenes**: endings, credits and Mr. Mushroom play at the same time even in different rooms; they are
   skipped when everyone votes ("Waiting for X to skip 1/2").
@@ -185,7 +185,8 @@ through the world checking that both players see the same thing.
   Tyrant, Hollow Knight and the Radiance.
 - Colosseum of Fools: Bronze, Silver and Gold.
 - Dreams: Failed Champion, Lost Kin, Soul Tyrant, White Defender, Grey Prince Zote and the Nightmare King.
-- Revive, shades, partner HUD, host settings, cutscenes, skins, go to a partner and NPC quests.
+- Revive (also the body on the last safe ground), shades, partner HUD, partners on the quick map, host settings,
+  cutscenes, skins, go to a partner, NPC quests and automatic reconnection.
 - Install, update and uninstall.
 
 ⚠️ **Partially tested:**
@@ -198,7 +199,8 @@ through the world checking that both players see the same thing.
 
 - A session between two PCs over the internet.
 - The English translation inside the game.
-- Partners on the map, automatic reconnection and the body on safe ground (0.22.0).
+- From 0.22.0: partners on the inventory map (the quick map was tested), cancelling the reconnection, and dying above
+  acid.
 - The orange steam of the False Knight's death (fixed without retesting).
 - Cloth and Menderbug, entering the Radiance through the game's normal path, and returning from the Godhome cutscenes.
 

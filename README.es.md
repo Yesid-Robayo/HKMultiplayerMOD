@@ -153,7 +153,7 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 - **HUD del compañero** arriba a la derecha (nombre, máscaras, alma y dónde está), sus máscaras sobre su cabeza al
   cambiarle la vida y **flechas** en el borde de la pantalla hacia el compañero y los cuerpos.
 - **Compañeros en el mapa**: con el mapa abierto, cada compañero sale como una brújula azul donde está (sin necesitar
-  el Wayward Compass), y en rojo donde cayó si está caído.
+  el Wayward Compass), y en rojo en su cuerpo si está caído.
 - **Barras de enemigos** opcionales sobre cada enemigo herido.
 - **Cinemáticas compartidas**: los finales, los créditos y Mr. Mushroom se ven a la vez aunque estéis en salas
   distintas; se saltan cuando todos votan ("Esperando a X para saltar 1/2").
@@ -186,7 +186,8 @@ automáticas que recorren el mundo comprobando que los dos ven lo mismo.
 - Coliseo de los Tontos: Bronce, Plata y Oro.
 - Sueños: Campeón Fallido (el Falso Caballero del sueño), Hermano Perdido, Tirano de Almas, Defensor Blanco, Príncipe Gris Zote y Rey
   de las Pesadillas.
-- Revivir, sombras, HUD del compañero, ajustes del host, cinemáticas, skins, ir con un compañero y misiones de NPC.
+- Revivir (también el cuerpo en el último sitio seguro), sombras, HUD del compañero, compañeros en el mapa rápido,
+  ajustes del host, cinemáticas, skins, ir con un compañero, misiones de NPC y la reconexión automática.
 - Instalar, actualizar y desinstalar.
 
 ⚠️ **Probado en parte:**
@@ -198,7 +199,8 @@ automáticas que recorren el mundo comprobando que los dos ven lo mismo.
 
 - Una partida entre dos PCs por internet.
 - La traducción al inglés dentro del juego.
-- Los compañeros en el mapa, la reconexión automática y el cuerpo en suelo seguro (0.22.0).
+- De 0.22.0: los compañeros en el mapa del inventario (se probó el mapa rápido), cancelar la reconexión y morir sobre
+  ácido.
 - El vapor naranja de la muerte del Falso Caballero (arreglado sin volver a probarlo).
 - Cloth y Menderbug, la entrada a la Radiancia por el camino del juego y la vuelta de las cinemáticas de los Panteones.
 

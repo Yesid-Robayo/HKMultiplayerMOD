@@ -223,6 +223,11 @@ internal sealed class Revive {
     /// <summary>Si el jugador local está caído.</summary>
     public bool IsDowned => _downed;
 
+    /// <summary>Sala y posición del cuerpo propio (solo con sentido estando caído).</summary>
+    public string OwnBodyScene => _bodyScene;
+
+    public Vector3 OwnBodyPosition => _bodyPosition;
+
     /// <summary>En un viaje de sala del mod (el caído detrás de su compañero, recargar la sala).</summary>
     public bool IsTraveling => _travelTarget != null;
 

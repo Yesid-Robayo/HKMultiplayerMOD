@@ -505,8 +505,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   la sala del mapa y su punto en ella de 0 a 1, con la cuenta de `GameMap.Update` para la brújula (los campos privados
   `sceneWidth`, `sceneHeight` y `originOffsetX/Y`; en una sala que no sale en el mapa, `inRoom`, la puerta por la que
   se entró). Así quien lo recibe no necesita las medidas de una sala que no tiene cargada: busca la sala por nombre
-  entre los hijos de las zonas del mapa y pone ahí una copia de `compassIcon` (sin FSM), azul, o roja con lo último
-  enviado de pie si el jugador está caído. Se ve con el mapa abierto (`flamePins` activo: lo encienden el mapa del
+  entre los hijos de las zonas del mapa y pone ahí una copia de `compassIcon` (sin FSM), azul, o roja en su cuerpo
+  si el jugador está caído (calculada al caer, en la sala del cuerpo: el cuerpo puede no estar donde cayó, sino en el
+  último sitio seguro; después no cambia aunque el caballero oculto siga al compañero). Se ve con el mapa abierto (`flamePins` activo: lo encienden el mapa del
   inventario y el rápido, y lo apaga `CloseQuickMap`), sin necesitar el Wayward Compass, salvo en sueños, el Palacio
   Blanco y los Panteones (donde el juego tampoco muestra la brújula). Sin noticias en 3 s, el icono se quita.
 - **Reconexión automática** (`MultiplayerRunner`): si el invitado pierde la conexión por tiempo después de haber
@@ -745,14 +746,19 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   skins, ir con un compañero, recargar sala, regalar geo; misiones de NPC (Mr. Mushroom, Quirrel, Bretta, Zote en Nido
   Profundo, Tiso, Myla, Hornet, la Compañía de Grimm); objetos de sala y rompibles; efectos y amuletos del compañero.
 - **Paquete**: instalar, actualizar y desinstalar en copias limpias (`installer-test.sh`); la ventana del instalador.
+- **0.22.0** (copias D y E, 10 oct 2026): compañeros en el mapa rápido (el icono en su sitio de Bocasucia, se mueve con
+  el compañero y se quita al cerrar el mapa; rojo en el cuerpo de un caído); el cuerpo en el último sitio seguro al
+  morir sin suelo debajo (fuera del borde de Bocasucia) y en el aire sobre los pinchos del Paso del Rey, y en el suelo
+  de debajo sobre suelo normal; revivir en ese sitio seguro; reconexión automática al cerrar de golpe el juego del host
+  y volver a abrir su mundo (entró en el intento 4, con su personaje).
 
 ## Pendientes
 
 Sin probar:
 - La traducción al inglés dentro del juego (0.21.0) y el vapor naranja de la muerte del Falso Caballero (0.20.3).
-- Lo de 0.22.0: los compañeros en el mapa (sitio del icono, que se vea y se quite con el mapa del inventario y el
-  rápido), la reconexión automática (cortar la red del host a mitad de partida) y el cuerpo en suelo seguro (morir en
-  el aire sobre un pozo, o con el suelo de debajo con pinchos o ácido).
+- De 0.22.0: el icono del compañero con el mapa del inventario (solo se probó el mapa rápido), en una sala que no sale
+  en el mapa (tiendas) y en otra zona; la muerte sobre ácido; cancelar la reconexión con Esc y rendirse tras los 12
+  intentos; la reconexión entre dos PCs.
 - La conversación con Zote tras el Rey Vengamosca, Zote en el Coliseo y Cloth (no aparecen en el mundo de prueba);
   Menderbug (por análisis).
 - Volver de una cinemática que acaba en una sala de juego (finales de los Panteones; va por `SceneTravel`).

@@ -11,7 +11,7 @@ namespace HKMultiplayer.Game.Features;
 /// <summary>
 /// Compañeros en el mapa: con el mapa abierto (el del inventario o el rápido) cada compañero sale como una brújula de
 /// otro color en el sitio de la sala en el que está, como la propia del Wayward Compass pero sin necesitar el amuleto.
-/// Si está caído, su icono se queda donde cayó, en rojo. Lo activa el host (<see cref="HostSettings.ShowPartnerOnMap"/>).
+/// Si está caído, su icono queda en rojo en su cuerpo. Lo activa el host (<see cref="HostSettings.ShowPartnerOnMap"/>).
 /// <para>Cada jugador envía 4 veces por segundo (no fiable, a todos) en qué sala del mapa está y en qué punto de ella,
 /// de 0 a 1, calculado como lo hace el juego para su brújula: así los demás no necesitan las medidas de una sala que no
 /// tienen cargada. En los sueños, el Palacio Blanco y los Panteones el mapa no muestra brújula, y tampoco al
@@ -126,11 +126,19 @@ internal sealed class PartnerMap {
 
     private void SendLocal(string scene) {
         if (_revive is { IsDowned: true }) {
-            // Caído: el icono se queda donde cayó (lo último enviado de pie)
-            if (_sentState == StateStanding) {
+            // Recién caído y aún en la sala del cuerpo: el icono va al cuerpo, que puede no estar donde cayó (el último
+            // sitio seguro). Después se queda ahí aunque el caballero oculto siga al compañero a otras salas
+            if (_sentState != StateDowned && _revive.OwnBodyScene == scene &&
+                TryGetLocalPosition(scene, _revive.OwnBodyPosition, out var bodyScene, out var bodyX, out var bodyY)) {
+                _sentState = StateDowned;
+                _sentScene = bodyScene;
+                _sentX = bodyX;
+                _sentY = bodyY;
+            } else if (_sentState == StateStanding) {
                 _sentState = StateDowned;
             }
-        } else if (TryGetLocalPosition(scene, out var mapScene, out var x, out var y)) {
+        } else if (TryGetLocalPosition(scene, HeroController.instance != null ? HeroController.instance.transform.position : Vector3.zero,
+                       out var mapScene, out var x, out var y)) {
             _sentState = StateStanding;
             _sentScene = mapScene;
             _sentX = x;
@@ -151,11 +159,11 @@ internal sealed class PartnerMap {
     }
 
     /// <summary>
-    /// Sala del mapa y punto dentro de ella (de 0 a 1) del caballero local, como los calcula el juego para su brújula
-    /// (<c>GameMap.Update</c>): en las salas que no salen en el mapa (tiendas, casas) cuenta la puerta por la que se
-    /// entró.
+    /// Sala del mapa y punto dentro de ella (de 0 a 1) de <paramref name="position"/> en la sala local, como los calcula
+    /// el juego para su brújula (<c>GameMap.Update</c>): en las salas que no salen en el mapa (tiendas, casas) cuenta la
+    /// puerta por la que se entró.
     /// </summary>
-    private static bool TryGetLocalPosition(string scene, out string mapScene, out float x, out float y) {
+    private static bool TryGetLocalPosition(string scene, Vector3 position, out string mapScene, out float x, out float y) {
         mapScene = null;
         x = y = 0f;
         var gm = GameManager.instance;
@@ -195,7 +203,6 @@ internal sealed class PartnerMap {
             return false;
         }
 
-        var position = hero.transform.position;
         mapScene = gm.sceneName;
         x = (position.x + ReadFloat(OriginOffsetXField, map)) / width;
         y = (position.y + ReadFloat(OriginOffsetYField, map)) / height;
