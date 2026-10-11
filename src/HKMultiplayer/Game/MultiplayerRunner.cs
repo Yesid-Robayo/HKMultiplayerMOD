@@ -144,6 +144,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     private void Awake() {
         Instance = this;
+        UpdateCheck.Begin(this);
         // Llamado cuando la sala nueva ya está lista y la anterior descargada
         On.GameManager.OnNextLevelReady += (orig, self) => {
             orig(self);
@@ -198,6 +199,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         CoopSaves.Update();
         MultiplayerMenu.EnsureInstalled();
         SessionMenu.UpdateInstalled(Session != null);
+        UpdateCheck.Update();
         World.Update();
         Progress.Update();
         Skins.Update();

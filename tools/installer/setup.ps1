@@ -1,4 +1,4 @@
-﻿# Instalador de HKMultiplayer (lo abre "HKMultiplayer Setup.bat").
+﻿# Instalador de HKMultiplayer (lo abre "HKMultiplayer Setup.exe", tools/installer/launcher).
 # Sin modo: ventana para instalar, actualizar y desinstalar, en español o en inglés según el idioma de Windows.
 # Con -Mode install|uninstall: en la consola, sin ventana (para pruebas o para quien lo prefiera).
 param([string]$Mode = '', [string]$GameDir = '')
@@ -59,12 +59,15 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-# La consola de PowerShell (abierta minimizada por el .bat) no hace falta con la ventana: se esconde
+# La consola de PowerShell no hace falta con la ventana: si la hay (abierto a mano, sin el .exe), se esconde
 try {
     Add-Type -Namespace HKMultiplayerSetup -Name ConsoleWindow -MemberDefinition @'
 [DllImport("kernel32.dll")] public static extern System.IntPtr GetConsoleWindow();
 [DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr handle, int command);
+[DllImport("shell32.dll", CharSet = CharSet.Unicode)] public static extern int SetCurrentProcessExplicitAppUserModelID(string id);
 '@
+    # Programa propio para la barra de tareas: si no, Windows agrupa la ventana con PowerShell y enseña su icono
+    [void][HKMultiplayerSetup.ConsoleWindow]::SetCurrentProcessExplicitAppUserModelID('HKMultiplayer.Setup')
     $console = [HKMultiplayerSetup.ConsoleWindow]::GetConsoleWindow()
     if ($console -ne [System.IntPtr]::Zero) { [void][HKMultiplayerSetup.ConsoleWindow]::ShowWindow($console, 0) }
 } catch { }
@@ -147,12 +150,45 @@ $form.BackColor = $colorBack
 $form.ForeColor = $colorText
 $form.Font = $fontText
 $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
-try { $form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon((Get-Process -Id $PID).Path) } catch { }
+# El icono del instalador, con todos sus tamaños (el de la barra de tareas es más grande que el del título); si falta,
+# el de "HKMultiplayer Setup.exe" y, si tampoco está, el de PowerShell
+$iconFile = Join-Path $PSScriptRoot 'setup.ico'
+$setupExe = Join-Path $packageRoot 'HKMultiplayer Setup.exe'
+try {
+    $form.Icon = if (Test-Path -LiteralPath $iconFile) { New-Object System.Drawing.Icon($iconFile) }
+    elseif (Test-Path -LiteralPath $setupExe) { [System.Drawing.Icon]::ExtractAssociatedIcon($setupExe) }
+    else { [System.Drawing.Icon]::ExtractAssociatedIcon((Get-Process -Id $PID).Path) }
+} catch { }
 
 # Cabecera
-$form.Controls.Add((New-Label 'HKMultiplayer' 24 16 520 48 $fontTitle $colorText))
+$form.Controls.Add((New-Label 'HKMultiplayer' 24 16 330 48 $fontTitle $colorText))
 $subtitle = (L 'Mod cooperativo para Hollow Knight' 'Co-op mod for Hollow Knight') + $(if ($version) { '   ·   ' + (L 'versión ' 'version ') + $version } else { '' })
-$form.Controls.Add((New-Label $subtitle 28 66 660 22 $fontText $colorDim))
+$form.Controls.Add((New-Label $subtitle 28 66 350 22 $fontText $colorDim))
+
+# Cartel de versión nueva (arriba a la derecha): sale solo si GitHub tiene una más nueva que este paquete
+$banner = New-Object System.Windows.Forms.Panel
+$banner.Location = New-Object System.Drawing.Point(392, 14)
+$banner.Size = New-Object System.Drawing.Size(304, 76)
+$banner.BackColor = New-Color '#1c2b4a'
+$banner.Visible = $false
+$banner.Add_Paint({
+        param($sender, $e)
+        $pen = New-Object System.Drawing.Pen($colorAccent)
+        $e.Graphics.DrawRectangle($pen, 0, 0, $sender.Width - 1, $sender.Height - 1)
+        $pen.Dispose()
+    })
+$bannerTitle = New-Label (L '¡Hay una versión nueva!' 'A new version is out!') 12 7 284 22 $fontBold $colorAccent
+$bannerVersion = New-Label '' 12 29 284 20 $fontText $colorText
+$bannerText = New-Object System.Windows.Forms.LinkLabel
+$bannerText.Location = New-Object System.Drawing.Point(12, 50)
+$bannerText.Size = New-Object System.Drawing.Size(284, 20)
+$bannerText.Font = $fontText
+$bannerText.ForeColor = $colorText
+$bannerText.LinkColor = $colorAccent
+$bannerText.ActiveLinkColor = [System.Drawing.Color]::White
+$bannerText.BackColor = [System.Drawing.Color]::Transparent
+$banner.Controls.AddRange(@($bannerTitle, $bannerVersion, $bannerText))
+$form.Controls.Add($banner)
 $line = New-Object System.Windows.Forms.Panel
 $line.Location = New-Object System.Drawing.Point(24, 98)
 $line.Size = New-Object System.Drawing.Size(672, 1)
@@ -205,7 +241,11 @@ $log.ScrollBars = [System.Windows.Forms.RichTextBoxScrollBars]::Vertical
 $form.Controls.Add($log)
 
 $footer = L 'Tus partidas normales no se tocan. Al desinstalar, el juego queda como estaba.' 'Your normal saves are not touched. Uninstalling puts the game back as it was.'
-$form.Controls.Add((New-Label $footer 24 514 672 36 $fontText $colorDim))
+$form.Controls.Add((New-Label $footer 24 514 520 36 $fontText $colorDim))
+$notes = New-Button (L 'Novedades' "What's new") 556 510 140 $false
+$notes.Height = 34
+$notes.Font = $fontBold
+$form.Controls.Add($notes)
 
 function Add-Log([string]$kind, [string]$text) {
     $color = switch ($kind) { 'step' { $colorAccent } 'warn' { $colorWarn } 'ok' { $colorOk } 'error' { $colorError } default { $colorText } }
@@ -326,7 +366,136 @@ $readme.Add_Click({
         if (Test-Path -LiteralPath $file) { Start-Process -FilePath $file }
     })
 
-# Carpeta inicial: la que se arrastró sobre el .bat, o la que se encuentra
+# Versiones publicadas. Al abrir, sin parar la ventana, se pide a GitHub la lista (todas se publican como pre-release,
+# así que no sirve "latest"): si hay una más nueva que este paquete sale el cartel de arriba. "Novedades" enseña lo que
+# trae esa versión nueva o, si no la hay, la de este paquete (el apartado "Novedades de la ..." de sus notas)
+$releasesApi = 'https://api.github.com/repos/Yesid-Robayo/HKMultiplayerMOD/releases?per_page=20'
+$releasesPage = 'https://github.com/Yesid-Robayo/HKMultiplayerMOD/releases'
+$script:Releases = $null
+$script:Newest = $null
+
+function Get-ReleaseVersion($release) {
+    $parsed = $null
+    if ([Version]::TryParse(([string]$release.tag_name).TrimStart('v', 'V'), [ref]$parsed)) { return $parsed }
+    return $null
+}
+
+function Set-Releases([string]$json) {
+    # En PowerShell 5.1 ConvertFrom-Json da la lista como un solo objeto: guardada en una variable, la tubería sí la
+    # recorre versión a versión
+    $list = ConvertFrom-Json $json
+    $script:Releases = @($list | Where-Object { -not $_.draft -and (Get-ReleaseVersion $_) })
+    $script:Newest = $script:Releases | Sort-Object { Get-ReleaseVersion $_ } -Descending | Select-Object -First 1
+    $current = $null
+    [void][Version]::TryParse([string]$version, [ref]$current)
+    if ($script:Newest -and $current -and (Get-ReleaseVersion $script:Newest) -gt $current) {
+        $newestText = ([string]$script:Newest.tag_name).TrimStart('v', 'V')
+        $bannerVersion.Text = L "La $newestText (este paquete es la $version)" "$newestText (this package is $version)"
+        $bannerText.Text = L 'Descargarla' 'Download it'
+        $banner.Visible = $true
+    }
+}
+
+function New-WebClient {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    $client = New-Object System.Net.WebClient
+    $client.Encoding = [System.Text.Encoding]::UTF8
+    $client.Headers.Add('User-Agent', "HKMultiplayer-Setup/$version")
+    $client.Headers.Add('Accept', 'application/vnd.github+json')
+    return $client
+}
+
+function Start-ReleaseCheck {
+    try {
+        $client = New-WebClient
+        # La respuesta llega en el hilo de la ventana (WebClient usa su contexto): se puede tocar el cartel ahí
+        $client.Add_DownloadStringCompleted({
+                param($sender, $e)
+                if (-not $e.Cancelled -and -not $e.Error) {
+                    try { Set-Releases $e.Result } catch { }
+                }
+                $sender.Dispose()
+            })
+        $client.DownloadStringAsync([Uri]$releasesApi)
+    } catch { }
+}
+
+# El apartado "Novedades de la X" / "What's new in X" de las notas, en el idioma de Windows, de Markdown a texto
+function Get-ReleaseNotes($release) {
+    $body = ([string]$release.body) -replace "`r", ''
+    $marker = if ($Spanish) { '### Novedades' } else { "### What's new" }
+    $start = $body.IndexOf($marker)
+    if ($start -ge 0) {
+        $rest = $body.Substring($start)
+        $next = $rest.IndexOf("`n### ", 1)
+        $body = if ($next -gt 0) { $rest.Substring(0, $next) } else { $rest }
+    }
+    # Sin el título del apartado (la ventana ya lo tiene)
+    $body = $body -replace '^###[^\n]*\n', ''
+    $body = $body -replace '(?m)^#+\s*', '' -replace '\[([^\]]+)\]\([^)]+\)', '$1' -replace '\*\*', '' -replace '`', ''
+    $body = $body -replace '(?m)^\s*[-*]\s+', ([string][char]0x2022 + '  ') -replace '(?<![\w*])\*([^*\n]+)\*(?![\w*])', '$1'
+    return $body.Trim()
+}
+
+function Show-Notes {
+    if (-not $script:Releases) {
+        # Aún no llegó (o falló al abrir): se pide ya
+        $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
+        try { $client = New-WebClient; Set-Releases ($client.DownloadString($releasesApi)); $client.Dispose() } catch { }
+        $form.Cursor = [System.Windows.Forms.Cursors]::Default
+    }
+    $current = $null
+    [void][Version]::TryParse([string]$version, [ref]$current)
+    $release = if ($script:Newest -and $current -and (Get-ReleaseVersion $script:Newest) -gt $current) { $script:Newest }
+    else { $script:Releases | Where-Object { (Get-ReleaseVersion $_) -eq $current } | Select-Object -First 1 }
+    if (-not $release) {
+        $text = if ($script:Releases) { L "Las novedades de la $version aún no están publicadas. Todas las versiones: $releasesPage" "What's new in $version isn't published yet. All versions: $releasesPage" }
+        else { L "No se pudieron cargar las novedades (hace falta internet). Están en $releasesPage" "Couldn't load what's new (an internet connection is needed). It's at $releasesPage" }
+        Show-Message $text 'Information'
+        return
+    }
+
+    $tag = ([string]$release.tag_name).TrimStart('v', 'V')
+    $dialog = New-Object System.Windows.Forms.Form
+    $dialog.Text = (L "Novedades de la $tag" "What's new in $tag")
+    $dialog.ClientSize = New-Object System.Drawing.Size(640, 460)
+    $dialog.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterParent
+    $dialog.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedSingle
+    $dialog.MaximizeBox = $false
+    $dialog.MinimizeBox = $false
+    $dialog.ShowInTaskbar = $false
+    $dialog.BackColor = $colorBack
+    $dialog.ForeColor = $colorText
+    $dialog.Font = $fontText
+    $dialog.Icon = $form.Icon
+    $dialog.Controls.Add((New-Label ((L 'Novedades de la ' "What's new in ") + $tag) 24 16 592 30 $fontButton $colorText))
+    $box = New-Object System.Windows.Forms.RichTextBox
+    $box.Location = New-Object System.Drawing.Point(24, 54)
+    $box.Size = New-Object System.Drawing.Size(592, 336)
+    $box.BackColor = (New-Color '#0a0c12')
+    $box.ForeColor = $colorText
+    $box.Font = $fontLog
+    $box.ReadOnly = $true
+    $box.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+    $box.ScrollBars = [System.Windows.Forms.RichTextBoxScrollBars]::Vertical
+    $box.Text = Get-ReleaseNotes $release
+    $dialog.Controls.Add($box)
+    $url = [string]$release.html_url
+    $web = New-Button (L 'Ver en GitHub' 'Open on GitHub') 24 404 200 $false
+    $web.Add_Click({ Start-Process -FilePath $url }.GetNewClosure())
+    $close = New-Button (L 'Cerrar' 'Close') 476 404 140 $true
+    $close.Add_Click({ $dialog.Close() }.GetNewClosure())
+    $dialog.Controls.AddRange(@($web, $close))
+    $dialog.AcceptButton = $close
+    $dialog.CancelButton = $close
+    [void]$dialog.ShowDialog($form)
+    $dialog.Dispose()
+}
+
+$notes.Add_Click({ Show-Notes })
+$bannerText.Add_LinkClicked({ if ($script:Newest) { Start-Process -FilePath ([string]$script:Newest.html_url) } })
+
+# Carpeta inicial: la que se arrastró sobre el .exe, o la que se encuentra
 $form.Add_Shown({
         $form.Activate()
         Add-Log 'step' (L 'Buscando Hollow Knight...' 'Looking for Hollow Knight...')
@@ -340,16 +509,18 @@ $form.Add_Shown({
             $folder.SelectedIndex = 0
         }
         $log.Clear()
+        # Primero el estado: el botón dice "Instalar" o "Actualizar" y el aviso nombra el mismo
+        Update-Status
         if ($found.Count -gt 1 -and -not $given) {
             Add-Log 'note' (L "Encontré el juego en $($found.Count) carpetas: elige la tuya en la lista." "The game was found in $($found.Count) folders: pick yours from the list.")
         } elseif (-not $folder.Text) {
             Add-Log 'warn' (L 'No encontré la carpeta del juego. Pulsa "Buscar…" y elígela.' 'The game folder was not found. Click "Browse…" and choose it.')
         } else {
-            Add-Log 'note' (L 'Todo listo. Cierra Hollow Knight y pulsa "Instalar".' 'All set. Close Hollow Knight and click "Install".')
+            Add-Log 'note' (L "Todo listo. Cierra Hollow Knight y pulsa ""$($install.Text)""." "All set. Close Hollow Knight and click ""$($install.Text)"".")
         }
-        Update-Status
         $folder.SelectionLength = 0
         if ($install.Enabled) { [void]$install.Focus() }
+        Start-ReleaseCheck
     })
 
 try {

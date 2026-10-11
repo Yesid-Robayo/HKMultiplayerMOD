@@ -1086,6 +1086,11 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "fakeupdate":
+                // fakeupdate <versión>: como si GitHub dijera que la versión publicada más nueva es esa (aviso y menú)
+                HKMultiplayer.Game.UpdateCheck.TestSetLatest(args[1]);
+                Log.Info($"{Tag}versión más nueva de prueba: {args[1]}");
+                break;
             case "bossscene":
                 // bossscene: si el juego cree estar en una sala de jefe (el geo que sale entonces se recicla al momento)
                 var bossScene = BossSceneController.Instance;

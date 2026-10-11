@@ -27,6 +27,7 @@
         <Reference Include="$(References)\Newtonsoft.Json.dll" Private="False" />
         <Reference Include="$(References)\PlayMaker.dll" Private="False" />
         <Reference Include="$(References)\UnityEngine.dll" Private="False" />
+        <Reference Include="$(References)\UnityEngine.UnityWebRequestModule.dll" Private="False" />
         <Reference Include="$(References)\UnityEngine.CoreModule.dll" Private="False" />
         <Reference Include="$(References)\UnityEngine.AnimationModule.dll" Private="False" />
         <Reference Include="$(References)\UnityEngine.AudioModule.dll" Private="False" />

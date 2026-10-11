@@ -20,7 +20,7 @@ language.
   1. Close Hollow Knight.
   2. Extract the whole .zip into any folder (right-click > Extract All). Don't run it from inside
      the .zip.
-  3. Open the folder and double-click "HKMultiplayer Setup.bat".
+  3. Open the folder and double-click "HKMultiplayer Setup.exe".
   4. The installer opens. Check that the game folder is the right one (if it isn't found, click
      "Browse…") and click "Install".
 
@@ -38,16 +38,21 @@ The installer:
 
 Then open Hollow Knight from Steam: "Multiplayer" appears in the main menu.
 
-Windows may warn you when opening "HKMultiplayer Setup.bat" ("Do you want to run this file?" or
+Windows may warn you when opening "HKMultiplayer Setup.exe" ("Do you want to run this file?" or
 "Windows protected your PC"): it happens with any unsigned file downloaded from the internet. Click
-"Run" (or "More info" > "Run anyway"). The installer is a PowerShell script you can read in the
-"scripts" folder; if you'd rather not use it, install by hand (section 2).
+"Run" (or "More info" > "Run anyway"). The .exe only opens the installer, a PowerShell
+script you can read in the "scripts" folder; if you'd rather not use it, install by hand (section 2).
 
-If Windows won't let the installer write to the game folder, right-click "HKMultiplayer Setup.bat"
+If Windows won't let the installer write to the game folder, right-click "HKMultiplayer Setup.exe"
 and choose "Run as administrator".
 
 To update to a new version of the mod, open the installer of the new package and click "Update":
 it keeps the game backup from the first install.
+
+Is there a new version? The installer checks GitHub when it opens and, if there is one, a notice at
+the top links to its download; "What's new" (bottom right) shows what it brings. The game also tells you on the
+main menu, and "Multiplayer" shows a button to download it (you can turn this off right there, in
+"Check for updates"). To play together, everyone needs the same version.
 
 
 2. INSTALL BY HAND (without the installer)
@@ -152,7 +157,7 @@ first time; then it's kept in Mods\HKMultiplayer\SkinCache).
 8. UNINSTALL
 ------------
 
-Close the game, open "HKMultiplayer Setup.bat" (from the same package) and click "Uninstall". It
+Close the game, open "HKMultiplayer Setup.exe" (from the same package) and click "Uninstall". It
 puts the game back as it was before installing: restores the original files, removes the Modding
 API and the mod, and moves back the mods that were set aside and the old mod if you had it.
 
@@ -165,7 +170,7 @@ Files > Verify integrity of game files.
 9. TROUBLESHOOTING
 ------------------
 
-  - The installer doesn't open: right-click "HKMultiplayer Setup.bat" > "Run as administrator",
+  - The installer doesn't open: right-click "HKMultiplayer Setup.exe" > "Run as administrator",
     or install by hand (section 2).
   - "Multiplayer" doesn't appear in the menu: install again. If it still doesn't show up, check
     the Modding API log:

@@ -132,6 +132,9 @@ world, see each other in real time and fight the same enemies and bosses togethe
 - **Stag travel together** (host option): when one player picks a destination, partners standing near them at that
   station ride along.
 - **Benches for two**: sitting on the same bench, each player takes one half.
+- **Version notices**: the main menu tells you when a new version is out (and *Multiplayer* offers to download it)
+  or when the mod was just updated (with what's new). It is one request to GitHub's public release list when the game
+  starts; turn it off in *Multiplayer › Check for updates*.
 - **New guests see the opening cinematic** (skippable) before joining the host's world.
 - **Room objects**: levers, switches, doors, breakable walls and floors, geo rocks, breakables, grass, vines, grub jars,
   stalactites, signs and props with their own logic.
@@ -232,7 +235,7 @@ The full list (in Spanish) is in [docs/arquitectura.md](docs/arquitectura.md#pen
 > version** of HKMultiplayer.
 
 1. Download `HKMultiplayer-<version>.zip` from the [*Releases*](../../releases) page.
-2. Close the game, **extract the whole zip** and double-click **`HKMultiplayer Setup.bat`**.
+2. Close the game, **extract the whole zip** and double-click **`HKMultiplayer Setup.exe`**.
 3. In the window that opens, check the game folder and click **Install**.
 4. Open Hollow Knight from Steam: **Multiplayer** appears in the main menu.
 
@@ -249,9 +252,12 @@ installer is a PowerShell script you can read in the package's `scripts` folder.
 - Removes the old **HollowKnightCoop** mod if present and moves other mods to `Mods\Disabled` (mods built for another
   Modding API version can break the game).
 - Copies the Modding API and the mod, and verifies the copy. Installing a new version on top is an update.
+- When it opens it checks GitHub: if there is a newer version than the package, a notice at the top offers to download
+  it. **What's new** (bottom right) shows what that version brings, or this package's one if there is none newer.
 - **Uninstall** undoes everything in reverse: the game is left as it was. Your coop worlds, saves and skins are not
   touched.
-- It also works from the console: `"HKMultiplayer Setup.bat" /install "D:\Games\Hollow Knight"` (or `/uninstall`).
+- It also works from the console: `start /wait "" "HKMultiplayer Setup.exe" /install "D:\Games\Hollow Knight"` (or
+  `/uninstall`).
 
 </details>
 

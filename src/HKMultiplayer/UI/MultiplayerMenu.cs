@@ -34,6 +34,12 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
     private Text _limitText;
     private Text _deleteQuestion;
     private CoopWorldInfo _pendingDelete;
+    private Text _updateText;
+    private MenuButton _updateButton;
+    private string _updateUrl;
+
+    private static readonly string[] YesNo = { "Sí", "No" };
+    private static readonly string[] YesNoEnglish = { "Yes", "No" };
 
     private static MenuButton _mainMenuButton;
 
@@ -89,6 +95,21 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         AddSpace(start, 30);
         AddButton(start, Lang.T("Hostear un mundo", "Host a world"), () => ShowPage(HostPage));
         AddButton(start, Lang.T("Unirse a un mundo", "Join a world"), () => ShowPage(JoinPage));
+        AddSpace(start, 16);
+        _updateText = AddText(start, string.Empty, 28);
+        _updateButton = AddButton(start, string.Empty, OpenUpdatePage, 34);
+        AddOption(start, Lang.T("Buscar actualizaciones", "Check for updates"), Lang.Spanish ? YesNo : YesNoEnglish,
+            settings.CheckForUpdates ? 0 : 1, index => {
+                HKMultiplayerMod.Settings.CheckForUpdates = index == 0;
+                HKMultiplayerMod.SaveSettings();
+                if (index == 0) {
+                    UpdateCheck.CheckAgain(UIManager.instance);
+                }
+
+                RefreshUpdate();
+            });
+        UpdateCheck.Changed += RefreshUpdate;
+        RefreshUpdate();
 
         var host = NewPage(HostPage);
         AddText(host, Lang.T($"Elige un mundo coop (hasta {WorldStore.MaxWorlds}). Tus partidas normales no se tocan.", $"Pick a coop world (up to {WorldStore.MaxWorlds}). Your normal saves are not touched."), 36);
@@ -151,6 +172,55 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         });
 
         ShowPage(StartPage, instant: true);
+    }
+
+    // =====================================================================================================
+    // Versiones
+    // =====================================================================================================
+
+    /// <summary>
+    /// Lo que se sabe de las versiones: una nueva para descargar (todos tienen que llevar la misma para jugar juntos),
+    /// las novedades de la recién instalada, o que es la más nueva.
+    /// </summary>
+    private void RefreshUpdate() {
+        if (_updateText == null) {
+            return;
+        }
+
+        var current = HKMultiplayerMod.Version;
+        string text;
+        string button = null;
+        _updateUrl = null;
+        if (UpdateCheck.NewerAvailable) {
+            text = Lang.T($"Hay una versión nueva: la {UpdateCheck.Latest} (tienes la {current}). Para jugar juntos, todos necesitan la misma.",
+                $"A new version is out: {UpdateCheck.Latest} (you have {current}). To play together, everyone needs the same one.");
+            button = Lang.T($"Descargar la {UpdateCheck.Latest}", $"Download {UpdateCheck.Latest}");
+            _updateUrl = UpdateCheck.LatestUrl;
+        } else if (UpdateCheck.JustUpdated) {
+            text = Lang.T($"Actualizado a la {current}.", $"Updated to {current}.");
+            button = Lang.T($"Novedades de la {current}", $"What's new in {current}");
+            _updateUrl = UpdateCheck.CurrentNotesUrl;
+        } else if (UpdateCheck.Latest != null) {
+            text = Lang.T($"Tienes la versión más nueva ({current}).", $"You have the newest version ({current}).");
+        } else {
+            text = Lang.T($"Versión {current}", $"Version {current}");
+        }
+
+        _updateText.text = text;
+        if (button != null) {
+            SetButtonText(_updateButton, button);
+        }
+
+        if (_updateButton.gameObject.activeSelf != (button != null)) {
+            _updateButton.gameObject.SetActive(button != null);
+        }
+    }
+
+    private void OpenUpdatePage() {
+        if (!string.IsNullOrEmpty(_updateUrl)) {
+            Log.Info($"Abriendo {_updateUrl}");
+            Application.OpenURL(_updateUrl);
+        }
     }
 
     // =====================================================================================================

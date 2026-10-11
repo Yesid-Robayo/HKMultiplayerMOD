@@ -132,6 +132,9 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 - **Viaje en ciervo juntos** (opción del host): cuando uno elige destino, los compañeros que están cerca de él en la
   estación viajan con él.
 - **Bancos para dos**: sentados en el mismo banco, cada uno ocupa una mitad.
+- **Avisos de versión**: en el menú principal sale un aviso si hay una versión nueva (y *Multijugador* ofrece
+  descargarla) o si el mod se acaba de actualizar (con sus novedades). Es una consulta a la lista pública de versiones
+  de GitHub al abrir el juego; se desactiva en *Multijugador › Buscar actualizaciones*.
 - **Los invitados nuevos ven la cinemática del principio** (se puede saltar) antes de entrar al mundo del host.
 - **Objetos de sala**: palancas, interruptores, puertas, paredes y suelos que se rompen, piedras de geo, rompibles,
   pasto, enredaderas, tarros de larva, estalactitas, letreros y decorados con su propia lógica.
@@ -232,7 +235,7 @@ La lista completa está en [docs/arquitectura.md](docs/arquitectura.md#pendiente
 > **la misma versión** de HKMultiplayer.
 
 1. Descarga `HKMultiplayer-<versión>.zip` de la página de [*Releases*](../../releases).
-2. Cierra el juego, **descomprime el zip entero** y haz doble clic en **`HKMultiplayer Setup.bat`**.
+2. Cierra el juego, **descomprime el zip entero** y haz doble clic en **`HKMultiplayer Setup.exe`**.
 3. En la ventana que se abre, comprueba la carpeta del juego y pulsa **Instalar**.
 4. Abre Hollow Knight desde Steam: en el menú principal aparece **Multijugador**.
 
@@ -249,8 +252,11 @@ todas formas*). El instalador es un script de PowerShell que puedes leer en la c
 - Quita el mod anterior **HollowKnightCoop** si está y aparta los demás mods a `Mods\Disabled` (los hechos para otra
   versión de la Modding API pueden romper el juego).
 - Copia la Modding API y el mod, y comprueba lo copiado. Instalar una versión nueva encima es una actualización.
+- Al abrirse mira en GitHub: si hay una versión más nueva que el paquete, un cartel arriba ofrece descargarla.
+  **Novedades** (abajo a la derecha) enseña lo que trae esa versión, o la del paquete si no hay otra más nueva.
 - **Desinstalar** deshace todo al revés: el juego queda como estaba. Tus mundos coop, partidas y skins no se tocan.
-- También funciona en la consola: `"HKMultiplayer Setup.bat" /install "D:\Juegos\Hollow Knight"` (o `/uninstall`).
+- También funciona en la consola: `start /wait "" "HKMultiplayer Setup.exe" /install "D:\Juegos\Hollow Knight"` (o
+  `/uninstall`).
 
 </details>
 

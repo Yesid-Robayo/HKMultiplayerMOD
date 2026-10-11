@@ -612,6 +612,14 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   último sitio seguro; después no cambia aunque el caballero oculto siga al compañero). Se ve con el mapa abierto (`flamePins` activo: lo encienden el mapa del
   inventario y el rápido, y lo apaga `CloseQuickMap`), solo si los dos llevan el Wayward Compass equipado (quien no lo lleva envía su sitio como oculto; verlos siempre era demasiado fácil) y salvo en sueños, el Palacio
   Blanco y los Panteones (donde el juego tampoco muestra la brújula). Sin noticias en 3 s, el icono se quita.
+- **Avisos de versión** (`UpdateCheck`): al cargar el mod se apunta la versión (`LastRunVersion` en los ajustes
+  globales); si es otra que la de la última vez, o no había ninguna pero sí ajustes de antes, el menú principal avisa
+  "se actualizó a la X" y *Multijugador* ofrece sus novedades (la página de su versión). Además, si
+  `CheckForUpdates` está activado (sí por defecto, en *Multijugador › Buscar actualizaciones*), una consulta a la lista
+  pública de versiones de GitHub (`UnityWebRequest`, 10 s como mucho, sin datos del jugador) busca la más nueva: si es
+  más nueva que la instalada, el menú principal lo avisa y *Multijugador* la ofrece para descargar (todos necesitan la
+  misma versión para jugar juntos). Los avisos salen 2 s después de llegar al menú principal, una vez por sesión.
+  Prueba: `fakeupdate <versión>`.
 - **Reconexión automática** (`MultiplayerRunner`): si el invitado pierde la conexión por tiempo después de haber
   entrado (no si el host cierra, ni por código, versión o partida llena), vuelve al menú como antes y, ya en el menú
   principal (el mundo solo se carga ahí), se vuelve a unir con la misma dirección, código y nombre: hasta 12 intentos,
@@ -835,19 +843,32 @@ Decisiones aprobadas por el usuario para M5 (las marcadas "elegido" las escogió
 ## Paquete e instalador
 
 - `tools/package.sh` compila en Release y arma `out/package/HKMultiplayer-<versión>.zip` con una carpeta
-  `HKMultiplayer-<versión>`: `HKMultiplayer Setup.bat`, `LEEME.txt` y `README.txt` (instrucciones para jugadores en
+  `HKMultiplayer-<versión>`: `HKMultiplayer Setup.exe`, `LEEME.txt` y `README.txt` (instrucciones para jugadores en
   español y en inglés, con la instalación a mano) en la raíz, los scripts de PowerShell en `scripts/` (con `version.txt`), lo que se copia al juego en `files/` (la Modding API de
   `vendor/modding-api/OutputFinal` sin su README, y `Mods/HKMultiplayer` con el mod, su `.pdb` y BouncyCastle) y
   `SHA256SUMS.txt`. Del juego solo van los dos ensamblados que parchea la Modding API (`Assembly-CSharp.dll` y
   `TeamCherry.Localization.dll`). Fuentes del instalador en `tools/installer/`.
-- `HKMultiplayer Setup.bat` (→ `scripts/setup.ps1`): sin argumentos abre una ventana de WinForms con el aspecto de los
+- `HKMultiplayer Setup.exe` (`tools/installer/launcher`, .NET Framework 4.7.2, que viene con Windows; → `scripts/setup.ps1`):
+  solo abre el instalador de PowerShell, sin lógica propia (hasta la 0.23.0 era un `.bat`). Sin argumentos (o con la
+  carpeta del juego arrastrada encima) abre una ventana de WinForms con el aspecto de los
   menús del juego (carpeta del juego con lista y *Buscar…*, estado de la instalación, *Instalar*/*Actualizar*,
-  *Desinstalar*, *Instrucciones* y el registro de lo que hace); con `/install` o `/uninstall` y la ruta trabaja en la
+  *Desinstalar*, *Instrucciones*, el registro de lo que hace y *Novedades* abajo a la derecha). Al abrirse pide a la
+  API de GitHub la lista de versiones sin parar la ventana (`WebClient.DownloadStringAsync`; se publican como
+  pre-release, así que no sirve `latest`). Si hay una más nueva que el paquete, sale un cartel arriba a la derecha con
+  un enlace para descargarla. *Novedades* enseña en una ventana el apartado "Novedades de la X" (o "What's new in X")
+  de las notas de esa versión, o de la del paquete si no hay otra más nueva, pasado de Markdown a texto. En
+  PowerShell 5.1 `ConvertFrom-Json` da la lista como un solo objeto: hay que guardarla en una variable antes de
+  filtrarla. La ventana tiene su propio programa para la barra de tareas (`SetCurrentProcessExplicitAppUserModelID`):
+  si no, Windows la agrupaba con PowerShell y enseñaba su icono. Con `/install` o `/uninstall` y la ruta trabaja en la
   consola (lo usa `installer-test.sh`). Un botón desactivado (*Desinstalar* sin nada instalado, *Instalar* sin carpeta
   del juego) se vuelve a dibujar con el texto en blanco: Windows lo pinta en un gris oscuro que no se leía sobre el
   fondo, y `ForeColor` no cuenta en un botón desactivado. Los textos van en el idioma de Windows (`common.ps1`: `L "español" "inglés"`).
-  El .bat abre PowerShell minimizado y `setup.ps1` esconde su consola al abrir la ventana: con `-WindowStyle Hidden` en
-  la orden (combinación que algunos antivirus vigilan) se veía igual, pero parecía sospechoso.
+  El .exe abre PowerShell sin consola desde el propio proceso (`CreateNoWindow`), no con `-WindowStyle Hidden` en la
+  orden (combinación que algunos antivirus vigilan); `setup.ps1` sigue escondiendo su consola si la tiene. Con
+  `/install` o `/uninstall` se une a la consola desde la que se llamó (o abre una y espera Intro al final), recoge la
+  salida del instalador en UTF-8 y devuelve su código de salida. En un `.bat` o con `start /wait` se espera a que acabe
+  (una consola interactiva no espera a un programa de ventana). Sin `scripts\setup.ps1` al lado (abierto desde dentro
+  del `.zip`) avisa con un cuadro de mensaje. Tiene su icono (`setup.ico`: dos círculos, sin nada del juego).
   `install.ps1` y `uninstall.ps1` solo definen `Invoke-Install` e `Invoke-Uninstall`, que escriben por `Write-Out` en la
   ventana o en la consola. Carpeta del juego pasada (también arrastrada sobre el .bat) o buscada (registro de Steam,
   `libraryfolders.vdf`, desinstalación de Steam, rutas típicas en los discos locales, GOG). Exige Unity 6 (`UnityPlayer.dll` 6000.x) y `TeamCherry.TK2D.dll`:

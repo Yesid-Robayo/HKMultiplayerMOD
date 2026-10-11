@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prueba del paquete para jugadores (tools/package.sh) sobre copias del juego dentro de test-instances, sin tocar el
-# juego de Steam: crea las copias, las deja como el juego sin mods, instala con "HKMultiplayer Setup.bat" /install y la ruta, arranca
+# juego de Steam: crea las copias, las deja como el juego sin mods, instala con "HKMultiplayer Setup.exe" /install y la ruta, arranca
 # la copia, mira en su ModLog que carga el mod y el menú Multijugador, desinstala y comprueba que queda como estaba.
 #
 # Uso: HK_INSTANCES_DIR=<carpeta con la copia b> bash tools/manual-tests/installer-test.sh <zip> [letras]
@@ -97,7 +97,7 @@ run_bat() {
   local mode="$1" letter="$2" log="$3" wrapper
   wrapper="$WORK/run-$letter.cmd"
   printf '@echo off\r\ncall "%s" %s "%s" < nul\r\nexit /b %%errorlevel%%\r\n' \
-    "$(cygpath -w "$PKG/HKMultiplayer Setup.bat")" "$mode" "$(cygpath -w "$(_inst_dir "$letter")")" > "$wrapper"
+    "$(cygpath -w "$PKG/HKMultiplayer Setup.exe")" "$mode" "$(cygpath -w "$(_inst_dir "$letter")")" > "$wrapper"
   cmd.exe //c "$(cygpath -w "$wrapper")" > "$log" 2>&1
   local code=$?
   sed 's/^/    /' "$log"

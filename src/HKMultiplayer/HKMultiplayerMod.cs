@@ -16,6 +16,9 @@ public sealed class HKMultiplayerMod : Mod, IGlobalSettings<GlobalSettings> {
 
     public static GlobalSettings Settings { get; private set; } = new();
 
+    /// <summary>Si los ajustes se leyeron de su archivo (el mod ya se había usado en este PC).</summary>
+    public static bool SettingsFromFile { get; private set; }
+
     private static HKMultiplayerMod _instance;
 
     public HKMultiplayerMod() : base("HKMultiplayer") {
@@ -37,6 +40,7 @@ public sealed class HKMultiplayerMod : Mod, IGlobalSettings<GlobalSettings> {
     }
 
     public void OnLoadGlobal(GlobalSettings settings) {
+        SettingsFromFile = settings != null;
         Settings = settings ?? new GlobalSettings();
         if (!Game.World.WorldSync.IsValidKey(Settings.PlayerKey)) {
             Settings.PlayerKey = Game.World.WorldSync.NewKey();

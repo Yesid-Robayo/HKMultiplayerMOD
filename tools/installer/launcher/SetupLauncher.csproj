@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!--
+      "HKMultiplayer Setup.exe": abre el instalador del paquete (scripts\setup.ps1) sin ventana de consola, como hacía
+      "HKMultiplayer Setup.bat". Todo el trabajo sigue en PowerShell; esto solo lo lanza. .NET Framework 4.7.2 viene con
+      Windows 10 y 11, así que no hace falta instalar nada. tools/package.sh lo compila y lo pone en el paquete.
+    -->
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <TargetFramework>net472</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>disable</Nullable>
+        <AssemblyName>HKMultiplayer Setup</AssemblyName>
+        <RootNamespace>HKMultiplayer.Setup</RootNamespace>
+        <!-- package.sh pone la versión del mod (-p:Version=...) -->
+        <Version>0.0.0</Version>
+        <Product>HKMultiplayer</Product>
+        <AssemblyTitle>HKMultiplayer Setup</AssemblyTitle>
+        <Description>Instalador de HKMultiplayer, mod cooperativo para Hollow Knight</Description>
+        <ApplicationIcon>setup.ico</ApplicationIcon>
+        <ApplicationManifest>app.manifest</ApplicationManifest>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Reference Include="System.Windows.Forms" />
+    </ItemGroup>
+</Project>

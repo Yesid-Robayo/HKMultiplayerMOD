@@ -28,4 +28,13 @@ public sealed class GlobalSettings {
 
     /// <summary>Si en este PC se ven las skins de los demás (si no, se les ve con el caballero normal).</summary>
     public bool ShowOthersSkins { get; set; } = true;
+
+    /// <summary>
+    /// Si al abrir el juego se mira en GitHub si hay una versión nueva del mod (una consulta a la lista pública de
+    /// versiones, sin datos del jugador).
+    /// </summary>
+    public bool CheckForUpdates { get; set; } = true;
+
+    /// <summary>La versión del mod de la última vez que se abrió el juego (para avisar de que se actualizó).</summary>
+    public string LastRunVersion { get; set; } = string.Empty;
 }
