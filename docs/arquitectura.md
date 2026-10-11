@@ -35,7 +35,12 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 - **Canales**:
   - *No fiable con secuencia*: estado continuo. Solo vale el más reciente; si llega uno viejo se descarta.
   - *Fiable ordenado*: eventos. Cada mensaje se reenvía hasta que llega el acuse de algún paquete que lo llevaba; el
-    receptor los entrega en orden y sin duplicados.
+    receptor los entrega en orden y sin duplicados. Un fallo de quien procesa un mensaje no sale del transporte (se
+    registra, como mucho 20 veces y luego uno de cada 500) y el mensaje cuenta como entregado: su paquete ya se
+    confirmó y nunca se reenvía. Antes la excepción cortaba la entrega, el receptor se quedaba esperando ese mensaje
+    para siempre y todo lo fiable de esa conexión dejaba de llegar (en una partida real, tras un fallo de
+    `EnemySync.OnSpawn`: el compañero se veía invisible al cambiar de sala, "Ir con" no tenía respuesta y las paredes
+    rotas por él no se rompían en el otro PC). En el host, un fallo al procesarlo tampoco impide reenviarlo a los demás.
   - *Datos grandes*: sobre el canal fiable, troceados con ventana (partida al unirse, skins). Sustituye al servidor TCP
     de skins.
 - **Serialización**: `PacketWriter` / `PacketReader` escriben y leen directamente en el búfer (little-endian, enteros
@@ -241,6 +246,11 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Cofres: abrirlos es del mundo (el otro lo ve abrirse en directo, o ya abierto si entra después), pero lo que
     sueltan es de cada uno: el objeto queda en el suelo para cada jugador hasta que lo recoge él, y el geo le cae a
     quien esté en la sala.
+  - Goam (`Worm Control`, Cruces Olvidados): salen y se esconden con esperas fijas desde que carga la sala y no tienen
+    vida, así que no son enemigos compartidos. `HazardSync` los alinea (mensaje 104, no fiable, a la sala): el dueño
+    envía cada segundo en qué estado de espera va cada uno y cuánto lleva, y los demás pasan a ese estado y ajustan la
+    espera (`Wait`) si se desvían más de 0,1 s. Cerca del principio o del final de una espera no se corrige (ahí cada
+    PC cambia de estado en un frame distinto).
   - Peligros animados (sierras del Palacio Blanco y del Camino del Dolor, paredes de pinchos): se mueven con una
     animación en bucle que empieza al cargar la sala. El dueño de la sala envía cada segundo en qué punto va cada una
     (`HazardSync`) y los demás se ajustan si se desvían más de un 3 % de vuelta. En las zonas revisadas no hay
@@ -316,6 +326,16 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     caja del Electric Mage, que solo se enciende al despertar: retomado justo entonces, nadie podía golpearlo. Y si allí
     su lógica ya lo había soltado de su padre (los Mage del Coliseo cuelgan de su oleada hasta despertar y luego se
     teletransportan con posiciones locales), aquí también se suelta: si no, se teletransportaba fuera de la arena.
+  - Un enemigo destruido durante un cambio de sala (`GameManager.IsInSceneTransition`) no cuenta como muerto: la sala
+    se está descargando. Al recargar la misma sala ("Recargar sala", "Ir con" a la sala en la que ya se está) su nombre
+    no cambia hasta que la nueva está lista, y antes todos sus enemigos se daban por muertos hasta el banco: el Falso
+    Caballero no salía al volver a su sala. Igual los rompibles que se cortan (destruidos no son cortados).
+  - Los que andan con una corrutina (`Climber`, los Tiktik; `Crawler`; la acción `WalkLeftRight` de los Reptantes)
+    siguen andando con el componente o la FSM apagados: en la marioneta giraban, se volteaban y se movían solos, y el
+    `Climber` la devolvía a donde estaba si se movía más de 0,1 en un frame (iban a saltos o quietos). Al hacerse
+    marioneta se paran sus corrutinas; al retomarlo, `Climber` y `Crawler` repiten su `Start` (después de poner la
+    velocidad del traspaso: el `Climber` solo la pone al echar a andar y al girar, y con la velocidad a 0 se quedaba
+    quieto tras cada cambio de PC) y `WalkLeftRight` vuelve a entrar en su estado.
   - En las pruebas del Coliseo (`Room_Colosseum_*`) ningún enemigo queda muerto hasta el banco, tampoco los de la
     sala (los Mage de las oleadas): cada prueba empieza de cero, y al repetirla sin descansar la oleada 46 de Oro
     esperaba a un Mage que el host daba por muerto.
@@ -438,7 +458,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 Decisiones aprobadas en [Decisiones de M5](#decisiones-de-m5). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
-mensajes nuevos van del 73 al 103 (el 98 es de `EnemySync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
+mensajes nuevos van del 73 al 104 (el 98 es de `EnemySync` y el 104 de `HazardSync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
 juego (16:9; con otra proporción el juego deja franjas) y escala con su alto como el HUD del juego; las piezas se crean
 una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
 
@@ -584,6 +604,11 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   materiales compartidos; efectos del compañero (sus copias bajo el avatar) con su skin. Crear la textura de una hoja de
   4096 cuesta 0,15-0,25 s (el juego descomprime el PNG en el hilo principal): se hace en pausa o al cambiar de sala (si
   no llega ese momento en 3 s, fuera de un combate de jefe, con un tirón corto). Cada PC elige si ve las skins de los demás.
+  El orbe de alma lleno propio (`OrbFull.png`) cambia el sprite de `Soul Orb/Orb Full` y de los fotogramas de su pulso
+  (`Orb Full/Pulse Sprite`, `soul_orb_glow0000` a `0015`), reconocidos por el nombre del sprite: los del pulso van en un
+  atlas (`sactx-...`) y, buscados por el nombre de su textura, no se cambiaban, así que con el orbe lleno parpadeaba
+  entre la cara del juego y la de la skin. Si su imagen no se pudo crear en ese frame, se vuelve a intentar (antes el
+  orbe se quedaba como el del juego hasta cambiar de skin).
 - **Barra del jefe**: el nombre es el título con el que el juego presenta al jefe (hoja `Titles`, partes `_SUPER`,
   `_MAIN` y `_SUB`), buscado en los textos de sus FSM o en las palabras de su nombre; si no, el de su diario.
 
@@ -620,6 +645,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   (vida llena por la vía del juego: `pdset maxHealth` no redibuja el HUD del juego y el mini-HUD lo mostraría distinto),
   `soul <n>`, `mppage <partida|ajustes|ajustes2|compañeros>`, `mpoption <etiqueta>|<pasos>`, `mpoptions`,
   `spriteof <objeto>`, `sprites <colección>|<texto>`, `collections <texto>`, `hudsprite`, `hudrot` y `clips <texto>`.
+  `spritewatch <s> <texto>` registra cada cambio del sprite dibujado (al final del frame) de los `SpriteRenderer` cuyo
+  objeto, sprite o textura contiene el texto (p. ej. `soul_orb` para el orbe del HUD). `enemies` da también el giro y
+  la velocidad de cada enemigo, y `hazards` los Goam con su estado y cuánto llevan en su espera.
   Segunda parte de M5: `partystate`, `cutscenes`, `cinematic` (vídeos de la escena, dónde se dibujan y el fundido),
   `presentation`, `dreams`, `dreamhit [encender]`, `transitions` (cambios de sala de las FSM de la sala), `senders
   <evento>`, `covers` (lo que tapa la cámara), `langget <hoja> <clave>`, `charmupdate`, `skins`, `skin <nombre>|normal`
@@ -760,10 +788,20 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   principal cancela la reconexión (con la tecla de verdad) y corta el intento en curso; sin host, se rinde tras los 12
   intentos y se queda en el menú. Las plataformas de liana de `Fungus1_06`: cortada a aguijonazos en un PC, cae en los
   dos, y quien entra después la encuentra caída (como en el juego: el sprite caído en el suelo y sin colisión arriba).
+- **0.23.0** (copias D y E, 11 oct 2026), tras una partida real entre dos PCs: los Tiktik y Reptantes de
+  `Crossroads_01` como marioneta van a velocidad 0 y siguen lo recibido, y andan al retomarlos en los dos sentidos; los
+  17 Goam de `Crossroads_13` se alinean una vez al entrar y luego coinciden (entran en "Down" a la vez, vuelta de
+  2,77 s); el Falso Caballero sale tras recargar su sala dos veces; la pared secreta de `Crossroads_10` rota a
+  aguijonazos por el invitado se rompe en el host; revivir cuesta 33 de alma en los dos sentidos (el orbe baja también
+  en pantalla); con la skin Rick Knight (copia B), el orbe lleno y su pulso salen con la imagen de la skin desde el
+  principio y no vuelven al del juego. Ruta `crossroads` sin fallos.
 
 ## Pendientes
 
 Sin probar:
+- De 0.23.0: todo entre dos PCs reales. En la partida real el invitado dijo que revivir no le gastaba alma; en las
+  copias sí la gasta (se cobra entera al empezar Focus y se devuelve si se suelta o le golpean, y su registro tiene
+  tres "Golpeado mientras revivía").
 - La traducción al inglés dentro del juego (0.21.0) y el vapor naranja de la muerte del Falso Caballero (0.20.3).
 - De 0.22.0: el icono del compañero en una sala que no sale en el mapa (tiendas) y en otra zona; la reconexión entre
   dos PCs.

@@ -637,6 +637,11 @@ internal sealed class TestDriver : MonoBehaviour {
                 ScreenCapture.CaptureScreenshot(path);
                 Log.Info($"{Tag}captura -> {path}");
                 break;
+            case "spritewatch":
+                // spritewatch <segundos> <texto>: cada cambio del sprite dibujado (al final del frame) de los
+                // SpriteRenderer cuyo objeto, sprite o textura contiene el texto (p. ej. "orb" para el orbe de alma)
+                StartCoroutine(WatchSprites(ParseFloat(args[1]), string.Join(" ", args.Skip(2))));
+                break;
             case "scenetrace":
                 // scenetrace <segundos>: sala, cambio de sala y posición del caballero cada 0,2 s
                 StartCoroutine(TraceScenes(ParseFloat(args[1])));
@@ -1244,6 +1249,42 @@ internal sealed class TestDriver : MonoBehaviour {
             }
 
             yield return null;
+        }
+    }
+
+    private static IEnumerator WatchSprites(float seconds, string text) {
+        bool Matches(SpriteRenderer r) =>
+            r.name.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0 ||
+            r.sprite != null && (r.sprite.name.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 r.sprite.texture.name.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0);
+
+        var watched = Resources.FindObjectsOfTypeAll<SpriteRenderer>()
+            .Where(r => r != null && r.gameObject.scene.IsValid() && Matches(r)).ToArray();
+        Log.Info($"{Tag}sprites vigilados: {watched.Length}");
+        var last = new Sprite[watched.Length];
+        var lastShown = new bool[watched.Length];
+        var start = Time.unscaledTime;
+        var endOfFrame = new WaitForEndOfFrame();
+        while (Time.unscaledTime - start < seconds) {
+            yield return endOfFrame;
+            for (var i = 0; i < watched.Length; i++) {
+                var renderer = watched[i];
+                if (renderer == null) {
+                    continue;
+                }
+
+                var shown = renderer.enabled && renderer.gameObject.activeInHierarchy;
+                if (renderer.sprite == last[i] && shown == lastShown[i]) {
+                    continue;
+                }
+
+                last[i] = renderer.sprite;
+                lastShown[i] = shown;
+                var sprite = renderer.sprite;
+                Log.Info($"{Tag}sprite {Time.unscaledTime - start:0.000} s {renderer.transform.parent?.name}/{renderer.name} " +
+                         $"{(shown ? "visible" : "oculto")} = {sprite?.name ?? "-"} ({sprite?.texture.name ?? "-"}) " +
+                         $"frame={Time.frameCount}");
+            }
         }
     }
 

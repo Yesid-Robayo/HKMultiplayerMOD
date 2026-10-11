@@ -273,6 +273,9 @@ internal sealed class EnemySync {
         /// <summary>FSM paradas en la marioneta y si antes reiniciaban al reactivarse (se pausan, no se reinician).</summary>
         public readonly List<(PlayMakerFSM Fsm, bool Restart)> PausedFsms = new();
 
+        /// <summary>FSM pausadas a las que se les paró el andar (`WalkLeftRight`): al retomarlo, vuelve a andar.</summary>
+        public readonly List<PlayMakerFSM> StoppedWalks = new();
+
         /// <summary>
         /// FSM de piezas que se soltaron de la marioneta al morir (el cadáver del Hollow Knight): ya funcionan solas en este
         /// PC y no siguen los efectos del original. Null si ninguna.
@@ -782,6 +785,9 @@ internal sealed class EnemySync {
         UpdateWakeGates();
     }
 
+    /// <summary>El juego está cambiando de sala (desde que empieza hasta que la nueva está lista).</summary>
+    internal static bool InSceneTransition() => GameManager.instance != null && GameManager.instance.IsInSceneTransition;
+
     private bool OthersInScene() {
         foreach (var player in _session.Players) {
             if (!player.IsLocal && player.Scene == _scene) {
@@ -842,6 +848,13 @@ internal sealed class EnemySync {
                     _healthOut.Add((enemy.Id, HealthKind.AlreadyDead, 0));
                 }
 
+                continue;
+            }
+
+            // Destruido durante un cambio de sala no es muerto: la sala se está descargando. Al volver a cargar la misma
+            // sala ("Recargar sala", "Ir con" a la sala en la que ya se está) su nombre no cambia hasta que la nueva está
+            // lista, y antes todos sus enemigos se daban por muertos hasta el banco (el Falso Caballero no salía)
+            if (enemy.Health == null && InSceneTransition()) {
                 continue;
             }
 
@@ -2599,6 +2612,8 @@ internal sealed class EnemySync {
         }
 
         if (handover == null || enemy.Fsms == null) {
+            // El `Climber` solo pone su velocidad al echar a andar y al girar: con la velocidad a 0 se quedaba quieto
+            RestartWalkers(enemy);
             return;
         }
 
@@ -2657,6 +2672,8 @@ internal sealed class EnemySync {
             enemy.Body.gravityScale = last.Gravity;
             enemy.Body.velocity = last.Velocity;
         }
+
+        RestartWalkers(enemy);
 
         RefreshZoneFlags(enemy);
         var first = handover.Length > 0 && enemy.Fsms.Length > 0 && enemy.Fsms[0] != null ? enemy.Fsms[0].ActiveStateName : "-";
@@ -3361,9 +3378,10 @@ internal sealed class EnemySync {
         // Lo solo visual se crea aunque este PC ya mueva al creador: el aviso pudo llegar justo después de tomarlo (con
         // retraso, la nube de la muerte del Falso Caballero no salía) y su lógica, que siguió desde más adelante, ya no
         // lo crea. Lo de juego no: este PC ya mueve su lógica y lo que cree será el original
-        if (sceneHash != _sceneHash || !_byId.TryGetValue(creatorId, out var creator) || !creator.Puppet && id != 0 ||
-            creator.Fsms == null || fsmIndex >= creator.Fsms.Length || creator.Fsms[fsmIndex] == null ||
-            id != 0 && (id & SpawnedIdFlag) == 0) {
+        // (un creador ya destruido aquí, p. ej. al morir, sigue apuntado: sin él no hay a qué altura crearlo)
+        if (sceneHash != _sceneHash || !_byId.TryGetValue(creatorId, out var creator) || creator.Root == null ||
+            !creator.Puppet && id != 0 || creator.Fsms == null || fsmIndex >= creator.Fsms.Length ||
+            creator.Fsms[fsmIndex] == null || id != 0 && (id & SpawnedIdFlag) == 0) {
             return;
         }
 
@@ -4419,6 +4437,7 @@ internal sealed class EnemySync {
                     Pause(enemy, behaviour as PlayMakerFSM);
                     behaviour.enabled = false;
                     enemy.Disabled.Add(behaviour);
+                    StopWalker(behaviour);
                 }
             }
 
@@ -4439,6 +4458,7 @@ internal sealed class EnemySync {
                 }
             }
 
+            StopFsmWalks(enemy);
             if (enemy.Body != null) {
                 enemy.BodyType = enemy.Body.bodyType;
                 enemy.Body.velocity = Vector2.zero;
@@ -4465,12 +4485,134 @@ internal sealed class EnemySync {
                 enemy.Body.bodyType = enemy.BodyType;
             }
 
+            // (al retomarlo, después de poner su velocidad: ver TakeOverUnguarded)
+            if (!_takingOver) {
+                RestartWalkers(enemy);
+            }
+
+            RestartFsmWalks(enemy);
+
             if (enemy.Health != null) {
                 enemy.LastHp = enemy.Health.hp;
                 enemy.ReportedDead = enemy.Health.isDead;
             }
         }
     }
+
+    /// <summary>
+    /// Los que andan por el suelo, las paredes y el techo con su propio código (`Climber`, los Tiktik; `Crawler`) lo
+    /// hacen en una corrutina que empieza en su `Start`, y apagar el componente no la para: en la marioneta seguía
+    /// girándola, volteándola y moviéndola, y el `Climber` la devuelve a donde estaba si se mueve más de 0,1 en un frame
+    /// (todo lo que llega del otro PC). Así iban a saltos o quietos. Se para al hacerse marioneta.
+    /// </summary>
+    private static void StopWalker(Behaviour behaviour) {
+        if (behaviour is Climber or Crawler && WalkerStarted(behaviour)) {
+            ((MonoBehaviour) behaviour).StopAllCoroutines();
+        }
+    }
+
+    /// <summary>
+    /// Al volver a moverlo este PC, su `Start` otra vez (elige la dirección por su giro y su escala de ahora, que son las
+    /// del PC que lo movía, y vuelve a echar a andar). Antes se quitan sus avisos del retroceso, que `Start` vuelve a
+    /// apuntar. Uno que aún no hizo su `Start` (se apagó antes de empezar) lo hará solo al encenderse.
+    /// </summary>
+    private static void RestartWalkers(Enemy enemy) {
+        foreach (var behaviour in enemy.Root.GetComponents<MonoBehaviour>()) {
+            if (behaviour is not (Climber or Crawler) || !behaviour.enabled || !WalkerStarted(behaviour)) {
+                continue;
+            }
+
+            behaviour.StopAllCoroutines();
+            var recoil = behaviour.GetComponent<Recoil>();
+            if (recoil != null) {
+                RemoveHandlersOf(recoil, RecoilFreezeField, behaviour);
+                RemoveHandlersOf(recoil, RecoilCancelField, behaviour);
+            }
+
+            try {
+                (behaviour is Climber ? ClimberStart : CrawlerStart)?.Invoke(behaviour, null);
+            } catch (Exception e) {
+                Log.Warn($"{enemy.Root.name}: no se pudo volver a echar a andar ({e.InnerException?.Message ?? e.Message})");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Lo mismo con la acción `WalkLeftRight` (los Reptantes de Cruces): su corrutina corre en el componente de la FSM y
+    /// sigue con la FSM apagada, poniendo su velocidad y dándole la vuelta. Se paran las de las FSM que están en un
+    /// estado con esa acción (es la única acción del juego que mueve con una corrutina).
+    /// </summary>
+    private static void StopFsmWalks(Enemy enemy) {
+        enemy.StoppedWalks.Clear();
+        foreach (var (fsm, _) in enemy.PausedFsms) {
+            if (fsm != null && HasWalk(fsm.Fsm.ActiveState)) {
+                fsm.StopAllCoroutines();
+                enemy.StoppedWalks.Add(fsm);
+            }
+        }
+    }
+
+    /// <summary>Al retomarlo, su acción de andar empieza otra vez en su estado (sigue hacia donde mira).</summary>
+    private static void RestartFsmWalks(Enemy enemy) {
+        foreach (var fsm in enemy.StoppedWalks) {
+            if (fsm == null || !fsm.enabled || fsm.Fsm.ActiveState == null) {
+                continue;
+            }
+
+            foreach (var action in fsm.Fsm.ActiveState.Actions) {
+                if (action is HutongGames.PlayMaker.Actions.WalkLeftRight walk && action.Enabled) {
+                    walk.OnExit();
+                    walk.OnEnter();
+                }
+            }
+        }
+
+        enemy.StoppedWalks.Clear();
+    }
+
+    private static bool HasWalk(HutongGames.PlayMaker.FsmState state) {
+        if (state == null) {
+            return false;
+        }
+
+        foreach (var action in state.Actions) {
+            if (action is HutongGames.PlayMaker.Actions.WalkLeftRight && action.Enabled) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Si ya pasó por su `Start` (lo que este fija y antes vale cero).</summary>
+    private static bool WalkerStarted(Behaviour behaviour) {
+        var field = behaviour is Climber ? ClimberPreviousPos : CrawlerVelocity;
+        return field != null && field.GetValue(behaviour) is Vector2 value && value != Vector2.zero;
+    }
+
+    private static void RemoveHandlersOf(Recoil recoil, System.Reflection.FieldInfo field, object target) {
+        if (field?.GetValue(recoil) is not Delegate handlers) {
+            return;
+        }
+
+        foreach (var handler in handlers.GetInvocationList()) {
+            if (handler.Target == target) {
+                handlers = Delegate.Remove(handlers, handler);
+            }
+        }
+
+        field.SetValue(recoil, handlers);
+    }
+
+    private const System.Reflection.BindingFlags AnyInstance =
+        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+
+    private static readonly System.Reflection.MethodInfo ClimberStart = typeof(Climber).GetMethod("Start", AnyInstance);
+    private static readonly System.Reflection.MethodInfo CrawlerStart = typeof(Crawler).GetMethod("Start", AnyInstance);
+    private static readonly System.Reflection.FieldInfo ClimberPreviousPos = typeof(Climber).GetField("previousPos", AnyInstance);
+    private static readonly System.Reflection.FieldInfo CrawlerVelocity = typeof(Crawler).GetField("velocity", AnyInstance);
+    private static readonly System.Reflection.FieldInfo RecoilFreezeField = typeof(Recoil).GetField("OnHandleFreeze", AnyInstance);
+    private static readonly System.Reflection.FieldInfo RecoilCancelField = typeof(Recoil).GetField("OnCancelRecoil", AnyInstance);
 
     /// <summary>
     /// La lógica de la marioneta se pausa, no se reinicia: al volver a moverla este PC sigue desde donde estaba (sin repetir
@@ -4975,7 +5117,8 @@ internal sealed class EnemySync {
                          $"{(enemy.Root.activeInHierarchy ? "" : " (inactivo)")}" +
                          $"{(enemy.Root.GetComponent<Renderer>() is { enabled: false } ? " oculto" : "")}" +
                          $"{(enemy.Root.GetComponent<Collider2D>() is { enabled: false } ? " sin-caja" : "")} " +
-                         $"pos=({p.x:0.00},{p.y:0.00})";
+                         $"pos=({p.x:0.00},{p.y:0.00}) giro={enemy.Transform.eulerAngles.z:0}" +
+                         $"{(enemy.Body != null ? $" vel=({enemy.Body.velocity.x:0.00},{enemy.Body.velocity.y:0.00})" : "")}";
         }
     }
 

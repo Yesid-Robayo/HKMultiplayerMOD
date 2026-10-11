@@ -48,6 +48,7 @@ public abstract class NetPeer : IDisposable {
     internal readonly PacketReader ScratchReader = new();
 
     private double _nextTick;
+    private int _handlerErrors;
 
     internal ITransport Transport { get; }
 
@@ -159,12 +160,31 @@ public abstract class NetPeer : IDisposable {
             Listener.OnMessage(connection, _appReader);
         } catch (PacketException e) {
             LogWarning($"Mensaje {type} mal formado de {connection.EndPoint}: {e.Message}");
+        } catch (Exception e) {
+            // Un fallo de quien procesa el mensaje no puede salir de aquí: cortaría el datagrama a medias y, en el canal
+            // fiable, el mensaje quedaría sin entregar con su paquete ya confirmado (nunca se reenvía) y todo lo
+            // siguiente de esa conexión esperaría detrás para siempre
+            LogHandlerError($"el mensaje {type} de {connection.EndPoint}", e);
         }
     }
 
     internal void DeliverLarge(NetConnection connection, byte kind, byte[] data) {
-        if (connection.State == ConnectionState.Connected) {
+        if (connection.State != ConnectionState.Connected) {
+            return;
+        }
+
+        try {
             Listener.OnLargeMessage(connection, kind, data);
+        } catch (Exception e) {
+            LogHandlerError($"la transferencia {kind} de {connection.EndPoint}", e);
+        }
+    }
+
+    /// <summary>Registra un fallo al procesar algo recibido; si se repite mucho, solo de vez en cuando.</summary>
+    private void LogHandlerError(string what, Exception e) {
+        _handlerErrors++;
+        if (_handlerErrors <= 20 || _handlerErrors % 500 == 0) {
+            LogWarning($"Error al procesar {what} (van {_handlerErrors}): {e}");
         }
     }
 

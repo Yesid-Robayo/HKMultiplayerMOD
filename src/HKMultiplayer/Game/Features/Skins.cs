@@ -92,8 +92,15 @@ internal sealed class Skins {
         { "Geo", "Geo.png" }
     };
 
-    /// <summary>Texturas del orbe de alma lleno del HUD que reemplaza OrbFull.png (imágenes sueltas, no hojas).</summary>
-    private static readonly HashSet<string> OrbFullTextures = new() { "soul_orb_full_v020000", "soul_orb_glow0000" };
+    /// <summary>
+    /// Sprites del orbe de alma lleno del HUD que reemplaza OrbFull.png, por el principio de su nombre: el orbe lleno
+    /// (`Orb Full`) y los fotogramas de su pulso (`Pulse Sprite`, `soul_orb_glow0000` a `0015`). Por su nombre y no por
+    /// el de su textura: los del pulso van en un atlas (`sactx-...`) y no se cambiaban, así que con el orbe lleno el
+    /// pulso dibujaba la cara del juego sobre la de la skin y parpadeaba entre las dos.
+    /// </summary>
+    private static readonly string[] OrbFullSprites = { "soul_orb_full", "soul_orb_glow" };
+
+    private const string OrbSkinSuffix = " (skin)";
 
     private static readonly int MainTex = Shader.PropertyToID("_MainTex");
 
@@ -160,6 +167,9 @@ internal sealed class Skins {
     private readonly Dictionary<SpriteRenderer, Sprite> _orbOriginals = new();
     private readonly Dictionary<Sprite, Sprite> _orbSkinned = new();
     private string _orbHash;
+
+    /// <summary>Imagen del orbe lleno de la skin propia (null si no lleva o aún no se creó).</summary>
+    private Texture2D _orbTexture;
 
     /// <summary>Texturas creadas este frame (crearlas cuesta: como mucho una por frame).</summary>
     private int _texturesThisFrame;
@@ -1064,7 +1074,8 @@ internal sealed class Skins {
             }
         }
 
-        ApplyOrbFull();
+        // (la imagen del orbe también cuenta: si no se pudo crear este frame, se vuelve a intentar)
+        complete &= ApplyOrbFull();
         if (complete) {
             _sharedAppliedHash = hash;
             _sharedAppliedScene = scene;
@@ -1113,14 +1124,14 @@ internal sealed class Skins {
     }
 
     /// <summary>
-    /// Orbe de alma lleno del HUD (OrbFull.png): es un sprite suelto, así que se cambia el sprite de sus SpriteRenderer por
-    /// uno hecho con la imagen de la skin (mismo pivote y escala). Solo el propio.
+    /// Orbe de alma lleno del HUD (OrbFull.png): son sprites sueltos, así que se cambia el sprite de sus SpriteRenderer
+    /// por uno hecho con la imagen de la skin (mismo pivote y escala que cada uno). Solo el propio.
     /// </summary>
-    private void ApplyOrbFull(bool reset = false) {
-        var orbTexture = !reset && _local != null && _local.Files.ContainsKey("OrbFull.png")
-            ? TextureOf(_local, "OrbFull.png", null)
-            : null;
-        var orbKey = orbTexture != null ? _local.Hash : string.Empty;
+    /// <returns>Si ya está como debe (o no hay imagen que poner); false si su imagen aún no se pudo crear.</returns>
+    private bool ApplyOrbFull(bool reset = false) {
+        var wanted = !reset && _local != null && _local.Files.ContainsKey("OrbFull.png");
+        _orbTexture = wanted ? TextureOf(_local, "OrbFull.png", null) : null;
+        var orbKey = _orbTexture != null ? _local.Hash : string.Empty;
         if (orbKey != _orbHash) {
             foreach (var sprite in _orbSkinned.Values) {
                 UnityEngine.Object.Destroy(sprite);
@@ -1136,7 +1147,7 @@ internal sealed class Skins {
             }
 
             if (!_orbOriginals.TryGetValue(renderer, out var original)) {
-                if (renderer.sprite == null || !OrbFullTextures.Contains(renderer.sprite.texture.name)) {
+                if (!IsOrbFullSprite(renderer.sprite)) {
                     continue;
                 }
 
@@ -1144,43 +1155,60 @@ internal sealed class Skins {
                 _orbOriginals[renderer] = original;
             }
 
-            if (orbTexture == null) {
-                renderer.sprite = original;
-                continue;
-            }
-
-            if (!_orbSkinned.TryGetValue(original, out var skinned)) {
-                var pivot = new Vector2(original.pivot.x / original.rect.width, original.pivot.y / original.rect.height);
-                // Misma escala en pantalla: los píxeles por unidad se ajustan al tamaño de la imagen de la skin
-                var pixelsPerUnit = original.pixelsPerUnit * orbTexture.width / original.rect.width;
-                skinned = Sprite.Create(orbTexture, new Rect(0, 0, orbTexture.width, orbTexture.height), pivot, pixelsPerUnit);
-                skinned.name = $"{original.name} (skin)";
-                _orbSkinned[original] = skinned;
-            }
-
-            renderer.sprite = skinned;
+            renderer.sprite = _orbTexture != null ? SkinnedOrb(original) : original;
         }
+
+        return _orbTexture != null || !wanted || _local.Failed.Contains("OrbFull.png");
     }
 
-    /// <summary>El juego vuelve a poner el sprite del orbe lleno (su brillo): se vuelve a poner el de la skin cada frame.</summary>
+    /// <summary>
+    /// El juego vuelve a poner los sprites del orbe lleno (el pulso los anima): se vuelve a poner el de la skin cada frame,
+    /// el que corresponde a cada fotograma.
+    /// </summary>
     private void KeepOrbFull() {
-        if (_orbSkinned.Count == 0) {
+        if (_orbTexture == null) {
             return;
         }
 
-        foreach (var pair in _orbOriginals) {
-            var renderer = pair.Key;
-            if (renderer == null || renderer.sprite == null || !_orbSkinned.TryGetValue(pair.Value, out var skinned) ||
-                renderer.sprite == skinned) {
+        foreach (var renderer in _orbOriginals.Keys) {
+            if (renderer == null) {
                 continue;
             }
 
-            if (_orbSkinned.TryGetValue(renderer.sprite, out var current)) {
-                renderer.sprite = current;
-            } else if (OrbFullTextures.Contains(renderer.sprite.texture.name)) {
-                renderer.sprite = skinned;
+            var sprite = renderer.sprite;
+            if (IsOrbFullSprite(sprite)) {
+                renderer.sprite = SkinnedOrb(sprite);
             }
         }
+    }
+
+    private static bool IsOrbFullSprite(Sprite sprite) {
+        if (sprite == null || sprite.name.EndsWith(OrbSkinSuffix, StringComparison.Ordinal)) {
+            return false;
+        }
+
+        foreach (var prefix in OrbFullSprites) {
+            if (sprite.name.StartsWith(prefix, StringComparison.Ordinal)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>El sprite de la skin para ese sprite del juego (se crea una vez por cada uno).</summary>
+    private Sprite SkinnedOrb(Sprite original) {
+        if (_orbSkinned.TryGetValue(original, out var skinned)) {
+            return skinned;
+        }
+
+        var pivot = new Vector2(original.pivot.x / original.rect.width, original.pivot.y / original.rect.height);
+        // Misma escala en pantalla: los píxeles por unidad se ajustan al tamaño de la imagen de la skin
+        var pixelsPerUnit = original.pixelsPerUnit * _orbTexture.width / original.rect.width;
+        skinned = Sprite.Create(_orbTexture, new Rect(0, 0, _orbTexture.width, _orbTexture.height), pivot, pixelsPerUnit);
+        skinned.name = original.name + OrbSkinSuffix;
+        _orbSkinned[original] = skinned;
+        return skinned;
     }
 
     /// <summary>

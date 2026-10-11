@@ -29,6 +29,7 @@ public static partial class Program {
         Run("Conexión con el código correcto", ConnectsWithRightCode);
         Run("Código incorrecto: rechazado", RejectsWrongCode);
         Run("Fiable: todo llega, una vez y en orden (20% de pérdida y desorden)", ReliableInOrderUnderLoss);
+        Run("Fiable: un fallo al procesar un mensaje no detiene los siguientes", ReliableSurvivesHandlerError);
         Run("No fiable: llega lo que no se pierde, sin duplicados", UnreliableArrives);
         Run("Datos grandes: 13 MB íntegros con 5% de pérdida", LargeTransfer);
         Run("Datos grandes de baja prioridad: a su ritmo y sin retrasar los mensajes", LowPriorityLargeTransfer);
@@ -115,6 +116,9 @@ public static partial class Program {
         public readonly List<uint> Unreliable = new();
         public readonly List<byte[]> Large = new();
 
+        /// <summary>Si se indica, procesar el mensaje fiable con este valor lanza una excepción (un fallo del juego).</summary>
+        public uint? ThrowOn;
+
         public Listener(string name) {
             _name = name;
         }
@@ -127,6 +131,10 @@ public static partial class Program {
             var type = reader.ReadByte();
             var value = reader.ReadUInt();
             if (type == 20) {
+                if (value == ThrowOn) {
+                    throw new InvalidOperationException("fallo simulado al procesar");
+                }
+
                 Reliable.Add(value);
             } else if (type == 21) {
                 Unreliable.Add(value);
@@ -180,6 +188,30 @@ public static partial class Program {
 
         pair.Pump(() => false, 0.5);
         Assert(pair.ServerListener.Reliable.Count == count, "llegaron duplicados");
+    }
+
+    private static void ReliableSurvivesHandlerError() {
+        var pair = new Pair(loss: 0.1);
+        pair.ConnectOrFail();
+        pair.ServerListener.ThrowOn = 10;
+        const int count = 100;
+        for (uint i = 0; i < count; i++) {
+            var writer = pair.Client.Connection.BeginReliable();
+            writer.WriteByte(20);
+            writer.WriteUInt(i);
+            pair.Client.Connection.EndMessage();
+            pair.Pump(() => false, 1.0 / 60);
+        }
+
+        // Todos menos el que falló, en orden: antes el canal se quedaba esperando a ese para siempre
+        Assert(pair.Pump(() => pair.ServerListener.Reliable.Count >= count - 1, 10),
+            $"llegaron {pair.ServerListener.Reliable.Count} de {count - 1}");
+        for (var i = 0; i < count - 1; i++) {
+            var expected = i < 10 ? i : i + 1;
+            Assert(pair.ServerListener.Reliable[i] == expected, $"fuera de orden en {i}");
+        }
+
+        Assert(pair.Client.IsConnected, "se cayó la conexión");
     }
 
     private static void UnreliableArrives() {

@@ -37,8 +37,10 @@ internal sealed class ReliableReceiver {
         }
 
         if (ahead == 0) {
-            sink.Deliver(buffer, offset, length);
+            // Se da por entregado antes de entregarlo: si quien lo procesa falla, el siguiente no debe esperar a este
+            // (su paquete ya se confirmó y el emisor no lo vuelve a enviar)
             _nextExpected++;
+            sink.Deliver(buffer, offset, length);
             DeliverStored(sink);
             return;
         }

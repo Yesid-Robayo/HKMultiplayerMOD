@@ -63,6 +63,7 @@ public sealed class GameSession : INetListener, IDisposable {
     private int _depth;
 
     private readonly Action<string> _log;
+    private int _relayErrors;
 
     public bool IsHost => _server != null;
 
@@ -385,7 +386,15 @@ public sealed class GameSession : INetListener, IDisposable {
                 if (target.IsLocal) {
                     var reader = ReaderAt(depth);
                     reader.Reset(buffer, offset, offset + length);
-                    _handlers[type]?.Invoke(from, reader);
+                    try {
+                        _handlers[type]?.Invoke(from, reader);
+                    } catch (Exception e) when (e is not PacketException) {
+                        // Un fallo del host al procesarlo no impide reenviarlo a los demás
+                        if (++_relayErrors <= 20 || _relayErrors % 500 == 0) {
+                            _log($"Error al procesar el mensaje {type} de {from.Name} (van {_relayErrors}): {e}");
+                        }
+                    }
+
                     continue;
                 }
 

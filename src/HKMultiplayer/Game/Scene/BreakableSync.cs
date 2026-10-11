@@ -227,8 +227,9 @@ internal sealed class BreakableSync {
             var item = _tracked[i];
             bool broken;
             if (item.Component == null) {
-                // Destruido: en los cortables significa cortado; en los demás, nada que vigilar
-                if (!item.Kind.DestroyedMeansBroken) {
+                // Destruido: en los cortables significa cortado; en los demás, nada que vigilar. Durante un cambio de
+                // sala es que la sala se descarga (al recargar la misma, su nombre aún no cambió)
+                if (!item.Kind.DestroyedMeansBroken || EnemySync.InSceneTransition()) {
                     continue;
                 }
 
