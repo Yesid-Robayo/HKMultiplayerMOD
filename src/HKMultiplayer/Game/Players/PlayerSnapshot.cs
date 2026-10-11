@@ -28,6 +28,9 @@ internal struct PlayerSnapshot {
     /// <summary>Invulnerable tras un golpe o al revivir: su sprite parpadea (como <see cref="InvulnerablePulse"/>).</summary>
     public bool Invulnerable;
 
+    /// <summary>Sentado en un banco (para sentarlo al lado si el que mira está en el mismo banco).</summary>
+    public bool AtBench;
+
     /// <summary>Sprite que se ve: colección (<see cref="HeroSprites"/>) e id dentro de ella.</summary>
     public byte Collection;
 
@@ -46,6 +49,7 @@ internal struct PlayerSnapshot {
     private const byte VisibleFlag = 2;
     private const byte DungAuraFlag = 4;
     private const byte InvulnerableFlag = 8;
+    private const byte AtBenchFlag = 16;
 
     /// <summary>Tamaño en bytes.</summary>
     public const int Size = 4 + 2 + 4 + 4 + 1 + 1 + 2;
@@ -56,7 +60,8 @@ internal struct PlayerSnapshot {
         writer.WriteFloat(X);
         writer.WriteFloat(Y);
         writer.WriteByte((byte) ((FacingRight ? FacingRightFlag : 0) | (Visible ? VisibleFlag : 0) |
-                                 (DungAura ? DungAuraFlag : 0) | (Invulnerable ? InvulnerableFlag : 0)));
+                                 (DungAura ? DungAuraFlag : 0) | (Invulnerable ? InvulnerableFlag : 0) |
+                                 (AtBench ? AtBenchFlag : 0)));
         writer.WriteByte(Collection);
         writer.WriteUShort(SpriteId);
     }
@@ -71,6 +76,7 @@ internal struct PlayerSnapshot {
         Visible = (flags & VisibleFlag) != 0;
         DungAura = (flags & DungAuraFlag) != 0;
         Invulnerable = (flags & InvulnerableFlag) != 0;
+        AtBench = (flags & AtBenchFlag) != 0;
         Collection = reader.ReadByte();
         SpriteId = reader.ReadUShort();
     }
@@ -78,7 +84,7 @@ internal struct PlayerSnapshot {
     /// <summary>Si dibujarían lo mismo (para no repetir estados de un jugador quieto).</summary>
     public bool SameLook(in PlayerSnapshot other) =>
         X == other.X && Y == other.Y && FacingRight == other.FacingRight && Visible == other.Visible &&
-        DungAura == other.DungAura && Invulnerable == other.Invulnerable &&
+        DungAura == other.DungAura && Invulnerable == other.Invulnerable && AtBench == other.AtBench &&
         Collection == other.Collection && SpriteId == other.SpriteId && SceneHash == other.SceneHash;
 
     /// <summary>Huella de 16 bits del nombre de una sala (FNV-1a).</summary>

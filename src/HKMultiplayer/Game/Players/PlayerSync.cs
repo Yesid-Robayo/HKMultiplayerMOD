@@ -170,6 +170,8 @@ internal sealed class PlayerSync {
         _localScene = scene;
         _localSceneHash = PlayerSnapshot.HashScene(scene);
         _hasLastSent = false;
+        _seat = null;
+        _shifted = false;
         _grass.SetScene(scene);
         foreach (var remote in _remotes.Values) {
             remote.Buffer.Clear();
@@ -208,6 +210,7 @@ internal sealed class PlayerSync {
             DungAura = _heroDungAura != null && _heroDungAura.gameObject.activeInHierarchy &&
                        _heroDungAura.emission.enabled,
             Invulnerable = _hero.cState.invulnerable,
+            AtBench = SittingOnBench(),
             Collection = _sprites.IndexOf(_heroSprite.Collection),
             SpriteId = (ushort) _heroSprite.spriteId
         };
@@ -264,6 +267,99 @@ internal sealed class PlayerSync {
         remote.Buffer.Add(_incoming, Time.unscaledTimeAsDouble, Time.unscaledDeltaTime < 0.1f);
     }
 
+    /// <summary>Distancia entre dos caballeros sentados en el mismo banco (cada uno en una mitad).</summary>
+    private const float BenchGap = 1.1f;
+
+    /// <summary>Hasta dónde del sitio del banco cuenta un compañero sentado como sentado en este mismo banco.</summary>
+    private const float BenchReach = 2.5f;
+
+    /// <summary>Dónde sentó el juego a este caballero (el centro del banco), o null si no está sentado.</summary>
+    private Vector2? _seat;
+
+    /// <summary>Si este caballero está corrido de ese centro por compartir el banco.</summary>
+    private bool _shifted;
+
+    /// <summary>Desde cuándo está sentado (el juego tarda un momento en colocarlo en el banco).</summary>
+    private float _seatedAt;
+
+    /// <summary>Lo que se espera tras sentarse para tomar el centro del banco: antes el juego aún lo está colocando.</summary>
+    private const float SeatSettle = 0.6f;
+
+    private readonly List<ushort> _seatedIds = new();
+    private readonly List<(Remote Remote, PlayerSnapshot State)> _sampled = new();
+
+    /// <summary>
+    /// Sentados en el mismo banco, cada uno ocupa su sitio en él y no quedan uno encima del otro: se reparten alrededor
+    /// del centro por número de jugador (el menor a la izquierda), así todos los PCs los ven igual. Este caballero se
+    /// corre a su sitio y a los compañeros se les dibuja en el suyo; al quedarse solo vuelve al centro.
+    /// </summary>
+    private void ShareBench() {
+        if (!SittingOnBench() || _session == null) {
+            _seat = null;
+            _shifted = false;
+            return;
+        }
+
+        var position = _hero.transform.position;
+        if (_seat == null) {
+            _seatedAt = Time.unscaledTime;
+        }
+
+        // Recién sentado: el centro sigue al caballero hasta que el juego lo deja quieto en el banco
+        if (Time.unscaledTime - _seatedAt < SeatSettle) {
+            _seat = new Vector2(position.x, position.y);
+            return;
+        }
+
+        _seatedIds.Clear();
+        _seatedIds.Add(_session.LocalId);
+        if (_seat is { } seat) {
+            foreach (var (remote, state) in _sampled) {
+                if (state.AtBench && Mathf.Abs(state.X - seat.x) <= BenchReach && Mathf.Abs(state.Y - seat.y) <= 1.5f) {
+                    _seatedIds.Add(remote.Player.Id);
+                }
+            }
+        }
+
+        // Solo: el juego lo sentó en el centro y ese es el sitio del banco (si estaba corrido, vuelve a él)
+        if (_seatedIds.Count == 1) {
+            if (_shifted && _seat is { } alone) {
+                _hero.transform.position = new Vector3(alone.x, position.y, position.z);
+                _shifted = false;
+            } else {
+                _seat = new Vector2(position.x, position.y);
+            }
+
+            return;
+        }
+
+        _seatedIds.Sort();
+        var center = _seat.Value.x;
+        var first = -(_seatedIds.Count - 1) * 0.5f;
+        var x = center + (first + _seatedIds.IndexOf(_session.LocalId)) * BenchGap;
+        if (Mathf.Abs(position.x - x) > 0.01f) {
+            _hero.transform.position = new Vector3(x, position.y, position.z);
+        }
+
+        _shifted = true;
+
+        for (var i = 0; i < _sampled.Count; i++) {
+            var (remote, state) = _sampled[i];
+            var index = _seatedIds.IndexOf(remote.Player.Id);
+            if (index >= 0) {
+                state.X = center + (first + index) * BenchGap;
+                _sampled[i] = (remote, state);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Si este caballero está sentado en un banco: `atBench` y el banco con su control. `atBench` solo no basta: el juego
+    /// no lo quita si se sale de la sala sin levantarse (un viaje del modo de prueba), y el caballero se quedaba clavado.
+    /// </summary>
+    private bool SittingOnBench() =>
+        PlayerData.instance is { atBench: true } && _hero != null && _hero.controlReqlinquished;
+
     /// <summary>Dibuja a los remotos de la sala. Llamar en LateUpdate, después de actualizar la red.</summary>
     public void UpdateAvatars() {
         var time = Time.unscaledTimeAsDouble;
@@ -271,6 +367,7 @@ internal sealed class PlayerSync {
         var heroReady = RefreshHero();
         var z = heroReady ? _hero.transform.position.z : 0f;
         var showNames = Features.HostSettings.Current.ShowNames;
+        _sampled.Clear();
         foreach (var remote in _remotes.Values) {
             // Un caído no se dibuja: se ve su cuerpo (Features.Revive) y su caballero va oculto pegado al compañero
             var sameScene = heroReady && _localScene.Length > 0 && remote.Player.Scene == _localScene &&
@@ -284,10 +381,13 @@ internal sealed class PlayerSync {
                 continue;
             }
 
-            if (!remote.Buffer.Sample(time, out var state)) {
-                continue;
+            if (remote.Buffer.Sample(time, out var state)) {
+                _sampled.Add((remote, state));
             }
+        }
 
+        ShareBench();
+        foreach (var (remote, state) in _sampled) {
             remote.Avatar ??= new RemoteAvatar(remote.Player.Name, _hero, Font);
             remote.Avatar.SetNameVisible(showNames);
             remote.Avatar.Apply(state, _sprites, z);

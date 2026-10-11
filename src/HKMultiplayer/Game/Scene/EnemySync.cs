@@ -1313,6 +1313,10 @@ internal sealed class EnemySync {
         return _creatorIds.TryGetValue(clone, out var found) ? found : null;
     }
 
+    /// <summary>Número compartido del enemigo (igual en todos los PCs), o 0 si no es uno de los compartidos.</summary>
+    internal static uint SyncIdOf(HealthManager health) =>
+        health != null && _active != null && _active._byHealth.TryGetValue(health, out var enemy) ? enemy.Id : 0u;
+
     /// <summary>Huella de un objeto por su sala, su nombre y su posición (redondeada a una décima).</summary>
     internal static uint PlacedId(Transform transform) {
         var hash = 2166136261u;

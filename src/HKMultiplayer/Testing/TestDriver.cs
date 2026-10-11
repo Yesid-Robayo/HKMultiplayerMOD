@@ -300,10 +300,13 @@ internal sealed class TestDriver : MonoBehaviour {
 
                 break;
             case "fsmstate":
-                // fsmstate <objeto>|<estado>: pone la FSM del objeto en ese estado (p. ej. el golpe de una palanca)
+                // fsmstate <objeto>|<estado>[|<fsm>]: pone la FSM del objeto (la primera, o la de ese nombre) en ese estado
+                // (p. ej. el golpe de una palanca)
                 var fsmArgs = string.Join(" ", args.Skip(1)).Split('|');
                 var fsmObject = GameObject.Find(fsmArgs[0]);
-                var targetFsm = fsmObject != null ? fsmObject.GetComponent<PlayMakerFSM>() : null;
+                var targetFsm = fsmObject == null ? null
+                    : fsmArgs.Length > 2 ? fsmObject.GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.FsmName == fsmArgs[2])
+                    : fsmObject.GetComponent<PlayMakerFSM>();
                 if (targetFsm == null) {
                     Log.Warn($"{Tag}no existe '{fsmArgs[0]}'");
                 } else {
@@ -649,6 +652,20 @@ internal sealed class TestDriver : MonoBehaviour {
                 var path = Path.Combine(Application.persistentDataPath, args[1] + ".png");
                 ScreenCapture.CaptureScreenshot(path);
                 Log.Info($"{Tag}captura -> {path}");
+                break;
+            case "stagtravel":
+                // stagtravel <sala> <número de estación>: como elegir ese destino en el ciervo de esta sala
+                var stag = UnityEngine.Object.FindObjectsByType<PlayMakerFSM>(FindObjectsSortMode.None)
+                    .FirstOrDefault(f => f.FsmName == "Stag Control");
+                if (stag == null) {
+                    Log.Warn($"{Tag}no hay ciervo en esta sala");
+                    break;
+                }
+
+                stag.FsmVariables.FindFsmString("To Scene").Value = args[1];
+                stag.FsmVariables.FindFsmInt("To Position").Value = int.Parse(args[2]);
+                hero.RelinquishControl();
+                stag.SetState("Fade");
                 break;
             case "nailtouch":
                 // nailtouch <objeto>: como si el aguijón de este jugador tocara esa copia (sin vida propia)
@@ -1069,6 +1086,12 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "bossscene":
+                // bossscene: si el juego cree estar en una sala de jefe (el geo que sale entonces se recicla al momento)
+                var bossScene = BossSceneController.Instance;
+                Log.Info($"{Tag}bossscene={BossSceneController.IsBossScene} objeto=" +
+                         $"{(bossScene != null ? bossScene.gameObject.name + " en " + bossScene.gameObject.scene.name : "-")}");
+                break;
             case "spawnlog":
                 // spawnlog <segundos>: registra cada objeto que sale del pool del juego durante ese tiempo
                 _spawnLogUntil = Time.unscaledTime + ParseFloat(args[1]);
@@ -1250,6 +1273,13 @@ internal sealed class TestDriver : MonoBehaviour {
             }
 
             return spawned;
+        };
+        // Quién apaga cada pieza de geo mientras dura el registro
+        On.GeoControl.OnDisable += (orig, self) => {
+            orig(self);
+            if (Time.unscaledTime < _spawnLogUntil) {
+                Log.Info($"{Tag}geo apagado {self.name} en {self.transform.position}: {Environment.StackTrace}");
+            }
         };
     }
 

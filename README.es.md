@@ -125,8 +125,13 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 <details>
 <summary><b>🗺️ Mundo compartido</b></summary>
 
-- **Progreso compartido en directo**: habilidades de movimiento y hechizos, jefes vencidos, puertas, palancas, paredes
-  rotas, salas visitadas y mapas.
+- **Progreso compartido en directo**: jefes vencidos, puertas, palancas, paredes rotas, salas visitadas y mapas.
+- **Habilidades de cada jugador** (de movimiento, hechizos, aguijón onírico): cada uno consigue las suyas y ve la
+  escena de recogerlas. Los personajes guardados con una versión anterior conservan las que ya tenían.
+- **El botín cae en el mismo sitio** en los dos PCs: el geo de los enemigos, de las rocas y de los cofres.
+- **Viaje en ciervo juntos**: cuando uno elige destino, los que están en la estación viajan con él.
+- **Bancos para dos**: sentados en el mismo banco, cada uno ocupa una mitad.
+- **Los invitados nuevos ven la cinemática del principio** (se puede saltar) antes de entrar al mundo del host.
 - **Objetos de sala**: palancas, interruptores, puertas, paredes y suelos que se rompen, piedras de geo, rompibles,
   pasto, enredaderas, tarros de larva, estalactitas, letreros y decorados con su propia lógica.
 - **Ascensores**: los mueve quien los usa y el otro lo ve moverse igual.

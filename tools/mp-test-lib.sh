@@ -13,13 +13,19 @@ HK_INSTANCES_DIR="${HK_INSTANCES_DIR:-$HK_TEST_ROOT/test-instances}"
 _inst_dir() { echo "$HK_INSTANCES_DIR/$(echo "$1" | tr 'A-Z' 'a-z')"; }
 _data_dir() { echo "$HK_LOCALLOW/HollowKnight$1"; }
 
+# Abre el juego de una copia sin que herede nada de este shell
+_start_game() {
+  local win; win="$(cygpath -w "$1")"
+  powershell.exe -NoProfile -Command "Start-Process -FilePath '$win\hollow_knight.exe' -WorkingDirectory '$win' -ArgumentList '-screen-fullscreen 0 -screen-width $2 -screen-height $3 -mptest'" </dev/null >/dev/null 2>&1
+}
+
 # Lanza la instancia en ventana, en modo de prueba. El ModLog anterior se borra antes: si no, wait_log podría
 # encontrar líneas de la ejecución pasada y enviar órdenes antes de que el juego vacíe su archivo de órdenes.
 launch() {
   local dir; dir="$(_inst_dir "$1")"
   rm -f "$(_data_dir "$1")/ModLog.txt"
-  (cd "$dir" && ./hollow_knight.exe -screen-fullscreen 0 -screen-width 960 -screen-height 540 \
-     -mptest >/dev/null 2>&1 &)
+  # Con Start-Process: lanzado desde bash, el juego heredaba la tubería de quien llamaba y "| tail" no acababa
+  _start_game "$dir" 960 540
   echo "lanzada $1"
 }
 

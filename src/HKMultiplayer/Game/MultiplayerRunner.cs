@@ -79,6 +79,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Grimmchild para todos si uno lo recibe.</summary>
     public Features.GrimmchildGift Grimmchild { get; } = new();
 
+    /// <summary>Viajar juntos en ciervo desde la misma estación.</summary>
+    public Features.StagTogether Stag { get; } = new();
+
     /// <summary>Skins: la propia y las de los demás.</summary>
     public Features.Skins Skins { get; } = new();
 
@@ -163,6 +166,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Features.SharedCutscenes.InstallHooks();
         Features.BossPresentation.InstallHooks();
         Features.DreamSync.InstallHooks();
+        Scene.DropSeeds.InstallHooks();
         CoopSaves.ExitedWorld += () => {
             // El host salió de su mundo (los personajes ya se recogieron al volver al menú): la partida se cierra
             if (_leaveOnMenu || Session is { IsHost: true }) {
@@ -256,6 +260,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Presentations.Update();
             Dreams.Update(scene);
             Grimmchild.Update(scene);
+            Stag.Update(scene);
             PartnerMap.Update(scene);
             Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene
                 : Dreams.InDream ? Features.PlayerStatus.Dream
@@ -488,6 +493,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         PartnerMap.Detach();
         Skins.Detach();
         Grimmchild.Detach();
+        Stag.Detach();
+        Scene.DropSeeds.Enabled = false;
         Dreams.Detach();
         Presentations.Detach();
         Cutscenes.Detach();
@@ -621,6 +628,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Dreams.Attach(session, Revive);
         Travel.Attach(session, Party, Revive, Dreams, Cutscenes);
         Grimmchild.Attach(session);
+        Stag.Attach(session);
+        Scene.DropSeeds.Enabled = true;
         Skins.Attach(session, Players);
         PartnerMap.Attach(session, Revive);
         var connected = false;

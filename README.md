@@ -125,8 +125,13 @@ world, see each other in real time and fight the same enemies and bosses togethe
 <details>
 <summary><b>🗺️ Shared world</b></summary>
 
-- **Live shared progress**: movement abilities and spells, defeated bosses, doors, levers, broken walls, visited rooms
-  and maps.
+- **Live shared progress**: defeated bosses, doors, levers, broken walls, visited rooms and maps.
+- **Abilities are per player** (movement abilities, spells, Dream Nail): each player gets their own and sees the
+  pickup scene. Characters saved with an earlier version keep the abilities they already had.
+- **Loot lands in the same place** on both PCs: geo from enemies, geo rocks and chests.
+- **Stag travel together**: when one player picks a destination, everyone at that station rides along.
+- **Benches for two**: sitting on the same bench, each player takes one half.
+- **New guests see the opening cinematic** (skippable) before joining the host's world.
 - **Room objects**: levers, switches, doors, breakable walls and floors, geo rocks, breakables, grass, vines, grub jars,
   stalactites, signs and props with their own logic.
 - **Elevators**: run by whoever uses them; the other player sees them move the same way.

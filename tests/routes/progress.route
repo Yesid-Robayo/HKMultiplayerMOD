@@ -5,19 +5,6 @@ title Progreso compartido: lo del mundo llega al otro, lo del personaje no
 room Town left1
 
 # ---- Del mundo, desde el invitado ----
-# Habilidades de movimiento y hechizos
-shared guest hasDash true
-shared guest hasWalljump true
-shared guest hasDoubleJump true
-shared guest hasSuperDash true
-shared guest hasAcidArmour true
-shared guest hasShadowDash true
-shared guest hasKingsBrand true
-shared guest hasDreamNail true
-shared guest hasDreamGate true
-shared guest fireballLevel 1
-shared guest quakeLevel 1
-shared guest screamLevel 1
 # Estaciones de ciervo y puertas
 shared guest openedCrossroads true
 shared guest openedGreenpath true
@@ -44,14 +31,18 @@ shared host jijiDoorUnlocked true
 shared host openedSlyShop true
 shared host visitedGreenpath true
 shared host visitedRuins true
-shared host dreamNailUpgraded true
 shared host killedBuzzer true
 shared host killsBuzzer 7
 shared host grubsCollected 5
 # Un número que sube dos veces seguidas: llega el último valor
-shared host fireballLevel 2
+shared host grubsCollected 6
 
 # ---- Del personaje, desde el invitado ----
+# Habilidades: cada uno consigue las suyas
+private guest hasWalljump true
+private guest hasSuperDash true
+private guest hasDreamNail true
+private guest quakeLevel 1
 private guest geo 1234
 private guest hasLantern true
 private guest nailDamage 13
@@ -72,15 +63,14 @@ private host nailDamage 17
 private host charmSlots 6
 private host gotCharm_2 true
 private host hasWhiteKey true
+private host hasKingsBrand true
+private host screamLevel 2
 
 # Al final los dos tienen el mismo mundo
-same-pd hasDash
 same-pd openedCityGate
 same-pd killsBuzzer
-same-pd fireballLevel
 
 # Cambiar de sala no deshace nada
 room Crossroads_01 left1
-same-pd hasSuperDash
 same-pd openedRoyalGardens
 same-pd grubsCollected

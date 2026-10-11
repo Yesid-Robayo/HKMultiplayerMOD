@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.Reflection;
+using GlobalEnums;
 using HKMultiplayer.Util;
 
 namespace HKMultiplayer.Game.World;
@@ -16,8 +18,17 @@ internal static class CoopSaves {
     private static readonly MethodInfo ResetGameTimer =
         typeof(GameManager).GetMethod("ResetGameTimer", BindingFlags.NonPublic | BindingFlags.Instance);
 
+    private static readonly FieldInfo OpeningChainField =
+        typeof(OpeningSequence).GetField("chainSequence", BindingFlags.NonPublic | BindingFlags.Instance);
+
     private static bool _installed;
     private static SaveGameData _pendingLoad;
+
+    /// <summary>El personaje del invitado es nuevo en este mundo: antes de entrar verá la introducción del juego.</summary>
+    private static bool _introPending;
+
+    /// <summary>Se está viendo esa introducción (al acabar se entra al mundo).</summary>
+    private static bool _introPlaying;
 
     /// <summary>Mundo en el que se está jugando (null = partida normal o menú).</summary>
     public static CoopWorldInfo ActiveWorld { get; private set; }
@@ -42,6 +53,57 @@ internal static class CoopSaves {
         _installed = true;
         On.GameManager.LoadGame += OnLoadGame;
         On.GameManager.SaveGame_int_Action1 += OnSaveGame;
+        On.GameManager.ContinueGame += OnContinueGame;
+        On.OpeningSequence.Start += (orig, self) => _introPlaying ? GuestIntro(self) : orig(self);
+    }
+
+    /// <summary>
+    /// Un invitado nuevo entra al mundo del host como quien continúa una partida (ya está empezada), y el juego solo pone
+    /// la introducción (el poema y la llegada a Hallownest) en una partida nueva: no la veía nunca. Ahora la ve primero y
+    /// después entra como siempre, donde reaparece el host.
+    /// </summary>
+    private static void OnContinueGame(On.GameManager.orig_ContinueGame orig, GameManager self) {
+        if (!_introPending || ActiveWorld == null || IsHostWorld) {
+            orig(self);
+            return;
+        }
+
+        _introPending = false;
+        _introPlaying = true;
+        Log.Info("Personaje nuevo: primero la introducción del juego");
+        self.StartCoroutine(self.RunStartNewGame());
+    }
+
+    /// <summary>
+    /// La introducción como la pone el juego (se puede saltar igual), pero al acabar no lleva al Paso del Rey de una
+    /// partida nueva: sigue con la entrada normal al mundo del host.
+    /// </summary>
+    private static IEnumerator GuestIntro(OpeningSequence opening) {
+        var gm = GameManager.instance;
+        var cameras = GameCameras.instance;
+        var chain = OpeningChainField?.GetValue(opening) as ChainSequence;
+        cameras.cameraFadeFSM.Fsm.Event("FADE SCENE IN");
+        cameras.DisableImageEffects();
+        PlayMakerFSM.BroadcastEvent("START FADE OUT");
+        gm.ui.SetState(UIState.CUTSCENE);
+        gm.RegisterSkippable(opening);
+        if (chain != null) {
+            chain.Begin();
+            while (chain.IsPlaying) {
+                var mode = chain.IsCurrentSkipped ? SkipPromptMode.NOT_SKIPPABLE : SkipPromptMode.SKIP_PROMPT;
+                if (gm.inputHandler.skipMode != mode) {
+                    gm.inputHandler.SetSkipMode(mode);
+                }
+
+                yield return null;
+            }
+        }
+
+        gm.inputHandler.SetSkipMode(SkipPromptMode.NOT_SKIPPABLE);
+        gm.DeregisterSkippable(opening);
+        _introPlaying = false;
+        Log.Info("Introducción terminada: entrando en el mundo del host");
+        gm.ContinueGame();
     }
 
     /// <summary>Si se puede empezar un mundo ahora (desde el menú principal).</summary>
@@ -97,6 +159,9 @@ internal static class CoopSaves {
         IsHostWorld = false;
         ActiveWorld = new CoopWorldInfo { Id = string.Empty, Name = "Mundo del host" };
         _pendingLoad = world;
+        // Un personaje nuevo empieza sin tiempo jugado (el tiempo es de cada personaje)
+        _introPending = world.playerData.playTime < 1f;
+        _introPlaying = false;
         Log.Info("Entrando en el mundo del host");
         GameManager.instance.LoadGameFromUI(1);
         return true;
@@ -127,6 +192,8 @@ internal static class CoopSaves {
 
         ActiveWorld = null;
         _pendingLoad = null;
+        _introPending = false;
+        _introPlaying = false;
         _enteredGame = false;
         IsHostWorld = false;
         ExitedWorld?.Invoke();

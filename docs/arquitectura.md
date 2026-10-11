@@ -78,8 +78,22 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     invitado su personaje y espera a recibirlo (unos segundos como mucho). El host guarda el mundo solo cada 2 minutos.
   - **Personaje** (`CharacterData`): estado (vida, alma, geo, banco, sombra, portal de sueño) e **inventario propio**
     (máscaras y vasijas, aguijón y artes, amuletos, llaves, reliquias, mapas, esencia, compras), más los objetos de
-    sala que recoge cada uno (objetos brillantes, fragmentos, cofres, orbes de sueño). Del mundo y compartido:
-    habilidades de movimiento y hechizos, jefes, puertas, palancas, paredes, personajes y salas visitadas.
+    sala que recoge cada uno (objetos brillantes, fragmentos, cofres, orbes de sueño). Del mundo y compartido: jefes,
+    puertas, palancas, paredes, personajes y salas visitadas.
+  - **Habilidades de cada jugador** (`CharacterData.AbilityFields`: dash, sombra, garra, doble salto, Corazón de
+    Cristal, Lágrima de Isma, Marca del Rey, aguijón onírico y su mejora, portal de sueño, hechizos y su nivel): hasta
+    la 0.23.0 eran del mundo, y todo lo que da una habilidad mira si este jugador ya la tiene (el objeto brillante de la
+    Capa de Polilla se destruye, la Vidente no da el aguijón, el chamán no da el hechizo). Recogida por uno, al otro le
+    llegaba puesta y se quedaba sin el objeto y sin su escena; cada caso pedía un parche aparte. Ahora cada uno consigue
+    las suyas. Un personaje guardado sin esos campos (versión anterior) se queda con los del mundo (`WasShared`: lo que
+    ya tenía, porque se compartía) y no con los de una partida nueva. Algunos personajes también miran una habilidad
+    (Quirrel se va del santuario de Sendero Verde y de la Estación de la Reina con la Garra de Mantis): eso pasa ahora
+    para cada uno según la suya.
+  - **Introducción para un invitado nuevo** (`CoopSaves`): el invitado entra al mundo del host como quien continúa una
+    partida, y el juego solo pone la introducción (el poema y la llegada a Hallownest, `Opening_Sequence`) en una
+    partida nueva. Si su personaje no tiene tiempo jugado, `ContinueGame` se cambia por `RunStartNewGame`; la
+    introducción hace lo del juego (se salta igual) pero al acabar no lleva al Paso del Rey: vuelve a `ContinueGame`,
+    que entra donde reaparece el host, como antes.
   - **Progreso compartido en directo** (`SharedProgress`): los campos del mundo se comparan cada 0,2 s con una copia
     (lectores compilados, sin memoria por lectura) y los cambios van al host, que los aplica y reenvía. Los objetos de
     sala (paredes, palancas, piedras de geo) se envían al guardarse y nunca retroceden.
@@ -510,7 +524,8 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 Decisiones aprobadas en [Decisiones de M5](#decisiones-de-m5). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
-mensajes nuevos van del 73 al 105 (el 98 es de `EnemySync` y el 104 y el 105 de `HazardSync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
+mensajes nuevos van del 73 al 106 (el 98 es de `EnemySync`, el 104 y el 105 de `HazardSync` y el 106 de
+`StagTogether`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
 juego (16:9; con otra proporción el juego deja franjas) y escala con su alto como el HUD del juego; las piezas se crean
 una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
 
@@ -536,9 +551,16 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   recuperar el orbe es de 66 y con "99" nadie podía revivir). "Avisos" apaga los avisos de lo que hacen los demás (se
   unió, salió, cayó, sombra recuperada, regalo de geo, Grimmchild, skin); los que responden a lo que hace uno
   (devoluciones, "Ir con ...", esperas de combate) salen siempre.
-- **Objetos brillantes de cada jugador que dan una habilidad del mundo** (la Capa de Polilla): su `PD Bool?` mira la
-  habilidad al cargar la sala y, si ya la tiene, se destruye. Recogida por otro, la capa de este jugador desaparecía y
-  no veía su escena. Como su guardado ya es de cada jugador (`Shiny`), esa comprobación se salta (`QuestNpcSync`).
+- **El botín cae igual en todos los PCs** (`DropSeeds`): cada jugador tiene su propio botín, así que cada PC lo crea, y
+  la dirección y la fuerza de cada pieza las decide el juego al azar (en un PC el geo caía a la izquierda y en el otro
+  a la derecha). Justo al lanzarlo se pone la misma semilla del azar en todos (de qué objeto es y cuántas veces lanzó ya
+  eso) y después el azar vuelve a como estaba. Sin mensajes. Se hace en `FlingUtils.SpawnAndFling` (el geo de los
+  enemigos: de un enemigo, solo el geo; su número compartido de `EnemySync`), `Breakable.Break` y los lanzamientos de
+  las FSM de la sala que no son de un enemigo (rocas de geo, cofres; contados por estado y acción, porque en el PC que
+  no golpea una roca solo se repiten algunos de sus estados), y en el lado y el ángulo de un objeto brillante que sale
+  volando (`SendRandomEvent` y `FlingObject` de `Shiny Control`). La semilla no va en `HealthManager.Die`: antes de
+  soltar el geo, la muerte gasta azar en cosas que dependen de quién golpeó (el giro del cadáver) y cada PC llegaba al
+  geo con otra tirada.
 - **Revivir** (`Revive`, mensajes 75 a 80): `HeroController.Die` se sustituye por la caída si hay alguien en pie (en un
   sueño, solo si está en el mismo; en los Panteones, nunca). El caído envía `Downed` (sala y suelo bajo él; si debajo no hay `Terrain` en 100 unidades, si ese suelo toca un
   `DamageHero` de peligro o si murió por un peligro, su `hazardRespawnLocation`: el cuerpo tiene que quedar donde el
@@ -648,6 +670,19 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   tendidos y se levantan al pulsar); las demás salidas son de cada uno.
 - **Grimmchild** (`GrimmchildGift`, mensaje 95): el amuleto es de cada jugador pero su nivel y la Compañía son del
   mundo; si uno lo recibe, los demás también.
+- **Viajar juntos en ciervo** (`StagTogether`, mensaje 106, fiable, a la sala): cuando la FSM `Stag Control` de la
+  estación de este jugador entra en `Fade` (ya eligió destino: `To Scene` y `To Position`), se avisa a la sala. En los
+  demás PCs su propio ciervo recibe el mismo destino y pasa a `Fade` (quitando el control al caballero), así que hace lo
+  del juego: fundido, `Cinematic_Stag_travel` y llegada a la salida del ciervo de destino. No va quien está caído,
+  muerto, cambiando de sala, sentado en un banco o en pausa (ve "X se fue en ciervo"). Quien sale así no vuelve a
+  avisar. Antes cada uno viajaba por su cuenta y el que se quedaba veía irse el ciervo sin poder seguirlo.
+- **Sentados en el mismo banco** (`PlayerSync.ShareBench`): el estado del jugador lleva si está sentado (bandera 16 del
+  byte de `PlayerSnapshot`: `atBench` y el banco con su control; `atBench` solo no basta, el juego no lo quita si se sale
+  de la sala sin levantarse). El centro del banco es donde el juego deja a este caballero (se toma 0,6 s después de
+  sentarse: antes aún lo está colocando). Los sentados a menos de 2,5 de ese centro se reparten a 1,1 uno de otro
+  alrededor de él por número de jugador (el menor a la izquierda), así todos los PCs los ven igual: este caballero se
+  corre a su sitio y a los compañeros se les dibuja en el suyo. Al quedarse solo vuelve al centro. Antes los dos
+  caballeros quedaban uno encima del otro.
 - **Skins** (`Skins`, mensajes 96 y 97, transferencia grande 3): compatibles con CustomKnight, como la 0.7.3 (con
   `AtlasRepair` para las hojas antiguas del HUD y el geo). Cada uno anuncia su skin (nombre y huella SHA-256 de los
   archivos que ven los demás) y quien no la tiene la pide al host, que la envía o se la pide a su dueño. Van por la
@@ -720,7 +755,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   ("efecto Slash de ...", con la FSM y el estado o el objeto). `tree <profundidad> <objeto>` y `fsmall <objeto>`
   muestran la jerarquía y todas las FSM de un objeto (también inactivo o del pool, como `Fireball Top`); `ptree` es
   `tree` buscando también entre lo cargado, `fsmvars` da los valores de las variables de sus FSM, `heroprefabs` los
-  objetos a los que apunta el caballero y `spawnlog <segundos>` registra lo que sale del pool. `effects` dice también
+  objetos a los que apunta el caballero y `spawnlog <segundos>` registra lo que sale del pool (y quién apaga cada pieza
+  de geo, con su pila de llamadas). `findobj` enseña como mucho 15 objetos y cuenta también los del pool: para el geo
+  en el suelo, `findactive`. `bossscene` dice si el juego cree estar en una sala de jefe (el geo se recicla al salir). `effects` dice también
   qué copias de amuletos y cuántos acompañantes del compañero hay encendidos. Ruta: `tests/routes/effects.route`.
 - Paquete para jugadores: `tools/manual-tests/installer-test.sh <zip>` (ver [Paquete e instalador](#paquete-e-instalador)).
 
@@ -732,8 +769,12 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   (`bash tools/test-cycle.sh --only "f g"`) y cerrar solo esas (`stop_all F G`).
 - Órdenes útiles: `hero` (por qué un caballero no responde) y `regain`; `enemies` marca "oculto", "sin-caja" e
   "(inactivo)"; `bosses` da la vida, si es marioneta y el estado de cada FSM del jefe; `tp x y` no fija el punto de
-  reaparición (`tp x y respawn` sí); `fsmgo` salta a un estado de un objeto con controlador; `healthlist` dice si cada
-  enemigo cuenta como jefe.
+  reaparición (`tp x y respawn` sí); `fsmgo` salta a un estado de un objeto con controlador; `fsmstate
+  <objeto>|<estado>|<fsm>` pone el estado de una FSM concreta (sin la tercera parte, la primera del objeto: en Lurien es
+  `Bob`, la que lo hace flotar); `healthlist` dice si cada enemigo cuenta como jefe.
+- Los juegos se abren con `Start-Process` (`_start_game`). Lanzados desde bash heredaban los handles abiertos, también
+  el extremo de una tubería, y `setup_pair | tail` no acababa hasta cerrar los juegos (parecía que la prueba se había
+  trabado).
 - No usar `hitall` ni abusar de `hitenemy` para comprobar combates: quitan vida directamente, matan enemigos dormidos o
   invulnerables, falsean el contador de las oleadas y pueden saltarse la lógica del jefe (la cabeza del Falso
   Caballero). Mejor golpes de aguijón reales (`tools/manual-tests/colo-nail.sh`).
@@ -867,15 +908,28 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   Charged Lumafly de `Fungus3_26` están en el mismo sitio en los dos PCs; la capa de Polilla de `Fungus1_04` sigue para
   el host cuando el invitado ya tiene la habilidad (también al recargar la sala); tocar un Shrumeling de `Fungus2_28`
   ya no hace retroceder ni da invulnerabilidad; el Rey Vengamosca, con los dos en el suelo de su arena, ataca cada
-  pocos segundos (embestidas e invocaciones) y casi no cambia de PC.
+  pocos segundos (embestidas e invocaciones) y casi no cambia de PC. El viaje en ciervo desde `Crossroads_47` a
+  `Room_Town_Stag_Station` lleva al otro en los dos sentidos (lo elige el host o el invitado; los dos llegan a la salida
+  del ciervo con control); sentados los dos en el banco de `Town`, cada uno ocupa una mitad y los dos PCs los ven igual.
+  Habilidades de cada uno: un personaje de antes conserva las del mundo; la garra de uno y el doble salto del otro no
+  pasan al compañero (el mundo, sí). Los soñadores de `RestingGrounds_04`: el host lee la placa, los dos entran juntos
+  en `Dream_NailCollection`, cada uno habla con la Vidente y recoge su aguijón onírico, y los dos despiertan en
+  `RestingGrounds_07`. Lurien: el host entra a su sueño con el aguijón onírico y el invitado va con él; al acabarlo, los
+  dos ven la cinemática y la puerta (`Cutscene_Boss_Door`), vuelven a la Aguja y `guardiansDefeated` queda en 1 en los
+  dos (no se cuenta dos veces). Un invitado nuevo ve la introducción, la salta y entra en la sala del host. El geo de
+  los enemigos de `Crossroads_07` y el de sus rocas cae en el mismo sitio en los dos PCs (a 0,1-0,3; una pieza que rebota
+  en el borde de una cornisa puede quedarse arriba en un PC y caer en el otro). Quirrel: hablarle en el templo y en el
+  santuario de Sendero Verde no lo quita al otro, y en la Estación de la Reina está igual en los dos.
 
 ## Pendientes
 
 Sin probar:
 - De 0.24.0, sin reproducir en las copias: los caballeros de musgo B y C de las arenas, que se quedaban quietos (no
   existen en el mundo de prueba); la curación del compañero pegada (cortada o no, acaba bien). Devolver el escupitajo
-  del Gulka con un aguijonazo físico (probado con `nailtouch`, no con el choque). Recoger la capa de Polilla con la
-  habilidad ya puesta y ver su escena (probado que la capa sigue; el camino de la escena no mira la habilidad).
+  del Gulka con un aguijonazo físico (probado con `nailtouch`, no con el choque). Un objeto brillante que sale volando
+  (mismo mecanismo que las rocas de geo, sin probar en vivo). En la partida real, a uno le salió Quirrel en su segunda
+  ubicación y al otro no; en las copias no se reprodujo (sin saber cuál era la ubicación). Monomon y Herrah (probado
+  Lurien).
 - De 0.23.0: todo entre dos PCs reales. En la partida real el invitado dijo que revivir no le gastaba alma; en las
   copias sí la gasta (se cobra entera al empezar Focus y se devuelve si se suelta o le golpean, y su registro tiene
   tres "Golpeado mientras revivía").

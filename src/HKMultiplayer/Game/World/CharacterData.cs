@@ -9,11 +9,11 @@ using Newtonsoft.Json.Linq;
 namespace HKMultiplayer.Game.World;
 
 /// <summary>
-/// Lo que es de cada jugador dentro de un mundo coop: su estado (vida, alma, banco, sombra) y su <b>inventario</b>
-/// (máscaras y vasijas, aguijón y artes, amuletos, llaves, reliquias, mapas, esencia, compras), además de los objetos
-/// de las salas que recoge cada uno por su cuenta (objetos brillantes, fragmentos, cofres, orbes de sueño...).
-/// Lo demás es del mundo y se comparte: habilidades de movimiento y hechizos, jefes, puertas, palancas, paredes,
-/// personajes y salas visitadas.
+/// Lo que es de cada jugador dentro de un mundo coop: su estado (vida, alma, banco, sombra), sus <b>habilidades</b>
+/// (movimiento, hechizos, aguijón onírico) y su <b>inventario</b> (máscaras y vasijas, aguijón y artes, amuletos,
+/// llaves, reliquias, mapas, esencia, compras), además de los objetos de las salas que recoge cada uno por su cuenta
+/// (objetos brillantes, fragmentos, cofres, orbes de sueño...). Lo demás es del mundo y se comparte: jefes, puertas,
+/// palancas, paredes, personajes y salas visitadas.
 /// </summary>
 internal static class CharacterData {
     /// <summary>Propiedad del JSON del personaje con sus objetos de sala individuales.</summary>
@@ -24,6 +24,17 @@ internal static class CharacterData {
 
     private static IEnumerable<string> Numbered(string prefix, int from, int to) =>
         Enumerable.Range(from, to - from + 1).Select(i => prefix + i);
+
+    /// <summary>
+    /// Habilidades: cada uno consigue las suyas, como en el juego. Lo que da una habilidad (el objeto brillante de la Capa
+    /// de Polilla, el chamán de los hechizos, el sueño del aguijón onírico) mira si este jugador ya la tiene; siendo del
+    /// mundo, al segundo le llegaba puesta y el juego le quitaba el objeto y su escena.
+    /// </summary>
+    private static readonly string[] AbilityFields = {
+        "hasDash", "canDash", "canBackDash", "hasShadowDash", "canShadowDash", "hasWalljump", "canWallJump",
+        "hasDoubleJump", "hasSuperDash", "canSuperDash", "hasAcidArmour", "hasKingsBrand", "hasDreamNail",
+        "dreamNailUpgraded", "hasDreamGate", "hasSpell", "fireballLevel", "quakeLevel", "screamLevel"
+    };
 
     /// <summary>Campos de <see cref="PlayerData"/> que son del personaje.</summary>
     private static readonly string[] FieldNames = new[] {
@@ -90,6 +101,7 @@ internal static class CharacterData {
             "spareMarkers_b", "spareMarkers_y", "spareMarkers_w", "placedMarkers_r", "placedMarkers_b",
             "placedMarkers_y", "placedMarkers_w"
         }
+        .Concat(AbilityFields)
         .Concat(Numbered("equippedCharm_", 1, 40))
         .Concat(Numbered("gotCharm_", 1, 40))
         .Concat(Numbered("newCharm_", 1, 40))
@@ -115,6 +127,12 @@ internal static class CharacterData {
         "Reward", "Reminder", "Interact Reminder", "Death Respawn Trigger", "Initial Fall Impact", "Force Hard Landing",
         "Secret Sound Region", "Poo "
     };
+
+    /// <summary>
+    /// Campos que fueron del mundo hasta la 0.23.0 (las habilidades): un personaje guardado sin ellos se queda con los del
+    /// mundo (lo que ya tenía, porque se compartía) y no con los de una partida nueva.
+    /// </summary>
+    private static readonly HashSet<string> WasShared = new(AbilityFields);
 
     /// <summary>Campos que se toman del host para un personaje nuevo: empieza donde reaparece el host.</summary>
     private static readonly string[] FromHostForNew = {
@@ -229,11 +247,12 @@ internal static class CharacterData {
     /// <summary>
     /// Pone un personaje en el JSON de una partida completa (<c>playerData</c> y <c>sceneData</c>): sus campos y sus
     /// objetos de sala individuales en lugar de los de quien guardó la partida. Lo que falte se toma de
-    /// <paramref name="defaults"/> (p. ej. personajes guardados con una versión anterior).
+    /// <paramref name="defaults"/> (p. ej. personajes guardados con una versión anterior), salvo lo que antes era del
+    /// mundo (<see cref="WasShared"/>): eso se queda como está en el mundo.
     /// </summary>
     public static void ApplyToWorld(JObject worldJson, JObject character, JObject defaults) {
         var playerJson = (JObject) worldJson["playerData"];
-        ApplyFields(playerJson, defaults);
+        ApplyFields(playerJson, defaults, character != defaults ? character : null);
         ApplyFields(playerJson, character);
 
         if (worldJson["sceneData"]?["persistentBoolItems"] is not JArray sceneItems) {
@@ -255,10 +274,12 @@ internal static class CharacterData {
         }
     }
 
-    private static void ApplyFields(JObject target, JObject source) {
+    /// <param name="saved">Personaje guardado: lo que antes era del mundo y a él le falta no se toca.</param>
+    private static void ApplyFields(JObject target, JObject source, JObject saved = null) {
         var serializer = Serializer;
         foreach (var property in source.Properties()) {
-            if (!Fields.TryGetValue(property.Name, out var field)) {
+            if (!Fields.TryGetValue(property.Name, out var field) ||
+                saved != null && saved[property.Name] == null && WasShared.Contains(property.Name)) {
                 continue;
             }
 

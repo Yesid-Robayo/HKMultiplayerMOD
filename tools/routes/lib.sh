@@ -30,6 +30,13 @@ HK_IGNORE_ERRORS="${HK_IGNORE_ERRORS:-zz_never_matches}"
 
 _inst_dir() { echo "$HK_INSTANCES_DIR/$(echo "$1" | tr 'A-Z' 'a-z')"; }
 _data_dir() { echo "$HK_LOCALLOW/HollowKnight$1"; }
+
+# Abre el juego de una copia sin que herede nada de este shell (ver launch_instance)
+_start_game() {
+  local win; win="$(cygpath -w "$1")"
+  powershell.exe -NoProfile -Command "Start-Process -FilePath '$win\hollow_knight.exe' -WorkingDirectory '$win' -ArgumentList '-screen-fullscreen 0 -screen-width $2 -screen-height $3 -mptest'" </dev/null >/dev/null 2>&1
+}
+
 _log_file() { echo "$(_data_dir "$1")/ModLog.txt"; }
 
 # Crea la copia <letra> si no existe: hard links al juego de Steam (no ocupa disco), salvo los dos archivos con el nombre
@@ -84,10 +91,12 @@ stop_instance() {
 }
 
 # Lanza la copia en una ventana pequeña. El ModLog anterior se borra: si no, se leerían resultados de la ejecución pasada.
+# Con Start-Process y no desde bash: un proceso de Windows lanzado desde bash hereda los handles abiertos, también el
+# extremo de escritura de una tubería, y "setup_pair | tail" se quedaba esperando hasta que se cerraran los juegos.
 launch_instance() {
   local dir; dir="$(_inst_dir "$1")"
   rm -f "$(_log_file "$1")"
-  (cd "$dir" && ./hollow_knight.exe -screen-fullscreen 0 -screen-width 640 -screen-height 360 -mptest >/dev/null 2>&1 &)
+  _start_game "$dir" 640 360
 }
 
 # =====================================================================================================
