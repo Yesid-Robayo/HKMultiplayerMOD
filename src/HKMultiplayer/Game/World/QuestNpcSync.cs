@@ -472,6 +472,14 @@ internal sealed class QuestNpcSync {
         }
 
         _hooked = true;
+        // En el registro: un personaje de misión que su comprobación quita, y por qué dato. En la partida real a uno le
+        // salía Quirrel y al otro no, y el registro no decía nada
+        On.HutongGames.PlayMaker.Actions.PlayerDataBoolTest.OnEnter += (orig, self) => {
+            orig(self);
+            if (_active != null) {
+                NoteRemoval(self);
+            }
+        };
         On.DeactivateIfPlayerdataTrue.OnEnable += (orig, self) => {
             orig(self);
             NoteTurnedOff(self);
@@ -516,7 +524,67 @@ internal sealed class QuestNpcSync {
     private static void NoteTurnedOff(MonoBehaviour toggle) {
         if (_active != null && toggle != null && !toggle.gameObject.activeSelf) {
             TurnedOffAtLoad.Add(toggle);
+            var field = toggle switch {
+                DeactivateIfPlayerdataTrue t => t.boolName,
+                DeactivateIfPlayerdataFalse f => f.boolName,
+                _ => null
+            };
+            if (!string.IsNullOrEmpty(field) && IsNpcObject(toggle.gameObject)) {
+                LogRemoval(toggle.gameObject.name, toggle.GetType().Name, field);
+            }
         }
+    }
+
+    /// <summary>Si la comprobación (un sí/no de la partida) manda a la FSM de un personaje a quitarse, se apunta.</summary>
+    private static void NoteRemoval(HutongGames.PlayMaker.Actions.PlayerDataBoolTest action) {
+        var field = action.boolName?.Value;
+        var fsm = action.Fsm;
+        if (string.IsNullOrEmpty(field) || PlayerData.instance == null || fsm?.Owner is not PlayMakerFSM owner ||
+            action.State == null) {
+            return;
+        }
+
+        var sent = PlayerData.instance.GetBool(field) ? action.isTrue : action.isFalse;
+        if (sent == null || !LeadsToRemoval(action.State, sent) || !IsNpc(owner)) {
+            return;
+        }
+
+        LogRemoval(owner.gameObject.name, owner.FsmName, field);
+    }
+
+    private static void LogRemoval(string name, string by, string field) {
+        var value = PlayerData.instance != null && PlayerData.instance.GetBool(field);
+        var whose = CharacterData.IsCharacterField(field) ? "de este jugador" : "del mundo";
+        Log.Info($"{name}/{by}: el personaje se quita en esta sala por {field}={value} (dato {whose})");
+    }
+
+    /// <summary>Si ese aviso lleva a destruir o apagar el objeto (el estado "Destroy" de los personajes).</summary>
+    private static bool LeadsToRemoval(FsmState state, FsmEvent sent) {
+        if (sent.Name.IndexOf("DESTROY", StringComparison.OrdinalIgnoreCase) >= 0) {
+            return true;
+        }
+
+        foreach (var transition in state.Transitions) {
+            if (transition.FsmEvent == sent && transition.ToState != null &&
+                (transition.ToState.IndexOf("Destroy", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 transition.ToState.IndexOf("Deactivate", StringComparison.OrdinalIgnoreCase) >= 0)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Si el objeto es de un personaje con el que se habla (él, un hijo o su padre tienen la FSM de hablar).</summary>
+    private static bool IsNpcObject(GameObject go) {
+        foreach (var fsm in go.GetComponentsInChildren<PlayMakerFSM>(true)) {
+            if (Array.IndexOf(NpcFsms, fsm.FsmName) >= 0) {
+                return true;
+            }
+        }
+
+        var parent = go.transform.parent;
+        return parent != null && Array.Exists(parent.GetComponents<PlayMakerFSM>(), f => Array.IndexOf(NpcFsms, f.FsmName) >= 0);
     }
 
     /// <summary>

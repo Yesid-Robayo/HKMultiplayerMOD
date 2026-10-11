@@ -159,8 +159,8 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
   aunque esté en otra sala.
 - **HUD del compañero** arriba a la derecha (nombre, máscaras, alma y dónde está), sus máscaras sobre su cabeza al
   cambiarle la vida y **flechas** en el borde de la pantalla hacia el compañero y los cuerpos.
-- **Compañeros en el mapa**: con el mapa abierto, cada compañero sale como una brújula azul donde está (sin necesitar
-  el Wayward Compass), y en rojo en su cuerpo si está caído.
+- **Compañeros en el mapa**: con el mapa abierto, cada compañero sale como una brújula azul donde está (si los dos
+  llevan el Wayward Compass equipado), y en rojo en su cuerpo si está caído.
 - **Barras de enemigos** opcionales sobre cada enemigo herido.
 - **Cinemáticas compartidas**: los finales, los créditos y Mr. Mushroom se ven a la vez aunque estéis en salas
   distintas; se saltan cuando todos votan ("Esperando a X para saltar 1/2").

@@ -112,6 +112,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
       contaba como "solo enseña"); abierta por otro jugador, aquí no había campana hasta volver a entrar.
       Mr. Mushroom se destruye en el otro PC en cuanto uno le habla (su `Control`
       compara `mrMushroomState` con su sitio), Bretta y Quirrel se van, el farol de la Pesadilla aparece.
+    - En el registro queda cada personaje que su comprobación quita al cargar la sala, con el dato, su valor y si es del
+      mundo o del jugador ("Quirrel Slug Shrine/deactivate: el personaje se quita en esta sala por hasWalljump=True (dato
+      de este jugador)"): en la partida real a uno le salía Quirrel y al otro no, y el registro no decía por qué.
     - Los objetos que el juego enciende o apaga según un dato (`DeactivateIfPlayerdataTrue`, `...False`,
       `ActivateIfPlayerdataTrue`; Myla, las larvas del Padre de las Larvas) se encienden o apagan igual. No los enemigos.
     - Se mira al cargar la sala qué FSM y objetos miran cada dato (una vez, sin memoria al jugar). No se tocan los
@@ -607,7 +610,7 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   entre los hijos de las zonas del mapa y pone ahí una copia de `compassIcon` (sin FSM), azul, o roja en su cuerpo
   si el jugador está caído (calculada al caer, en la sala del cuerpo: el cuerpo puede no estar donde cayó, sino en el
   último sitio seguro; después no cambia aunque el caballero oculto siga al compañero). Se ve con el mapa abierto (`flamePins` activo: lo encienden el mapa del
-  inventario y el rápido, y lo apaga `CloseQuickMap`), sin necesitar el Wayward Compass, salvo en sueños, el Palacio
+  inventario y el rápido, y lo apaga `CloseQuickMap`), solo si los dos llevan el Wayward Compass equipado (quien no lo lleva envía su sitio como oculto; verlos siempre era demasiado fácil) y salvo en sueños, el Palacio
   Blanco y los Panteones (donde el juego tampoco muestra la brújula). Sin noticias en 3 s, el icono se quita.
 - **Reconexión automática** (`MultiplayerRunner`): si el invitado pierde la conexión por tiempo después de haber
   entrado (no si el host cierra, ni por código, versión o partida llena), vuelve al menú como antes y, ya en el menú

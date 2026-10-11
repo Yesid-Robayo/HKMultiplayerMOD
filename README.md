@@ -159,8 +159,8 @@ world, see each other in real time and fight the same enemies and bosses togethe
   in another room.
 - **Partner HUD** at the top right (name, masks, soul and where they are), their masks above their head when their
   health changes, and **arrows** at the edge of the screen pointing to partners and bodies.
-- **Partners on the map**: with the map open, each partner shows up as a blue compass where they are (no Wayward
-  Compass needed), and red on their body if they are down.
+- **Partners on the map**: with the map open, each partner shows up as a blue compass where they are (when both of
+  you wear the Wayward Compass), and red on their body if they are down.
 - Optional **enemy health bars** above each damaged enemy.
 - **Shared cutscenes**: endings, credits and Mr. Mushroom play at the same time even in different rooms; they are
   skipped when everyone votes ("Waiting for X to skip 1/2").

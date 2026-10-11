@@ -10,7 +10,8 @@ namespace HKMultiplayer.Game.Features;
 
 /// <summary>
 /// Compañeros en el mapa: con el mapa abierto (el del inventario o el rápido) cada compañero sale como una brújula de
-/// otro color en el sitio de la sala en el que está, como la propia del Wayward Compass pero sin necesitar el amuleto.
+/// otro color en el sitio de la sala en el que está, como la propia del Wayward Compass, y como ella con el amuleto:
+/// solo se ven si los dos lo llevan equipado (verlos siempre, sin amuleto, era demasiado fácil).
 /// Si está caído, su icono queda en rojo en su cuerpo. Lo activa el host (<see cref="HostSettings.ShowPartnerOnMap"/>).
 /// <para>Cada jugador envía 4 veces por segundo (no fiable, a todos) en qué sala del mapa está y en qué punto de ella,
 /// de 0 a 1, calculado como lo hace el juego para su brújula: así los demás no necesitan las medidas de una sala que no
@@ -147,9 +148,12 @@ internal sealed class PartnerMap {
             _sentState = StateHidden;
         }
 
+        // Sin el Wayward Compass este jugador no sale en el mapa de los demás (y él tampoco los ve): para verse, los dos
+        // lo llevan. Lo de arriba se sigue calculando: el sitio del cuerpo de un caído solo se toma al caer
+        var state = HasCompass() ? _sentState : StateHidden;
         var writer = _session.Begin(MapPosition);
-        writer.WriteByte(_sentState);
-        if (_sentState != StateHidden) {
+        writer.WriteByte(state);
+        if (state != StateHidden) {
             writer.WriteString(_sentScene);
             writer.WriteFloat(_sentX);
             writer.WriteFloat(_sentY);
@@ -238,6 +242,12 @@ internal sealed class PartnerMap {
         entry.Y = Mathf.Clamp(reader.ReadFloat(), -0.5f, 1.5f);
     }
 
+    /// <summary>Amuleto del Wayward Compass.</summary>
+    private const string CompassCharm = "equippedCharm_2";
+
+    /// <summary>Si este jugador lleva el Wayward Compass: sin él tampoco ve su propia brújula.</summary>
+    private static bool HasCompass() => PlayerData.instance != null && PlayerData.instance.GetBool(CompassCharm);
+
     private void UpdateIcons(float now) {
         var gm = GameManager.instance;
         var map = gm != null && gm.gameMap != null ? gm.gameMap.GetComponent<GameMap>() : null;
@@ -252,7 +262,7 @@ internal sealed class PartnerMap {
         }
 
         var open = map != null && map.compassIcon != null && map.flamePins != null && map.flamePins.activeSelf &&
-                   map.gameObject.activeInHierarchy && HostSettings.Current.ShowPartnerOnMap &&
+                   map.gameObject.activeInHierarchy && HostSettings.Current.ShowPartnerOnMap && HasCompass() &&
                    !HiddenZone(gm.GetCurrentMapZone());
         foreach (var entry in _entries.Values) {
             var position = Vector3.zero;

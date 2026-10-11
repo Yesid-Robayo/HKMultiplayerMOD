@@ -119,7 +119,7 @@ internal sealed class HostSettings {
     public static readonly HostOption ShowArrowsOption = new(12, "showArrows", "Flechas hacia el compañero", "Arrows to partners",
         YesNoValues, YesNo, YesNoEnglish, 0);
 
-    /// <summary>Cada compañero sale en el mapa abierto como una brújula de otro color (sin necesitar el Wayward Compass).</summary>
+    /// <summary>Cada compañero sale en el mapa abierto como una brújula de otro color (si los dos llevan el Wayward Compass equipado).</summary>
     public static readonly HostOption ShowPartnerOnMapOption = new(13, "showPartnerOnMap", "Compañeros en el mapa", "Partners on the map",
         YesNoValues, YesNo, YesNoEnglish, 0);
 
