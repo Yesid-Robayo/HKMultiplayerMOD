@@ -407,6 +407,10 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     caja del Electric Mage, que solo se enciende al despertar: retomado justo entonces, nadie podía golpearlo. Y si allí
     su lógica ya lo había soltado de su padre (los Mage del Coliseo cuelgan de su oleada hasta despertar y luego se
     teletransportan con posiciones locales), aquí también se suelta: si no, se teletransportaba fuera de la arena.
+  - El host recuerda los enemigos muertos de cada sala (aunque se quede vacía) hasta que alguien descansa en un banco
+    o muere: es cuando el juego hace que vuelvan (`GameManager.ResetSemiPersistentItems`, enganchado; lo llaman el banco
+    y `PlayerDead`). Antes se miraba `SetBenchRespawn`, que el banco no llama (pone el punto de reaparición dato a dato):
+    ni sentarse ni morir devolvía los enemigos.
   - Un enemigo destruido durante un cambio de sala (`GameManager.IsInSceneTransition`) no cuenta como muerto: la sala
     se está descargando. Al recargar la misma sala ("Recargar sala", "Ir con" a la sala en la que ya se está) su nombre
     no cambia hasta que la nueva está lista, y antes todos sus enemigos se daban por muertos hasta el banco: el Falso
@@ -968,7 +972,9 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   al levantarse los tronos. En el PC que copia al Mantis Lord, al irse se oculta en el mismo cuadro que en el que lo
   mueve y sigue oculto lo mismo (~0,4 s; antes el último cuadro de la salida se quedaba ~0,36 s más en local).
   Ascensores de `Town` (`Mines Exit Lift`) y de `Room_Town_Stag_Station` (`Stag Lift`): el invitado se sube, baja y en
-  el host baja a la vez; el host lo sube después desde abajo y en el invitado sube igual.
+  el host baja a la vez; el host lo sube después desde abajo y en el invitado sube igual. Enemigos de `Crossroads_01`
+  muertos: el invitado se sienta en el banco de `Town` y al volver están todos; muertos otra vez, mueren los dos y al
+  volver están todos.
 
 ## Pendientes
 

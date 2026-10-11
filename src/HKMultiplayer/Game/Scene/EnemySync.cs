@@ -622,7 +622,7 @@ internal sealed class EnemySync {
         _onPlayerScene = OnPlayerScene;
         _onKilled = OnKilled;
         _onRested = (from, _) => {
-            Log.Info($"{from.Name} descansó en un banco: los enemigos vuelven a aparecer");
+            Log.Info($"{from.Name} descansó en un banco o murió: los enemigos vuelven a aparecer");
             ClearDead();
         };
     }
@@ -1135,7 +1135,7 @@ internal sealed class EnemySync {
         }
     }
 
-    /// <summary>Este jugador descansó en un banco.</summary>
+    /// <summary>Este jugador descansó en un banco o murió.</summary>
     private void OnLocalRest() {
         if (_session == null || Time.unscaledTime - _lastRest < 3f) {
             return;
@@ -1143,9 +1143,10 @@ internal sealed class EnemySync {
 
         _lastRest = Time.unscaledTime;
         if (_session.IsHost) {
-            Log.Info("Descansaste en un banco: los enemigos vuelven a aparecer");
+            Log.Info("Banco o muerte: los enemigos vuelven a aparecer");
             ClearDead();
         } else if (_session.CanSend) {
+            Log.Info("Banco o muerte: se avisa al host para que los enemigos vuelvan a aparecer");
             _session.Begin(Rested);
             _session.End();
         }
@@ -5460,6 +5461,14 @@ internal sealed class EnemySync {
             if (!_playingFx && sync?._session != null && sync._byHealth.TryGetValue(self, out var enemy) && !enemy.Puppet) {
                 sync.SendHitFx(enemy, hit);
             }
+        };
+
+        // Lo que hace el juego para que los enemigos vuelvan (sus datos "semipersistentes"): al descansar en un banco y al
+        // morir. El banco no llama a SetBenchRespawn (pone el punto de reaparición dato a dato): sentarse no hacía nada y
+        // los enemigos muertos seguían muertos; morir tampoco los devolvía
+        On.GameManager.ResetSemiPersistentItems += (orig, self) => {
+            orig(self);
+            _active?.OnLocalRest();
         };
 
         // Descansar en un banco (el juego fija ahí el punto de reaparición)
