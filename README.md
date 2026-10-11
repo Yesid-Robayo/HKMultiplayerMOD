@@ -41,8 +41,10 @@ world, see each other in real time and fight the same enemies and bosses togethe
 ## ✨ Features
 
 - 🌍 **Coop worlds**: up to 4 worlds of your own, saved on the host's PC, separate from your normal saves.
-- 🔒 **Connection**: local network or internet, with a game code and everything encrypted, no Steam or relay servers.
-- 👥 **Players**: you see your partner in real time with their name, animations, attacks, spells and charms.
+- 🔒 **Connection**: local network or internet, with a game code and everything encrypted, no Steam or relay servers;
+  a guest who loses the connection gets back in on their own.
+- 👥 **Players**: you see your partner in real time with their name, animations, attacks, spells and charms, and on the
+  map.
 - ⚔️ **Enemies and bosses**: the same on every PC (same health, same hits, same death); bosses wait until you are both
   there.
 - 🗺️ **Shared world**: progress, levers, doors, broken walls, elevators, gates, chests and NPC quests, all at once.
@@ -279,7 +281,7 @@ away without being able to change them.
 | Masks on revive | 1 · 2 · 3 · All | 1 |
 | Invulnerable after revive | 1 · 2 · 3 · 5 s | 2 s |
 | Revive at a partner's bench | Yes · No | Yes |
-| Names · Partner health · Arrows to partners · Notices · Boss bar | Yes · No | Yes |
+| Names · Partner health · Arrows to partners · Partners on the map · Notices · Boss bar | Yes · No | Yes |
 | Enemy bars | Yes · No | No |
 | Gift geo · Allow going to a partner | Yes · No | Yes |
 | Skip cutscenes | Vote · Anyone | Vote |
@@ -317,7 +319,7 @@ away without being able to change them.
 | `src/HKMultiplayer/Session/` | Session: hosting and joining, players, rooms and each room's owner, message routing. |
 | `src/HKMultiplayer/Game/Players/` | Player state, interpolation, partner avatars and their effects. |
 | `src/HKMultiplayer/Game/World/` | Coop worlds, saving, guests' characters, shared progress and NPC quests. |
-| `src/HKMultiplayer/Game/Features/` | Co-op features: player status, host settings, revive, shades, HUD, bars, geo gifts, going to a partner, dreams, cutscenes, skins. |
+| `src/HKMultiplayer/Game/Features/` | Co-op features: player status, host settings, revive, shades, HUD, partners on the map, bars, geo gifts, going to a partner, dreams, cutscenes, skins. |
 | `src/HKMultiplayer/Game/Scene/` | Room objects, breakables, elevators and gates, battle controllers, enemies and bosses, animated hazards. |
 | `src/HKMultiplayer/UI/` | Menus, notices, language and the co-op HUD canvas. |
 | `src/HKMultiplayer/Testing/` | Test mode: file-driven commands to test with several copies of the game. |

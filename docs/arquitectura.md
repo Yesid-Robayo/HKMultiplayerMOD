@@ -614,7 +614,8 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   o a una cinemática), `scenetrace <s>` (sala, cambio de sala y posición cada 0,2 s), `enemybars`, `invulwatch <s>`
   (cuándo empieza y acaba la invulnerabilidad), `hurt [daño] [tipo]` (tipo 2 = pinchos, 3 = ácido) y `status` dice el
   dueño de la sala.
-- Funciones del coop: `settings` (ajustes que rigen), `party` (revivir y estado de cada jugador), `vitals`, `shades`,
+- Funciones del coop: `settings` (ajustes que rigen), `party` (revivir y estado de cada jugador), `partnermap` (lo
+  enviado al mapa y, de cada compañero, su sala, su punto y si su icono se ve), `vitals`, `shades`,
   `killshade` (mata la copia de la sombra de un compañero), `bossbar`, `focus <s>` (Focus simulado), `tpbody`, `heal`
   (vida llena por la vía del juego: `pdset maxHealth` no redibuja el HUD del juego y el mini-HUD lo mostraría distinto),
   `soul <n>`, `mppage <partida|ajustes|ajustes2|compañeros>`, `mpoption <etiqueta>|<pasos>`, `mpoptions`,

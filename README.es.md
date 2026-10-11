@@ -41,8 +41,10 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 ## ✨ Funciones
 
 - 🌍 **Mundos coop**: hasta 4 mundos propios, guardados en el PC del host, aparte de tus partidas normales.
-- 🔒 **Conexión**: red local o internet, con código de partida y todo cifrado, sin Steam ni servidores intermedios.
-- 👥 **Jugadores**: el compañero se ve en tiempo real con su nombre, animaciones, ataques, hechizos y amuletos.
+- 🔒 **Conexión**: red local o internet, con código de partida y todo cifrado, sin Steam ni servidores intermedios;
+  el invitado que pierde la conexión vuelve a entrar solo.
+- 👥 **Jugadores**: el compañero se ve en tiempo real con su nombre, animaciones, ataques, hechizos y amuletos, y
+  también en el mapa.
 - ⚔️ **Enemigos y jefes**: los mismos en todos los PCs (misma vida, mismos golpes, misma muerte); los jefes esperan a
   que estéis los dos.
 - 🗺️ **Mundo compartido**: progreso, palancas, puertas, paredes rotas, ascensores, rejas, cofres y misiones de NPC, a la
@@ -279,7 +281,7 @@ al momento sin poder cambiarlos.
 | Máscaras al revivir | 1 · 2 · 3 · Todas | 1 |
 | Invulnerable al revivir | 1 · 2 · 3 · 5 s | 2 s |
 | Revivir en el banco del compañero | Sí · No | Sí |
-| Nombres · Vida del compañero · Flechas · Avisos · Barra del jefe | Sí · No | Sí |
+| Nombres · Vida del compañero · Flechas · Compañeros en el mapa · Avisos · Barra del jefe | Sí · No | Sí |
 | Barras de enemigos | Sí · No | No |
 | Regalar geo · Permitir ir con un compañero | Sí · No | Sí |
 | Saltar cinemáticas | Votación · Cualquiera | Votación |
@@ -305,6 +307,10 @@ al momento sin poder cambiarlos.
 
 ## 💻 Desarrollo
 
+> [!NOTE]
+> Los identificadores del código están en inglés; los comentarios, los registros y las notas de diseño de `docs/`, en
+> español.
+
 <details>
 <summary><b>Estructura del repositorio</b></summary>
 
@@ -314,7 +320,7 @@ al momento sin poder cambiarlos.
 | `src/HKMultiplayer/Session/` | Sesión: host y unirse, jugadores, salas y dueño de cada sala, reparto de mensajes. |
 | `src/HKMultiplayer/Game/Players/` | Estado de los jugadores, interpolación, avatares del compañero y sus efectos. |
 | `src/HKMultiplayer/Game/World/` | Mundos coop, guardado, personajes de los invitados, progreso compartido y misiones de NPC. |
-| `src/HKMultiplayer/Game/Features/` | Funciones del coop: estado de cada jugador, ajustes del host, revivir, sombras, HUD, barras, regalar geo, ir con un compañero, sueños, cinemáticas, skins. |
+| `src/HKMultiplayer/Game/Features/` | Funciones del coop: estado de cada jugador, ajustes del host, revivir, sombras, HUD, compañeros en el mapa, barras, regalar geo, ir con un compañero, sueños, cinemáticas, skins. |
 | `src/HKMultiplayer/Game/Scene/` | Objetos de sala, rompibles, ascensores y rejas, controladores de batalla, enemigos y jefes, peligros animados. |
 | `src/HKMultiplayer/UI/` | Menús, avisos, idioma y el lienzo del HUD del coop. |
 | `src/HKMultiplayer/Testing/` | Modo de prueba: órdenes por archivo para probar con varias copias del juego. |
