@@ -246,7 +246,7 @@ internal sealed class QuestNpcSync {
 
             reads.Clear();
             var onlyShows = ReadStart(fsm, reads);
-            if (reads.Count == 0 || !onlyShows && !IsNpc(fsm)) {
+            if (reads.Count == 0 || !onlyShows && !IsNpc(fsm) && Array.IndexOf(RecheckAlways, fsm.FsmName) < 0) {
                 continue;
             }
 
@@ -297,6 +297,13 @@ internal sealed class QuestNpcSync {
 
         list.Add(toggle);
     }
+
+    /// <summary>
+    /// FSM que no son de un personaje pero se vuelven a comprobar como si lo fueran. La campana de las estaciones del
+    /// ciervo (`Stag Bell`) solo se enciende al cargar la sala si la estación está abierta, y al empezar avisa a su cartel
+    /// (por eso no contaba como "solo enseña"): abierta por otro jugador, aquí no había campana hasta volver a entrar.
+    /// </summary>
+    private static readonly string[] RecheckAlways = { "Stag Bell" };
 
     /// <summary>FSM de un personaje con el que se habla: el suyo, el de algo suyo o el que lo enciende.</summary>
     private static readonly string[] NpcFsms = { "npc_control", "Conversation Control" };

@@ -19,6 +19,11 @@ namespace HKMultiplayer.Game.Scene;
 /// por lectura) y se vigila cada frame. Para romperlo en los demás se usa el mismo camino que el juego: su método de
 /// romper o, si solo se rompe al tocarlo un ataque, su detector de choques con un ataque de hechizo simulado.
 /// </para>
+/// <para>
+/// El capullo de savia vital (`HealthCocoon`, de código y guardable, sin FSM: los guardables de `SceneObjectSync` necesitan
+/// una) también: roto en directo, en los demás se rompe igual y suelta allí sus mariposas, así que cada jugador de la sala
+/// recoge su savia, como el geo. A quien entra después se le pone roto sin soltar nada (si no, ganaría savia al entrar).
+/// </para>
 /// </summary>
 internal sealed class BreakableSync {
     public const MessageType Broken = (MessageType) 52;
@@ -32,6 +37,12 @@ internal sealed class BreakableSync {
 
         /// <summary>El componente se destruye a sí mismo al romperse (telas y pasto cortables).</summary>
         public bool DestroyedMeansBroken;
+
+        /// <summary>
+        /// Si lo tiene, a quien entra en la sala se le pone roto así, sin lo que suelta al romperse (el capullo de
+        /// savia). Si no, se rompe como en directo (los trozos de decoración no dan nada).
+        /// </summary>
+        public Action<MonoBehaviour> SetBroken;
     }
 
     private sealed class Tracked {
@@ -46,7 +57,8 @@ internal sealed class BreakableSync {
     private readonly List<Tracked> _tracked = new();
     private readonly Dictionary<uint, Tracked> _byId = new();
     private readonly List<uint> _out = new();
-    private readonly HashSet<uint> _pending = new();
+    /// <summary>Rotos en otro PC antes de encontrarlos aquí, y si llegaron como estado para quien entra.</summary>
+    private readonly Dictionary<uint, bool> _pending = new();
     private readonly MessageHandler _onBroken;
     private readonly Action<SessionPlayer> _onPlayerScene;
     private GameSession _session;
@@ -64,6 +76,17 @@ internal sealed class BreakableSync {
         AddFieldKind("BreakableInfectedVine", "activated", TriggerBreak);
         // Plataformas de enredadera que se cortan (Sendero Verde, Jardines)
         AddFieldKind("VinePlatformCut", "activated", (c, _) => ((VinePlatformCut) c).Cut());
+        var cocoon = AddFieldKind("HealthCocoon", "activated", TriggerBreak);
+        if (cocoon != null) {
+            var activated = typeof(HealthCocoon).GetField("activated", BindingFlags.NonPublic | BindingFlags.Instance);
+            var setBroken = typeof(HealthCocoon).GetMethod("SetBroken", BindingFlags.NonPublic | BindingFlags.Instance);
+            cocoon.SetBroken = c => {
+                // Como al cargar la sala ya abierto (su OnSetSaveState): roto, sin mariposas ni sonido
+                activated?.SetValue(c, true);
+                setBroken?.Invoke(c, null);
+            };
+        }
+
         AddFieldKind("GlobControl", "broken", (c, _) => {
             var method = c.GetType().GetMethod("Break", BindingFlags.NonPublic | BindingFlags.Instance);
             if (method != null) {
@@ -78,6 +101,16 @@ internal sealed class BreakableSync {
             Break = (c, sync) => {
                 var method = typeof(GrassCut).GetMethod("OnTriggerEnter2D", BindingFlags.NonPublic | BindingFlags.Instance);
                 var attack = sync.FakeAttack("Nail Attack", c.transform.position);
+                // Sus partículas toman el color del material de su GrassBehaviour, que el juego borra al apagarse el pasto
+                // (lejos de la cámara de este PC): sin él, el corte fallaba antes de quitar el pasto. Se corta sin ellas
+                var cut = (GrassCut) c;
+                var particles = cut.particles;
+                var behaviour = c.GetComponentInParent<GrassBehaviour>();
+                var noColor = particles != null && behaviour != null && behaviour.SharedMaterial == null;
+                if (noColor) {
+                    cut.particles = null;
+                }
+
                 // El juego pone el efecto del corte entre el centro del golpe y el del pasto: el golpe se activa solo
                 // durante la llamada (sin un paso de física en medio, no toca nada más) para que su centro sea real
                 attack.enabled = true;
@@ -85,7 +118,30 @@ internal sealed class BreakableSync {
                     method?.Invoke(c, new object[] { attack });
                 } finally {
                     attack.enabled = false;
+                    if (noColor) {
+                        cut.particles = particles;
+                        particles.SetActive(true);
+                    }
                 }
+            }
+        });
+
+        // Pasto que se corta y se queda en su sitio (el del Sendero Verde y casi todo el de 1.5): no se seguía, así que lo
+        // cortado por uno seguía entero para el otro. `Grass` recibe el golpe como un enemigo; `GrassSpriteBehaviour`
+        // se corta con un aguijonazo y solo si está a la vista (fuera de la vista del otro no se cortaría)
+        AddFieldKind("Grass", "isCut", (c, _) => ((Grass) c).Hit(new HitInstance {
+            AttackType = AttackTypes.Nail, Direction = 0f, DamageDealt = 1, Multiplier = 1f, MagnitudeMultiplier = 1f
+        }));
+        var grassVisible = typeof(GrassSpriteBehaviour).GetField("visible", BindingFlags.NonPublic | BindingFlags.Instance);
+        AddFieldKind("GrassSpriteBehaviour", "isCut", (c, sync) => {
+            var method = typeof(GrassSpriteBehaviour).GetMethod("OnTriggerEnter2D", BindingFlags.NonPublic | BindingFlags.Instance);
+            var attack = sync.FakeAttack("Nail Attack", c.transform.position);
+            grassVisible?.SetValue(c, true);
+            attack.enabled = true;
+            try {
+                method?.Invoke(c, new object[] { attack });
+            } finally {
+                attack.enabled = false;
             }
         });
 
@@ -99,18 +155,20 @@ internal sealed class BreakableSync {
         });
     }
 
-    private static void AddFieldKind(string typeName, string fieldName, Action<MonoBehaviour, BreakableSync> breakAction) {
+    private static Kind AddFieldKind(string typeName, string fieldName, Action<MonoBehaviour, BreakableSync> breakAction) {
         var type = typeof(Breakable).Assembly.GetType(typeName);
         var field = type?.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
         if (field == null || field.FieldType != typeof(bool)) {
             Util.Log.Warn($"Rompible {typeName}.{fieldName} no encontrado: no se sincroniza");
-            return;
+            return null;
         }
 
         var target = Expression.Parameter(typeof(MonoBehaviour));
         var getter = Expression.Lambda<Func<MonoBehaviour, bool>>(
             Expression.Field(Expression.Convert(target, type), field), target).Compile();
-        Kinds.Add(new Kind { Type = type, IsBroken = getter, Break = breakAction });
+        var kind = new Kind { Type = type, IsBroken = getter, Break = breakAction };
+        Kinds.Add(kind);
+        return kind;
     }
 
     /// <summary>Rompe un objeto que solo se rompe al tocarlo un ataque: se simula el choque de un hechizo.</summary>
@@ -248,9 +306,11 @@ internal sealed class BreakableSync {
             }
         }
 
+        var snapshot = false;
         if (_sendSnapshot) {
             // Alguien entró en la sala: le llegan todos los que ya están rotos aquí
             _sendSnapshot = false;
+            snapshot = true;
             _out.Clear();
             foreach (var item in _tracked) {
                 if (item.LastValue) {
@@ -260,15 +320,16 @@ internal sealed class BreakableSync {
         }
 
         if (_out.Count > 0 && _session.CanSend) {
-            Send(_out);
+            Send(_out, snapshot);
         }
     }
 
-    private void Send(List<uint> ids) {
+    private void Send(List<uint> ids, bool snapshot) {
         for (var start = 0; start < ids.Count; start += MaxIdsPerMessage) {
             var count = Math.Min(MaxIdsPerMessage, ids.Count - start);
             var writer = _session.Begin(Broken);
             writer.WriteUShort(_sceneHash);
+            writer.WriteBool(snapshot);
             writer.WriteByte((byte) count);
             for (var i = start; i < start + count; i++) {
                 writer.WriteUInt(ids[i]);
@@ -296,8 +357,9 @@ internal sealed class BreakableSync {
                 var item = new Tracked { Id = id, Component = component, Kind = kind, LastValue = kind.IsBroken(component) };
                 _tracked.Add(item);
                 _byId[id] = item;
-                if (_pending.Remove(id)) {
-                    BreakRemote(item);
+                if (_pending.TryGetValue(id, out var pendingSnapshot)) {
+                    _pending.Remove(id);
+                    BreakRemote(item, pendingSnapshot);
                 }
             }
         }
@@ -325,6 +387,7 @@ internal sealed class BreakableSync {
 
     private void OnBroken(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
+        var snapshot = reader.ReadBool();
         var count = reader.ReadByte();
         for (var i = 0; i < count; i++) {
             var id = reader.ReadUInt();
@@ -333,14 +396,14 @@ internal sealed class BreakableSync {
             }
 
             if (_byId.TryGetValue(id, out var item)) {
-                BreakRemote(item);
+                BreakRemote(item, snapshot);
             } else {
-                _pending.Add(id);
+                _pending[id] = snapshot;
             }
         }
     }
 
-    private void BreakRemote(Tracked item) {
+    private void BreakRemote(Tracked item, bool snapshot) {
         if (item.Component == null || item.Kind.IsBroken(item.Component)) {
             item.LastValue = true;
             return;
@@ -349,9 +412,13 @@ internal sealed class BreakableSync {
         // Lo roto desde fuera no se vuelve a enviar
         item.LastValue = true;
         try {
-            item.Kind.Break(item.Component, this);
+            if (snapshot && item.Kind.SetBroken != null) {
+                item.Kind.SetBroken(item.Component);
+            } else {
+                item.Kind.Break(item.Component, this);
+            }
         } catch (Exception e) {
-            Util.Log.Warn($"No se pudo romper {item.Component.name}: {e.Message}");
+            Util.Log.Warn($"No se pudo romper {item.Component.name}: {e.InnerException?.Message ?? e.Message}");
         }
     }
 

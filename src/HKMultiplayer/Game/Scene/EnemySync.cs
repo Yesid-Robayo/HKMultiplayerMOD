@@ -125,6 +125,13 @@ internal sealed class EnemySync {
 
     private const float BossSwitchInterval = 8f;
 
+    /// <summary>
+    /// Velocidad (unidades/s, medida entre dos repartos) a partir de la cual no cambia de PC: va embistiendo o lanzándose.
+    /// El Moss Charger embiste a 15 y cruzaba de un jugador al otro: pasaba al PC del otro a mitad de la embestida, su
+    /// lógica seguía allí con ese caballero y daba la vuelta (se veía derrapar al revés).
+    /// </summary>
+    private const float FastSpeed = 9f;
+
     /// <summary>Vida a partir de la cual un enemigo se trata como jefe.</summary>
     private const int BossHp = 150;
 
@@ -232,6 +239,11 @@ internal sealed class EnemySync {
         public ushort PreviousController;
         public float LastSwitch;
 
+        /// <summary>Dónde estaba y cuándo en el reparto anterior (para saber si va rápido).</summary>
+        public Vector2 AssignPosition;
+
+        public float AssignAt;
+
         /// <summary>
         /// Enemigo del que cuelga este (la cabeza del Falso Caballero): lo mueve siempre el mismo PC que a él (ver
         /// <see cref="AssignControllers"/>). Null si no cuelga de ninguno.
@@ -284,6 +296,15 @@ internal sealed class EnemySync {
 
         /// <summary>Su lógica recibió y atendió ZERO HP en este PC (su muerte va por ella, no por HealthManager.Die).</summary>
         public bool ZeroHp;
+
+        /// <summary>El PC que lo mueve avisó de que allí ya murió (sus efectos llegan con su muerte en marcha).</summary>
+        public bool DeadThere;
+
+        /// <summary>
+        /// Su muerte está en marcha aunque su vida no lo diga: la del Falso Caballero va por su cabeza (otro enemigo) y su
+        /// cuerpo nunca queda muerto en su HealthManager.
+        /// </summary>
+        public bool Dying => ZeroHp || DeadThere;
         public RigidbodyType2D BodyType;
         public readonly SnapshotBuffer Buffer = new();
 
@@ -2066,6 +2087,8 @@ internal sealed class EnemySync {
             return;
         }
 
+        enemy.DeadThere |= deadThere;
+
         if (enemy.Detached != null && enemy.Detached.Contains(enemy.Fsms[fsmIndex])) {
             return;
         }
@@ -2264,12 +2287,20 @@ internal sealed class EnemySync {
             if (!enemy.Root.activeInHierarchy && !currentDown) {
                 continue;
             }
+
+            // Con su muerte en marcha se queda en el PC que la empezó mientras siga en la sala (aunque esté caído o en
+            // pausa: allí sigue cuando vuelve). Si pasaba a otro, este seguía desde a mitad ("Cough" del Falso Caballero)
+            // y la muerte no acababa: el cuerpo seguía dañando y las rejas no se abrían
+            if (enemy.Dying && InScene(current)) {
+                continue;
+            }
+            var position = enemy.Transform.position;
+            var moving = MovingFast(enemy, position, now);
             var interval = enemy.Health.hp >= BossHp ? BossSwitchInterval : SwitchInterval;
-            if (now - enemy.LastSwitch < interval && !currentDown) {
+            if (now - enemy.LastSwitch < interval && !currentDown || moving && !currentDown) {
                 continue;
             }
 
-            var position = enemy.Transform.position;
             var currentDistance = !currentDown && TryGetPlayerPosition(current, out var currentPosition)
                 ? Vector2.Distance(position, currentPosition)
                 : float.MaxValue;
@@ -2309,6 +2340,16 @@ internal sealed class EnemySync {
     }
 
     private readonly List<Enemy> _childScratch = new();
+
+    /// <summary>Si desde el reparto anterior se movió más rápido que <see cref="FastSpeed"/> (y apunta dónde está ahora).</summary>
+    private static bool MovingFast(Enemy enemy, Vector2 position, float now) {
+        var elapsed = now - enemy.AssignAt;
+        var fast = enemy.AssignAt > 0f && elapsed > 0.05f && elapsed < 2f &&
+                   Vector2.Distance(position, enemy.AssignPosition) / elapsed > FastSpeed;
+        enemy.AssignPosition = position;
+        enemy.AssignAt = now;
+        return fast;
+    }
 
     private const int MaxParentChecks = 20;
 

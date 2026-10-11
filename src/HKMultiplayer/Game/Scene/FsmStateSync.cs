@@ -25,6 +25,8 @@ namespace HKMultiplayer.Game.Scene;
 /// </list>
 /// </summary>
 internal sealed class FsmStateSync {
+    private static readonly bool TestMode = HKMultiplayer.Testing.TestDriver.IsEnabled();
+
     public const MessageType ControllerState = (MessageType) 51;
     public const MessageType Transition = (MessageType) 53;
     public const MessageType Pose = (MessageType) 54;
@@ -983,7 +985,9 @@ internal sealed class FsmStateSync {
     /// pidan sus acciones corta las acciones siguientes (igual que en el PC de origen) y se retiene.
     /// </summary>
     private static void ApplyRemoteState(Tracked item, string state) {
-        if (item.Fsm.FsmName != LiftFsm && !IsGate(item.Fsm)) {
+        // Solo un controlador de batalla: antes cualquier cadena de otro PC (una palanca de la Aldea Mantis) apagaba el
+        // cartel para desafiar a los Señores Mantis sin que hubiera combate
+        if (item.Battle) {
             CloseChallengePrompts();
         }
 
@@ -1871,6 +1875,11 @@ internal sealed class FsmStateSync {
         // Lo copiado no se vuelve a enviar ni encadena solo: el siguiente paso también llega de allí
         item.LastState = state;
         item.LastStateTime = Time.unscaledTime;
+        if (TestMode) {
+            Log.Info($"[TEST] {item.Fsm.gameObject.name}/{item.Fsm.FsmName}: paso de la cadena de {from.Name} " +
+                     $"({item.Fsm.ActiveStateName} → {state})");
+        }
+
         ApplyRemoteState(item, state);
     }
 

@@ -93,7 +93,10 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
       con lo que deciden sus acciones, hasta uno que espera al caballero) vuelven a su estado inicial. Solo las de un
       personaje (su objeto, un hijo o su padre tienen `npc_control` o `Conversation Control`) o las que al empezar solo
       enseñan, esconden o animan (sin crear objetos, avisar a otros, cambiar datos, sonar...): así no se repite la
-      apertura de una arena ni un combate. Mr. Mushroom se destruye en el otro PC en cuanto uno le habla (su `Control`
+      apertura de una arena ni un combate. La campana de las estaciones del ciervo (`Stag Bell`) se trata como un
+      personaje: solo se enciende al cargar la sala si la estación está abierta, y al empezar avisa a su cartel (no
+      contaba como "solo enseña"); abierta por otro jugador, aquí no había campana hasta volver a entrar.
+      Mr. Mushroom se destruye en el otro PC en cuanto uno le habla (su `Control`
       compara `mrMushroomState` con su sitio), Bretta y Quirrel se van, el farol de la Pesadilla aparece.
     - Los objetos que el juego enciende o apaga según un dato (`DeactivateIfPlayerdataTrue`, `...False`,
       `ActivateIfPlayerdataTrue`; Myla, las larvas del Padre de las Larvas) se encienden o apagan igual. No los enemigos.
@@ -115,6 +118,12 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     el dueño de la sala; cambia solo si el otro está claramente más cerca (4 unidades) y hace un rato del último cambio
     (3 s; 8 s en los jefes, cada cambio corta su ataque). Ese PC lo hace funcionar normal y envía su estado (transform,
     animación, profundidad, activo, vida, daño al tocarlo) con detección de cambios sin crear objetos.
+  - No cambia de PC mientras va rápido (más de 9 unidades/s entre dos repartos: embistiendo o lanzándose). El Moss
+    Charger embiste a 15 y cruzaba de un jugador al otro: pasaba al otro PC a mitad de la embestida, su lógica seguía
+    allí con ese caballero y daba la vuelta (se veía derrapar al revés). Tampoco con su muerte en marcha (`Dying`: su
+    lógica atendió `ZERO HP` en este PC, o el PC que lo mueve avisó de que allí ya murió), mientras quien lo mueve siga
+    en la sala. La muerte del Falso Caballero va por su cabeza y su cuerpo nunca queda muerto en su `HealthManager`: el
+    cuerpo pasaba al otro PC a mitad de su muerte (`Cough`), seguía dañando y las rejas no se abrían.
   - Los de un caído o de quien está en pausa pasan enseguida a otro, también los apagados: en una marioneta, apagado
     es solo lo último que envió quien la movía, y antes se saltaban; con un invitado caído junto a los enemigos que
     movía, el dueño creía que los movía el caído y el caído que el dueño, y quedaban quietos en los dos. Además el
@@ -193,7 +202,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     igual en todos. Lo que mueven con avisos a todos (jaula, suelos, puertas) va igual que ellos, y quien entra a mitad
     del combate se pone al día con su estado. En las copias no se hacen las llamadas al caballero (devolverle el control,
     girarlo), salvo la que fija dónde reaparece tras los pinchos (el Coliseo la pone en una plataforma antes de sacarlos;
-    sin ella, el caballero del otro PC reaparecía en la entrada de la sala), y el cartel para desafiar se apaga en los demás PCs (si no, se podría desafiar otra vez a mitad del
+    sin ella, el caballero del otro PC reaparecía en la entrada de la sala), y el cartel para desafiar se apaga en los demás PCs al llegar un estado de un controlador de batalla (antes con cualquier cadena de otro PC: una palanca de la Aldea Mantis lo apagaba sin combate) (si no, se podría desafiar otra vez a mitad del
     combate y ese caballero se quedaría sin control). Las órdenes de esos controladores a un enemigo no se reenvían:
     ya las da su copia en el PC que lo mueve. Los avisos de una copia a otro objeto con controlador (p. ej. el `SPAWN`
     con 1 s de retraso que la batalla del Coliseo manda a sus jaulas, que llega fuera de la aplicación del estado) no
@@ -267,8 +276,15 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Rompibles con FSM propia (la plantilla genérica del juego: recibe `TAKE DAMAGE`, tiene `Break` y la variable
     `Activated`, sin componente rompible ni guardable, como el letrero de la bajada a Cruces Olvidados): se copia su
     cadena como la de una palanca. Los rompibles con componente (`Breakable`, `BreakableObject`, `BreakablePole`,
-    `BreakablePoleSimple`, `BreakableInfectedVine`, `VinePlatformCut`, `GlobControl`, `GrassCut`) son todos los tipos
-    del juego y van por `BreakableSync`. Salvo los del pool del juego (guardados en él o sacados de él, como las gotas
+    `BreakablePoleSimple`, `BreakableInfectedVine`, `VinePlatformCut`, `GlobControl`, `GrassCut`, `Grass`,
+    `GrassSpriteBehaviour`, `HealthCocoon`) van por `BreakableSync`. `Grass` (recibe el golpe como un enemigo) y
+    `GrassSpriteBehaviour` (las lianas y matas del Sendero Verde, que solo se cortan a la vista: se pone a la vista
+    antes de cortarlo) no se seguían y lo cortado por uno seguía entero para el otro. El capullo de savia vital
+    (`HealthCocoon`, de código y guardable, sin FSM: `SceneObjectSync` solo sigue los que tienen una) se rompe igual en
+    los demás y suelta allí sus mariposas: cada jugador recoge su savia, como el geo. El mensaje dice si es el estado
+    para quien entra: entonces el capullo se pone roto sin soltar nada (si no, se ganaría savia al entrar). Un
+    `GrassCut` lejos de la cámara de este PC no tiene el material con el que colorea sus partículas (su `GrassBehaviour`
+    lo borra al apagarse) y el corte que llegaba de otro PC fallaba antes de quitar el pasto: se corta sin colorearlas. Salvo los del pool del juego (guardados en él o sacados de él, como las gotas
     `Orange Glob` de los Bordes del Reino, que vuelven solas al pool): su ruta no es la misma en cada PC ni de una vez a
     otra, así que romper una aquí rompía otra distinta (o ninguna) en el otro PC. Son decoración y cada PC tiene las
     suyas.
@@ -795,10 +811,24 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   aguijonazos por el invitado se rompe en el host; revivir cuesta 33 de alma en los dos sentidos (el orbe baja también
   en pantalla); con la skin Rick Knight (copia B), el orbe lleno y su pulso salen con la imagen de la skin desde el
   principio y no vuelven al del juego. Ruta `crossroads` sin fallos.
+- **0.24.0** (copias D y E, 11 oct 2026), con lo que siguió saliendo en la partida real: el Falso Caballero muere
+  entero aunque el host esté junto al cuerpo y el invitado (que lo movía) lejos al matarle la cabeza (no cambia de PC,
+  las 5 rejas se abren en los dos); la campana de `Crossroads_47` aparece en el host en cuanto el invitado abre la
+  estación y su toque se copia paso a paso; las lianas de `Fungus1_01` cortadas en un PC salen cortadas en el otro; el
+  capullo de savia de `Fungus2_15` roto por el invitado se rompe en el host y cada uno tiene sus mariposas; en la
+  misma sala, una palanca golpeada por el invitado ya no apaga el cartel para desafiar a los Señores Mantis del host.
+  El Musgoso Volátil de `Fungus1_01` y sus esporas se ven en el otro PC. Rutas `crossroads` y `greenpath` sin fallos.
 
 ## Pendientes
 
 Sin probar:
+- De 0.24.0, vistos en la partida real y sin arreglar todavía: el escupitajo del Gulka (`Spike Ball`) "al revés" (un
+  aguijonazo a la copia no llega al PC que la mueve: su `NAIL` es un `Trigger2dEventLayer`, y allí la dirección sale
+  de un `Nail Object` que no tiene); que el Moss Charger pegue antes de salir (no se reproduce: todos los golpes son con
+  él visible); caballeros de musgo con escudo que se quedan quietos; lo que lanzan los Ogros Hongo y su arena (la de
+  la muesca) que no se abre.
+- Las escenas de recoger una habilidad (la visión de la Capa de Polilla) solo las ve quien la recoge: la habilidad es
+  del mundo, así que al otro le llega ya puesta y al recogerla él el juego no pone la escena.
 - De 0.23.0: todo entre dos PCs reales. En la partida real el invitado dijo que revivir no le gastaba alma; en las
   copias sí la gasta (se cobra entera al empezar Focus y se devuelve si se suelta o le golpean, y su registro tiene
   tres "Golpeado mientras revivía").

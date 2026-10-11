@@ -47,6 +47,18 @@ internal sealed class TestDriver : MonoBehaviour {
 
     public static bool IsEnabled() => Enabled;
 
+    /// <summary>Quién pegó al caballero y si se veía (un golpe de algo que no se dibuja es sospechoso).</summary>
+    private static string DescribeSource(GameObject source) {
+        if (source == null) {
+            return "?";
+        }
+
+        var renderer = source.GetComponentInParent<Renderer>();
+        var shown = renderer != null && renderer.enabled && renderer.gameObject.activeInHierarchy;
+        var p = source.transform.position;
+        return $"{source.name} ({(shown ? "visible" : "no se dibuja")}, en ({p.x:0.0},{p.y:0.0}))";
+    }
+
     private void Start() {
         _commandFile = Path.Combine(Application.persistentDataPath, "mp-test.txt");
         InputSimulator.Install();
@@ -55,7 +67,7 @@ internal sealed class TestDriver : MonoBehaviour {
         On.HeroController.TakeDamage += (orig, self, source, side, amount, hazard) => {
             // Con "god" el golpe se registra pero no quita vida (combates largos en las pruebas); "die" sí mata
             if (_god && amount < 99) {
-                Log.Info($"{Tag}golpe sin daño ({amount}) de {(source != null ? source.name : "?")}");
+                Log.Info($"{Tag}golpe sin daño ({amount}) de {DescribeSource(source)}");
                 return;
             }
 
@@ -63,7 +75,7 @@ internal sealed class TestDriver : MonoBehaviour {
             orig(self, source, side, amount, hazard);
             var after = PlayerData.instance != null ? PlayerData.instance.health : -1;
             if (after != health) {
-                Log.Info($"{Tag}daño {health - after} de {(source != null ? source.name : "?")}");
+                Log.Info($"{Tag}daño {health - after} de {DescribeSource(source)}");
             }
         };
 
