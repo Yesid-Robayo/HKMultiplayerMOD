@@ -119,6 +119,13 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     (5 s; 8 s en los jefes, cada cambio corta su ataque: con 3 s y los dos cerca, un caballero de musgo podía volver a
     empezar su estado cada pocos segundos sin llegar a atacar). Ese PC lo hace funcionar normal y envía su estado (transform,
     animación, profundidad, activo, vida, daño al tocarlo) con detección de cambios sin crear objetos.
+  - Si quien lo mueve está fuera de su zona de alerta (la variable `Alert Range` de su lógica, o un hijo "Alert
+    Range...", ampliada con el tamaño de la caja del caballero) y otro jugador está dentro, pasa a ese: su lógica solo
+    ataca a un caballero dentro de la zona. El Rey Vengamosca se iba a esperar a su sitio (`Lurk`) siguiendo al más
+    cercano, fuera de la zona, mientras el otro peleaba dentro, y se quedaba mucho rato sin atacar.
+  - El Moss Charger sale de la tierra a 14 del caballero de su PC y ya al salir daña: si ese punto cae encima de otro
+    jugador, sale por el otro lado de su caballero (girado y embistiendo hacia el otro lado), si ese lado está en su
+    zona y libre.
   - No cambia de PC mientras va rápido (más de 9 unidades/s entre dos repartos: embistiendo o lanzándose). El Moss
     Charger embiste a 15 y cruzaba de un jugador al otro: pasaba al otro PC a mitad de la embestida, su lógica seguía
     allí con ese caballero y daba la vuelta (se veía derrapar al revés). Tampoco con su muerte en marcha (`Dying`: su
@@ -177,6 +184,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     `Send Event` se enviaba en cada contacto (los barriles del Falso Caballero, unos 257 por minuto) sin hacer nada.
   - Un efecto continuo de una marioneta se acaba si el enemigo muere por la vía normal o se apaga: ya no llegan más
     estados que lo acaben y se quedaba pegado (salvo una muerte que va por su lógica, `Dying`).
+  - Las FSM de los hijos que solo animan su propio objeto (sus acciones son esperas, animación, partículas, sonido,
+    encenderse o apagarse a sí mismo, moverse o girarse: el `Spit Effect` del Gulka y del Elder Baldur) siguen
+    funcionando en la marioneta. Paradas con las demás, el efecto que encendía la marioneta no se apagaba nunca.
   - Los efectos que su lógica repite cada frame mientras dura el estado también siguen en la marioneta
     (`EnemySync.UpdateRunningEffects`): partículas con `everyFrame`, salpicaduras continuas (`SpawnBloodTime`,
     `SpawnRandomObjectsOverTime`) y, si el estado tiene alguno, las cuentas con sus números que usan (`FloatAdd`,
@@ -261,6 +271,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Cofres: abrirlos es del mundo (el otro lo ve abrirse en directo, o ya abierto si entra después), pero lo que
     sueltan es de cada uno: el objeto queda en el suelo para cada jugador hasta que lo recoge él, y el geo le cae a
     quien esté en la sala.
+  - Charged Lumafly (`zap drift`, Cañón de Niebla): flotan a la deriva sin vida. Los mueve el dueño de la sala, que
+    envía dónde está cada uno 10 veces por segundo (mensaje 105, no fiable, a la sala); en los demás su deriva se para y
+    siguen esa posición suavizada. Su descarga (`zap control`) sigue siendo de cada PC: daña a su caballero.
   - Goam (`Worm Control`, Cruces Olvidados): salen y se esconden con esperas fijas desde que carga la sala y no tienen
     vida, así que no son enemigos compartidos. `HazardSync` los alinea (mensaje 104, no fiable, a la sala): el dueño
     envía cada segundo en qué estado de espera va cada uno y cuánto lleva, y los demás pasan a ese estado y ajustan la
@@ -493,7 +506,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 Decisiones aprobadas en [Decisiones de M5](#decisiones-de-m5). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
-mensajes nuevos van del 73 al 104 (el 98 es de `EnemySync` y el 104 de `HazardSync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
+mensajes nuevos van del 73 al 105 (el 98 es de `EnemySync` y el 104 y el 105 de `HazardSync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
 juego (16:9; con otra proporción el juego deja franjas) y escala con su alto como el HUD del juego; las piezas se crean
 una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
 
@@ -513,10 +526,15 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   y 3 (antes 2, 2,5×). El daño recibido se escala en `HeroController.TakeDamage`, salvo pinchos, ácido y pozos, con lo
   que sobra para el golpe siguiente; un golpe que queda en 0 se recibe igual (retroceso e invulnerabilidad: si no, el
   enemigo volvería a golpear en el frame siguiente) pero `PlayerData.TakeHealth` no quita vida. Antes, con 0,5× los
-  golpes de 1 (casi todos) seguían quitando 1. El alma para revivir nunca pasa de `maxMP` (con la sombra sin
+  golpes de 1 (casi todos) seguían quitando 1. Un golpe que ya llega con 0 (los Shrumeling, o un Mosscreep escondido:
+  en el juego no hacen daño al tocarlos) pasa tal cual y el juego lo ignora; antes se convertía en uno de 1 sin quitar
+  vida, con retroceso e invulnerabilidad, y parecía que pegaban. El alma para revivir nunca pasa de `maxMP` (con la sombra sin
   recuperar el orbe es de 66 y con "99" nadie podía revivir). "Avisos" apaga los avisos de lo que hacen los demás (se
   unió, salió, cayó, sombra recuperada, regalo de geo, Grimmchild, skin); los que responden a lo que hace uno
   (devoluciones, "Ir con ...", esperas de combate) salen siempre.
+- **Objetos brillantes de cada jugador que dan una habilidad del mundo** (la Capa de Polilla): su `PD Bool?` mira la
+  habilidad al cargar la sala y, si ya la tiene, se destruye. Recogida por otro, la capa de este jugador desaparecía y
+  no veía su escena. Como su guardado ya es de cada jugador (`Shiny`), esa comprobación se salta (`QuestNpcSync`).
 - **Revivir** (`Revive`, mensajes 75 a 80): `HeroController.Die` se sustituye por la caída si hay alguien en pie (en un
   sueño, solo si está en el mismo; en los Panteones, nunca). El caído envía `Downed` (sala y suelo bajo él; si debajo no hay `Terrain` en 100 unidades, si ese suelo toca un
   `DamageHero` de peligro o si murió por un peligro, su `hazardRespawnLocation`: el cuerpo tiene que quedar donde el
@@ -841,18 +859,18 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   El Musgoso Volátil de `Fungus1_01` y sus esporas se ven en el otro PC. Rutas `crossroads` y `greenpath` sin fallos.
   Después: los disparos y las crías del Elder Baldur de `Crossroads_11_alt` salen en el invitado; un aguijonazo del
   invitado a la copia del escupitajo del Gulka (`nailtouch`) lo devuelve en el host; el vómito de los Ogros Hongo de
-  `Fungus2_05` se ve en el otro PC y, con los dos acabando el combate a la vez, las rejas se abren en los dos.
+  `Fungus2_05` se ve en el otro PC y, con los dos acabando el combate a la vez, las rejas se abren en los dos. Los
+  Charged Lumafly de `Fungus3_26` están en el mismo sitio en los dos PCs; la capa de Polilla de `Fungus1_04` sigue para
+  el host cuando el invitado ya tiene la habilidad (también al recargar la sala); tocar un Shrumeling de `Fungus2_28`
+  ya no hace retroceder ni da invulnerabilidad.
 
 ## Pendientes
 
 Sin probar:
-- De 0.24.0, vistos en la partida real y sin reproducir en las copias: que el Moss Charger pegue antes de salir (todos
-  los golpes son con él visible); los caballeros de musgo B y C de las arenas, que se quedaban quietos (no existen en
-  el mundo de prueba); que los `Mushroom Baby` dañen (no aparecen en el mundo de prueba; los `Fungoon Baby` sí dañan
-  también en el juego normal); efectos que se quedan pegados (la curación del compañero, cortada o no, acaba bien).
-  Devolver el escupitajo del Gulka con un aguijonazo físico (probado con `nailtouch`, no con el choque).
-- Las escenas de recoger una habilidad (la visión de la Capa de Polilla) solo las ve quien la recoge: la habilidad es
-  del mundo, así que al otro le llega ya puesta y al recogerla él el juego no pone la escena.
+- De 0.24.0, sin reproducir en las copias: los caballeros de musgo B y C de las arenas, que se quedaban quietos (no
+  existen en el mundo de prueba); la curación del compañero pegada (cortada o no, acaba bien). Devolver el escupitajo
+  del Gulka con un aguijonazo físico (probado con `nailtouch`, no con el choque). Recoger la capa de Polilla con la
+  habilidad ya puesta y ver su escena (probado que la capa sigue; el camino de la escena no mira la habilidad).
 - De 0.23.0: todo entre dos PCs reales. En la partida real el invitado dijo que revivir no le gastaba alma; en las
   copias sí la gasta (se cobra entera al empezar Focus y se devuelve si se suelta o le golpean, y su registro tiene
   tres "Golpeado mientras revivía").

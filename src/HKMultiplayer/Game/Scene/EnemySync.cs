@@ -239,6 +239,11 @@ internal sealed class EnemySync {
         public ushort PreviousController;
         public float LastSwitch;
 
+        /// <summary>Su zona de alerta (ver AlertZone) y si ya se buscó.</summary>
+        public Collider2D AlertZone;
+
+        public bool AlertZoneSearched;
+
         /// <summary>Dónde estaba y cuándo en el reparto anterior (para saber si va rápido).</summary>
         public Vector2 AssignPosition;
 
@@ -2313,11 +2318,20 @@ internal sealed class EnemySync {
                 continue;
             }
 
-            var currentDistance = !currentDown && TryGetPlayerPosition(current, out var currentPosition)
-                ? Vector2.Distance(position, currentPosition)
-                : float.MaxValue;
+            // Los que están dentro de su zona de alerta van primero: su lógica solo ataca si su caballero está dentro.
+            // El Rey Vengamosca se iba a esperar a su sitio ("Lurk") siguiendo al más cercano, fuera de la zona, mientras
+            // el otro peleaba dentro, y se quedaba mucho rato sin atacar
+            var zone = AlertZone(enemy);
+            var currentInZone = false;
+            var currentDistance = float.MaxValue;
+            if (!currentDown && TryGetPlayerPosition(current, out var currentPosition)) {
+                currentDistance = Vector2.Distance(position, currentPosition);
+                currentInZone = InZone(zone, currentPosition);
+            }
+
             var nearest = current;
             var nearestDistance = currentDistance;
+            var nearestInZone = currentInZone;
             foreach (var player in _session.Players) {
                 if (player.Scene != _scene || player.Id == current || Features.PartyState.IsInactive(player.Id) ||
                     !TryGetPlayerPosition(player.Id, out var playerPosition)) {
@@ -2325,13 +2339,16 @@ internal sealed class EnemySync {
                 }
 
                 var distance = Vector2.Distance(position, playerPosition);
-                if (distance < nearestDistance) {
+                var inZone = InZone(zone, playerPosition);
+                if (inZone && !nearestInZone || inZone == nearestInZone && distance < nearestDistance) {
                     nearest = player.Id;
                     nearestDistance = distance;
+                    nearestInZone = inZone;
                 }
             }
 
-            if (nearest != current && (currentDown || currentDistance - nearestDistance > SwitchMargin)) {
+            if (nearest != current && (currentDown || nearestInZone && !currentInZone ||
+                                       currentDistance - nearestDistance > SwitchMargin)) {
                 _controlOut.Add((enemy.Id, nearest));
                 ApplyControl(enemy, nearest);
             }
@@ -2352,6 +2369,54 @@ internal sealed class EnemySync {
     }
 
     private readonly List<Enemy> _childScratch = new();
+
+    /// <summary>
+    /// Si un caballero en esa posición toca la zona: el juego mira si su caja la toca, no su centro, así que la zona se
+    /// amplía con el tamaño de esa caja (sin zona, cuenta como dentro).
+    /// </summary>
+    private static bool InZone(Collider2D zone, Vector3 position) {
+        if (zone == null) {
+            return true;
+        }
+
+        if (!zone.isActiveAndEnabled) {
+            return false;
+        }
+
+        var bounds = zone.bounds;
+        bounds.Expand(new Vector3(1f, 2.6f, 0f));
+        return bounds.Contains(new Vector3(position.x, position.y, bounds.center.z));
+    }
+
+    /// <summary>
+    /// Zona de alerta del enemigo (el hijo "Alert Range..." con su caja: su lógica mira si el caballero está dentro). Se
+    /// busca una vez; null si no tiene.
+    /// </summary>
+    private static Collider2D AlertZone(Enemy enemy) {
+        if (enemy.AlertZoneSearched) {
+            return enemy.AlertZone;
+        }
+
+        enemy.AlertZoneSearched = true;
+        // La que apunta su lógica (la del Rey Vengamosca es un objeto de la sala, "Buzzer Range")
+        foreach (var fsm in enemy.Fsms ?? Array.Empty<PlayMakerFSM>()) {
+            var variable = fsm != null ? fsm.FsmVariables.FindFsmGameObject("Alert Range") : null;
+            if (variable?.Value != null && variable.Value.GetComponent<Collider2D>() is { } zone) {
+                enemy.AlertZone = zone;
+                return zone;
+            }
+        }
+
+        foreach (var child in enemy.Root.GetComponentsInChildren<Transform>(true)) {
+            if (child != enemy.Transform && child.name.StartsWith("Alert Range", StringComparison.Ordinal) &&
+                child.GetComponent<Collider2D>() is { } box) {
+                enemy.AlertZone = box;
+                break;
+            }
+        }
+
+        return enemy.AlertZone;
+    }
 
     /// <summary>Si desde el reparto anterior se movió más rápido que <see cref="FastSpeed"/> (y apunta dónde está ahora).</summary>
     private static bool MovingFast(Enemy enemy, Vector2 position, float now) {
@@ -4610,7 +4675,7 @@ internal sealed class EnemySync {
             }
 
             foreach (var fsm in enemy.Root.GetComponentsInChildren<PlayMakerFSM>(true)) {
-                if (fsm.enabled && fsm.gameObject != enemy.Root) {
+                if (fsm.enabled && fsm.gameObject != enemy.Root && !IsVisualOnly(fsm)) {
                     Pause(enemy, fsm);
                     fsm.enabled = false;
                     enemy.Disabled.Add(fsm);
@@ -4793,6 +4858,77 @@ internal sealed class EnemySync {
 
         enemy.PausedFsms.Add((fsm, fsm.Fsm.RestartOnEnable));
         fsm.Fsm.RestartOnEnable = false;
+    }
+
+    /// <summary>
+    /// Acciones (por el principio de su tipo) que solo cambian cómo se ve o se oye su propio objeto: esperas, animación,
+    /// partículas, sonido, encenderse o apagarse, moverse o girarse, y sus cuentas y comparaciones.
+    /// </summary>
+    private static readonly string[] VisualActionPrefixes = {
+        "Wait", "Tk2d", "SetMeshRenderer", "SetSpriteRenderer", "SetParticle", "PlayParticle", "StopParticle", "Audio",
+        "GetOwner", "BoolTest", "BoolFlip", "NextFrameEvent", "SetPosition", "GetPosition", "SetRotation", "GetRotation",
+        "SetScale", "GetScale", "SetParent", "DestroySelf", "iTween", "Fade", "SetColor", "SetFloatValue", "FloatAdd",
+        "FloatSubtract", "FloatMultiply", "FloatCompare", "FloatOperator", "IntCompare", "SetIntValue", "IntAdd",
+        "SetBoolValue", "RandomFloat", "RandomInt", "SetVector", "Vector", "SetZ", "SendRandomEvent", "FinishFSM"
+    };
+
+    private static readonly Dictionary<HutongGames.PlayMaker.Fsm, bool> VisualOnlyCache = new();
+
+    /// <summary>
+    /// FSM de un hijo que solo anima su propio objeto (el efecto de escupir del Gulka o del Elder Baldur: aparece, se
+    /// anima y se apaga). En la marioneta sigue funcionando: si se paraba con las demás, el efecto que encendía la
+    /// marioneta no se apagaba nunca y se quedaba pegado. Las que deciden algo (zonas de alcance, avisos a otros objetos,
+    /// colisiones, daño, crear cosas) se paran.
+    /// </summary>
+    private static bool IsVisualOnly(PlayMakerFSM fsm) {
+        if (VisualOnlyCache.TryGetValue(fsm.Fsm, out var cached)) {
+            return cached;
+        }
+
+        var visual = fsm.GetComponent<HealthManager>() == null && fsm.GetComponent<DamageHero>() == null &&
+                     fsm.GetComponent<Collider2D>() == null;
+        foreach (var state in visual ? fsm.FsmStates : Array.Empty<HutongGames.PlayMaker.FsmState>()) {
+            foreach (var action in state.Actions) {
+                if (!IsVisualAction(fsm, action)) {
+                    visual = false;
+                    break;
+                }
+            }
+
+            if (!visual) {
+                break;
+            }
+        }
+
+        if (VisualOnlyCache.Count > 512) {
+            VisualOnlyCache.Clear();
+        }
+
+        VisualOnlyCache[fsm.Fsm] = visual;
+        return visual;
+    }
+
+    private static bool IsVisualAction(PlayMakerFSM fsm, HutongGames.PlayMaker.FsmStateAction action) {
+        switch (action) {
+            case null:
+                return true;
+            // Encender o apagar: solo a sí mismo o a algo suyo
+            case HutongGames.PlayMaker.Actions.ActivateGameObject activate:
+                var target = fsm.Fsm.GetOwnerDefaultTarget(activate.gameObject);
+                return target == null || target.transform.IsChildOf(fsm.transform);
+            case HutongGames.PlayMaker.Actions.SendEvent send:
+                return send.eventTarget == null ||
+                       send.eventTarget.target == HutongGames.PlayMaker.FsmEventTarget.EventTarget.Self;
+        }
+
+        var name = action.GetType().Name;
+        foreach (var prefix in VisualActionPrefixes) {
+            if (name.StartsWith(prefix, StringComparison.Ordinal)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool Keep(Behaviour behaviour) {
@@ -5062,6 +5198,66 @@ internal sealed class EnemySync {
     private static readonly System.Reflection.FieldInfo JarEnemyField = typeof(SpawnJarControl).GetField("enemyToSpawn",
         System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
 
+    /// <summary>Distancia (en x y en y) a otro jugador a la que el Moss Charger ya no sale de la tierra.</summary>
+    private const float EmergeClearance = 4f;
+
+    /// <summary>
+    /// El Moss Charger sale de la tierra a 14 del caballero de su PC (`Appear X`, en "Emerge Left/Right") y ya al salir
+    /// tiene su caja de daño (en "Emerge", durante la animación de salir). En el juego nunca sale encima del caballero,
+    /// pero ese punto se elige con el caballero del PC que lo mueve y podía caer justo debajo del otro jugador: le pegaba
+    /// mientras aún salía. Si es así, sale por el otro lado de su caballero (girado y embistiendo hacia el otro lado,
+    /// como en el otro estado), si ese lado está dentro de su zona y libre.
+    /// </summary>
+    /// <returns>El estado al que pasa.</returns>
+    private HutongGames.PlayMaker.FsmState AvoidEmergingOnPartner(HutongGames.PlayMaker.Fsm fsm,
+        HutongGames.PlayMaker.FsmState toState) {
+        if (toState.Name != "Emerge" || fsm.Name != "Mossy Control" || _session == null ||
+            !_enemyFsms.TryGetValue(fsm, out var owner) || owner.Enemy.Puppet || owner.Enemy.Root == null) {
+            return toState;
+        }
+
+        var variables = fsm.Variables;
+        var appear = variables.FindFsmFloat("Appear X");
+        var heroX = variables.FindFsmFloat("Hero X");
+        var startY = variables.FindFsmFloat("Start Y");
+        var speed = variables.FindFsmFloat("Current Charge Speed");
+        var minX = variables.FindFsmFloat("X Min");
+        var maxX = variables.FindFsmFloat("X Max");
+        if (appear == null || heroX == null || startY == null || speed == null || minX == null || maxX == null ||
+            !NearOtherPlayer(appear.Value, startY.Value)) {
+            return toState;
+        }
+
+        // (si ese lado no vale, sale como en el juego: esperar escondido lo hacía intentarlo otra vez cada frame)
+        var mirrored = 2f * heroX.Value - appear.Value;
+        if (mirrored < minX.Value || mirrored > maxX.Value || NearOtherPlayer(mirrored, startY.Value)) {
+            return toState;
+        }
+
+        appear.Value = mirrored;
+        speed.Value = -speed.Value;
+        var transform = owner.Enemy.Transform;
+        var scale = transform.localScale;
+        scale.x = -scale.x;
+        transform.localScale = scale;
+        Log.Info($"{owner.Enemy.Root.name}: iba a salir encima de otro jugador, sale por el otro lado");
+        return toState;
+    }
+
+    private bool NearOtherPlayer(float x, float y) {
+        foreach (var player in _session.Players) {
+            if (player.IsLocal || player.Scene != _scene || !TryGetPlayerPosition(player.Id, out var position)) {
+                continue;
+            }
+
+            if (Mathf.Abs(position.x - x) < EmergeClearance && Mathf.Abs(position.y - y) < EmergeClearance) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Acción de lanzar objetos que se está ejecutando (para seguir lo que saca del pool).</summary>
     private static HutongGames.PlayMaker.FsmStateAction _flinging;
 
@@ -5120,6 +5316,10 @@ internal sealed class EnemySync {
             if (toState != null && _active != null && _active.HoldWake(self, toState)) {
                 SwitchToStateField?.SetValue(self, null);
                 return;
+            }
+
+            if (toState != null && _active != null) {
+                toState = _active.AvoidEmergingOnPartner(self, toState);
             }
 
             orig(self, toState);

@@ -332,7 +332,9 @@ internal sealed class Revive {
 
         On.HeroController.TakeDamage += (orig, self, source, side, amount, hazard) => {
             var active = _active;
-            if (active == null || active._session == null) {
+            // Un golpe que ya llega con 0 (los Shrumeling no hacen daño al tocarlos) el juego lo ignora: no se convierte en
+            // un golpe de 1 con retroceso como los que el multiplicador deja en 0
+            if (active == null || active._session == null || amount <= 0) {
                 orig(self, source, side, amount, hazard);
                 return;
             }

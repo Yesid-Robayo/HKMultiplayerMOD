@@ -466,12 +466,39 @@ internal sealed class QuestNpcSync {
     // La misma conversación no avanza la misión dos veces
     // =====================================================================================================
 
+    private static bool SkipsSharedAbilityCheck(HutongGames.PlayMaker.Actions.PlayerDataBoolTest action) {
+        var fsm = action.Fsm;
+        if (fsm == null || fsm.Name != "Shiny Control" || action.State?.Name != "PD Bool?") {
+            return false;
+        }
+
+        var field = action.boolName?.Value;
+        if (string.IsNullOrEmpty(field) || CharacterData.IsCharacterField(field)) {
+            return false;
+        }
+
+        var id = fsm.GameObject != null ? fsm.GameObject.GetComponent<PersistentBoolItem>()?.persistentBoolData?.id : null;
+        return CharacterData.IsIndividualItem(id);
+    }
+
     private static void InstallHooks() {
         if (_hooked) {
             return;
         }
 
         _hooked = true;
+        // Objetos brillantes que recoge cada jugador y dan una habilidad del mundo (la Capa de Polilla: su "PD Bool?"
+        // mira hasDash al cargar la sala y, si ya la tiene, se destruye). Recogida por otro jugador, la habilidad llegaba
+        // aquí y la capa de este jugador desaparecía: no veía nunca la escena de recogerla. Ya se sabe por personaje si
+        // la recogió (su guardado es de cada uno), así que esa comprobación se salta
+        On.HutongGames.PlayMaker.Actions.PlayerDataBoolTest.OnEnter += (orig, self) => {
+            if (_active != null && SkipsSharedAbilityCheck(self)) {
+                self.Finish();
+                return;
+            }
+
+            orig(self);
+        };
         On.DeactivateIfPlayerdataTrue.OnEnable += (orig, self) => {
             orig(self);
             NoteTurnedOff(self);

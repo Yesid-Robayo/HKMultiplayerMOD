@@ -56,7 +56,8 @@ internal sealed class TestDriver : MonoBehaviour {
         var renderer = source.GetComponentInParent<Renderer>();
         var shown = renderer != null && renderer.enabled && renderer.gameObject.activeInHierarchy;
         var p = source.transform.position;
-        return $"{source.name} ({(shown ? "visible" : "no se dibuja")}, en ({p.x:0.0},{p.y:0.0}))";
+        var clip = source.GetComponentInParent<tk2dSpriteAnimator>()?.CurrentClip?.name ?? "-";
+        return $"{source.name} ({(shown ? "visible" : "no se dibuja")}, animación {clip}, en ({p.x:0.0},{p.y:0.0}))";
     }
 
     private void Start() {

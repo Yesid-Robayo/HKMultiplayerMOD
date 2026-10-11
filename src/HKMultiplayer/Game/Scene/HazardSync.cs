@@ -19,10 +19,40 @@ namespace HKMultiplayer.Game.Scene;
 /// en uno estaban fuera y en el otro escondidos. El dueño envía el estado de espera en el que va cada uno y cuánto lleva;
 /// los demás pasan a ese estado y ajustan su espera si se desvían.
 /// </para>
+/// <para>
+/// Y los que flotan a la deriva sin vida (los Charged Lumafly del Cañón de Niebla, `zap drift`): cada PC los movía al azar
+/// y acababan en sitios distintos. Los mueve el dueño de la sala, que envía dónde está cada uno 10 veces por segundo; en
+/// los demás su deriva se para y siguen esa posición suavizada. Su descarga sigue siendo de cada PC (daña a su caballero).
+/// </para>
 /// </summary>
 internal sealed class HazardSync {
     public const MessageType Phases = (MessageType) 70;
     public const MessageType CyclePhases = (MessageType) 104;
+    public const MessageType DriftPositions = (MessageType) 105;
+
+    /// <summary>FSM de los peligros que flotan a la deriva.</summary>
+    private const string DriftFsm = "zap drift";
+
+    private const float DriftSendInterval = 0.1f;
+
+    /// <summary>Lo que se acerca a la posición recibida cada segundo (fracción): suave pero sin quedarse atrás.</summary>
+    private const float DriftFollow = 10f;
+
+    private sealed class Drifter {
+        public uint Id;
+        public PlayMakerFSM Fsm;
+        public Transform Transform;
+        public Rigidbody2D Body;
+        public bool Following;
+        public bool HasTarget;
+        public Vector2 Target;
+        public RigidbodyType2D BodyType;
+    }
+
+    private readonly List<Drifter> _drifters = new();
+    private readonly Dictionary<uint, Drifter> _drifterById = new();
+    private readonly MessageHandler _onDriftPositions;
+    private float _nextDriftSend;
 
     /// <summary>FSM de peligros que salen y se esconden solos con esperas fijas.</summary>
     private static readonly string[] CyclicFsms = { "Worm Control" };
@@ -71,23 +101,31 @@ internal sealed class HazardSync {
     static HazardSync() {
         MessageRoutes.Register(Phases, Route.SameScene, reliable: false);
         MessageRoutes.Register(CyclePhases, Route.SameScene, reliable: false);
+        MessageRoutes.Register(DriftPositions, Route.SameScene, reliable: false);
     }
 
     public HazardSync() {
         _onPhases = OnPhases;
         _onCyclePhases = OnCyclePhases;
+        _onDriftPositions = OnDriftPositions;
     }
 
     public void Attach(GameSession session) {
         _session = session;
         session.On(Phases, _onPhases);
         session.On(CyclePhases, _onCyclePhases);
+        session.On(DriftPositions, _onDriftPositions);
         Clear();
     }
 
     public void Detach() {
         _session?.On(Phases, null);
         _session?.On(CyclePhases, null);
+        _session?.On(DriftPositions, null);
+        foreach (var drifter in _drifters) {
+            StopFollowing(drifter);
+        }
+
         _session = null;
         Clear();
     }
@@ -97,6 +135,8 @@ internal sealed class HazardSync {
         _byId.Clear();
         _cyclic.Clear();
         _cyclicById.Clear();
+        _drifters.Clear();
+        _drifterById.Clear();
         _scene = string.Empty;
         _sceneHash = 0;
     }
@@ -128,6 +168,7 @@ internal sealed class HazardSync {
             Scan();
         }
 
+        UpdateDrifters();
         if (_hazards.Count + _cyclic.Count == 0 || !_session.CanSend || !_session.IsLocalSceneOwner ||
             Time.unscaledTime < _nextSend || !OthersInScene()) {
             return;
@@ -162,6 +203,19 @@ internal sealed class HazardSync {
         }
 
         foreach (var fsm in Object.FindObjectsByType<PlayMakerFSM>(FindObjectsSortMode.None)) {
+            if (fsm.FsmName == DriftFsm && fsm.gameObject.scene.buildIndex >= 0 && _drifters.Count < MaxHazards) {
+                var driftId = ScenePaths.Hash(fsm.transform);
+                if (!_drifterById.ContainsKey(driftId)) {
+                    var drifter = new Drifter {
+                        Id = driftId, Fsm = fsm, Transform = fsm.transform, Body = fsm.GetComponent<Rigidbody2D>()
+                    };
+                    _drifters.Add(drifter);
+                    _drifterById[driftId] = drifter;
+                }
+
+                continue;
+            }
+
             if (_cyclic.Count >= MaxHazards || fsm.gameObject.scene.buildIndex < 0 ||
                 System.Array.IndexOf(CyclicFsms, fsm.FsmName) < 0) {
                 continue;
@@ -240,6 +294,98 @@ internal sealed class HazardSync {
         writer.WriteByte((byte) count);
         writer.Seek(end);
         _session.End();
+    }
+
+    /// <summary>
+    /// Los que flotan a la deriva: el dueño de la sala los deja moverse solos y envía dónde están; los demás paran su
+    /// deriva y se acercan a la posición recibida.
+    /// </summary>
+    private void UpdateDrifters() {
+        if (_drifters.Count == 0) {
+            return;
+        }
+
+        var owner = _session.IsLocalSceneOwner || !OthersInScene();
+        var dt = Time.deltaTime;
+        foreach (var drifter in _drifters) {
+            if (drifter.Fsm == null) {
+                continue;
+            }
+
+            if (owner) {
+                StopFollowing(drifter);
+                continue;
+            }
+
+            if (!drifter.Following) {
+                drifter.Following = true;
+                drifter.Fsm.enabled = false;
+                if (drifter.Body != null) {
+                    drifter.BodyType = drifter.Body.bodyType;
+                    drifter.Body.velocity = Vector2.zero;
+                    drifter.Body.bodyType = RigidbodyType2D.Kinematic;
+                }
+            }
+
+            if (drifter.HasTarget) {
+                var position = (Vector2) drifter.Transform.position;
+                var next = Vector2.Lerp(position, drifter.Target, Mathf.Clamp01(DriftFollow * dt));
+                drifter.Transform.position = new Vector3(next.x, next.y, drifter.Transform.position.z);
+            }
+        }
+
+        if (!owner || !_session.CanSend || Time.unscaledTime < _nextDriftSend || !OthersInScene()) {
+            return;
+        }
+
+        _nextDriftSend = Time.unscaledTime + DriftSendInterval;
+        var writer = _session.Begin(DriftPositions);
+        writer.WriteUShort(_sceneHash);
+        var count = System.Math.Min(_drifters.Count, PerMessage);
+        writer.WriteByte((byte) count);
+        for (var i = 0; i < count; i++) {
+            var drifter = _drifters[i];
+            var position = drifter.Transform != null ? drifter.Transform.position : Vector3.zero;
+            writer.WriteUInt(drifter.Id);
+            writer.WriteFloat(position.x);
+            writer.WriteFloat(position.y);
+        }
+
+        _session.End();
+    }
+
+    /// <summary>Vuelve a moverse solo en este PC (pasó a ser el dueño de la sala o se acaba la partida).</summary>
+    private static void StopFollowing(Drifter drifter) {
+        if (!drifter.Following || drifter.Fsm == null) {
+            return;
+        }
+
+        drifter.Following = false;
+        drifter.HasTarget = false;
+        drifter.Fsm.enabled = true;
+        if (drifter.Body != null) {
+            drifter.Body.bodyType = drifter.BodyType;
+        }
+    }
+
+    private void OnDriftPositions(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var count = reader.ReadByte();
+        for (var i = 0; i < count; i++) {
+            var id = reader.ReadUInt();
+            var target = new Vector2(reader.ReadFloat(), reader.ReadFloat());
+            if (sceneHash != _sceneHash || from.Scene != _scene || !_drifterById.TryGetValue(id, out var drifter)) {
+                continue;
+            }
+
+            // La primera vez se pone en su sitio de golpe (al entrar en la sala cada PC lo tenía donde lo dejó su azar)
+            if (!drifter.HasTarget && drifter.Transform != null) {
+                drifter.Transform.position = new Vector3(target.x, target.y, drifter.Transform.position.z);
+            }
+
+            drifter.Target = target;
+            drifter.HasTarget = true;
+        }
     }
 
     /// <summary>Los que están en una espera: su estado (por su puesto en la FSM, igual en todos los PCs) y cuánto lleva.</summary>
@@ -384,8 +530,15 @@ internal sealed class HazardSync {
 
     /// <summary>Para el modo de prueba: cuántos se siguen y en qué punto van los que están animándose.</summary>
     public string Describe() {
-        var builder = new System.Text.StringBuilder($"peligros animados: {_hazards.Count}, con esperas: {_cyclic.Count} " +
-                                                    $"a las {System.DateTime.UtcNow:HH:mm:ss.fff}");
+        var builder = new System.Text.StringBuilder($"peligros animados: {_hazards.Count}, con esperas: {_cyclic.Count}, " +
+                                                    $"a la deriva: {_drifters.Count} a las {System.DateTime.UtcNow:HH:mm:ss.fff}");
+        foreach (var drifter in _drifters) {
+            if (drifter.Transform != null) {
+                builder.Append($" {drifter.Transform.name}=({drifter.Transform.position.x:0.00},{drifter.Transform.position.y:0.00})" +
+                               $"{(drifter.Following ? " sigue" : "")}");
+            }
+        }
+
         foreach (var (_, fsm) in _cyclic) {
             if (fsm != null && TryGetWait(fsm, out _, out var wait)) {
                 builder.Append($" {fsm.name}={fsm.ActiveStateName}@{Elapsed(wait):0.00}");
