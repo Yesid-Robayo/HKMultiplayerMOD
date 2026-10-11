@@ -263,7 +263,9 @@ internal sealed class PartnerHud {
         var downed = member.Status == PlayerStatus.Downed;
         var localZone = (int) Vitals.CurrentZone();
         var elsewhere = member.Player?.Scene != scene;
+        // En pausa se dice aunque esté en la misma sala: su caballero se queda quieto y parecía que se había trabado
         var statusKey = downed ? 1000
+            : member.Paused ? 1004
             : elsewhere && member.Status == PlayerStatus.Cutscene ? 1001
             : elsewhere && member.Status == PlayerStatus.Dream ? 1002
             : elsewhere && member.Status == PlayerStatus.StagTravel ? 1003
@@ -276,6 +278,7 @@ internal sealed class PartnerHud {
                 1001 => Lang.T("viendo una cinemática", "watching a cutscene"),
                 1002 => Lang.T("en un sueño", "in a dream"),
                 1003 => Lang.T("viajando en ciervo", "riding the stag"),
+                1004 => Lang.T("en pausa", "paused"),
                 >= 0 => Lang.T($"en {Zones.Name((byte) statusKey)}", $"in {Zones.Name((byte) statusKey)}"),
                 _ => string.Empty
             };

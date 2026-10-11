@@ -7,9 +7,10 @@ using UnityEngine;
 namespace HKMultiplayer.Game.Features;
 
 /// <summary>
-/// Viajar juntos en ciervo: cuando un jugador elige destino en una estación, los demás que están en esa misma sala
-/// viajan con él al mismo sitio. Antes cada uno viajaba por su cuenta y el que se quedaba veía irse al ciervo (su
-/// posición es del mundo) sin poder seguirlo.
+/// Viajar juntos en ciervo: cuando un jugador elige destino en una estación, los demás que están cerca de él en esa
+/// misma sala viajan con él al mismo sitio. Antes cada uno viajaba por su cuenta y el que se quedaba veía irse al ciervo
+/// (su posición es del mundo) sin poder seguirlo. Lo activa el host (<see cref="HostSettings.StagTogether"/>), y quien
+/// está lejos en la estación (haciendo otra cosa) no va.
 /// <para>
 /// Quien viaja avisa al entrar su FSM `Stag Control` en "Fade" (ya con el destino en `To Scene` y `To Position`). En los
 /// demás PCs se usa su propio ciervo de esa sala: se le pone el mismo destino y pasa a "Fade", así que su lógica hace lo
@@ -22,6 +23,9 @@ internal sealed class StagTogether {
 
     private const string StagFsm = "Stag Control";
     private const string FadeState = "Fade";
+
+    /// <summary>Hasta dónde de quien viaja se va con él (como media pantalla).</summary>
+    private const float NearDistance = 10f;
 
     /// <summary>Estados en los que su ciervo ya está saliendo (no se vuelve a empezar).</summary>
     private static readonly string[] LeavingStates = { FadeState, "Time Passes", "Go To Stag Cutscene" };
@@ -93,7 +97,7 @@ internal sealed class StagTogether {
         }
 
         _lastState = state;
-        if (state != FadeState || _following || !_session.CanSend) {
+        if (state != FadeState || _following || !_session.CanSend || !HostSettings.Current.StagTogether) {
             return;
         }
 
@@ -103,11 +107,14 @@ internal sealed class StagTogether {
             return;
         }
 
-        Log.Info($"Viaje en ciervo a {toScene}: los compañeros de la sala vienen también");
+        Log.Info($"Viaje en ciervo a {toScene}: los compañeros cercanos de la sala vienen también");
+        var position = HeroController.instance != null ? HeroController.instance.transform.position : Vector3.zero;
         var writer = _session.Begin(StagTravel);
         writer.WriteString(_scene);
         writer.WriteString(toScene);
         writer.WriteInt(toPosition);
+        writer.WriteFloat(position.x);
+        writer.WriteFloat(position.y);
         _session.End();
     }
 
@@ -115,13 +122,16 @@ internal sealed class StagTogether {
         var scene = reader.ReadString(128);
         var toScene = reader.ReadString(128);
         var toPosition = reader.ReadInt();
+        var fromPosition = new Vector2(reader.ReadFloat(), reader.ReadFloat());
         if (scene != _scene || _stag == null || System.Array.IndexOf(LeavingStates, _stag.ActiveStateName) >= 0) {
             return;
         }
 
         var hero = HeroController.instance;
         var pd = PlayerData.instance;
-        var why = hero == null || pd == null ? "sin caballero"
+        var why = !HostSettings.Current.StagTogether ? "desactivado por el host"
+            : hero == null || pd == null ? "sin caballero"
+            : Vector2.Distance(hero.transform.position, fromPosition) > NearDistance ? "lejos de él"
             : PartyState.IsDown(_session.LocalId) ? "caído"
             : hero.cState.dead || hero.cState.transitioning ? "cambiando de sala"
             : pd.atBench ? "sentado en un banco"

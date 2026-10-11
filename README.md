@@ -129,7 +129,8 @@ world, see each other in real time and fight the same enemies and bosses togethe
 - **Abilities are per player** (movement abilities, spells, Dream Nail): each player gets their own and sees the
   pickup scene. Characters saved with an earlier version keep the abilities they already had.
 - **Loot lands in the same place** on both PCs: geo from enemies, geo rocks and chests.
-- **Stag travel together**: when one player picks a destination, everyone at that station rides along.
+- **Stag travel together** (host option): when one player picks a destination, partners standing near them at that
+  station ride along.
 - **Benches for two**: sitting on the same bench, each player takes one half.
 - **New guests see the opening cinematic** (skippable) before joining the host's world.
 - **Room objects**: levers, switches, doors, breakable walls and floors, geo rocks, breakables, grass, vines, grub jars,
@@ -290,6 +291,7 @@ away without being able to change them.
 | Enemy bars | Yes · No | No |
 | Gift geo · Allow going to a partner | Yes · No | Yes |
 | Skip cutscenes | Vote · Anyone | Vote |
+| Ride the stag together | Yes · No | Yes |
 
 ---
 

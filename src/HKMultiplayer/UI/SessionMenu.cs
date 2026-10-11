@@ -514,6 +514,8 @@ internal sealed class SessionMenu : GameStyledMenu {
                 var text = new StringBuilder(member.Name);
                 if (member.Status == PlayerStatus.Downed) {
                     text.Append(Lang.T("  ·  caído", "  ·  down"));
+                } else if (member.Paused) {
+                    text.Append(Lang.T("  ·  en pausa", "  ·  paused"));
                 } else if (entry != null) {
                     text.Append(Lang.T($"  ·  {entry.Health}/{entry.MaxHealth} máscaras", $"  ·  {entry.Health}/{entry.MaxHealth} masks"));
                     if (entry.Blue > 0) {

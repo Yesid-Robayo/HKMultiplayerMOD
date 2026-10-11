@@ -69,9 +69,10 @@ internal sealed class HostSettings {
 
     /// <summary>
     /// Versión del formato del mensaje: un invitado con otra la ignora (sigue con los de por defecto). La 2 añadió las
-    /// barras de enemigos y "ir con un compañero" (y cambió el orden); la 3, los compañeros en el mapa.
+    /// barras de enemigos y "ir con un compañero" (y cambió el orden); la 3, los compañeros en el mapa; la 4, viajar
+    /// juntos en ciervo.
     /// </summary>
-    private const byte FormatVersion = 3;
+    private const byte FormatVersion = 4;
 
     private const string FileName = "settings.json";
 
@@ -145,12 +146,19 @@ internal sealed class HostSettings {
     public static readonly HostOption SkipCutscenesOption = new(19, "skipCutscenes", "Saltar cinemáticas", "Skip cutscenes",
         new[] { 0f, 1f }, new[] { "Votación", "Cualquiera" }, new[] { "Vote", "Anyone" }, 0);
 
+    /// <summary>
+    /// Quien elige destino en una estación del ciervo se lleva a los compañeros que están cerca de él en esa estación (ver
+    /// <see cref="StagTogether"/>).
+    /// </summary>
+    public static readonly HostOption StagTogetherOption = new(20, "stagTogether", "Viajar juntos en ciervo", "Ride the stag together",
+        YesNoValues, YesNo, YesNoEnglish, 0);
+
     /// <summary>Todos, en el orden del mensaje y del panel (su posición es su <see cref="HostOption.Index"/>).</summary>
     public static readonly HostOption[] Options = {
         BossHealthOption, EnemyHealthOption, PartnerInRoomOption, DamageTakenOption,
         ReviveOption, ReviveSecondsOption, ReviveSoulOption, ReviveMasksOption, ReviveInvulnerableOption, ReviveAtBenchOption,
         ShowNamesOption, ShowPartnerHealthOption, ShowArrowsOption, ShowPartnerOnMapOption, ShowNoticesOption, ShowBossBarOption,
-        ShowEnemyBarsOption, GeoGiftsOption, PartnerTravelOption, SkipCutscenesOption
+        ShowEnemyBarsOption, GeoGiftsOption, PartnerTravelOption, SkipCutscenesOption, StagTogetherOption
     };
 
     /// <summary>Posición elegida de cada ajuste.</summary>
@@ -207,6 +215,9 @@ internal sealed class HostSettings {
 
     /// <summary>Una cinemática compartida se salta en cuanto la salta cualquiera (si no, votan todos).</summary>
     public bool AnyoneSkipsCutscenes => Flag(SkipCutscenesOption);
+
+    /// <summary>Si quien viaja en ciervo se lleva a los compañeros que están cerca en la estación.</summary>
+    public bool StagTogether => Flag(StagTogetherOption);
 
     // =====================================================================================================
     // Red

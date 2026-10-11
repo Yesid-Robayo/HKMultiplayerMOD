@@ -644,7 +644,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   su estado mientras no está caído (al revivir en un sueño vuelve a "en sueño"). El
   mini-HUD lo muestra si está en otra sala. Con eso va si tiene el juego en pausa (el host lo reparte en
   `PartyStatus`): con la escala de tiempo a 0 sus enemigos se quedaban congelados para los demás, así que quien está
-  en pausa, como un caído, no se queda con enemigos (`PartyState.IsInactive` en `EnemySync.AssignControllers`).
+  en pausa, como un caído, no se queda con enemigos (`PartyState.IsInactive` en `EnemySync.AssignControllers`). El HUD
+  de los demás y su fila en *Compañeros* dicen "en pausa", también en la misma sala: su caballero se queda quieto y
+  parecía que se había trabado.
 - **Cinemáticas compartidas** (`SharedCutscenes`, mensajes 87 a 90): los finales, los créditos, Mr. Mushroom y las
   pantallas con las que acaba el final (partida completada, Alma de Acero). Quien entra en una lo dice al host, que
   lleva a los demás (con un cambio de sala, esperando si están en pausa o cambiando de sala; un caído no va). Al
@@ -674,11 +676,13 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
 - **Grimmchild** (`GrimmchildGift`, mensaje 95): el amuleto es de cada jugador pero su nivel y la Compañía son del
   mundo; si uno lo recibe, los demás también.
 - **Viajar juntos en ciervo** (`StagTogether`, mensaje 106, fiable, a la sala): cuando la FSM `Stag Control` de la
-  estación de este jugador entra en `Fade` (ya eligió destino: `To Scene` y `To Position`), se avisa a la sala. En los
-  demás PCs su propio ciervo recibe el mismo destino y pasa a `Fade` (quitando el control al caballero), así que hace lo
-  del juego: fundido, `Cinematic_Stag_travel` y llegada a la salida del ciervo de destino. No va quien está caído,
-  muerto, cambiando de sala, sentado en un banco o en pausa (ve "X se fue en ciervo"). Quien sale así no vuelve a
-  avisar. Antes cada uno viajaba por su cuenta y el que se quedaba veía irse el ciervo sin poder seguirlo.
+  estación de este jugador entra en `Fade` (ya eligió destino: `To Scene` y `To Position`), se avisa a la sala con
+  dónde está. En los demás PCs su propio ciervo recibe el mismo destino y pasa a `Fade` (quitando el control al
+  caballero), así que hace lo del juego: fundido, `Cinematic_Stag_travel` y llegada a la salida del ciervo de destino.
+  Solo va quien está a menos de 10 de quien viaja (en la otra punta de la estación, haciendo otra cosa, no se le lleva)
+  y no está caído, muerto, cambiando de sala, sentado en un banco ni en pausa (ve "X se fue en ciervo"). Quien sale así
+  no vuelve a avisar. Es un ajuste del host (*Viajar juntos en ciervo*, sí por defecto; formato de ajustes 4): con no,
+  nadie avisa y cada uno viaja por su cuenta. Antes cada uno viajaba por su cuenta y el que se quedaba veía irse el ciervo sin poder seguirlo.
 - **Sentados en el mismo banco** (`PlayerSync.ShareBench`): el estado del jugador lleva si está sentado (bandera 16 del
   byte de `PlayerSnapshot`: `atBench` y el banco con su control; `atBench` solo no basta, el juego no lo quita si se sale
   de la sala sin levantarse). El centro del banco es donde el juego deja a este caballero (se toma 0,6 s después de
@@ -809,7 +813,8 @@ Decisiones aprobadas por el usuario para M5 (las marcadas "elegido" las escogió
   jefes 1,5× (elegido) solo con el compañero en la sala, enemigos 1×, daño recibido 1×; revivir sí (2 s, 33 de alma, 1
   máscara, 2 s de invulnerabilidad, en el banco sí); nombres, vida del compañero, flechas, compañeros en el mapa, avisos
   y barra del jefe sí,
-  barras de enemigos no; regalar geo sí; ir con un compañero sí; saltar cinemáticas por votación. La vida extra divide
+  barras de enemigos no; regalar geo sí; ir con un compañero sí; saltar cinemáticas por votación; viajar juntos en
+  ciervo sí. La vida extra divide
   el daño en el PC que mueve al enemigo (las fases de los jefes dependen de su vida).
 - **Ir con un compañero** (pedido después): en *Compañeros*, al quitar la pausa aparece a su lado; no con alguien
   caído, en un sueño, en una cinemática, cambiando de sala o en otro mundo.
@@ -913,7 +918,8 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   ya no hace retroceder ni da invulnerabilidad; el Rey Vengamosca, con los dos en el suelo de su arena, ataca cada
   pocos segundos (embestidas e invocaciones) y casi no cambia de PC. El viaje en ciervo desde `Crossroads_47` a
   `Room_Town_Stag_Station` lleva al otro en los dos sentidos (lo elige el host o el invitado; los dos llegan a la salida
-  del ciervo con control); sentados los dos en el banco de `Town`, cada uno ocupa una mitad y los dos PCs los ven igual.
+  del ciervo con control); a 3,6 del host va con él, a 20 o 28 se queda ("lejos de él"), y con el ajuste en no se queda
+  aunque esté al lado; con el invitado en pausa, el HUD del host dice "en pausa"; sentados los dos en el banco de `Town`, cada uno ocupa una mitad y los dos PCs los ven igual.
   Habilidades de cada uno: un personaje de antes conserva las del mundo; la garra de uno y el doble salto del otro no
   pasan al compañero (el mundo, sí). Los soñadores de `RestingGrounds_04`: el host lee la placa, los dos entran juntos
   en `Dream_NailCollection`, cada uno habla con la Vidente y recoge su aguijón onírico, y los dos despiertan en

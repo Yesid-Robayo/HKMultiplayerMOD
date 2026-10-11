@@ -129,7 +129,8 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 - **Habilidades de cada jugador** (de movimiento, hechizos, aguijón onírico): cada uno consigue las suyas y ve la
   escena de recogerlas. Los personajes guardados con una versión anterior conservan las que ya tenían.
 - **El botín cae en el mismo sitio** en los dos PCs: el geo de los enemigos, de las rocas y de los cofres.
-- **Viaje en ciervo juntos**: cuando uno elige destino, los que están en la estación viajan con él.
+- **Viaje en ciervo juntos** (opción del host): cuando uno elige destino, los compañeros que están cerca de él en la
+  estación viajan con él.
 - **Bancos para dos**: sentados en el mismo banco, cada uno ocupa una mitad.
 - **Los invitados nuevos ven la cinemática del principio** (se puede saltar) antes de entrar al mundo del host.
 - **Objetos de sala**: palancas, interruptores, puertas, paredes y suelos que se rompen, piedras de geo, rompibles,
@@ -290,6 +291,7 @@ al momento sin poder cambiarlos.
 | Barras de enemigos | Sí · No | No |
 | Regalar geo · Permitir ir con un compañero | Sí · No | Sí |
 | Saltar cinemáticas | Votación · Cualquiera | Votación |
+| Viajar juntos en ciervo | Sí · No | Sí |
 
 ---
 
