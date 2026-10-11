@@ -514,7 +514,8 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   entrado (no si el host cierra, ni por código, versión o partida llena), vuelve al menú como antes y, ya en el menú
   principal (el mundo solo se carga ahí), se vuelve a unir con la misma dirección, código y nombre: hasta 12 intentos,
   5 s después de que falle cada uno (cada intento espera hasta 10 s al host). Al conectar, el host le envía el mundo
-  con su personaje como a cualquiera que entra. *Esc* en el menú principal, unirse, hostear o salir lo cancelan.
+  con su personaje como a cualquiera que entra. *Esc* en el menú principal (que además corta el intento en curso si
+  aún no conectó), unirse, hostear o salir lo cancelan. Rendirse y cancelar quedan también en el registro.
 - **Compañeros** (`PartyActions`, mensajes 85 y 86): regalo de geo validado por el host (o devuelto), desatascarse y
   recargar la sala al quitar la pausa.
 - **Ir con un compañero** (`PartnerTravel`, mensajes 99 a 102): quien lo pide desde el panel lo envía al quitar la
@@ -750,15 +751,19 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   el compañero y se quita al cerrar el mapa; rojo en el cuerpo de un caído); el cuerpo en el último sitio seguro al
   morir sin suelo debajo (fuera del borde de Bocasucia) y en el aire sobre los pinchos del Paso del Rey, y en el suelo
   de debajo sobre suelo normal; revivir en ese sitio seguro; reconexión automática al cerrar de golpe el juego del host
-  y volver a abrir su mundo (entró en el intento 4, con su personaje).
+  y volver a abrir su mundo (entró en el intento 4, con su personaje). Después: el icono también con el mapa del
+  inventario (al acercar; se quita al cerrar el inventario); morir en el aire sobre el ácido de `Fungus1_07` (el
+  cuerpo nunca queda dentro: sobre una plataforma si la hay debajo, si no en el último sitio seguro); Esc en el menú
+  principal cancela la reconexión (con la tecla de verdad) y corta el intento en curso; sin host, se rinde tras los 12
+  intentos y se queda en el menú. Las plataformas de liana de `Fungus1_06`: cortada a aguijonazos en un PC, cae en los
+  dos, y quien entra después la encuentra caída (como en el juego: el sprite caído en el suelo y sin colisión arriba).
 
 ## Pendientes
 
 Sin probar:
 - La traducción al inglés dentro del juego (0.21.0) y el vapor naranja de la muerte del Falso Caballero (0.20.3).
-- De 0.22.0: el icono del compañero con el mapa del inventario (solo se probó el mapa rápido), en una sala que no sale
-  en el mapa (tiendas) y en otra zona; la muerte sobre ácido; cancelar la reconexión con Esc y rendirse tras los 12
-  intentos; la reconexión entre dos PCs.
+- De 0.22.0: el icono del compañero en una sala que no sale en el mapa (tiendas) y en otra zona; la reconexión entre
+  dos PCs.
 - La conversación con Zote tras el Rey Vengamosca, Zote en el Coliseo y Cloth (no aparecen en el mundo de prueba);
   Menderbug (por análisis).
 - Volver de una cinemática que acaba en una sala de juego (finales de los Panteones; va por `SceneTravel`).

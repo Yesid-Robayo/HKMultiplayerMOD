@@ -185,8 +185,9 @@ through the world checking that both players see the same thing.
   Tyrant, Hollow Knight and the Radiance.
 - Colosseum of Fools: Bronze, Silver and Gold.
 - Dreams: Failed Champion, Lost Kin, Soul Tyrant, White Defender, Grey Prince Zote and the Nightmare King.
-- Revive (also the body on the last safe ground), shades, partner HUD, partners on the quick map, host settings,
-  cutscenes, skins, go to a partner, NPC quests and automatic reconnection.
+- Revive (also the body on the last safe ground, over spikes and acid), shades, partner HUD, partners on the map,
+  host settings, cutscenes, skins, go to a partner, NPC quests, vine platforms and automatic reconnection (also
+  cancelling it and giving up).
 - Install, update and uninstall.
 
 ⚠️ **Partially tested:**
@@ -199,8 +200,7 @@ through the world checking that both players see the same thing.
 
 - A session between two PCs over the internet.
 - The English translation inside the game.
-- From 0.22.0: partners on the inventory map (the quick map was tested), cancelling the reconnection, and dying above
-  acid.
+- From 0.22.0: a partner's map icon inside rooms that are not on the map (shops).
 - The orange steam of the False Knight's death (fixed without retesting).
 - Cloth and Menderbug, entering the Radiance through the game's normal path, and returning from the Godhome cutscenes.
 

@@ -524,8 +524,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     private void OnGuestDisconnected(DisconnectReason reason, bool wasConnected) {
         if (reason != DisconnectReason.Timeout || _lastJoin == null) {
             if (_reconnectAttempts > 0) {
-                _reconnectAttempts = 0;
-                Notice.Show(Lang.T("No se pudo volver a la partida: ", "Couldn't get back into the game: ") + DescribeDisconnect(reason), 8f);
+                GiveUpReconnect(DescribeDisconnect(reason));
             }
 
             return;
@@ -537,8 +536,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         }
 
         if (_reconnectAttempts >= MaxReconnectAttempts) {
-            _reconnectAttempts = 0;
-            Notice.Show(Lang.T("No se pudo volver a la partida: el host no responde", "Couldn't get back into the game: the host isn't responding"), 8f);
+            GiveUpReconnect(Lang.T("el host no responde", "the host isn't responding"));
             return;
         }
 
@@ -559,6 +557,11 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         // Esc cancela en el menú principal (en la partida es la pausa)
         if (CoopSaves.CanStart && Input.GetKeyDown(KeyCode.Escape)) {
             CancelReconnect();
+            // El intento en curso (aún sin conectar) también se corta: si no, entraría si el host vuelve en esos segundos
+            if (Session is { IsHost: false, CanSend: false }) {
+                CloseSession();
+            }
+
             Notice.Show(Lang.T("Reconexión cancelada", "Reconnection cancelled"), 4f);
             return;
         }
@@ -574,9 +577,15 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Notice.Show(Lang.T($"Reconectando con el host (intento {_reconnectAttempts} de {MaxReconnectAttempts})...\nEsc para cancelar",
             $"Reconnecting to the host (attempt {_reconnectAttempts} of {MaxReconnectAttempts})...\nEsc to cancel"), 12f);
         if (!StartJoin(target.Address, target.Port, target.RoomCode, target.Name)) {
-            _reconnectAttempts = 0;
-            Notice.Show(Lang.T("No se pudo volver a la partida: ", "Couldn't get back into the game: ") + StatusMessage, 8f);
+            GiveUpReconnect(StatusMessage);
         }
+    }
+
+    /// <summary>Se deja de intentar volver a la partida, con el motivo en pantalla y en el registro.</summary>
+    private void GiveUpReconnect(string reason) {
+        _reconnectAttempts = 0;
+        Log.Info($"No se pudo volver a la partida: {reason}");
+        Notice.Show(Lang.T("No se pudo volver a la partida: ", "Couldn't get back into the game: ") + reason, 8f);
     }
 
     private void CancelReconnect() {

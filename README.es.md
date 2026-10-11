@@ -186,8 +186,9 @@ automáticas que recorren el mundo comprobando que los dos ven lo mismo.
 - Coliseo de los Tontos: Bronce, Plata y Oro.
 - Sueños: Campeón Fallido (el Falso Caballero del sueño), Hermano Perdido, Tirano de Almas, Defensor Blanco, Príncipe Gris Zote y Rey
   de las Pesadillas.
-- Revivir (también el cuerpo en el último sitio seguro), sombras, HUD del compañero, compañeros en el mapa rápido,
-  ajustes del host, cinemáticas, skins, ir con un compañero, misiones de NPC y la reconexión automática.
+- Revivir (también el cuerpo en el último sitio seguro, sobre pinchos y ácido), sombras, HUD del compañero,
+  compañeros en el mapa, ajustes del host, cinemáticas, skins, ir con un compañero, misiones de NPC, plataformas de
+  liana y la reconexión automática (también cancelarla y rendirse).
 - Instalar, actualizar y desinstalar.
 
 ⚠️ **Probado en parte:**
@@ -199,8 +200,7 @@ automáticas que recorren el mundo comprobando que los dos ven lo mismo.
 
 - Una partida entre dos PCs por internet.
 - La traducción al inglés dentro del juego.
-- De 0.22.0: los compañeros en el mapa del inventario (se probó el mapa rápido), cancelar la reconexión y morir sobre
-  ácido.
+- De 0.22.0: el icono del compañero dentro de salas que no salen en el mapa (tiendas).
 - El vapor naranja de la muerte del Falso Caballero (arreglado sin volver a probarlo).
 - Cloth y Menderbug, la entrada a la Radiancia por el camino del juego y la vuelta de las cinemáticas de los Panteones.
 
