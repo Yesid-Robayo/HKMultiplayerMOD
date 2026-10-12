@@ -341,6 +341,7 @@ away without being able to change them.
 | `tools/` | PC setup (`setup-dev.sh`), build and install (`test-cycle.sh`), multi-copy tests, automated routes, package and installer. |
 | `docs/` | [Architecture](docs/arquitectura.md) (Spanish): design, decisions, testing and pending work. |
 | `lib/`, `vendor/`, `test-instances/` | *(local only, not committed)* Game and Modding API DLLs, and game copies for testing. |
+| `decomp/` | *(local only, not committed)* The game's code decompiled by `tools/decompile.sh`, for reference. |
 
 The game's DLLs belong to Team Cherry and are not in the repository: they are taken from your installed game.
 
@@ -363,6 +364,9 @@ bash tools/package.sh               # player package: out/package/HKMultiplayer-
 fills `lib/` and `vendor/`. If the game already has the Modding API, it uses the originals saved by the installer
 (`HKMultiplayer-backup`); if there are none, it asks you to verify the game files in Steam. To change the Modding API,
 edit `modding-api/` and run it again.
+
+`bash tools/decompile.sh` decompiles the game's code into `decomp/` to see how it does something (needs `ilspycmd`).
+PlayMaker FSMs are not in there; see [Código del juego](docs/arquitectura.md#código-del-juego) (Spanish).
 
 ### Testing
 

@@ -3,6 +3,8 @@
 lib/
 vendor/
 test-instances/
+# Código del juego descompilado (tools/decompile.sh) y FSM volcadas: para consultar, nunca se sube
+decomp/
 
 # Modding API (código en modding-api/, sí se sube): sin el juego ni lo que se genera al compilarla
 modding-api/Vanilla/

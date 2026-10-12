@@ -342,6 +342,7 @@ al momento sin poder cambiarlos.
 | `tools/` | Preparar el PC (`setup-dev.sh`), compilar e instalar (`test-cycle.sh`), pruebas con varias copias, rutas automáticas, paquete e instalador. |
 | `docs/` | [Arquitectura](docs/arquitectura.md): diseño, decisiones, pruebas y pendientes. |
 | `lib/`, `vendor/`, `test-instances/` | *(solo local, no se suben)* DLL del juego y de la Modding API, y copias del juego para probar. |
+| `decomp/` | *(solo local, no se sube)* Código del juego descompilado con `tools/decompile.sh`, para consultar. |
 
 Las DLL del juego son de Team Cherry y no están en el repositorio: se sacan del juego instalado.
 
@@ -364,6 +365,9 @@ bash tools/package.sh               # paquete para jugadores: out/package/HKMult
 y deja `lib/` y `vendor/`. Si el juego ya tiene la Modding API, usa los originales que guardó el instalador
 (`HKMultiplayer-backup`); si no los hay, pide verificar la integridad de los archivos del juego en Steam. Para cambiar la
 Modding API se edita `modding-api/` y se vuelve a ejecutar.
+
+`bash tools/decompile.sh` descompila el código del juego en `decomp/` para ver cómo hace algo (necesita `ilspycmd`).
+Las FSM de PlayMaker no salen ahí; ver [Código del juego](docs/arquitectura.md#código-del-juego).
 
 ### Probar
 

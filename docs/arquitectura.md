@@ -751,6 +751,26 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
 - **Barra del jefe**: el nombre es el título con el que el juego presenta al jefe (hoja `Titles`, partes `_SUPER`,
   `_MAIN` y `_SUB`), buscado en los textos de sus FSM o en las palabras de su nombre; si no, el de su diario.
 
+## Código del juego
+
+Para ver cómo hace algo el juego antes de tocarlo. Todo queda en `decomp/` (en `.gitignore`): es código de Team Cherry
+y nunca se sube.
+
+- **C#:** `bash tools/decompile.sh` (después de `setup-dev.sh`; necesita `ilspycmd`) descompila con ILSpy las DLL de
+  `lib/`, contra las que compila el mod: `Assembly-CSharp` (con la Modding API, así que trae `Modding/ModHooks.cs`),
+  `PlayMaker` y `Assembly-CSharp-firstpass`. Sale un archivo `.cs` por clase, con los nombres originales
+  (`HeroController`, `GameManager`, `HealthManager`...), y tarda unos segundos. Se busca y se lee solo lo que toca
+  cada fallo; son unas 3000 clases.
+- **FSM de PlayMaker:** buena parte de la lógica (jefes, NPC, ascensores, puertas, eventos) no está en el C#. En el
+  descompilado salen las piezas, que son las acciones de PlayMaker (esperar, saltar hacia el caballero, lanzar del
+  pool, comparar una variable...), pero no cómo las arma cada objeto: sus estados, transiciones, probabilidades,
+  tiempos y valores. Eso son datos guardados en las escenas (`level*`). Dos formas de verlas:
+  - **FSMViewAvalonia** (herramienta de la comunidad): abre las escenas del juego y dibuja cada FSM como un diagrama,
+    sin abrir el juego. Es la cómoda para mirarlas a ojo.
+  - **Volcarlas a texto desde el mod** (pendiente): una orden del modo de prueba que escriba en `decomp/fsm/` las FSM
+    de la sala actual (estados, transiciones, acciones y sus valores) tal como quedan en el juego, después de lo que
+    cambian el propio juego y la Modding API. Es la útil para revisarlas y buscar en ellas.
+
 ## Pruebas
 
 - `tests/NetTests`: aplicación de consola que prueba el transporte fuera del juego (conexión, código incorrecto,
