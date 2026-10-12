@@ -1031,6 +1031,9 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
 
 ## Pendientes
 
+Fallos y mejoras de la revisión contra el juego descompilado (12/10/2026), para ir arreglando:
+[review-backlog.md](review-backlog.md).
+
 Sin probar:
 - De 0.24.0, sin reproducir en las copias: los caballeros de musgo B y C de las arenas, que se quedaban quietos (no
   existen en el mundo de prueba); la curación del compañero pegada (cortada o no, acaba bien). Devolver el escupitajo
