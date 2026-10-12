@@ -14,14 +14,27 @@ function Remove-EmptyTree([string]$path) {
     return $false
 }
 
-# Carpeta del mod: se borra todo salvo las skins que haya puesto el jugador. Devuelve $true si quedan skins.
-function Remove-ModFolder([string]$modDir) {
+# Carpeta del mod. Los archivos del paquete ya los borró su línea "added" del manifiesto; aquí se borra la caché de
+# skins de los compañeros (SkinCache, la crea el mod) y, con $all (instalado a mano: no hay lista de lo que se puso),
+# también los .dll, .pdb y .xml. Lo demás se queda: las skins del jugador y cualquier archivo que haya puesto ahí (antes
+# se borraba todo menos Skins). Devuelve $true si la carpeta se queda.
+function Remove-ModFolder([string]$modDir, [bool]$all = $false) {
     if (-not (Test-Path -LiteralPath $modDir)) { return $false }
-    foreach ($item in Get-ChildItem -LiteralPath $modDir -Force) {
-        if ($item.PSIsContainer -and $item.Name -eq 'Skins') { continue }
-        Remove-Item -LiteralPath $item.FullName -Recurse -Force
+    $cache = Join-Path $modDir 'SkinCache'
+    if (Test-Path -LiteralPath $cache) { Remove-Item -LiteralPath $cache -Recurse -Force }
+    if ($all) {
+        foreach ($item in Get-ChildItem -LiteralPath $modDir -File -Force) {
+            if (@('.dll', '.pdb', '.xml') -contains $item.Extension.ToLowerInvariant()) {
+                Remove-Item -LiteralPath $item.FullName -Force
+            }
+        }
     }
-    return -not (Remove-EmptyTree $modDir)
+    if (Remove-EmptyTree $modDir) { return $false }
+    $left = @(Get-ChildItem -LiteralPath $modDir -Force | ForEach-Object { $_.Name })
+    Write-Note ((L 'Se deja la carpeta del mod con lo que no puso el instalador (tus skins y tus archivos): ' `
+            'The mod folder is kept with what the installer did not put there (your skins and files): ') +
+            "$modDir ($($left -join ', '))")
+    return $true
 }
 
 # Desinstala de la carpeta del juego. Devuelve $true si el juego quedó como estaba; lanza una excepción si algo falla.
@@ -39,11 +52,10 @@ function Invoke-Uninstall([string]$game) {
             Write-Warn (L "No encontré HKMultiplayer instalado en esta carpeta (ni la copia $BackupName)." "HKMultiplayer isn't installed in this folder (and there is no $BackupName copy).")
             return $false
         }
-        $keptSkins = Remove-ModFolder $modDir
+        $keptSkins = Remove-ModFolder $modDir $true
         Write-Warn (L 'Mod quitado. No había copia del instalador, así que la Modding API sigue instalada.' "Mod removed. There was no installer backup, so the Modding API is still installed.")
         Write-Warn (L 'Para dejar el juego original: Steam > clic derecho en Hollow Knight > Propiedades > Archivos instalados > Verificar integridad.' `
                 'To get the original game back: Steam > right-click Hollow Knight > Properties > Installed Files > Verify integrity.')
-        if ($keptSkins) { Write-Note ((L 'Tus skins siguen en: ' 'Your skins are still in: ') + (Join-Path $modDir 'Skins')) }
         return $false
     }
 
@@ -119,7 +131,6 @@ function Invoke-Uninstall([string]$game) {
     }
     if ($restoredOldMod) { Write-Note (L "El mod anterior ($OldModName) vuelve a estar instalado, como antes." "The old mod ($OldModName) is installed again, as before.") }
     if ($restoredMods -gt 0) { Write-Note (L "Mods apartados a Mods\Disabled que vuelven a su sitio: $restoredMods." "Mods moved back from Mods\Disabled: $restoredMods.") }
-    if ($keptSkins) { Write-Note ((L 'Tus skins siguen en: ' 'Your skins are still in: ') + (Join-Path $modDir 'Skins')) }
     Write-Note (L 'Tus mundos coop y tus partidas no se han tocado.' 'Your coop worlds and saves were not touched.')
     return $clean
 }

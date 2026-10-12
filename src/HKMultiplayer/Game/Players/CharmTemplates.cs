@@ -135,6 +135,9 @@ internal sealed class CharmTemplates {
     /// </summary>
     public readonly List<PuffInfo> Puffs = new();
 
+    /// <summary>Índice en <see cref="Puffs"/> del efecto del golpe de 2 o más (<c>takeHitDoublePrefab</c>), o -1.</summary>
+    public int DoubleHitPuff { get; private set; } = -1;
+
     /// <summary>La onda del grito (Howling Wraiths y Abyss Shriek); se crea tal cual, como hace el caballero.</summary>
     public GameObject RoarWave { get; private set; }
 
@@ -181,13 +184,20 @@ internal sealed class CharmTemplates {
             ? HeroEffectTemplates.FirstAction<SpawnObjectFromGlobalPoolOverTime>(FSMUtility.LocateFSM(dung.gameObject, "Control"),
                 "Equipped")?.gameObject.Value
             : null;
+        // Las chispas del aguijón contra la pared también salen del pool. El golpe de 2 o más se crea con Instantiate (no
+        // pasa por el pool): va como una más para tener su copia, y se enciende con el aviso del golpe (DoubleHitPuff)
         foreach (var prefab in new[] {
                      hero.shadowdashBurstPrefab, hero.shadowdashDownBurstPrefab, hero.shadowRingPrefab, hero.backDashPrefab,
-                     hero.hardLandingEffectPrefab, hero.softLandingEffectPrefab, hero.jumpEffectPrefab, dungTrail
+                     hero.hardLandingEffectPrefab, hero.softLandingEffectPrefab, hero.jumpEffectPrefab, dungTrail,
+                     hero.nailTerrainImpactEffectPrefab, hero.takeHitDoublePrefab
                  }) {
             // Solo los que salen del pool (algunos campos apuntan a hijos del caballero, que ya se copian)
             if (prefab == null || prefab.scene.IsValid() || _spawns.ContainsKey(prefab)) {
                 continue;
+            }
+
+            if (prefab == hero.takeHitDoublePrefab) {
+                DoubleHitPuff = Puffs.Count;
             }
 
             _spawns[prefab] = Pack(SpawnKind.Puff, Puffs.Count);

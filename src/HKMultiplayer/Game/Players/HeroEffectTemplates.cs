@@ -82,6 +82,14 @@ internal sealed class HeroEffectTemplates {
     /// <summary>Partículas del golpe recibido.</summary>
     public readonly GameObject[] HitParticles = new GameObject[2];
 
+    /// <summary>
+    /// Sprites de la animación "Wall Slide" del caballero (colección y número): mientras el avatar enseña uno, su copia
+    /// del polvo de la pared (<c>wallslideDustPrefab</c>, que el juego enciende al deslizarse) emite.
+    /// </summary>
+    public readonly HashSet<int> WallSlideSprites = new();
+
+    public string WallSlideCollection { get; private set; }
+
     /// <summary>Efectos de amuletos que crean objetos aparte (rayos, nubes, moscas, onda del grito); puede faltar.</summary>
     public CharmTemplates Charms { get; private set; }
 
@@ -144,6 +152,20 @@ internal sealed class HeroEffectTemplates {
             Companions = new CompanionTemplates(hero, _holder.transform);
         } catch (System.Exception e) {
             Log.Warn($"Efectos: sin los acompañantes del compañero: {e}");
+        }
+
+        var wallSlide = hero.GetComponent<tk2dSpriteAnimator>()?.Library?.GetClipByName("Wall Slide");
+        if (wallSlide?.frames != null) {
+            foreach (var frame in wallSlide.frames) {
+                if (frame?.spriteCollection == null) {
+                    continue;
+                }
+
+                WallSlideCollection ??= frame.spriteCollection.spriteCollectionName;
+                if (frame.spriteCollection.spriteCollectionName == WallSlideCollection) {
+                    WallSlideSprites.Add(frame.spriteId);
+                }
+            }
         }
 
         HitParticles[0] = heroTransform.Find("Effects/Damage Effect/Hit Pt 1")?.gameObject;

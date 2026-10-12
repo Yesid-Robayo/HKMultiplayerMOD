@@ -813,8 +813,10 @@ internal sealed class PlayerEffects {
             orig(self, source, side, amount, hazard);
             var after = data != null ? data.health + data.healthBlue : 0;
             if (after < before && self == HeroController.instance) {
-                // Con A = 1 se llevó una máscara azul: sin las partículas del golpe normal
-                _active?.Send(new EffectEvent { Kind = EffectKind.Hit, A = (byte) (data.damagedBlue ? 1 : 0) });
+                // Bit 1: se llevó una máscara azul (sin las partículas del golpe normal). Bit 2: fue de 2 o más (el juego
+                // crea además takeHitDoublePrefab; con la azul no, porque no hay efecto de daño)
+                var flags = (data.damagedBlue ? 1 : 0) | (before - after > 1 ? 2 : 0);
+                _active?.Send(new EffectEvent { Kind = EffectKind.Hit, A = (byte) flags });
             }
         };
     }

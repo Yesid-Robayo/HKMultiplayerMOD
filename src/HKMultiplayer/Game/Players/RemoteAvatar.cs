@@ -183,6 +183,9 @@ internal sealed class RemoteAvatar {
 
     public bool FacingRight => _facingRight;
 
+    /// <summary>Si su caballero se ve en su PC (no está escondido por una cinemática, un viaje o caído).</summary>
+    public bool Visible => _visible;
+
     /// <summary>Destello al curarse (como el del caballero).</summary>
     public void FlashHeal() => _flash.flashFocusHeal();
 

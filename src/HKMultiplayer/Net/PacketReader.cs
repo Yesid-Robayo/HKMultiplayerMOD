@@ -97,6 +97,69 @@ public sealed class PacketReader {
         return value;
     }
 
+    /// <summary>Cadenas ya leídas con <see cref="ReadName"/>, por la huella de sus bytes.</summary>
+    private static readonly System.Collections.Generic.Dictionary<uint, string> Names = new();
+
+    private const int MaxNames = 4096;
+
+    /// <summary>
+    /// Como <see cref="ReadString"/>, para nombres que se repiten mucho (estados y eventos de FSM, prefabs): si los mismos
+    /// bytes (en ASCII) ya llegaron, devuelve la misma cadena en vez de crear otra en cada mensaje.
+    /// </summary>
+    public string ReadName(int maxBytes = 256) {
+        var length = (int) ReadVarUInt();
+        if (length > maxBytes) {
+            throw new PacketException($"Cadena demasiado larga ({length} bytes)");
+        }
+
+        Ensure(length);
+        if (length == 0) {
+            return string.Empty;
+        }
+
+        var hash = 2166136261u;
+        var ascii = true;
+        for (var i = 0; i < length; i++) {
+            var b = _buffer[_position + i];
+            ascii &= b < 0x80;
+            hash = (hash ^ b) * 16777619u;
+        }
+
+        string value;
+        lock (Names) {
+            if (ascii && Names.TryGetValue(hash, out value) && SameAscii(value, length)) {
+                _position += length;
+                return value;
+            }
+
+            value = Encoding.UTF8.GetString(_buffer, _position, length);
+            if (ascii) {
+                if (Names.Count >= MaxNames) {
+                    Names.Clear();
+                }
+
+                Names[hash] = value;
+            }
+        }
+
+        _position += length;
+        return value;
+    }
+
+    private bool SameAscii(string value, int length) {
+        if (value.Length != length) {
+            return false;
+        }
+
+        for (var i = 0; i < length; i++) {
+            if (value[i] != _buffer[_position + i]) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public void ReadBytes(byte[] destination, int offset, int count) {
         Ensure(count);
         System.Buffer.BlockCopy(_buffer, _position, destination, offset, count);

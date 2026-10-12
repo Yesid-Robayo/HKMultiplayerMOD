@@ -318,6 +318,9 @@ internal sealed class Revive {
         }
 
         _hooked = true;
+        // El gancho de Die tiene que ir antes que el de TakeDamage: MonoMod compila la copia de TakeDamage que hace de
+        // `orig` al poner su gancho, y esa copia solo llama a este Die si ya estaba puesto (si se cambia el orden, el
+        // caballero muere de verdad en vez de caer)
         On.HeroController.Die += (orig, self) => {
             var active = _active;
             if (_allowRealDeath || active == null) {
@@ -1416,12 +1419,15 @@ internal sealed class Revive {
             collider.enabled = false;
         }
 
+        // Se esconde con forceRenderingOff, una marca aparte que el juego no toca: lo que el juego encienda o apague
+        // mientras tanto (`enabled`, un efecto de Focus o de amuleto que acaba) queda como lo dejó al revivir. Antes se
+        // apagaba `enabled` y al revivir se encendía todo, también lo que el juego había apagado entre medias
         _rendererScratch.Clear();
-        hero.GetComponentsInChildren(_rendererScratch);
+        hero.GetComponentsInChildren(true, _rendererScratch);
         foreach (var renderer in _rendererScratch) {
             // La luz y la viñeta siguen: sin ellas el caído veía las salas oscuras sin oscuridad
-            if (renderer.enabled && renderer != hero.heroLight && renderer != hero.vignette) {
-                renderer.enabled = false;
+            if (!renderer.forceRenderingOff && renderer != hero.heroLight && renderer != hero.vignette) {
+                renderer.forceRenderingOff = true;
                 _hiddenRenderers.Add(renderer);
             }
         }
@@ -1434,7 +1440,7 @@ internal sealed class Revive {
     private void RestoreVisibleState() {
         foreach (var renderer in _hiddenRenderers) {
             if (renderer != null) {
-                renderer.enabled = true;
+                renderer.forceRenderingOff = false;
             }
         }
 

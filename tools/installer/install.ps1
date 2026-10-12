@@ -56,6 +56,15 @@ function Assert-CompatibleGame([string]$game) {
 
 # Instala en la carpeta del juego (ya comprobada). Lanza una excepción si algo falla; $script:Changing dice si ya se
 # había empezado a cambiar el juego.
+# Otros mods que la instalación aparta a Mods\Disabled (carpetas y .dll sueltos de Mods, salvo este y Disabled)
+function Get-OtherMods([string]$game) {
+    $mods = Join-Game $game $ModsRelative
+    if (-not (Test-Path -LiteralPath $mods)) { return @() }
+    return @(Get-ChildItem -LiteralPath $mods -Force | Where-Object {
+            ($_.PSIsContainer -and $_.Name -ne $ModName -and $_.Name -ne 'Disabled' -and $_.Name -ne $OldModName) -or
+            (-not $_.PSIsContainer -and $_.Extension -ieq '.dll' -and $_.Name -ne "$OldModName.dll") })
+}
+
 function Invoke-Install([string]$game) {
     $packageRoot = Split-Path -Parent $PSScriptRoot
     $source = Join-Path $packageRoot 'files'
@@ -178,9 +187,7 @@ function Invoke-Install([string]$game) {
     # 4. Otros mods: los hechos para otra versión de la Modding API no cargan con esta y pueden romper el juego. Se
     #    apartan a Mods\Disabled (la Modding API no carga esa carpeta) y la desinstalación los devuelve.
     if (Test-Path -LiteralPath $mods) {
-        $others = @(Get-ChildItem -LiteralPath $mods -Force | Where-Object {
-                ($_.PSIsContainer -and $_.Name -ne $ModName -and $_.Name -ne 'Disabled') -or
-                (-not $_.PSIsContainer -and $_.Extension -ieq '.dll') })
+        $others = Get-OtherMods $game
         if ($others.Count -gt 0) {
             $disabled = Join-Path $mods 'Disabled'
             if (-not (Test-Path -LiteralPath $disabled)) {

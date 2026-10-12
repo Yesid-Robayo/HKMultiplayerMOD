@@ -317,6 +317,17 @@ $folder.Add_SelectedIndexChanged({ Update-Status })
 $install.Add_Click({
         $game = ConvertTo-GameDir $folder.Text
         if (-not $game) { return }
+        # Se dice antes qué otros mods se apartan: también uno que el jugador volvió a activar después de otra instalación
+        $others = @(Get-OtherMods $game | ForEach-Object { $_.Name })
+        if ($others.Count -gt 0) {
+            $answer = [System.Windows.Forms.MessageBox]::Show($form,
+                (L ("Estos mods se apartarán a Mods\Disabled (no funcionan con la Modding API de HKMultiplayer; al desinstalar vuelven):`n`n" +
+                        ($others -join "`n") + "`n`n¿Seguir?") `
+                        ("These mods will be moved to Mods\Disabled (they don't work with HKMultiplayer's Modding API; uninstalling brings them back):`n`n" +
+                        ($others -join "`n") + "`n`nContinue?")),
+                'HKMultiplayer', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+            if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+        }
         $log.Clear()
         Set-Busy $true
         try {
@@ -378,7 +389,8 @@ $script:Newest = $null
 
 function Get-ReleaseVersion($release) {
     $parsed = $null
-    if ([Version]::TryParse(([string]$release.tag_name).TrimStart('v', 'V'), [ref]$parsed)) { return $parsed }
+    # Los números del principio: una etiqueta como "v0.26.0-hotfix" cuenta como 0.26.0 (antes se ignoraba sin avisar)
+    if (([string]$release.tag_name) -match '^[vV]?(\d+(\.\d+){1,3})' -and [Version]::TryParse($Matches[1], [ref]$parsed)) { return $parsed }
     return $null
 }
 
@@ -441,9 +453,28 @@ function Get-ReleaseNotes($release) {
 
 function Show-Notes {
     if (-not $script:Releases) {
-        # Aún no llegó (o falló al abrir): se pide ya
+        # Aún no llegó (o falló al abrir): se pide ya, sin parar la ventana y esperando como mucho 10 s (DownloadString
+        # en este hilo la dejaba congelada hasta ~100 s sin internet)
         $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
-        try { $client = New-WebClient; Set-Releases ($client.DownloadString($releasesApi)); $client.Dispose() } catch { }
+        $script:NotesDone = $false
+        try {
+            $client = New-WebClient
+            $client.Add_DownloadStringCompleted({
+                    param($sender, $e)
+                    if (-not $e.Cancelled -and -not $e.Error) {
+                        try { Set-Releases $e.Result } catch { }
+                    }
+                    $script:NotesDone = $true
+                    $sender.Dispose()
+                })
+            $client.DownloadStringAsync([Uri]$releasesApi)
+            $deadline = (Get-Date).AddSeconds(10)
+            while (-not $script:NotesDone -and (Get-Date) -lt $deadline) {
+                [System.Windows.Forms.Application]::DoEvents()
+                Start-Sleep -Milliseconds 50
+            }
+            if (-not $script:NotesDone) { $client.CancelAsync() }
+        } catch { }
         $form.Cursor = [System.Windows.Forms.Cursors]::Default
     }
     $current = $null

@@ -231,8 +231,8 @@ The full list (in Spanish) is in [docs/arquitectura.md](docs/arquitectura.md#pen
 ## 📦 Install
 
 > [!NOTE]
-> You need **Hollow Knight 1.5.12620 on Windows** (the current Steam version). All players must have **the same
-> version** of HKMultiplayer.
+> You need **Hollow Knight 1.5.12620 on Windows** (the current Steam version; GOG works too). All players must have
+> **the same version** of HKMultiplayer. Mac and Linux are not supported, and the Xbox/Game Pass version is not tested.
 
 1. Download `HKMultiplayer-<version>.zip` from the [*Releases*](../../releases) page.
 2. Close the game, **extract the whole zip** and double-click **`HKMultiplayer Setup.exe`**.
@@ -256,6 +256,8 @@ installer is a PowerShell script you can read in the package's `scripts` folder.
   it. **What's new** (bottom right) shows what that version brings, or this package's one if there is none newer.
 - **Uninstall** undoes everything in reverse: the game is left as it was. Your coop worlds, saves and skins are not
   touched.
+- Don't mix it with Lumafly or Scarab on the same folder: their "vanilla" switch moves the same files, and uninstalling
+  may then not leave the game exactly as it was (Steam's *Verify integrity* fixes it).
 - It also works from the console: `start /wait "" "HKMultiplayer Setup.exe" /install "D:\Games\Hollow Knight"` (or
   `/uninstall`).
 

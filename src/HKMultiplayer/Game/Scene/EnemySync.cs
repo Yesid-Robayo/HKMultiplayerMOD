@@ -1402,10 +1402,10 @@ internal sealed class EnemySync {
                     }
 
                     if (path == 0) {
-                        path = ScenePaths.StableHash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode();
+                        path = ScenePaths.StableHash(fsm.transform) ^ ScenePaths.Fnv(fsm.FsmName);
                     }
 
-                    var id = (path ^ (uint) variable.Name.GetHashCode() * 16777619u) & ~SpawnedIdFlag;
+                    var id = (path ^ ScenePaths.Fnv(variable.Name) * 16777619u) & ~SpawnedIdFlag;
                     // Si lo apuntan varias, la menor: igual en todos los PCs, sea cual sea el orden en que se recorren
                     if (!_creatorIds.TryGetValue(value, out var known) || id < known) {
                         _creatorIds[value] = id;
@@ -1515,7 +1515,7 @@ internal sealed class EnemySync {
     private void OnJar(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
-        var prefabName = reader.ReadString(128);
+        var prefabName = reader.ReadName(128);
         var hp = reader.ReadInt();
         var position = new Vector3(reader.ReadFloat(), reader.ReadFloat(), 0f);
         if (sceneHash != _sceneHash || (id & SpawnedIdFlag) == 0 || _byId.ContainsKey(id)) {
@@ -1768,7 +1768,7 @@ internal sealed class EnemySync {
         var stateIndex = Array.IndexOf(action.Fsm.States, action.State);
         var actionIndex = action.State != null ? Array.IndexOf(action.State.Actions, action) : -1;
         var id = ScenePaths.StableHash(owner.transform);
-        id = (id ^ (uint) action.Fsm.Name.GetHashCode()) * 16777619u;
+        id = (id ^ ScenePaths.Fnv(action.Fsm.Name)) * 16777619u;
         id = (id ^ (uint) (stateIndex << 8 | actionIndex & 0xFF)) * 16777619u;
         id &= ~SpawnedIdFlag;
         if (_byId.ContainsKey(id)) {
@@ -3875,7 +3875,7 @@ internal sealed class EnemySync {
         var fsmIndex = reader.ReadByte();
         var stateIndex = reader.ReadUShort();
         var actionIndex = reader.ReadByte();
-        var prefabName = reader.ReadString(128);
+        var prefabName = reader.ReadName(128);
         var id = reader.ReadUInt();
         var position = new Vector3(reader.ReadFloat(), reader.ReadFloat(), 0f);
         var rotation = Quaternion.Euler(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
@@ -4203,7 +4203,7 @@ internal sealed class EnemySync {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
         var fsmIndex = reader.ReadByte();
-        var eventName = reader.ReadString(128);
+        var eventName = reader.ReadName(128);
         var target = reader.ReadUShort();
         var hops = reader.ReadByte();
         // Solo lo atiende el PC al que iba (si no, al cambiar quién lo mueve podrían atenderlo dos o ninguno)

@@ -6,7 +6,9 @@ la partida: comparten el mundo, se ven en tiempo real y pelean juntos contra los
 jefes.
 
 Necesitas:
-  - Hollow Knight 1.5.12620 en Windows (la versión actual de Steam).
+  - Hollow Knight 1.5.12620 en Windows (la versión actual de Steam; la de GOG también vale).
+    Mac y Linux no: la Modding API del paquete es solo para Windows. La versión de Xbox/Game Pass
+    no está probada y el instalador no la busca.
   - Que todos los jugadores tengan instalada la MISMA versión de HKMultiplayer.
 
 El mod sale en el idioma del juego: en español si el juego está en español; en cualquier otro
@@ -77,6 +79,11 @@ Si prefieres no usar el instalador, o no funciona en tu PC:
 Si ya tienes instalada la Modding API para esta versión del juego (por ejemplo con Lumafly o
 Scarab), basta con copiar la carpeta "files\hollow_knight_Data\Managed\Mods\HKMultiplayer" del
 paquete a <carpeta del juego>\hollow_knight_Data\Managed\Mods.
+
+No uses el instalador y Lumafly o Scarab a la vez en la misma carpeta: si en ellos activas el
+modo "vanilla" o cambias la Modding API, mueven los mismos archivos (Assembly-CSharp.dll y
+Mods\Disabled) y al desinstalar el juego puede no quedar exactamente como estaba. Si pasa,
+Steam lo arregla: Propiedades > Archivos instalados > Verificar integridad.
 
 Para quitarlo a mano: borra la carpeta Managed\Mods\HKMultiplayer y devuelve la copia de
 seguridad de Managed (o en Steam: clic derecho en Hollow Knight > Propiedades > Archivos

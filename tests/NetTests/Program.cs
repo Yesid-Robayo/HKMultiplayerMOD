@@ -37,11 +37,34 @@ public static partial class Program {
         Run("Desconexión avisada", DisconnectNotified);
         Run("Memoria creada por paquete en régimen estable", SteadyStateAllocations);
         Run("Memoria del cifrado por paquete", CipherAllocations);
+        Run("ReadName: los mismos bytes dan la misma cadena", ReadNameReusesStrings);
         RunSessionTests();
         RunInterpolationTests();
 
         Console.WriteLine(_failures == 0 ? "\nTODAS LAS PRUEBAS PASARON" : $"\n{_failures} PRUEBA(S) FALLARON");
         return _failures == 0 ? 0 : 1;
+    }
+
+    private static void ReadNameReusesStrings() {
+        var buffer = new byte[256];
+        var writer = new PacketWriter();
+        writer.Reset(buffer, 0, buffer.Length);
+        writer.WriteString("Roar Lock");
+        writer.WriteString("Roar Lock");
+        writer.WriteString("Roar Lack");
+        writer.WriteString("Caída");
+        writer.WriteString(string.Empty);
+        var reader = new PacketReader();
+        reader.Reset(buffer, 0, writer.Length);
+        var first = reader.ReadName(128);
+        var second = reader.ReadName(128);
+        var other = reader.ReadName(128);
+        var accented = reader.ReadName(128);
+        var empty = reader.ReadName(128);
+        Assert(first == "Roar Lock" && ReferenceEquals(first, second), "la segunda lectura no reutilizó la cadena");
+        Assert(other == "Roar Lack", $"otro nombre leído como {other}");
+        Assert(accented == "Caída", $"un nombre con tilde leído como {accented}");
+        Assert(empty.Length == 0, "la cadena vacía no salió vacía");
     }
 
     private static void Run(string name, Action test) {

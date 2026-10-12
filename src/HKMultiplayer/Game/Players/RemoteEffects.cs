@@ -96,6 +96,12 @@ internal sealed class RemoteEffects {
     private readonly AudioSource _dungAuraAudio;
     private bool _dungAuraOn;
 
+    /// <summary>Copia del polvo al deslizarse por la pared (si está en las carpetas copiadas) y si emite ahora.</summary>
+    private ParticleSystem _wallDust;
+
+    private bool _wallDustResolved;
+    private bool _wallSliding;
+
     /// <summary>Polvo al correr: pegado al avatar mientras corre; al parar se suelta, deja de emitir y se apaga a los 2 s.</summary>
     private GameObject _run;
 
@@ -378,7 +384,7 @@ internal sealed class RemoteEffects {
 
                     break;
                 case EffectKind.Hit:
-                    PlayHit(effect.A != 0);
+                    PlayHit((effect.A & 1) != 0, (effect.A & 2) != 0);
                     break;
                 case EffectKind.Beam:
                     _charms?.SpawnBeam(effect.A, _avatar.Position, effect.Angle, effect.Scale);
@@ -410,6 +416,7 @@ internal sealed class RemoteEffects {
         }
 
         SetDungAura(_avatar != null && _avatar.DungAura, force: false);
+        UpdateWallDust();
         if (_runOffAt >= 0f && Time.time >= _runOffAt) {
             HideRun();
         }
@@ -915,11 +922,52 @@ internal sealed class RemoteEffects {
         _run.SetActive(false);
     }
 
+    /// <summary>
+    /// Como el juego al deslizarse por la pared (`wallslideDustPrefab.enableEmission`): el polvo emite mientras el avatar
+    /// enseña un sprite de "Wall Slide". Sin red: el sprite ya llega en su estado.
+    /// </summary>
+    private void UpdateWallDust() {
+        if (!_wallDustResolved) {
+            _wallDustResolved = true;
+            _wallDust = Component<ParticleSystem>(Resolve(_templates.Hero.wallslideDustPrefab?.gameObject));
+            if (_wallDust != null) {
+                var off = _wallDust.emission;
+                off.enabled = false;
+            }
+        }
+
+        if (_wallDust == null || _avatar == null) {
+            return;
+        }
+
+        var sprite = _avatar.Sprite;
+        var sliding = _avatar.Visible && sprite.Collection != null &&
+                      sprite.Collection.spriteCollectionName == _templates.WallSlideCollection &&
+                      _templates.WallSlideSprites.Contains(sprite.spriteId);
+        if (sliding == _wallSliding) {
+            return;
+        }
+
+        _wallSliding = sliding;
+        var emission = _wallDust.emission;
+        emission.enabled = sliding;
+        if (sliding && !_wallDust.isPlaying) {
+            _wallDust.Play();
+        }
+    }
+
     /// <summary>Golpe recibido: partículas, sonido y destello del avatar (sin las partículas si se llevó una máscara azul).</summary>
-    private void PlayHit(bool blue) {
+    private void PlayHit(bool blue, bool twoOrMore) {
         if (!blue) {
             foreach (var particles in _templates.HitParticles) {
                 Component<ParticleSystem>(Resolve(particles))?.Play();
+            }
+
+            // Como el juego: en el caballero, con su tamaño (Instantiate no le cambia la escala)
+            var charms = _templates.Charms;
+            if (twoOrMore && charms is { DoubleHitPuff: >= 0 }) {
+                _charms?.SpawnPuff(charms.DoubleHitPuff, _avatar.Position, 0f,
+                    charms.Puffs[charms.DoubleHitPuff].Template.transform.localScale.x);
             }
         }
 

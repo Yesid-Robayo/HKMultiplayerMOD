@@ -953,14 +953,31 @@ internal sealed class FsmStateSync {
     private static bool IsHollowKnightChain(PlayMakerFSM fsm) =>
         fsm.FsmName == "Control" && fsm.gameObject.name.StartsWith("hollow_knight_chain_base", StringComparison.Ordinal);
 
+    private static readonly List<PlayMakerFSM> SiblingFsms = new();
+
     /// <summary>
     /// Identificador de la FSM igual en todos los PCs: por su ruta en la sala. Los clonados en la raíz (lo que crean las
     /// jaulas del Coliseo) se llaman igual y tienen el mismo puesto entre hermanos: van por su sitio, como los enemigos.
+    /// Si el objeto tiene otra FSM antes con el mismo nombre, cuenta también su puesto entre ellas (si no, chocaban).
     /// </summary>
     internal static uint FsmId(PlayMakerFSM fsm) {
         var transform = fsm.transform;
         var cloned = transform.parent == null && transform.name.EndsWith("(Clone)", StringComparison.Ordinal);
-        return (cloned ? EnemySync.PlacedId(transform) : ScenePaths.StableHash(transform)) ^ (uint) fsm.FsmName.GetHashCode();
+        var id = (cloned ? EnemySync.PlacedId(transform) : ScenePaths.StableHash(transform)) ^ ScenePaths.Fnv(fsm.FsmName);
+        var repeated = 0;
+        fsm.GetComponents(SiblingFsms);
+        foreach (var other in SiblingFsms) {
+            if (other == fsm) {
+                break;
+            }
+
+            if (other.FsmName == fsm.FsmName) {
+                repeated++;
+            }
+        }
+
+        SiblingFsms.Clear();
+        return repeated == 0 ? id : (id ^ (uint) repeated) * 16777619u;
     }
 
     /// <summary>
@@ -1501,7 +1518,7 @@ internal sealed class FsmStateSync {
     private void OnConvoDone(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
-        var state = reader.ReadString(128);
+        var state = reader.ReadName(128);
         if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var item) || item.Fsm == null || !item.Encounter ||
             item.Fsm.ActiveStateName != state) {
             return;
@@ -1790,7 +1807,7 @@ internal sealed class FsmStateSync {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
         var target = reader.ReadUShort();
-        var name = reader.ReadString(128);
+        var name = reader.ReadName(128);
         if (target != _session.LocalId || sceneHash != _sceneHash || !_byId.TryGetValue(id, out var item) ||
             item.Fsm == null) {
             return;
@@ -2035,7 +2052,7 @@ internal sealed class FsmStateSync {
     private void OnControllerState(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
-        var state = reader.ReadString(128);
+        var state = reader.ReadName(128);
         if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var item) || item.Fsm == null ||
             !AcceptFrom(item, from) || !item.Ready || item.Fsm.ActiveStateName == state) {
             return;
@@ -2089,8 +2106,8 @@ internal sealed class FsmStateSync {
     private void OnTransition(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
-        var fromState = reader.ReadString(128);
-        var state = reader.ReadString(128);
+        var fromState = reader.ReadName(128);
+        var state = reader.ReadName(128);
         if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var item) || item.Fsm == null) {
             return;
         }
@@ -2173,7 +2190,7 @@ internal sealed class FsmStateSync {
     private void OnPose(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
-        var state = reader.ReadString(128);
+        var state = reader.ReadName(128);
         if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var item) || item.Fsm == null ||
             !AcceptFrom(item, from)) {
             return;

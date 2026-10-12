@@ -24,6 +24,14 @@ internal static class Program {
     private static extern bool AllocConsole();
 
     [DllImport("kernel32.dll")]
+    private static extern IntPtr GetConsoleWindow();
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr window, int command);
+
+    private const int HideWindow = 0;
+
+    [DllImport("kernel32.dll")]
     private static extern bool SetConsoleOutputCP(uint codePage);
 
     private const uint Utf8CodePage = 65001;
@@ -92,6 +100,13 @@ internal static class Program {
         if (own && output == null) {
             AllocConsole();
         } else {
+            if (own) {
+                // Salida a un archivo sin consola de la que colgarse: PowerShell abría la suya (visible y en la página de
+                // códigos OEM: las tildes llegaban mal). Se crea una escondida en UTF-8 y PowerShell la hereda
+                AllocConsole();
+                ShowWindow(GetConsoleWindow(), HideWindow);
+            }
+
             own = false;
         }
 

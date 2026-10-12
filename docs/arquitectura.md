@@ -48,12 +48,18 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 - **Cifrado**:
   - Al conectar, intercambio de claves **X25519** (efímeras, secreto hacia adelante).
   - Claves de sesión con **HKDF-SHA256** mezclando el secreto compartido y el **código de partida**: sin el código no
-    se puede derivar la clave, así que nadie sin él puede unirse ni hacerse pasar por el host.
+    se puede derivar la clave, así que nadie sin él puede unirse ni hacerse pasar por el host. El código entra estirado
+    con **PBKDF2-HMAC-SHA256** de 100.000 vueltas (`KeyExchange.Stretch`, una vez por código y en otro hilo): quien
+    capture un saludo ya no puede probar códigos a millones por segundo. Desde la 0.26.0, protocolo 2.
   - Cada paquete con **ChaCha20-Poly1305** (cifrado autenticado); el *nonce* sale del número de secuencia y la
     dirección, y nunca se repite. Paquetes alterados o repetidos se descartan.
   - Primitivas de la biblioteca BouncyCastle (MIT), con los objetos de cifrado reutilizados.
 - **Conexión**: saludo en dos pasos con versión del mod, nombre y prueba de que se conoce el código; latido, tiempo de
-  espera y desconexión limpia. Límite de jugadores y de conexiones a medio abrir.
+  espera y desconexión limpia. Límite de jugadores y de conexiones a medio abrir, y como mucho 10 saludos nuevos por
+  segundo. Un saludo desde la dirección de un jugador que envió algo en los últimos 3 s se ignora (no tira su conexión).
+- **Robustez**: un fallo al procesar un datagrama, el tick de una conexión o un mensaje no sale del transporte. Un
+  mensaje a medio escribir que falló se descarta en el siguiente `Begin`. Las transferencias grandes a medio recibir son
+  como mucho 2 y caducan a los 30 s.
 
 ### Sesión (`Session/`)
 
@@ -557,12 +563,13 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 Decisiones aprobadas en [Decisiones de M5](#decisiones-de-m5). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
-mensajes nuevos van del 73 al 107 (el 98 es de `EnemySync`, el 104, el 105 y el 107 de `HazardSync` y el 106 de
-`StagTogether`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
+mensajes nuevos van del 73 al 110 (el 98 y el 108 son de `EnemySync`, el 104, el 105 y el 107 de `HazardSync`, el 106
+de `StagTogether` y el 109 y el 110 de `SceneObjectSync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
 juego (16:9; con otra proporción el juego deja franjas) y escala con su alto como el HUD del juego; las piezas se crean
 una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
 
-- **Estado de cada jugador** (`PartyState`, mensaje 74): en pie, caído, en cinemática o en sueño. Lo decide el host y
+- **Estado de cada jugador** (`PartyState`, mensaje 74): en pie, caído, en cinemática, en sueño o entrando (`Joining`:
+  conectado pero sin caballero, en el menú o en la introducción; no cuenta como en pie). Lo decide el host y
   lo reparte entero al cambiar y a quien entra. Un caído no cuenta para repartir enemigos (`EnemySync.AssignControllers`:
   los suyos pasan enseguida a quien sigue en pie), ni para las esperas de los combates de jefe (`MissingNear`,
   `EveryoneInside`), ni para los diálogos (`AllConvoDone`), y su avatar no se dibuja.
@@ -599,7 +606,8 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   `DamageHero` de peligro o si murió por un peligro, su `hazardRespawnLocation`: el cuerpo tiene que quedar donde el
   compañero pueda estar de pie a su lado, y antes un caído en el aire sobre un pozo quedaba flotando); el host
   le asigna el compañero en pie al que seguir. El caballero del caído se oculta (sin colisión, sin gravedad,
-  invencible, sin control; se reaplica cada frame) y, tras la animación de muerte, se pega al avatar del compañero, con
+  invencible, sin control ni entrada; se reaplica cada frame; se esconde con `Renderer.forceRenderingOff`, así lo que el
+  juego encienda o apague entre medias queda como lo dejó, y la luz y la viñeta siguen) y, tras la animación de muerte, se pega al avatar del compañero, con
   las zonas de cámara emuladas; si el compañero cambia de sala, viaja detrás de él y entra por la misma puerta que él
   (la de esta sala hacia esa sala más cercana a donde se le vio por última vez). Los viajes a un punto (volver al
   cuerpo, "Recargar sala") entran por `dreamGate` como `SceneTravel`. Antes todos entraban sin puerta: el juego ponía
@@ -750,6 +758,31 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   orbe se quedaba como el del juego hasta cambiar de skin).
 - **Barra del jefe**: el nombre es el título con el que el juego presenta al jefe (hoja `Titles`, partes `_SUPER`,
   `_MAIN` y `_SUB`), buscado en los textos de sus FSM o en las palabras de su nombre; si no, el de su diario.
+
+### Cambios de la revisión contra el juego (0.26.0)
+
+Lo que cambió al arreglar [review-backlog.md](review-backlog.md) y no está ya contado arriba (cada entrada tiene su
+detalle allí):
+
+- **Ids de sala** (`ScenePaths`): la huella de cada objeto sincronizado se apunta al cargar su sala (`sceneLoaded`,
+  antes del `Start` de los objetos) y se usa siempre esa (`StableHash`): un enemigo de la raíz que se destruye o un
+  objeto brillante ya recogido (`Shiny Control` hace `DestroySelf`) ya no cambian los ids de lo que va detrás. Los
+  textos entran en los ids con FNV-1a (`ScenePaths.Fnv`), no con `string.GetHashCode`. `FsmId` cuenta también el puesto
+  entre las FSM del mismo nombre de un objeto.
+- **Daño a enemigos** (mensaje 108, `EnemyDamage`): el daño que no pasa por `TakeDamage` (`ApplyExtraDamage`, las
+  moscas de Flukenest) y la muerte de una marioneta van a quien la mueve. Una marioneta no hace retroceso ni muere en
+  local. Los golpes que llegan a un enemigo a punto de cambiar de PC se guardan 3 s y se aplican al tomarlo.
+- **Traspaso de enemigos**: lleva si el jefe ya despertó, el estado del `Walker` y los textos recortados para que
+  quepa. Los creados en combate con vida pasan a otro si quien los mueve cae o pausa.
+- **Objetos que activa solo un caballero** (`SceneObjectSync`): la palanca del puente (109) y, con el mensaje 110
+  (`LocalTrigger`), las plataformas que giran o caen al pisarlas y los huevos de Cañón de Niebla.
+- **FSM compartidas**: el tranvía, el ascensor del Palacio Blanco y las plataformas del Coliseo y de la Radiancia tienen
+  controlador. Las copias no tocan al caballero local ni abren diálogos.
+- **Datos del personaje**: `maxMP`, estatuas y puertas de los Panteones, `blockerHits` y el robo del banquero son de cada
+  personaje (`SharedUntil026`: los guardados antes toman el valor del mundo). Cada personaje guardado deja un `.bak`.
+- **Cargas** (`CoopSaves.CanStart`): falso los 5 s siguientes a empezar una carga, para que el mundo del host no empiece
+  otra encima mientras el juego sigue en el menú.
+- **Red**: `PacketReader.ReadName` reutiliza las cadenas de nombres de estado, evento y prefab que ya llegaron.
 
 ## Código del juego
 
@@ -945,15 +978,19 @@ Decisiones aprobadas por el usuario para M5 (las marcadas "elegido" las escogió
   `install.ps1` y `uninstall.ps1` solo definen `Invoke-Install` e `Invoke-Uninstall`, que escriben por `Write-Out` en la
   ventana o en la consola. Carpeta del juego pasada (también arrastrada sobre el .bat) o buscada (registro de Steam,
   `libraryfolders.vdf`, desinstalación de Steam, rutas típicas en los discos locales, GOG). Exige Unity 6 (`UnityPlayer.dll` 6000.x) y `TeamCherry.TK2D.dll`:
-  con otra versión del juego la Modding API lo dejaría sin arrancar. Solo bloquea si hay un `hollow_knight.exe`
-  abierto desde esa carpeta (otras copias no molestan).
+  con otra versión del juego la Modding API lo dejaría sin arrancar. Además, el `Assembly-CSharp.dll` del juego tiene
+  que llevar `1.5.12620` (`Test-GameVersion`). Solo bloquea si hay un `hollow_knight.exe` abierto desde esa carpeta
+  (otras copias no molestan) o uno cuya ruta no se puede leer (abierto como administrador). Antes de instalar, la
+  ventana pregunta con la lista de los otros mods que va a apartar.
 - Cada cambio se apunta en `<juego>\HKMultiplayer-backup\manifest.txt` antes de hacerlo: `added-dir`, `added`,
   `replaced` (el original en `HKMultiplayer-backup\files\`), `old-mod` (el mod anterior `HollowKnightCoop`, movido a
   la copia porque también abre la red) y `moved` (otros mods apartados a `Mods\Disabled`). Volver a instalar es una
   actualización: lo ya apuntado no se vuelve a copiar, así que la copia sigue siendo la del juego antes de la primera
   instalación.
-- La desinstalación (`uninstall.ps1`) recorre el manifiesto al revés. De `Mods\HKMultiplayer` solo deja
-  `Skins` si tiene algo; las carpetas añadidas se borran si quedan vacías. Si algo no se pudo devolver, conserva la
+- La desinstalación (`uninstall.ps1`) recorre el manifiesto al revés. De `Mods\HKMultiplayer` borra lo que puso el
+  instalador y la caché `SkinCache`; lo demás (las skins y lo que haya puesto el jugador) se queda y se dice qué. Las
+  carpetas añadidas se borran si quedan vacías. Un ensamblado que ya no es el de la Modding API (`Test-Modded`: los
+  parcheados nombran `ModHooks`) lo volvió a poner Steam: se deja si es distinto de la copia. Si algo no se pudo devolver, conserva la
   copia y remite a "Verificar integridad" de Steam. Sin manifiesto (mod puesto a mano) quita solo el mod.
 
 ## Hitos

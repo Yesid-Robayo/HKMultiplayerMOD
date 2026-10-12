@@ -215,7 +215,7 @@ internal sealed class DreamSync {
                 continue;
             }
 
-            var id = ScenePaths.StableHash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode();
+            var id = ScenePaths.StableHash(fsm.transform) ^ ScenePaths.Fnv(fsm.FsmName);
             _entries.Add(new Entry {
                 Id = id, Fsm = fsm, Transition = transition, LastState = fsm.ActiveStateName, LastStateTime = Time.unscaledTime
             });

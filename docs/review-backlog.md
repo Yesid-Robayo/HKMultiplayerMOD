@@ -14,6 +14,10 @@ juego en `decomp/`, en tres pasadas:
 
 Lo que **no** cubre: cómo se siente cada combate jugando entre dos personas, y lo que solo pasa con dos PCs reales.
 
+**Estado en la 0.26.0:** 171 de 172 cerradas (arregladas o revisadas con su motivo). Queda abierta en parte J8 (efectos
+del caballero que no se ven en el compañero). Muchas de las arregladas están "sin probar en el juego": las rutas
+automáticas pasan, pero falta jugarlas.
+
 Cómo leerla:
 
 - **Comprobado**: se miró en el código del mod y del juego que pasa así. **Sin comprobar**: lo encontró la revisión
@@ -311,12 +315,13 @@ Del volcado de FSM (`decomp/fsm`):
   no salta (`Revive.UpdateBench` espera el paso de falso a verdadero, [:938-947](../src/HKMultiplayer/Game/Features/Revive.cs#L938))
   y el inventario se abre siempre. Arreglo: no llevar a quien está sentado, o quitar `atBench` al llegar.
   - **Arreglado en 0.26.0:** Los sueños ya no se llevan a quien está sentado (J4) y las cinemáticas compartidas quitan `atBench` al llevarlo.
-- [ ] **J6 · baja · sin comprobar.** `RestoreVisibleState` vuelve a encender todos los renderers que apagó
+- [x] **J6 · baja · sin comprobar.** `RestoreVisibleState` vuelve a encender todos los renderers que apagó
   ([Revive.cs:1382-1386](../src/HKMultiplayer/Game/Features/Revive.cs#L1382)), aunque el juego los hubiera apagado
   después: si cayó a mitad de Focus, un hechizo o un efecto de amuleto, pueden quedarse pegados. Además se apagan
   `heroLight` y `vignette` (juego `HeroController.cs:708-710`): el caído ve las salas oscuras sin oscuridad. Arreglo:
   ocultar y reponer solo el `MeshRenderer` del caballero y dejar la luz y la viñeta.
   - **En parte en 0.26.0:** la luz y la viñeta ya no se esconden (en la 0.26.0, con J1). Lo de los efectos que vuelven a encenderse sigue abierto.
+  - **Arreglado en 0.26.0:** Se esconde con `Renderer.forceRenderingOff`, una marca que el juego no toca: lo que encienda o apague mientras tanto queda como lo dejó. `PlayerSync` mira también esa marca para decir si se ve.
 - [x] **J7 · baja · sin comprobar.** Se puede perder la recuperación de la sombra: `KillOwnShade`
   ([ShadeSync.cs:575-577](../src/HKMultiplayer/Game/Features/ShadeSync.cs#L575)) sale antes si no hay prefab o
   caballero (el dueño está en una cinemática o en el ciervo) y no pone `_ownSent = false` ([:593-594](../src/HKMultiplayer/Game/Features/ShadeSync.cs#L593)).
@@ -337,6 +342,7 @@ Del volcado de FSM (`decomp/fsm`):
   - chispas del aguijón contra la pared (`nailTerrainImpactEffectPrefab`, 4959);
   - muerte de verdad (`heroDeathPrefab`, 4261);
   - su luz (`heroLight`, 708): en salas oscuras el compañero se pierde en la oscuridad si no está cerca.
+  - **En parte en 0.26.0:** ya salen las chispas del aguijón contra la pared y el efecto del golpe de 2 o más (`Puff`; el doble va como bit 2 del aviso de golpe) y el polvo de la pared (sin red: mientras el avatar enseña un sprite de "Wall Slide"; sin probar, solo sale si el objeto está en las carpetas copiadas). Siguen sin salir: el escudo de Carefree Melody, el golpe parado por Baldur Shell, la recarga del dash sombra, las muertes y la luz (necesitan ver en el juego cómo están montados en el caballero).
 - [x] **J9 · baja · sin comprobar.** Caer a mitad de Crystal Heart, Desolate Dive o Cyclone Slash: `OnHeroDie` no corta
   nada ([Revive.cs:430-455](../src/HKMultiplayer/Game/Features/Revive.cs#L430)) y las FSM `Superdash` y
   `Spell Control` pueden seguir (sonido en bucle, velocidad) y retomarse al revivir. Probar; si pasa, mandar sus avisos
@@ -363,8 +369,9 @@ Del volcado de FSM (`decomp/fsm`):
   - **Arreglado en 0.26.0:** La comprobación de sueño mira también el nombre de la sala (`Dream_*`, `Grimm_Nightmare`). Además, "alguien en pie" ya no cuenta a quien está entrando (S2).
 - [x] **J14 · baja · sin comprobar.** Salir de la partida estando caído en Alma de Acero evita la muerte (truco).
   - **Revisado en 0.26.0:** No aplica: los mundos coop no pueden ser de Alma de Acero (ver W10).
-- [ ] **J15 · baja · sin comprobar.** El avatar no tiene colisión: las salpicaduras al entrar en agua o ácido no salen
+- [x] **J15 · baja · sin comprobar.** El avatar no tiene colisión: las salpicaduras al entrar en agua o ácido no salen
   en el compañero.
+  - **Revisado en 0.26.0:** Se deja: dar colisión al avatar haría que el juego lo tratara como el caballero (peligros, puertas, zonas que se activan al entrar).
 - [x] **J16 · baja · sin comprobar.** `DownedBody` repite la animación "Death" cada vez que se vuelve a entrar en la
   sala y mira siempre a la izquierda.
   - **Arreglado en 0.26.0:** El cuerpo hace la muerte solo si la caída es de hace menos de 3 s, y mira hacia donde miraba al caer.
@@ -429,9 +436,10 @@ Del volcado de FSM (`decomp/fsm`):
   invitado se queda sin personaje (`LoadCharacter` no mira el `.tmp`) y empieza uno nuevo. Arreglo: `File.Replace` o
   un `.bak` como en `Save`.
   - **Arreglado en 0.26.0:** El anterior queda como `.bak` y `LoadCharacter` lo usa si el último falta o está dañado.
-- [ ] **W10 · baja · nota.** `permadeathMode` se comparte. Hoy los mundos coop empiezan con `StartNewGame()` y no
+- [x] **W10 · baja · nota.** `permadeathMode` se comparte. Hoy los mundos coop empiezan con `StartNewGame()` y no
   hay Alma de Acero; si algún día se permite, la muerte de un invitado (juego `HeroController.cs:4248-4250`) marcaría
   el mundo del host como perdido.
+  - **Revisado en 0.26.0:** Sigue sin aplicar: los mundos coop no pueden ser de Alma de Acero. Si algún día se permite, `permadeathMode` tiene que ser de cada personaje.
 - [x] **W11 · baja · sin comprobar.** Grimmchild para quien entra después: `GrimmchildGift` solo actúa si el jugador
   recibe el amuleto con el otro conectado ([GrimmchildGift.cs:67-73](../src/HKMultiplayer/Game/Features/GrimmchildGift.cs#L67)).
   Un invitado que entra luego no lo recibe, pero `grimmChildLevel` y la Compañía son del mundo y `metGrimm` es suyo:
@@ -507,15 +515,17 @@ Del volcado de FSM:
 - [x] **H6 · baja · descartado.** `BossPresentation` solo engancha `RelinquishControl`; falta
   `RelinquishControlNotVelocity` (juego `HeroController.cs:3312`), si alguna FSM lo usa.
   - **Volcado de FSM:** `RelinquishControlNotVelocity` solo la usa `Inventory Control [Open]` del caballero (`_persistent`); ninguna FSM de jefe ni código de C# fuera de `HeroController`.
-- [ ] **H7 · baja · nota.** `QuestNpcSync` no trata `DeactivateIfPlayerdataFalseDelayed`.
+- [x] **H7 · baja · nota.** `QuestNpcSync` no trata `DeactivateIfPlayerdataFalseDelayed`.
   - **Volcado de FSM:** Solo existe en `GG_Atrium` (`top2`, el camino oculto).
+  - **Arreglado en 0.26.0:** `DeactivateIfPlayerdataFalseDelayed` va como `DeactivateIfPlayerdataFalse`; se apunta al apagar el objeto (`DoCheck`, tras su espera).
 - [x] **H8 · baja · sin comprobar.** Vueltas al menú que no pasan por los ganchos de `ReturnToMainMenu`
   (`CollectGuestsThen`, `CancelDowned`): `QuitToMenu` (juego `GameManager.cs:3419`), `EmergencyReturnToMenu` (`3513`)
   y la muerte en Alma de Acero (va a `PermaDeath`).
   - **Revisado en 0.26.0:** No aplica en PC: `EmergencyReturnToMenu` solo salta si la plataforma se desconecta (consolas); la muerte de Alma de Acero no existe en los mundos coop.
-- [ ] **H9 · nota.** El gancho de `Die` tiene que seguir antes que el de `TakeDamage` ([Revive.cs:323](../src/HKMultiplayer/Game/Features/Revive.cs#L323)
+- [x] **H9 · nota.** El gancho de `Die` tiene que seguir antes que el de `TakeDamage` ([Revive.cs:323](../src/HKMultiplayer/Game/Features/Revive.cs#L323)
   y [:333](../src/HKMultiplayer/Game/Features/Revive.cs#L333)): MonoMod compila la copia de `TakeDamage` que usa como
   `orig` al añadir el gancho. Bien hoy, pero frágil: dejar un comentario.
+  - **Arreglado en 0.26.0:** Comentario en el gancho de `Die` de `Revive.InstallHooks`.
 
 ## Objetos de sala (O)
 
@@ -586,11 +596,12 @@ Del volcado de FSM:
   con el mismo problema que O1: tras morir un enemigo de la raíz, cada PC usa otra semilla. Solo cosmético. Arreglo:
   guardar la clave por `Transform` al cargar la sala (arregla también P1).
   - **Arreglado en 0.26.0:** `DropSeeds` usa `ScenePaths.StableHash` (ver O1).
-- [ ] **O13 · baja · sin comprobar.** Ids frágiles al cargar la sala: si `Shiny Control` destruye (en vez de apagar) un
+- [x] **O13 · baja · sin comprobar.** Ids frágiles al cargar la sala: si `Shiny Control` destruye (en vez de apagar) un
   objeto brillante que uno ya recogió, el puesto de los objetos de la raíz cambia entre jugadores y fallarían los ids
   de todo lo que va detrás (rompibles, peligros, FSM, la foto para quien entra). Lo encontrado en la segunda pasada
   (1,5 s) se apunta después de posibles cambios. Arreglo posible: ids por nombre y posición (como `PlacedId`) o sin el
   puesto de la raíz cuando el nombre es único.
+  - **Revisado en 0.26.0:** Cubierto por O1: `ScenePaths` apunta las huellas en `sceneLoaded`, que llega antes del `Start` de los objetos de la sala, así que antes de que `Shiny Control` empiece y haga `DestroySelf`. Lo creado después va por su sitio (`PlacedId`).
 - [x] **O14 · baja · sin comprobar.** Una `VinePlatform` que cae por un corte llegado de otro PC (o de la foto) cae en
   directo en quien lo recibe, y su `enemyDetector` mata con `Die()` a los enemigos de ese PC que tiene debajo (juego
   `VinePlatform.cs:101-108`): muertes dobles o solo locales.
@@ -599,16 +610,19 @@ Del volcado de FSM:
 - [x] **O15 · baja · descartado.** Plataformas que se desmoronan y vuelven, llevadas por una FSM sin `Activated`
   ni nombre de palanca: probablemente no se copian y cada PC tiene la suya (como O5).
   - **Volcado de FSM:** Todos los suelos que se desmoronan por FSM llevan `PersistentBoolItem` + `Activated` y ya los siguen `FsmStateSync`/`SceneObjectSync`; ninguno vuelve a aparecer (`collapse small`, `break_floor`, `quake_floor_shake`, `Garden Slide Floor`, `Resting Grounds Slide Floor`, `Chain Platform` de `Ruins1_28`, `Detect Quake` de `Mines_01`/`Mines_35`).
-- [ ] **O16 · baja · comprobado.** Plataformas sólidas movidas por FSM (`iTweenMoveTo/By/Add/Update`,
+- [x] **O16 · baja · comprobado.** Plataformas sólidas movidas por FSM (`iTweenMoveTo/By/Add/Update`,
   `MoveTowards`): el doc dice que no hay en las zonas revisadas, y en el C# no hay ninguna aparte de las ya tratadas,
   pero en las FSM no se puede ver desde `decomp/`. Una orden del modo de prueba que registre colisiones no trigger que
   se mueven sin ser enemigo, caballero ni ascensor lo resolvería.
   - **Volcado de FSM:** Hay sólidos movidos por FSM que no sigue nadie: O19 (tranvía), O21 (ascensor del Palacio Blanco), O22 (plataformas con espera al azar). Los grandes ascensores `elev_main` (`Crossroads_49/49b`, `Ruins2_10/10b`, `Lift Move`) van bien: la palanca `Lift Call Lever` se copia y solo manda `MOVE` si el caballero de ese PC está en la cabina (`Hero Check`).
-- [ ] **O17 · baja · comprobado.** `SlopePlat` pone su altura según la x del caballero local (juego `SlopePlat.cs:20-35`):
+  - **Revisado en 0.26.0:** Con el volcado: los sólidos movidos por FSM que no seguía nadie eran O19, O21 y O22 (arreglados). Los `elev_main` van bien.
+- [x] **O17 · baja · comprobado.** `SlopePlat` pone su altura según la x del caballero local (juego `SlopePlat.cs:20-35`):
   el compañero encima se ve desplazado.
   - **Volcado de FSM:** `SlopePlat` solo está dentro de los cuatro `elev_main` (ver O16).
-- [ ] **O18 · baja · nota.** Los ids usan `string.GetHashCode` en algunos sitios: igual en la misma versión de Mono
+  - **Revisado en 0.26.0:** Se deja: solo pasa en los cuatro ascensores grandes y es visual (el compañero se ve un poco más alto o más bajo mientras sube).
+- [x] **O18 · baja · nota.** Los ids usan `string.GetHashCode` en algunos sitios: igual en la misma versión de Mono
   (la sesión ya exige la misma versión del mod), pero FNV sería más seguro.
+  - **Arreglado en 0.26.0:** `ScenePaths.Fnv` en lugar de `string.GetHashCode` en todos los ids (`FsmId`, `DreamSync`, `BreakableSync`, `EnemySync`).
 
 Del volcado de FSM:
 
@@ -671,16 +685,19 @@ Del volcado de FSM:
   cada `PersistentBoolItem.Start` también jugando solo y solo se limpia en `Clear` de la sesión. Arreglo: limpiar
   aunque esté apagado y añadir solo con `_active != null`.
   - **Arreglado en 0.26.0:** `EnemyBars` quita los destruidos siempre; `StartedItems` solo se llena con partida.
-- [ ] **P4 · baja · sin comprobar.** `UdpTransport` crea un `IPEndPoint` por paquete recibido
+- [x] **P4 · baja · sin comprobar.** `UdpTransport` crea un `IPEndPoint` por paquete recibido
   ([:318](../src/HKMultiplayer/Net/Transport/UdpTransport.cs#L318)) y `SendTo` lo vuelve a serializar en cada envío. En
   el invitado, `Connect()` + `Send`/`Receive` lo evita.
-- [ ] **P5 · baja · sin comprobar.** Los nombres de evento y de estado van como texto: `ReadString` crea una cadena por
+  - **Revisado en 0.26.0:** Se deja: la memoria la crea el propio `ReceiveFrom` de Mono (arma una dirección nueva en cada datagrama), y `Connect()` haría que el invitado ignorara datagramas de otra dirección.
+- [x] **P5 · baja · sin comprobar.** Los nombres de evento y de estado van como texto: `ReadString` crea una cadena por
   mensaje ([EnemySync.cs:3702](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L3702), 4011; `FsmStateSync` 6 veces). Un
   índice lo evitaría.
-- [ ] **P6 · baja · sin comprobar.** `QuestNpcSync.Concerns` y `PlayerDataReads` ([:482](../src/HKMultiplayer/Game/World/QuestNpcSync.cs#L482),
+  - **Arreglado en 0.26.0:** `PacketReader.ReadName`: si los mismos bytes (ASCII) ya llegaron, devuelve la misma cadena. Lo usan los nombres de estado, evento y prefab de `FsmStateSync` y `EnemySync`. Con prueba en NetTests.
+- [x] **P6 · baja · sin comprobar.** `QuestNpcSync.Concerns` y `PlayerDataReads` ([:482](../src/HKMultiplayer/Game/World/QuestNpcSync.cs#L482),
   [:690](../src/HKMultiplayer/Game/World/QuestNpcSync.cs#L690)) usan reflexión y un iterador `yield` por acción, desde
   los ganchos de `GetBool`/`GetInt`/`SetInt` durante una conversación tras un cambio de otro PC. Guardar el resultado
   por (FSM, campo).
+  - **Arreglado en 0.26.0:** `Concerns` calcula una vez por FSM los datos que lee (`_fsmReads`, se vacía al cambiar de sala).
 
 ## Red y robustez (N)
 
@@ -805,13 +822,14 @@ Del volcado de FSM:
   `NOT_SKIPPABLE_DUE_TO_LOADING`. Arreglo: aplicar el salto solo con `CUTSCENE` (si no, guardarlo y reintentar) y
   quitar la marca si no se hizo.
   - **Arreglado en 0.26.0:** El salto se guarda y se hace cuando la cinemática está en marcha (`gameState` CUTSCENE y no cargando).
-- [ ] **F8 · media · descartado en lo grave.** `QuestNpcSync.Recheck` ([:190-216](../src/HKMultiplayer/Game/World/QuestNpcSync.cs#L190))
+- [x] **F8 · media · descartado en lo grave.** `QuestNpcSync.Recheck` ([:190-216](../src/HKMultiplayer/Game/World/QuestNpcSync.cs#L190))
   vuelve al estado inicial desde cualquier estado; solo mira que el caballero local tenga el control, no que el
   personaje esté en reposo. En las FSM de personaje no se aplica `NotOnRecheck` ([:305](../src/HKMultiplayer/Game/World/QuestNpcSync.cs#L305))
   y nada se apaga (como hace `PrepareCopy`): los `SetPlayerData`, `Spawn`, `Fling` y `SendEvent` del camino de inicio
   se repiten. Un personaje que suelta un objeto o geo tras devolver el control podría darlo dos veces. Arreglo: apagar
   esas acciones durante la vuelta y solo reiniciar FSM en reposo (esperando un aviso o `ListenFor`).
   - **Volcado de FSM:** Revisado el camino de inicio de todas las FSM de personaje (o de su padre o hijo) que leen un dato del mundo: ninguna suelta geo ni objetos. Lo que se repite es inofensivo: Cornifer (13 salas, `corn_*Left = true`), el ciervo (depende de `travelling`, de cada PC), `Quirrel … [Set Encounters]`, `Shaman Meeting` (`shaman = 2`), `GG_Boss_Door_Entrance`. La excepción es Millibelle (W14). Queda baja.
+  - **Revisado en 0.26.0:** Revisado con el volcado (ver arriba): nada da geo ni objetos dos veces; Millibelle ya es de cada personaje (W14).
 - [x] **F9 · baja · sin comprobar.** `ApplyRemoteState` y `Recheck` llaman a `SetState` sin mirar `Started` ni si
   está encendida (el juego ignora una FSM no `Active`, PlayMaker `Fsm.cs:2025`). En una apagada, las acciones corren
   en un objeto inactivo y `OnEnable` la devuelve al inicio (`Fsm.cs:1847-1855`); en una sin empezar, `Start()` vuelve a
@@ -829,8 +847,9 @@ Del volcado de FSM:
   `Update` ([:238](../src/HKMultiplayer/Game/Features/BossPresentation.cs#L238)) también suelta al cambiar de sala el
   jugador local, llamando a `RegainControl` durante una muerte o reaparición.
   - **Arreglado en 0.26.0:** Ver J10; además `Release` no devuelve el control durante una muerte, una reaparición o un cambio de sala.
-- [ ] **F12 · baja · nota.** Dos FSM con el mismo nombre en un objeto chocan en `FsmId` (`_byId` se queda con la
+- [x] **F12 · baja · nota.** Dos FSM con el mismo nombre en un objeto chocan en `FsmId` (`_byId` se queda con la
   primera, en orden sin ordenar). Raro.
+  - **Arreglado en 0.26.0:** `FsmId` suma el puesto entre las FSM del mismo nombre del objeto (si no es la primera).
 
 ## Sesión: unirse, salir y reconectar (S)
 
@@ -900,9 +919,10 @@ Del volcado de FSM:
   puede caer a mitad de un cambio de sala, o mientras ya hay una vuelta al menú del juego en marcha (el caballero dura
   el fundido de 2 s) y empezar otra. Esperar a que no haya cambio de sala y una sola vuelta a la vez.
   - **Arreglado en 0.26.0:** Una sola vuelta al menú cada 10 s y nunca ya en el menú.
-- [ ] **S9 · baja · sin comprobar.** Dos cargas a la vez: `RunContinueGame` deja el juego en `MAIN_MENU` 2,6 s sin
+- [x] **S9 · baja · sin comprobar.** Dos cargas a la vez: `RunContinueGame` deja el juego en `MAIN_MENU` 2,6 s sin
   caballero (juego `GameManager.cs:3326-3336`), así que `CanStart` es cierto; si el mundo llega mientras el invitado
   carga una partida suya, `StartGuest` empieza otra carga. Ventana pequeña y necesita S1.
+  - **Arreglado en 0.26.0:** `CanStart` es falso los 5 s siguientes a `ContinueGame` o `StartNewGame` (el juego sigue 2,6 s en el menú sin caballero). `ReturnToMenu` mira `AtMainMenu`.
 - [x] **S10 · baja · sin comprobar.** El mundo y los personajes pueden desfasarse: los personajes se guardan en cada
   banco y cada 30 s, el mundo cada 2 min. Si el host se cierra de golpe, los invitados conservan objetos cuyos datos del
   mundo volvieron atrás y los pueden recoger otra vez. Arreglo: `_saveSoon` al recibir un personaje.
@@ -1064,32 +1084,39 @@ Del volcado de FSM:
 - [x] **I6 · baja · sin comprobar.** Códigos de salida engañosos ([setup.ps1:32-38](../tools/installer/setup.ps1#L32)):
   desinstalar da 0 sin nada instalado y con problemas al reponer. Devolver 2 si `Invoke-Uninstall` da `$false`.
   - **Arreglado en 0.26.0:** Desinstalar sin dejarlo limpio devuelve 2.
-- [ ] **I7 · baja · sin comprobar.** Desinstalar borra todo `Mods\HKMultiplayer` menos `Skins` ([uninstall.ps1:18-25](../tools/installer/uninstall.ps1#L18)):
+- [x] **I7 · baja · sin comprobar.** Desinstalar borra todo `Mods\HKMultiplayer` menos `Skins` ([uninstall.ps1:18-25](../tools/installer/uninstall.ps1#L18)):
   `SkinCache` (es caché, vale) y cualquier archivo que el usuario puso ahí.
+  - **Arreglado en 0.26.0:** Se borran la caché (`SkinCache`) y lo que puso el instalador (sus líneas `added`); lo demás se queda y se dice qué. Instalado a mano: además los `.dll`, `.pdb` y `.xml`.
 - [x] **I8 · baja · sin comprobar.** Una Modding API puesta a mano antes se guarda como "el original": desinstalar
   repone una API y dice que el juego quedó como estaba. Si la huella del archivo es la del paquete, no tratarlo como
   original y avisar.
   - **Arreglado en 0.26.0:** Si el archivo del juego ya estaba parcheado, se avisa de que la copia no es el original.
-- [ ] **I9 · baja · sin comprobar.** Otros mods se apartan a `Mods\Disabled` en cada instalación y actualización sin
+- [x] **I9 · baja · sin comprobar.** Otros mods se apartan a `Mods\Disabled` en cada instalación y actualización sin
   preguntar ([install.ps1:150-172](../tools/installer/install.ps1#L150)): uno que el usuario volvió a activar se
   vuelve a apartar (el registro sí lo dice). Listarlos en la confirmación.
-- [ ] **I10 · baja · sin comprobar.** *Novedades* puede congelar la ventana ([setup.ps1:444](../tools/installer/setup.ps1#L444)):
+  - **Arreglado en 0.26.0:** Antes de instalar, la ventana pregunta con la lista de mods que se van a apartar (`Get-OtherMods`).
+- [x] **I10 · baja · sin comprobar.** *Novedades* puede congelar la ventana ([setup.ps1:444](../tools/installer/setup.ps1#L444)):
   si la consulta en segundo plano falló, usa `WebClient.DownloadString` en el hilo de la ventana (hasta ~100 s). Las
   etiquetas que `[Version]` no entiende (`v0.26.0-hotfix`) se ignoran sin avisar.
+  - **Arreglado en 0.26.0:** *Novedades* espera la consulta sin parar la ventana (como mucho 10 s); las etiquetas toman los números del principio (`v0.26.0-hotfix` es 0.26.0).
 - [x] **I11 · baja · sin comprobar.** `package.sh` toma la versión solo de `const string Version` y no la compara con
   `<AssemblyVersion>` del csproj, que es la que lee `Get-InstalledVersion`: si se olvida subir una, sale mal la
   versión instalada. Fallar si no coinciden.
   - **Arreglado en 0.26.0:** `package.sh` falla si la versión del código y la del `.csproj` no coinciden.
-- [ ] **I12 · baja · sin comprobar.** El lanzador con la salida redirigida y sin consola padre
+- [x] **I12 · baja · sin comprobar.** El lanzador con la salida redirigida y sin consola padre
   (`launcher/Program.cs:89-104`): `powershell.exe` abre una consola en la página de códigos OEM y el lanzador lee UTF-8:
   las tildes salen mal.
-- [ ] **I13 · baja · sin comprobar.** Lumafly y Scarab cambian `Assembly-CSharp.dll` con copias `.v`/`.m` y también
+  - **Arreglado en 0.26.0:** Sin consola padre y con la salida a un archivo, el lanzador crea una consola escondida en UTF-8 que hereda PowerShell.
+- [x] **I13 · baja · sin comprobar.** Lumafly y Scarab cambian `Assembly-CSharp.dll` con copias `.v`/`.m` y también
   usan `Mods\Disabled`: alternar "vanilla" en ellos desfasa el manifiesto (como I1).
-- [ ] **I14 · baja · sin comprobar.** Solo Windows con Steam o GOG: Mac y Linux no se mencionan en LEEME/README y las
+  - **Arreglado en 0.26.0:** El caso del archivo cambiado ya lo trata I1 (y I8 avisa). LEEME, README y README.md dicen que no se mezcle con Lumafly o Scarab y cómo arreglarlo.
+- [x] **I14 · baja · sin comprobar.** Solo Windows con Steam o GOG: Mac y Linux no se mencionan en LEEME/README y las
   rutas de Xbox/Game Pass no se buscan (falla bien, con mensaje y *Buscar…*). Decirlo en el README.
-- [ ] **I15 · baja · sin comprobar.** `Get-GameProcesses` ([common.ps1:150-154](../tools/installer/common.ps1#L150))
+  - **Arreglado en 0.26.0:** LEEME, README y README.md: Windows con Steam o GOG; Mac y Linux no; Xbox/Game Pass sin probar.
+- [x] **I15 · baja · sin comprobar.** `Get-GameProcesses` ([common.ps1:150-154](../tools/installer/common.ps1#L150))
   salta procesos sin `.Path` (el juego abierto como administrador y el instalador no): el bloqueo sale como error de
   archivo (se trata), y buscar "proceso|process" en el mensaje no vale en otros idiomas (alemán...).
+  - **Arreglado en 0.26.0:** Un `hollow_knight` sin ruta legible cuenta como abierto; el archivo en uso se reconoce por el código (32 o 33), no por el texto.
 - [x] **I16 · baja · pruebas.** `installer-test.sh` no prueba "Steam cambió `Assembly-CSharp.dll` entre instalar y
   desinstalar" (I1). Añadir ese paso.
   - **Arreglado en 0.26.0:** `installer-test.sh` prueba las dos actualizaciones de Steam (con y sin actualizar el mod entre medias).

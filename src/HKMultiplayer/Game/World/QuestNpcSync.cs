@@ -42,9 +42,12 @@ internal sealed class QuestNpcSync {
     /// <summary>Por dato del mundo, las FSM de la sala que lo miran al empezar.</summary>
     private readonly Dictionary<string, List<PlayMakerFSM>> _startReaders = new();
 
+    /// <summary>Datos que lee cada FSM, calculados la primera vez que se pregunta (se miran en cada `GetInt` de una conversación).</summary>
+    private readonly Dictionary<Fsm, HashSet<string>> _fsmReads = new();
+
     /// <summary>
     /// Por dato del mundo, los objetos de la sala que el juego enciende o apaga según él al encenderse o al empezar
-    /// (<c>DeactivateIfPlayerdataTrue</c>, <c>DeactivateIfPlayerdataFalse</c>, <c>ActivateIfPlayerdataTrue</c>): el
+    /// (<c>DeactivateIfPlayerdataTrue</c>, <c>DeactivateIfPlayerdataFalse(Delayed)</c>, <c>ActivateIfPlayerdataTrue</c>): el
     /// Forjaguijones, el farol de la Pesadilla...
     /// </summary>
     private readonly Dictionary<string, List<MonoBehaviour>> _toggles = new();
@@ -96,6 +99,7 @@ internal sealed class QuestNpcSync {
     private void Clear() {
         _scene = string.Empty;
         _startReaders.Clear();
+        _fsmReads.Clear();
         _toggles.Clear();
         _remoteChangedAt.Clear();
         _pending.Clear();
@@ -261,7 +265,7 @@ internal sealed class QuestNpcSync {
             var wasOff = TurnedOffAtLoad.Contains(toggle);
             var target = toggle switch {
                 DeactivateIfPlayerdataTrue => value ? false : wasOff ? true : null,
-                DeactivateIfPlayerdataFalse => value ? wasOff ? true : null : false,
+                DeactivateIfPlayerdataFalse or DeactivateIfPlayerdataFalseDelayed => value ? wasOff ? true : null : false,
                 ActivateIfPlayerdataTrue => value ? true : (bool?) null,
                 _ => null
             };
@@ -364,6 +368,12 @@ internal sealed class QuestNpcSync {
         }
 
         foreach (var toggle in UnityEngine.Object.FindObjectsByType<ActivateIfPlayerdataTrue>(FindObjectsInactive.Include,
+                     FindObjectsSortMode.None)) {
+            AddToggle(toggle.boolName, toggle);
+        }
+
+        // Solo en GG_Atrium (el camino escondido, `top2`): apaga su objeto un rato después de encenderse
+        foreach (var toggle in UnityEngine.Object.FindObjectsByType<DeactivateIfPlayerdataFalseDelayed>(FindObjectsInactive.Include,
                      FindObjectsSortMode.None)) {
             AddToggle(toggle.boolName, toggle);
         }
@@ -577,6 +587,11 @@ internal sealed class QuestNpcSync {
             orig(self);
             NoteTurnedOff(self);
         };
+        // Este apaga el objeto con espera (`Invoke`): se apunta cuando lo hace
+        On.DeactivateIfPlayerdataFalseDelayed.DoCheck += (orig, self) => {
+            orig(self);
+            NoteTurnedOff(self);
+        };
         On.PlayerData.IncrementInt += (orig, self, name) => {
             if (_active == null || !_active.AlreadyAdvanced(name)) {
                 orig(self, name);
@@ -616,6 +631,7 @@ internal sealed class QuestNpcSync {
             var field = toggle switch {
                 DeactivateIfPlayerdataTrue t => t.boolName,
                 DeactivateIfPlayerdataFalse f => f.boolName,
+                DeactivateIfPlayerdataFalseDelayed d => d.boolName,
                 _ => null
             };
             if (!string.IsNullOrEmpty(field) && IsNpcObject(toggle.gameObject)) {
@@ -720,18 +736,25 @@ internal sealed class QuestNpcSync {
 
     /// <summary>Si la FSM lee el dato en algún estado, o lo mira al empezar otra FSM del mismo objeto.</summary>
     private bool Concerns(Fsm fsm, string field) {
-        foreach (var state in fsm.States) {
-            foreach (var action in state.Actions) {
-                if (action == null) {
-                    continue;
-                }
+        if (!_fsmReads.TryGetValue(fsm, out var reads)) {
+            reads = new HashSet<string>();
+            foreach (var state in fsm.States) {
+                foreach (var action in state.Actions) {
+                    if (action == null) {
+                        continue;
+                    }
 
-                foreach (var name in PlayerDataReads(action)) {
-                    if (name == field) {
-                        return true;
+                    foreach (var name in PlayerDataReads(action)) {
+                        reads.Add(name);
                     }
                 }
             }
+
+            _fsmReads[fsm] = reads;
+        }
+
+        if (reads.Contains(field)) {
+            return true;
         }
 
         if (!_startReaders.TryGetValue(field, out var fsms)) {

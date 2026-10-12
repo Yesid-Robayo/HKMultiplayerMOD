@@ -521,7 +521,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     private void ReturnToMenu(bool save) {
         // Una sola vuelta a la vez: el caballero sigue durante el fundido de 2 s y una segunda empezaba otra encima
-        if (Time.unscaledTime - _returningSince < 10f || CoopSaves.CanStart) {
+        if (Time.unscaledTime - _returningSince < 10f || CoopSaves.AtMainMenu) {
             return;
         }
 

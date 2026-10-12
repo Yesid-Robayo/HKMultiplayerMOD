@@ -53,6 +53,19 @@ internal static class ScenePaths {
     public static uint StableHash(Transform transform) =>
         transform != null && Stable.TryGetValue(transform, out var hash) ? hash : Hash(transform);
 
+    /// <summary>
+    /// Huella FNV-1a de un texto. Igual en todos los PCs y versiones de Mono, a diferencia de `string.GetHashCode`, que
+    /// .NET no promete estable.
+    /// </summary>
+    public static uint Fnv(string text) {
+        var hash = 2166136261u;
+        foreach (var c in text) {
+            hash = (hash ^ c) * 16777619u;
+        }
+
+        return hash;
+    }
+
     public static uint Hash(Transform transform) {
         Path.Length = 0;
         for (var t = transform; t != null; t = t.parent) {

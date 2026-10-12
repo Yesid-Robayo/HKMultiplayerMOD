@@ -206,7 +206,7 @@ internal sealed class PlayerSync {
             X = position.x,
             Y = position.y,
             FacingRight = _hero.transform.localScale.x < 0f,
-            Visible = _heroRenderer == null || _heroRenderer.enabled,
+            Visible = _heroRenderer == null || _heroRenderer.enabled && !_heroRenderer.forceRenderingOff,
             DungAura = _heroDungAura != null && _heroDungAura.gameObject.activeInHierarchy &&
                        _heroDungAura.emission.enabled,
             Invulnerable = _hero.cState.invulnerable,

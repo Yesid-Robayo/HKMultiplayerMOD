@@ -361,7 +361,7 @@ internal sealed class BreakableSync {
                 }
 
                 // Un componente derivado (p. ej. de Breakable) se apunta una sola vez, con el primer tipo que encaje
-                var id = ScenePaths.StableHash(component.transform) ^ (uint) kind.Type.Name.GetHashCode();
+                var id = ScenePaths.StableHash(component.transform) ^ ScenePaths.Fnv(kind.Type.Name);
                 if (_byId.ContainsKey(id) || IsTrackedObject(component)) {
                     continue;
                 }

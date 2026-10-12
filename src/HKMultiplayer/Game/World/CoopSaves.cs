@@ -57,6 +57,10 @@ internal static class CoopSaves {
         On.GameManager.LoadGame += OnLoadGame;
         On.GameManager.SaveGame_int_Action1 += OnSaveGame;
         On.GameManager.ContinueGame += OnContinueGame;
+        On.GameManager.StartNewGame += (orig, self, permadeath, bossRush) => {
+            _loadStartedAt = UnityEngine.Time.unscaledTime;
+            orig(self, permadeath, bossRush);
+        };
         On.OpeningSequence.Start += (orig, self) => _introPlaying ? GuestIntro(self) : orig(self);
     }
 
@@ -66,6 +70,7 @@ internal static class CoopSaves {
     /// después entra como siempre, donde reaparece el host.
     /// </summary>
     private static void OnContinueGame(On.GameManager.orig_ContinueGame orig, GameManager self) {
+        _loadStartedAt = UnityEngine.Time.unscaledTime;
         if (!_introPending || ActiveWorld == null || IsHostWorld) {
             orig(self);
             return;
@@ -109,13 +114,24 @@ internal static class CoopSaves {
         gm.ContinueGame();
     }
 
-    /// <summary>Si se puede empezar un mundo ahora (desde el menú principal).</summary>
-    public static bool CanStart {
+    /// <summary>Si el juego está en el menú principal, sin caballero.</summary>
+    public static bool AtMainMenu {
         get {
             var gm = GameManager.instance;
             return gm != null && gm.gameState == GlobalEnums.GameState.MAIN_MENU && HeroController.instance == null;
         }
     }
+
+    /// <summary>
+    /// Cuándo empezó a cargarse una partida (`ContinueGame` o `StartNewGame`). El juego sigue 2,6 s en el menú principal
+    /// sin caballero durante el fundido: si el mundo del host llegaba entonces, se empezaba otra carga encima.
+    /// </summary>
+    private static float _loadStartedAt = -100f;
+
+    private const float LoadStartWindow = 5f;
+
+    /// <summary>Si se puede empezar un mundo ahora: en el menú principal y sin otra partida empezando a cargarse.</summary>
+    public static bool CanStart => AtMainMenu && UnityEngine.Time.unscaledTime - _loadStartedAt > LoadStartWindow;
 
     /// <summary>Empieza a jugar un mundo coop desde el menú principal: partida nueva si es nuevo, si no lo carga.</summary>
     public static bool Start(CoopWorldInfo world) {

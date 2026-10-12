@@ -146,11 +146,13 @@ function Resolve-GameDir([string]$given) {
     return $game
 }
 
-# Copias del juego abiertas desde esa carpeta (otras copias en otras carpetas no molestan)
+# Copias del juego abiertas desde esa carpeta (otras copias en otras carpetas no molestan). Una de la que no se puede
+# leer la ruta (abierta como administrador y el instalador no) cuenta: puede ser esta, y si no se decía, el bloqueo
+# salía después como un error de archivo
 function Get-GameProcesses([string]$gameDir) {
     $prefix = $gameDir.TrimEnd('\') + '\'
     return @(Get-Process hollow_knight -ErrorAction SilentlyContinue |
-            Where-Object { $_.Path -and $_.Path.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase) })
+            Where-Object { -not $_.Path -or $_.Path.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase) })
 }
 
 function Assert-GameClosed([string]$gameDir) {
@@ -200,7 +202,9 @@ function Get-ErrorText($errorRecord) {
         return (L "Windows no deja escribir en la carpeta del juego. Cierra el instalador, haz clic derecho en 'HKMultiplayer Setup.exe' y elige 'Ejecutar como administrador'. ($($exception.Message))" `
                 "Windows won't let the installer write to the game folder. Close the installer, right-click 'HKMultiplayer Setup.exe' and choose 'Run as administrator'. ($($exception.Message))")
     }
-    if ($exception -is [System.IO.IOException] -and $exception.Message -match 'proceso|process') {
+    # Archivo en uso (ERROR_SHARING_VIOLATION 32 o ERROR_LOCK_VIOLATION 33): por el código, porque el texto del mensaje
+    # va en el idioma de Windows
+    if ($exception -is [System.IO.IOException] -and @(32, 33) -contains ($exception.HResult -band 0xFFFF)) {
         return (L "Un archivo del juego está en uso. Cierra Hollow Knight (y Steam si sigue bloqueado) y vuelve a probar. ($($exception.Message))" `
                 "A game file is in use. Close Hollow Knight (and Steam if it is still locked) and try again. ($($exception.Message))")
     }

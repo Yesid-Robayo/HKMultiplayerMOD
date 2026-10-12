@@ -5,7 +5,9 @@ One player hosts a coop world and their friends join with the host's address and
 you share the world, see each other in real time and fight the same enemies and bosses together.
 
 You need:
-  - Hollow Knight 1.5.12620 on Windows (the current Steam version).
+  - Hollow Knight 1.5.12620 on Windows (the current Steam version; the GOG one works too).
+    Not Mac or Linux: the package's Modding API is Windows only. The Xbox/Game Pass version is not
+    tested and the installer doesn't look for it.
   - Every player must have the SAME version of HKMultiplayer installed.
 
 The mod uses the game's language: Spanish if the game is in Spanish; English for any other
@@ -75,6 +77,11 @@ If you'd rather not use the installer, or it doesn't work on your PC:
 If you already have the Modding API for this game version (for example from Lumafly or Scarab),
 just copy the package's "files\hollow_knight_Data\Managed\Mods\HKMultiplayer" folder into
 <game folder>\hollow_knight_Data\Managed\Mods.
+
+Don't use the installer and Lumafly or Scarab on the same folder at the same time: if you switch
+them to "vanilla" or change the Modding API there, they move the same files (Assembly-CSharp.dll
+and Mods\Disabled) and uninstalling may not leave the game exactly as it was. If that happens,
+Steam fixes it: Properties > Installed Files > Verify integrity.
 
 To remove it by hand: delete the Managed\Mods\HKMultiplayer folder and restore your backup of
 Managed (or in Steam: right-click Hollow Knight > Properties > Installed Files > Verify integrity
