@@ -101,6 +101,7 @@ internal sealed class RemoteEffects {
 
     private bool _wallDustResolved;
     private bool _wallSliding;
+    private int _wallDustStarts;
 
     /// <summary>Polvo al correr: pegado al avatar mientras corre; al parar se suelta, deja de emitir y se apaga a los 2 s.</summary>
     private GameObject _run;
@@ -233,6 +234,8 @@ internal sealed class RemoteEffects {
     public string DescribeCharms() =>
         (_charms?.Describe() ?? " sin efectos de amuletos") + $" acompañantes={Companions?.ShownCount ?? 0}" +
         $" aura={_dungAuraOn} corre={_running}" +
+        $" polvoPared={(_wallDust != null ? (_wallSliding ? "emite" : "parado") + $"({_wallDustStarts} veces)" : _wallDustResolved ? "sin copia" : "sin mirar")}" +
+        $" spritesPared={_templates.WallSlideSprites.Count}" +
         (_run != null && _run.activeSelf ? $" polvo en {_runTransform.position}" : string.Empty);
 
     /// <summary>
@@ -949,6 +952,10 @@ internal sealed class RemoteEffects {
         }
 
         _wallSliding = sliding;
+        if (sliding) {
+            _wallDustStarts++;
+        }
+
         var emission = _wallDust.emission;
         emission.enabled = sliding;
         if (sliding && !_wallDust.isPlaying) {

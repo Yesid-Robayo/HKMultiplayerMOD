@@ -714,14 +714,17 @@ internal sealed class SceneObjectSync {
                     }
 
                     FlipRoutineField.SetValue(flip, flip.StartCoroutine((System.Collections.IEnumerator) FlipMethod.Invoke(flip, null)));
+                    Log.Info($"{component.name}: se gira como en el PC de {from.Name}");
                     break;
                 case TriggerKind.DropPlatform when component is DropPlatform drop && DropRoutineField?.GetValue(drop) == null &&
                                                    DropMethod != null:
                     DropRoutineField.SetValue(drop, drop.StartCoroutine((System.Collections.IEnumerator) DropMethod.Invoke(drop, null)));
+                    Log.Info($"{component.name}: cae como en el PC de {from.Name}");
                     break;
                 case TriggerKind.JellyEgg when component is JellyEgg egg && EggBurstMethod != null &&
                                                EggColliderField?.GetValue(egg) is Collider2D { enabled: true }:
                     EggBurstMethod.Invoke(egg, null);
+                    Log.Info($"{component.name}: se rompe como en el PC de {from.Name}");
                     break;
             }
         } catch (System.Exception e) {

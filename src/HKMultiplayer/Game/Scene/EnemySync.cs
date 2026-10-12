@@ -444,6 +444,9 @@ internal sealed class EnemySync {
         /// <summary>El jefe ya había despertado en el PC que lo soltó.</summary>
         public bool Awake;
 
+        /// <summary>Estado al que iba su despertar retenido en el PC que lo soltó (+1; 0 si no esperaba).</summary>
+        public ushort HeldWake;
+
         /// <summary>Cómo iba su `Walker` en el PC que lo soltó (null si no tiene).</summary>
         public WalkerData? Walker;
         public int[] Ints;
@@ -2624,7 +2627,9 @@ internal sealed class EnemySync {
                 if (_pendingControl.Count < 256) {
                     _pendingControl[id] = controller;
                 }
-            } else if (!enemy.Spawned) {
+            } else if (!enemy.Spawned || enemy.Health != null) {
+                // Los creados en combate con vida también: el dueño los pasa a otro si quien los creó cae o pausa. Antes
+                // se ignoraba aquí y el dueño ya los daba por movidos por este PC: quedaban como marionetas en los dos
                 ApplyControl(enemy, controller);
             }
         }
@@ -2729,7 +2734,7 @@ internal sealed class EnemySync {
                 : Math.Min(variables.GameObjectVariables.Length, MaxHandoverVars);
             // Lo que va detrás de los textos: objetos (hasta 5 bytes cada uno), física, aspecto, si estaba despierto y su
             // Walker. Un jefe con muchos textos pasaba del tamaño del mensaje y el envío fallaba dentro del cambio de sala
-            var reserve = 1 + objectTotal * 5 + 1 + 13 + 6 + 14 + 8;
+            var reserve = 1 + objectTotal * 5 + 1 + 13 + 6 + 14 + 8 + 2;
             writer.WriteByte((byte) stringCount);
             for (var v = 0; v < stringCount; v++) {
                 // Uno demasiado largo no va (el otro PC deja el suyo): no son los que eligen lados ni ataques
@@ -2785,6 +2790,17 @@ internal sealed class EnemySync {
             // Si ya despertó: el que lo toma a mitad del combate no apunta su estado de ahora como el de dormido (si no, su
             // siguiente cambio de estado esperaba a todos y el jefe se paraba invulnerable)
             writer.WriteBool(enemy.Awake);
+            // Si este PC retenía su despertar (esperando a que llegaran todos): a qué estado iba (+1; 0 si no). El que lo
+            // toma sigue esperando con él; si no, el jefe se quedaba dormido hasta que alguien volviera a entrar en su zona
+            var heldWake = (ushort) 0;
+            if (enemy.WaitingWake && i == enemy.WakeFsm && enemy.HeldWake != null && fsm != null) {
+                var held = Array.IndexOf(fsm.Fsm.States, enemy.HeldWake);
+                if (held >= 0) {
+                    heldWake = (ushort) (held + 1);
+                }
+            }
+
+            writer.WriteUShort(heldWake);
             WriteWalker(writer, enemy);
             _session.End();
         }
@@ -2840,6 +2856,7 @@ internal sealed class EnemySync {
         var damage = reader.ReadByte();
         var detached = reader.ReadBool();
         var awake = reader.ReadBool();
+        var heldWake = reader.ReadUShort();
         var walker = ReadWalker(reader);
         // También uno que aún no es marioneta porque este PC acaba de entrar en la sala (se toma igual, ver Update)
         if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var enemy) || index >= count ||
@@ -2855,7 +2872,7 @@ internal sealed class EnemySync {
         enemy.Handover[index] = new HandoverFsm {
             State = state, Ints = ints, Floats = floats, Bools = bools, Strings = strings, Objects = objects, HasBody = hasBody, Velocity = velocity, Gravity = gravity,
             BodyType = bodyType, Active = active, Look = look, Damage = damage, Detached = detached, Waited = waited,
-            Awake = awake, Walker = walker
+            Awake = awake, HeldWake = heldWake, Walker = walker
         };
         if (index == count - 1) {
             enemy.HandoverReady = true;
@@ -2910,8 +2927,10 @@ internal sealed class EnemySync {
             ApplyWalker(enemy, walkerData);
         }
 
+
         MatchPrevious(enemy, handover);
         SetPuppet(enemy, false);
+        ResumeHeldWake(enemy, handover);
         enemy.SendFull = true;
         if (enemy.Body != null) {
             enemy.Body.velocity = Vector2.zero;
@@ -3240,6 +3259,37 @@ internal sealed class EnemySync {
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// El PC que soltó al jefe retenía su despertar: este sigue esperando a que estén todos cerca (o el minuto) con el
+    /// mismo estado al que iba. Se mira después de MatchPrevious, que deja su lógica en el estado dormido.
+    /// </summary>
+    private void ResumeHeldWake(Enemy enemy, HandoverFsm[] handover) {
+        if (handover == null || enemy.Awake || enemy.Fsms == null || enemy.Health == null) {
+            return;
+        }
+
+        for (var i = 0; i < handover.Length && i < enemy.Fsms.Length; i++) {
+            var fsm = enemy.Fsms[i];
+            if (handover[i] is not { HeldWake: > 0 } data || fsm == null || data.HeldWake > fsm.Fsm.States.Length ||
+                data.State >= fsm.Fsm.States.Length) {
+                continue;
+            }
+
+            enemy.WakeFsm = i;
+            enemy.DormantState = fsm.Fsm.States[data.State].Name;
+            enemy.HeldWake = fsm.Fsm.States[data.HeldWake - 1];
+            if (!enemy.WaitingWake) {
+                enemy.WaitingWake = true;
+                enemy.WaitingWakeSince = Time.unscaledTime;
+                enemy.WasInvincible = enemy.Health.IsInvincible;
+                enemy.Health.IsInvincible = true;
+            }
+
+            Log.Info($"{enemy.Root.name}: sigue esperando a que estén todos cerca para despertar (lo esperaba el otro PC)");
+            return;
+        }
     }
 
     /// <summary>Lo que un jefe espera como mucho a que estén todos cerca para despertar.</summary>

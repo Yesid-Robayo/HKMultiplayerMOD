@@ -136,6 +136,9 @@ internal sealed class FsmStateSync {
         // progreso compartido) y su llegada (`TRAM ARRIVE`) hace que la puerta lea la estación nueva. Antes quien pulsaba
         // viajaba solo y el otro salía por la puerta a la estación vieja
         ("Tram Control", "Control"),
+        // El tranvía de las estaciones (`Crossroads_46/46b`, `Abyss_03/03_b/03_c`): llega con el CALL TRAM del llamador de
+        // un PC; quien llama lo controla. Antes en el otro PC se quedaba lejos (`Away`) y el compañero no podía subir
+        ("Tram Main", "Tram Control"),
         // El ascensor de luz del Palacio Blanco (`White_Palace_01`, `_03_hub`, `_09`): sube al pisarlo el caballero local y
         // no es `Lift Control`; cada uno usaba el suyo y el compañero subía flotando
         ("White Palace Lift", "Control"),
@@ -1628,7 +1631,34 @@ internal sealed class FsmStateSync {
     /// <summary>Si los caballeros de todos los jugadores de la sala están dentro de la zona del combate.</summary>
     private bool EveryoneInside(Tracked item) {
         var hero = HeroController.instance;
-        if (hero == null || !InsideZone(item, hero.transform.position, 0.5f)) {
+        if (hero == null) {
+            return false;
+        }
+
+        // Zona fina: si todos están ya al mismo lado de la línea, ese es el de la arena. El lado apuntado al cruzarla sale
+        // de hacia dónde iba el caballero, y quien entra quieto o mirando atrás (un retroceso, un dash al revés) lo dejaba al
+        // revés: los dos dentro de la arena y el combate sin empezar nunca
+        var side = SameSideOfLine(item, hero.transform.position);
+        if (side != 0) {
+            foreach (var player in _session.Players) {
+                if (player.IsLocal || player.Scene != _scene || Features.PartyState.IsDown(player.Id)) {
+                    continue;
+                }
+
+                if (!_players.TryGetAvatarObject(player.Id, out var avatar) ||
+                    SameSideOfLine(item, avatar.transform.position) != side) {
+                    side = 0;
+                    break;
+                }
+            }
+
+            if (side != 0) {
+                item.ZoneSide = side;
+                return true;
+            }
+        }
+
+        if (!InsideZone(item, hero.transform.position, 0.5f)) {
             return false;
         }
 
@@ -1674,6 +1704,34 @@ internal sealed class FsmStateSync {
         var along = vertical ? position.x - bounds.center.x : position.y - bounds.center.y;
         var half = (vertical ? size.x : size.y) * 0.5f + margin;
         return Mathf.Abs(along) <= half || (along > 0f ? 1 : -1) == item.ZoneSide;
+    }
+
+    /// <summary>
+    /// En una zona fina, a qué lado de la línea está un caballero que ya la dejó atrás (1 o -1), dentro de su largo; 0 si
+    /// la zona no es fina, si está sobre la línea o fuera de su largo.
+    /// </summary>
+    private static sbyte SameSideOfLine(Tracked item, Vector3 position) {
+        if (item.Zone == null) {
+            return 0;
+        }
+
+        var bounds = item.Zone.bounds;
+        var size = bounds.size;
+        if (Mathf.Min(size.x, size.y) >= ThinZone) {
+            return 0;
+        }
+
+        var vertical = size.x < size.y;
+        var across = vertical ? position.y : position.x;
+        var min = vertical ? bounds.min.y : bounds.min.x;
+        var max = vertical ? bounds.max.y : bounds.max.x;
+        if (across < min - 0.5f || across > max + 0.5f) {
+            return 0;
+        }
+
+        var along = vertical ? position.x - bounds.center.x : position.y - bounds.center.y;
+        var half = (vertical ? size.x : size.y) * 0.5f + 0.5f;
+        return Mathf.Abs(along) <= half ? (sbyte) 0 : (sbyte) (along > 0f ? 1 : -1);
     }
 
     /// <summary>Lado de la arena de una zona fina: hacia donde va el caballero que acaba de entrar en ella (0 si no es fina).</summary>

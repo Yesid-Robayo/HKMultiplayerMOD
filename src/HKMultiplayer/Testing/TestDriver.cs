@@ -159,6 +159,60 @@ internal sealed class TestDriver : MonoBehaviour {
                 // mkworld <nombre>: crea un mundo coop sin abrirlo
                 HKMultiplayer.Game.World.WorldStore.Create(string.Join(" ", args.Skip(1)));
                 break;
+            case "pdadd":
+                // pdadd <campo> <cantidad>: suma a un número de la partida como el juego (IntAdd, sobre el valor de ahora)
+                PlayerData.instance.IntAdd(args[1], int.Parse(args[2]));
+                Log.Info($"{Tag}pd {args[1]}={PlayerData.instance.GetInt(args[1])}");
+                break;
+            case "fsmstates":
+                // fsmstates <texto>: cada objeto de la sala cuyo nombre lo contiene, con su ruta y el estado de cada FSM (sin
+                // límite, ordenados por ruta: para comparar los dos PCs línea a línea)
+                var stateLines = new List<string>();
+                var stateText = string.Join(" ", args.Skip(1));
+                foreach (var fsm in UnityEngine.Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+                    if (fsm.gameObject.scene.buildIndex < 0 ||
+                        fsm.gameObject.name.IndexOf(stateText, StringComparison.OrdinalIgnoreCase) < 0) {
+                        continue;
+                    }
+
+                    stateLines.Add($"{PathOf(fsm.transform)} [{fsm.FsmName}:{fsm.ActiveStateName}]" +
+                                   (fsm.gameObject.activeInHierarchy ? string.Empty : " (inactivo)"));
+                }
+
+                stateLines.Sort(StringComparer.Ordinal);
+                foreach (var line in stateLines) {
+                    Log.Info($"{Tag}fsmstate {line}");
+                }
+
+                break;
+            case "towall":
+                // towall: busca una pared alta cerca (que siga 4 unidades más abajo), pega el caballero a ella en el aire y
+                // pulsa hacia ella 1,5 s, para probar el deslizamiento por la pared
+                var wallFound = false;
+                for (var up = 3f; up <= 12f && !wallFound; up += 1f) {
+                    var wallFrom = (Vector2) hero.transform.position + Vector2.up * up;
+                    foreach (var dir in new[] { Vector2.left, Vector2.right }) {
+                        var top = Physics2D.Raycast(wallFrom, dir, 15f, 1 << 8);
+                        var low = Physics2D.Raycast(wallFrom + Vector2.down * 4f, dir, 15f, 1 << 8);
+                        if (top.collider == null || low.collider == null || Mathf.Abs(top.point.x - low.point.x) > 0.3f) {
+                            continue;
+                        }
+
+                        var leftWall = dir.x < 0f;
+                        hero.transform.position = new Vector3(top.point.x + (leftWall ? 0.45f : -0.45f), wallFrom.y,
+                            hero.transform.position.z);
+                        InputSimulator.Press(leftWall ? "left" : "right", 1.5f);
+                        Log.Info($"{Tag}pared a la {(leftWall ? "izquierda" : "derecha")} en x={top.point.x:0.00}");
+                        wallFound = true;
+                        break;
+                    }
+                }
+
+                if (!wallFound) {
+                    Log.Warn($"{Tag}no hay pared alta cerca");
+                }
+
+                break;
             case "pdset":
                 // pdset <campo> <true|false|entero|texto>: cambia un dato de la partida como lo haría el juego
                 if (bool.TryParse(args[2], out var boolValue)) {
@@ -650,7 +704,7 @@ internal sealed class TestDriver : MonoBehaviour {
                          $"hazardRespawning={hero.cState.hazardRespawning} recoiling={hero.cState.recoiling} " +
                          $"invulnerable={hero.cState.invulnerable} focusing={hero.cState.focusing} " +
                          $"isPaused={GameManager.instance.isPaused} gameState={GameManager.instance.gameState} " +
-                         $"timeScale={Time.timeScale} heroState={hero.hero_state} " +
+                         $"timeScale={Time.timeScale} heroState={hero.hero_state} transitionState={hero.transitionState} " +
                          $"anim={hero.GetComponent<tk2dSpriteAnimator>()?.CurrentClip?.name}");
                 break;
             case "regain":
