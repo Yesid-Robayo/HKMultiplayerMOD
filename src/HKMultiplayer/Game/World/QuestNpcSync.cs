@@ -522,7 +522,12 @@ internal sealed class QuestNpcSync {
     // La misma conversación no avanza la misión dos veces
     // =====================================================================================================
 
-    private static void InstallHooks() {
+    /// <summary>
+    /// Se llama al cargar el mod (y en Attach por si acaso): `PlayerData.GetBool`, `GetInt` y `SetInt` son de una línea, y si
+    /// quien los llama ya se compiló (tras una partida normal en el mismo proceso) con el método copiado dentro, el gancho
+    /// puesto después no se ve: volvían los fallos de misiones que avanzan dos veces, solo en ese caso.
+    /// </summary>
+    internal static void InstallHooks() {
         if (_hooked) {
             return;
         }

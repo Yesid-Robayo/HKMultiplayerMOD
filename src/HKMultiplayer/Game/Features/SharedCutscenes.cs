@@ -377,6 +377,12 @@ internal sealed class SharedCutscenes {
                 _returnScene = gm.sceneName;
                 _returnPosition = HeroController.instance.transform.position;
                 Log.Info($"Un compañero empezó {scene}: viéndola juntos");
+                // Sale de la sala sin levantarse del banco: solo la FSM del banco quita `atBench`, y puesto después
+                // impedía "Ir con" y revivir en el siguiente banco (que espera a que pase de no a sí)
+                if (PlayerData.instance != null && PlayerData.instance.atBench) {
+                    PlayerData.instance.SetBool("atBench", false);
+                }
+
                 gm.BeginSceneTransition(new GameManager.SceneLoadInfo {
                     SceneName = scene,
                     EntryGateName = string.Empty,

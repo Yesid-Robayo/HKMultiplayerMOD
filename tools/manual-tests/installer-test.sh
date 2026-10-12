@@ -50,8 +50,10 @@ prepare_copy() {
     fail "[$letter] quedan enlaces duros en Managed"; return 1
   fi
 
-  # Como el juego sin mods
-  cp "$managed/Assembly-CSharp.dll.v" "$managed/Assembly-CSharp.dll"
+  # Como el juego sin mods. En este PC no hay un Assembly-CSharp.dll original de esta versión (el .v es de una versión
+  # anterior del juego, que el instalador rechaza): se usa el actual sin el texto ModHooks, que es lo que distingue un
+  # original de uno parcheado
+  LC_ALL=C perl -0777 -pi -e 's/ModHooks/XodHooks/g' "$managed/Assembly-CSharp.dll"
   rm -f "$managed/Assembly-CSharp.dll.v"
   local pattern
   for pattern in "${API_PATTERNS[@]}"; do
@@ -141,6 +143,7 @@ for letter in $LETTERS; do
   echo "=== copia $letter ==="
   prepare_copy "$letter" || continue
   snapshot "$letter" "$WORK/$letter-before"
+  cp "$(_inst_dir "$letter")/hollow_knight_Data/Managed/Assembly-CSharp.dll" "$WORK/$letter-clean-Assembly-CSharp.dll"
 
   echo "[$letter] instalar"
   run_bat /install "$letter" "$WORK/$letter-install.txt" || fail "[$letter] la instalación terminó con error"
@@ -162,6 +165,37 @@ for letter in $LETTERS; do
     fail "[$letter] tras desinstalar no queda como estaba"
   fi
 done
+
+# Steam cambia Assembly-CSharp.dll entre instalar y desinstalar (el juego se actualizó o se verificó). Antes la
+# desinstalación volvía a poner la copia de la primera instalación, de una versión anterior, y el juego no arrancaba.
+# La "versión nueva" se hace con el Assembly-CSharp.dll de la copia limpia sin el texto ModHooks (lo que distingue un
+# original de uno parcheado: en este PC no hay un original de verdad, el .v es una Modding API anterior) y un byte más.
+# El juego no se abre en estos pasos.
+letter="${LETTERS%% *}"
+managed="$(_inst_dir "$letter")/hollow_knight_Data/Managed"
+dll="$managed/Assembly-CSharp.dll"
+sha() { sha256sum "$1" | cut -d' ' -f1; }
+newer="$WORK/Assembly-CSharp.newer.dll"
+LC_ALL=C perl -0777 -pe 's/ModHooks/XodHooks/g' "$WORK/$letter-clean-Assembly-CSharp.dll" > "$newer" && printf 'x' >> "$newer"
+grep -aq ModHooks "$newer" && fail "[$letter] la versión nueva de prueba sigue nombrando ModHooks"
+
+echo "[$letter] el juego se actualiza, luego se actualiza el mod y se desinstala"
+run_bat /install "$letter" "$WORK/$letter-steam1-install.txt" || fail "[$letter] instalar (actualización de Steam 1)"
+cp "$newer" "$dll"
+run_bat /install "$letter" "$WORK/$letter-steam1-update.txt" || fail "[$letter] actualizar el mod tras la de Steam"
+grep -aq "desde la última instalación\|since the last install" "$WORK/$letter-steam1-update.txt" ||
+  fail "[$letter] la actualización del mod no vio que el juego cambió Assembly-CSharp.dll"
+run_bat /uninstall "$letter" "$WORK/$letter-steam1-uninstall.txt" || fail "[$letter] desinstalar (actualización de Steam 1)"
+[ "$(sha "$dll")" = "$(sha "$newer")" ] && echo "[$letter] queda el Assembly-CSharp.dll nuevo del juego" ||
+  fail "[$letter] tras actualizar el juego y el mod, desinstalar no deja el Assembly-CSharp.dll nuevo"
+
+echo "[$letter] el juego se actualiza y se desinstala sin actualizar el mod"
+run_bat /install "$letter" "$WORK/$letter-steam2-install.txt" || fail "[$letter] instalar (actualización de Steam 2)"
+cp "$newer" "$dll" && printf 'y' >> "$dll"
+cp "$dll" "$newer.2"
+run_bat /uninstall "$letter" "$WORK/$letter-steam2-uninstall.txt" || fail "[$letter] desinstalar (actualización de Steam 2)"
+[ "$(sha "$dll")" = "$(sha "$newer.2")" ] && echo "[$letter] se deja el Assembly-CSharp.dll que puso Steam" ||
+  fail "[$letter] desinstalar volvió a poner un Assembly-CSharp.dll viejo"
 
 [ $FAILED = 0 ] && echo "RESULTADO: OK" || echo "RESULTADO: FALLO"
 exit $FAILED

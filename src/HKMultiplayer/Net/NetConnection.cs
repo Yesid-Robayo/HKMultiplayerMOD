@@ -144,20 +144,27 @@ public sealed class NetConnection : ReliableReceiver.ISink {
     /// Empieza un mensaje fiable: se escribe en el escritor devuelto (el primer byte, el tipo de mensaje) y se termina con
     /// <see cref="EndMessage"/>. Llegará una vez y en orden.
     /// </summary>
-    public PacketWriter BeginReliable() => Begin(1);
+    /// <param name="reserve">Bytes que se dejan libres al final (el host añade quién lo envía al reenviarlo).</param>
+    public PacketWriter BeginReliable(int reserve = 0) => Begin(1, reserve);
 
     /// <summary>
     /// Empieza un mensaje no fiable (estado continuo): se envía en el siguiente tick y no se reenvía si se pierde.
     /// </summary>
-    public PacketWriter BeginUnreliable() => Begin(2);
+    public PacketWriter BeginUnreliable(int reserve = 0) => Begin(2, reserve);
 
-    private PacketWriter Begin(int kind) {
+    /// <summary>Mensajes empezados que se descartaron porque quien los escribía falló a medias.</summary>
+    public int AbandonedMessages { get; private set; }
+
+    private PacketWriter Begin(int kind, int reserve) {
+        // Uno a medio escribir es de alguien que falló entre Begin y EndMessage: se descarta. Antes se lanzaba una
+        // excepción y, como solo CloseConnection lo cancelaba, todo lo siguiente a esa conexión fallaba para siempre (y
+        // los acuses seguían llegando, así que nunca se cortaba por tiempo)
         if (_writing != 0) {
-            throw new InvalidOperationException("Ya hay un mensaje a medio escribir en esta conexión");
+            AbandonedMessages++;
         }
 
         _writing = kind;
-        _messageWriter.Reset(_messageScratch, 0, _messageScratch.Length);
+        _messageWriter.Reset(_messageScratch, 0, _messageScratch.Length - Math.Max(0, reserve));
         return _messageWriter;
     }
 
@@ -479,14 +486,31 @@ public sealed class NetConnection : ReliableReceiver.ISink {
             return;
         }
 
-        var type = buffer[offset];
-        if (type == ControlMessage.LargeChunk) {
-            ReceiveLargeChunk(buffer, offset, length);
-            return;
-        }
+        // Un fallo al procesar un mensaje se queda en ese mensaje. Antes salía hasta ReceiveData: se perdían los registros
+        // fiables que iban detrás en el mismo paquete (ya confirmado, nunca se reenvían) y el receptor los esperaba para
+        // siempre; o, en el canal fiable, los guardados desordenados no se entregaban
+        try {
+            var type = buffer[offset];
+            if (type == ControlMessage.LargeChunk) {
+                ReceiveLargeChunk(buffer, offset, length);
+                return;
+            }
 
-        _peer.DeliverMessage(this, buffer, offset, length);
+            _peer.DeliverMessage(this, buffer, offset, length);
+        } catch (Exception e) {
+            if (++_deliverErrors <= 20 || _deliverErrors % 500 == 0) {
+                _peer.LogWarning($"Fallo al procesar un mensaje de {EndPoint} (van {_deliverErrors}): {e}");
+            }
+        }
     }
+
+    private int _deliverErrors;
+
+    /// <summary>Transferencias grandes a medio recibir a la vez, como mucho (cada una reserva su tamaño entero).</summary>
+    private const int MaxLargeIncoming = 2;
+
+    /// <summary>Una transferencia grande sin trozos nuevos en este tiempo se abandona.</summary>
+    private const double LargeIncomingTimeout = 30;
 
     private void ReceiveLargeChunk(byte[] buffer, int offset, int length) {
         var reader = _peer.ScratchReader;
@@ -501,11 +525,26 @@ public sealed class NetConnection : ReliableReceiver.ISink {
             return;
         }
 
+        var now = NetPeer.Now;
         if (!_largeIn.TryGetValue(id, out var transfer)) {
+            // Cada transferencia reserva su tamaño entero con el primer trozo: sin límite, unos pocos paquetes de 1 KB con
+            // ids distintos agotaban la memoria (hasta 64 MB cada uno). Las abandonadas caducan
+            PruneLargeIncoming(now);
+            if (_largeIn.Count >= MaxLargeIncoming) {
+                _peer.LogWarning($"Demasiadas transferencias grandes a la vez de {EndPoint}: se ignora una más");
+                return;
+            }
+
             transfer = new LargeIncoming { Kind = kind, Data = new byte[total] };
             _largeIn[id] = transfer;
+        } else if (transfer.Data.Length != total || transfer.Kind != kind) {
+            // El mismo id con otro tamaño: el trozo no cabría donde dice
+            _peer.LogWarning($"Transferencia grande incoherente de {EndPoint}: se abandona");
+            _largeIn.Remove(id);
+            return;
         }
 
+        transfer.LastChunk = now;
         reader.ReadBytes(transfer.Data, (int) position, chunk);
         transfer.Received += chunk;
         if (transfer.Received >= transfer.Data.Length) {
@@ -537,6 +576,22 @@ public sealed class NetConnection : ReliableReceiver.ISink {
         public byte Kind;
         public byte[] Data;
         public int Received;
+        public double LastChunk;
+    }
+
+    private readonly List<ushort> _staleLarge = new();
+
+    private void PruneLargeIncoming(double now) {
+        _staleLarge.Clear();
+        foreach (var pair in _largeIn) {
+            if (now - pair.Value.LastChunk > LargeIncomingTimeout) {
+                _staleLarge.Add(pair.Key);
+            }
+        }
+
+        foreach (var id in _staleLarge) {
+            _largeIn.Remove(id);
+        }
     }
 }
 

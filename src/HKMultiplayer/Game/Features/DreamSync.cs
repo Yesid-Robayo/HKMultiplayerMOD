@@ -4,6 +4,7 @@ using HKMultiplayer.Game.Players;
 using HKMultiplayer.Game.Scene;
 using HKMultiplayer.Net;
 using HKMultiplayer.Session;
+using HKMultiplayer.UI;
 using HKMultiplayer.Util;
 using HutongGames.PlayMaker;
 using UnityEngine;
@@ -128,6 +129,15 @@ internal sealed class DreamSync {
     // =====================================================================================================
 
     public void Update(string scene) {
+        if (_pendingExit is { } exit && GameManager.instance is { isPaused: false, IsInSceneTransition: false } &&
+            HeroController.instance != null) {
+            _pendingExit = null;
+            if (InDream) {
+                ExitDream("El compañero", exit.Target, exit.Gate, exit.Visualization, exit.Delay, exit.PreventFade,
+                    exit.WaitFade);
+            }
+        }
+
         if (_session == null) {
             return;
         }
@@ -205,7 +215,7 @@ internal sealed class DreamSync {
                 continue;
             }
 
-            var id = ScenePaths.Hash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode();
+            var id = ScenePaths.StableHash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode();
             _entries.Add(new Entry {
                 Id = id, Fsm = fsm, Transition = transition, LastState = fsm.ActiveStateName, LastStateTime = Time.unscaledTime
             });
@@ -306,6 +316,18 @@ internal sealed class DreamSync {
         var hero = HeroController.instance;
         if (sceneHash != _sceneHash || _scene.Length == 0 || gm == null || hero == null || gm.IsInSceneTransition ||
             hero.cState.dead || _revive != null && _revive.IsDowned || InDream) {
+            return;
+        }
+
+        // Como el ciervo: no se lleva a quien está en pausa (un cambio de sala con el menú abierto lo dejaba colgado),
+        // sentado en un banco (se iba sin levantarse y su `atBench` se quedaba puesto) ni hablando o comprando
+        var busy = gm.isPaused ? "en pausa"
+            : PlayerData.instance != null && PlayerData.instance.atBench ? "sentado en un banco"
+            : hero.controlReqlinquished ? "ocupado (diálogo, tienda o cinemática)"
+            : null;
+        if (busy != null) {
+            Log.Info($"{from.Name} entró en un sueño; este jugador no va ({busy})");
+            Notice.Show(Lang.T($"{from.Name} entró en un sueño", $"{from.Name} entered a dream"), 4f);
             return;
         }
 
@@ -430,7 +452,24 @@ internal sealed class DreamSync {
             return;
         }
 
-        Log.Info($"{from.Name} ganó el sueño y sale: se sale con él");
+        // Con el menú de pausa abierto, un cambio de sala lo deja colgado: se sale al quitarla
+        if (gm.isPaused) {
+            _pendingExit = (target, gate, visualization, delay, preventFade, waitFade);
+            Log.Info($"{from.Name} ganó el sueño y sale: se sale con él al quitar la pausa");
+            return;
+        }
+
+        ExitDream(from.Name, target, gate, visualization, delay, preventFade, waitFade);
+    }
+
+    private (string Target, string Gate, GameManager.SceneLoadVisualizations Visualization, float Delay, bool PreventFade,
+        bool WaitFade)? _pendingExit;
+
+    private void ExitDream(string who, string target, string gate, GameManager.SceneLoadVisualizations visualization,
+        float delay, bool preventFade, bool waitFade) {
+        var gm = GameManager.instance;
+        var hero = HeroController.instance;
+        Log.Info($"{who} ganó el sueño y sale: se sale con él");
         _applying = true;
         try {
             if (!LeaveDreamLikeTheGame(hero)) {

@@ -168,12 +168,22 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Features.BossPresentation.InstallHooks();
         Features.DreamSync.InstallHooks();
         Scene.DropSeeds.InstallHooks();
+        Scene.ScenePaths.InstallHooks();
+        QuestNpcSync.InstallHooks();
         CoopSaves.ExitedWorld += () => {
-            // El host salió de su mundo (los personajes ya se recogieron al volver al menú): la partida se cierra
-            if (_leaveOnMenu || Session is { IsHost: true }) {
+            // Se salió del mundo coop al menú principal (los personajes ya se recogieron o se enviaron al guardar): la
+            // partida se cierra. También el invitado que sale con "Salir al menú" del juego (no con el botón del mod):
+            // antes seguía conectado en el menú, contaba como "en pie" (el host caía en vez de morir y nadie lo revivía)
+            // y, si luego cargaba una partida suya, el mod seguía actuando sobre ella
+            if (_leaveOnMenu || Session != null) {
                 _leaveOnMenu = false;
                 Leave();
             }
+        };
+        World.WorldRejected += reason => {
+            Log.Warn($"No se pudo entrar en el mundo del host: {reason}");
+            Notice.Show(reason, 6f);
+            Leave();
         };
 
         // El host vuelve al menú: antes recoge el personaje de cada invitado
@@ -195,6 +205,16 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     }
 
     private void Update() {
+        if (_backToMenuWhenReady) {
+            if (CoopSaves.CanStart) {
+                _backToMenuWhenReady = false;
+            } else if (HeroController.instance != null && !CoopSaves.IntroPlaying &&
+                       GameManager.instance is { IsInSceneTransition: false, gameState: GlobalEnums.GameState.PLAYING }) {
+                _backToMenuWhenReady = false;
+                ReturnToMenu(save: false);
+            }
+        }
+
         UpdateReconnect();
         CoopSaves.Update();
         MultiplayerMenu.EnsureInstalled();
@@ -267,7 +287,10 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             PartnerMap.Update(scene);
             Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene
                 : Dreams.InDream ? Features.PlayerStatus.Dream
-                : InStagTravel() ? Features.PlayerStatus.StagTravel : Features.PlayerStatus.Standing,
+                : InStagTravel() ? Features.PlayerStatus.StagTravel
+                : HeroController.instance == null || !session.IsHost && CoopSaves.ActiveWorld == null || CoopSaves.IntroPlaying
+                    ? Features.PlayerStatus.Joining
+                : Features.PlayerStatus.Standing,
                 GameManager.instance != null && GameManager.instance.isPaused);
         } catch (Exception e) {
             Log.Error($"Error en la partida: {e}");
@@ -461,7 +484,18 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Application.Quit();
     }
 
+    /// <summary>Se perdió la conexión mientras se cargaba el mundo del host: se vuelve al menú en cuanto se pueda.</summary>
+    private bool _backToMenuWhenReady;
+
+    private float _returningSince = -100f;
+
     private void ReturnToMenu(bool save) {
+        // Una sola vuelta a la vez: el caballero sigue durante el fundido de 2 s y una segunda empezaba otra encima
+        if (Time.unscaledTime - _returningSince < 10f || CoopSaves.CanStart) {
+            return;
+        }
+
+        _returningSince = Time.unscaledTime;
         var ui = UIManager.instance;
         if (ui != null && ui.uiState == GlobalEnums.UIState.PAUSED) {
             ui.UIReturnToMainMenu();
@@ -498,6 +532,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Grimmchild.Detach();
         Stag.Detach();
         Scene.DropSeeds.Enabled = false;
+        Scene.ScenePaths.Enabled = false;
+        Scene.ScenePaths.Clear();
         Dreams.Detach();
         Presentations.Detach();
         Cutscenes.Detach();
@@ -633,6 +669,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Grimmchild.Attach(session);
         Stag.Attach(session);
         Scene.DropSeeds.Enabled = true;
+        Scene.ScenePaths.Enabled = true;
+        Scene.ScenePaths.RememberLoaded();
         Skins.Attach(session, Players);
         PartnerMap.Attach(session, Revive);
         var connected = false;
@@ -654,10 +692,17 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             _closing = session;
             SetStatus(DescribeDisconnect(reason));
 
-            // Jugando el mundo del host sin host: de vuelta al menú (aquí no hay nada que guardar)
-            if (CoopSaves.ActiveWorld != null && !CoopSaves.IsHostWorld && HeroController.instance != null) {
+            // Jugando el mundo del host sin host: de vuelta al menú (aquí no hay nada que guardar). Si aún está cargándolo o
+            // viendo la introducción, en cuanto haya caballero: antes la carga seguía y se jugaba una copia sin conexión del
+            // mundo del host, con todo lo que se guardaba tirado
+            if (CoopSaves.ActiveWorld != null && !CoopSaves.IsHostWorld) {
                 Notice.Show(DescribeDisconnect(reason), 6f);
-                ReturnToMenu(save: false);
+                if (HeroController.instance != null && !CoopSaves.IntroPlaying &&
+                    GameManager.instance is { IsInSceneTransition: false }) {
+                    ReturnToMenu(save: false);
+                } else {
+                    _backToMenuWhenReady = true;
+                }
             }
 
             // Después del aviso de desconexión: si se va a reconectar, su aviso lo sustituye

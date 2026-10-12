@@ -206,6 +206,7 @@ internal sealed class PartnerTravel {
             PlayerStatus.Downed => Refusal.Downed,
             PlayerStatus.Cutscene => Refusal.Cutscene,
             PlayerStatus.Dream => Refusal.Dream,
+            PlayerStatus.Joining => Refusal.Changing,
             _ => target.Player.Scene.Length == 0 ? Refusal.Changing
                 : !Revive.IsFollowedScene(target.Player.Scene) ? Refusal.Unreachable : Refusal.None
         };
@@ -511,6 +512,7 @@ internal sealed class PartnerTravel {
             PlayerStatus.Downed => Refusal.Downed,
             PlayerStatus.Cutscene => Refusal.Cutscene,
             PlayerStatus.Dream => Refusal.Dream,
+            PlayerStatus.Joining => Refusal.Changing,
             _ => Refusal.None
         };
     }

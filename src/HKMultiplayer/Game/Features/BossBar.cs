@@ -140,6 +140,7 @@ internal sealed class BossBar {
         var gm = GameManager.instance;
         var camera = GameCameras.instance != null ? GameCameras.instance.mainCamera : null;
         if (scene.Length == 0 || gm == null || gm.isPaused || camera == null || !HostSettings.Current.ShowBossBar ||
+            UI.HudCanvas.GameHudHidden() ||
             gm.gameState != GlobalEnums.GameState.PLAYING) {
             SetVisible(false);
             return;

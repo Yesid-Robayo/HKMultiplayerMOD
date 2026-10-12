@@ -35,10 +35,8 @@ internal sealed class SceneTravel {
     private Func<Vector3, Vector3> _onArrival;
 
     /// <summary>Punto de la Puerta de los sueños del jugador, cambiado durante el viaje (se repone al acabar).</summary>
-    private bool _dreamGateSaved;
+    private readonly DreamGatePoint _dreamGate = new();
 
-    private float _dreamGateX;
-    private float _dreamGateY;
 
     /// <summary>Nombre de entrada con el que el juego coloca al caballero en <c>dreamGateX/Y</c>.</summary>
     public const string DreamGateEntry = "dreamGate";
@@ -66,14 +64,7 @@ internal sealed class SceneTravel {
         var pd = PlayerData.instance;
         var entry = string.Empty;
         if (pd != null) {
-            if (!_dreamGateSaved) {
-                _dreamGateX = pd.GetFloat("dreamGateX");
-                _dreamGateY = pd.GetFloat("dreamGateY");
-                _dreamGateSaved = true;
-            }
-
-            pd.SetFloat("dreamGateX", position.x);
-            pd.SetFloat("dreamGateY", position.y);
+            _dreamGate.Use(pd, position);
             entry = DreamGateEntry;
         }
 
@@ -95,18 +86,7 @@ internal sealed class SceneTravel {
     }
 
     /// <summary>Repone el punto de la Puerta de los sueños del jugador.</summary>
-    private void RestoreDreamGate() {
-        if (!_dreamGateSaved) {
-            return;
-        }
-
-        _dreamGateSaved = false;
-        var pd = PlayerData.instance;
-        if (pd != null) {
-            pd.SetFloat("dreamGateX", _dreamGateX);
-            pd.SetFloat("dreamGateY", _dreamGateY);
-        }
-    }
+    private void RestoreDreamGate() => _dreamGate.Restore();
 
     /// <summary>Llamar cada frame: al llegar coloca al caballero y le devuelve el control.</summary>
     public void Update() {
@@ -160,5 +140,63 @@ internal sealed class SceneTravel {
 
         gm.FadeSceneIn();
         hero.RegainControl();
+    }
+}
+
+/// <summary>
+/// El punto de la Puerta de los sueños del jugador, cambiado un momento para entrar en una sala en un punto (la entrada
+/// <c>dreamGate</c> coloca al caballero en <c>dreamGateX/Y</c>). Mientras dura, su sala (<c>dreamGateScene</c>) se vacía:
+/// si el destino era la sala de la marca, el juego la ponía al empezar la sala en el punto pedido. Al reponerlo, si la
+/// marca es de la sala en la que se está, se pone en su sitio como lo hace el juego (<c>SceneManager.Start</c>).
+/// </summary>
+internal sealed class DreamGatePoint {
+    private bool _saved;
+    private float _x;
+    private float _y;
+    private string _scene;
+
+    public void Use(PlayerData pd, Vector3 position) {
+        if (!_saved) {
+            _x = pd.GetFloat("dreamGateX");
+            _y = pd.GetFloat("dreamGateY");
+            _scene = pd.GetString("dreamGateScene");
+            _saved = true;
+        }
+
+        pd.SetFloat("dreamGateX", position.x);
+        pd.SetFloat("dreamGateY", position.y);
+        pd.SetString("dreamGateScene", string.Empty);
+    }
+
+    public void Restore() {
+        if (!_saved) {
+            return;
+        }
+
+        _saved = false;
+        var pd = PlayerData.instance;
+        if (pd == null) {
+            return;
+        }
+
+        pd.SetFloat("dreamGateX", _x);
+        pd.SetFloat("dreamGateY", _y);
+        pd.SetString("dreamGateScene", _scene ?? string.Empty);
+        SpawnMarker(pd);
+    }
+
+    private static void SpawnMarker(PlayerData pd) {
+        var gm = GameManager.instance;
+        var sm = gm != null ? gm.sm : null;
+        var scene = pd.GetString("dreamGateScene");
+        if (sm == null || sm.dreamgateObject == null || string.IsNullOrEmpty(scene) || !gm.IsGameplayScene() ||
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != scene) {
+            return;
+        }
+
+        var marker = UnityEngine.Object.Instantiate(sm.dreamgateObject,
+            new Vector3(pd.GetFloat("dreamGateX"), pd.GetFloat("dreamGateY") - 1.429361f, -0.002f), Quaternion.identity);
+        marker.transform.SetParent(sm.transform, worldPositionStays: true);
+        marker.transform.SetParent(null);
     }
 }

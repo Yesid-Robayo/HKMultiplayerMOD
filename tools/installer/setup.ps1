@@ -33,6 +33,8 @@ function Invoke-Console([string]$mode, [string]$given) {
             Write-Host ''
             if ($clean) {
                 Write-Ok (L 'Desinstalado: el juego vuelve a estar como antes de instalar HKMultiplayer.' 'Uninstalled: the game is back to how it was before installing HKMultiplayer.')
+            } else {
+                return 2
             }
         }
         return 0

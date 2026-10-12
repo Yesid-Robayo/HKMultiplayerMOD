@@ -70,6 +70,26 @@ public sealed class NetServer : NetPeer {
 
     private int PendingCount => Connections.Count - ConnectedCount;
 
+    /// <summary>Lo que tiene que llevar callado un jugador conectado para aceptar un Hello nuevo desde su dirección.</summary>
+    private const double SilentBeforeReconnect = 3;
+
+    /// <summary>Saludos nuevos por segundo como mucho: cada uno cuesta un X25519 y un HKDF en el hilo principal.</summary>
+    private const double HellosPerSecond = 10;
+
+    private double _helloTokens = HellosPerSecond;
+    private double _helloRefilledAt;
+
+    private bool TakeHelloToken(double now) {
+        _helloTokens = Math.Min(HellosPerSecond, _helloTokens + (now - _helloRefilledAt) * HellosPerSecond);
+        _helloRefilledAt = now;
+        if (_helloTokens < 1) {
+            return false;
+        }
+
+        _helloTokens--;
+        return true;
+    }
+
     protected override void HandleHandshake(DatagramType type, byte[] buffer, int length, IPEndPoint from, double now) {
         if (type != DatagramType.Hello) {
             return;
@@ -91,11 +111,17 @@ public sealed class NetServer : NetPeer {
                 return;
             }
 
-            // Mismo puerto con claves nuevas: el jugador se reconecta; la conexión vieja ya no sirve
+            // Mismo puerto con claves nuevas. Un Hello no va autenticado y la dirección se puede suplantar: a un jugador
+            // conectado que sigue enviando no se le echa (antes cualquiera podía cerrar su conexión así). Si lleva un rato
+            // callado, es él reconectándose (su juego se cerró) y la conexión vieja ya no sirve
+            if (existing.State == ConnectionState.Connected && now - existing.LastReceive < SilentBeforeReconnect) {
+                return;
+            }
+
             CloseConnection(existing, DisconnectReason.Closed, false);
         }
 
-        if (PendingCount >= NetConstants.MaxPendingConnections) {
+        if (PendingCount >= NetConstants.MaxPendingConnections || !TakeHelloToken(now)) {
             return;
         }
 
@@ -158,8 +184,8 @@ public sealed class NetServer : NetPeer {
             return false;
         }
 
-        connection.Name = SanitizeName(reader.ReadString(64));
-        connection.RemoteVersion = reader.ReadString(64);
+        connection.Name = SanitizeName(reader.ReadString(128));
+        connection.RemoteVersion = reader.ReadString(128);
 
         DisconnectReason? reject = null;
         if (ConnectedCount >= _maxClients) {
@@ -180,7 +206,7 @@ public sealed class NetServer : NetPeer {
         accept.WriteByte(ControlMessage.ConnectAccept);
         accept.WriteUShort(connection.Id);
         connection.EndMessage();
-        Listener.OnConnected(connection);
+        NotifyConnected(connection);
         return true;
     }
 
@@ -217,7 +243,7 @@ public sealed class NetServer : NetPeer {
         }
 
         if (wasConnected) {
-            Listener.OnDisconnected(connection, reason);
+            NotifyDisconnected(connection, reason);
         }
     }
 

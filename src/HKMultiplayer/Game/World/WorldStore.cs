@@ -58,6 +58,18 @@ public static class WorldStore {
         Converters = JsonConverterTypes.ConverterTypes
     };
 
+    /// <summary>
+    /// Para lo que llega de otro PC (el mundo del host, el personaje de un invitado): sin nombres de tipo, que con
+    /// <c>TypeNameHandling.Auto</c> dejarían a quien envía elegir qué clase se crea al leerlo. <c>PlayerData</c> y
+    /// <c>SceneData</c> no tienen miembros polimórficos, así que se leen igual.
+    /// </summary>
+    internal static readonly JsonSerializerSettings NetworkSettings = new() {
+        ContractResolver = ShouldSerializeContractResolver.Instance,
+        TypeNameHandling = TypeNameHandling.None,
+        ObjectCreationHandling = ObjectCreationHandling.Replace,
+        Converters = JsonConverterTypes.ConverterTypes
+    };
+
     public static List<CoopWorldInfo> List() {
         var worlds = new List<CoopWorldInfo>();
         if (!Directory.Exists(Root)) {

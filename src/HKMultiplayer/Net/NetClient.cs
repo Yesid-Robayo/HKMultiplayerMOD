@@ -64,7 +64,7 @@ public sealed class NetClient : NetPeer {
             var failed = new NetConnection(this, _server, MessagePool, now) {
                 State = ConnectionState.Handshaking
             };
-            Listener.OnDisconnected(failed, DisconnectReason.Timeout);
+            NotifyDisconnected(failed, DisconnectReason.Timeout);
             return;
         }
 
@@ -146,14 +146,14 @@ public sealed class NetClient : NetPeer {
         var failed = new NetConnection(this, _server, MessagePool, now) {
             State = ConnectionState.Handshaking
         };
-        Listener.OnDisconnected(failed, reason);
+        NotifyDisconnected(failed, reason);
     }
 
     protected override bool HandleControl(NetConnection connection, byte type, PacketReader reader) {
         if (type == ControlMessage.ConnectAccept && connection.State == ConnectionState.Handshaking) {
             connection.Id = reader.ReadUShort();
             connection.State = ConnectionState.Connected;
-            Listener.OnConnected(connection);
+            NotifyConnected(connection);
             return true;
         }
 
@@ -166,6 +166,6 @@ public sealed class NetClient : NetPeer {
         }
 
         // El cliente avisa siempre: también si se cerró durante el saludo (rechazo, partida llena...)
-        Listener.OnDisconnected(connection, reason);
+        NotifyDisconnected(connection, reason);
     }
 }

@@ -26,7 +26,6 @@ function Read-PackageEntries([string]$packageRoot) {
     return $entries
 }
 
-function Get-Sha256([string]$file) { return (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLower() }
 
 # La Modding API del paquete es para Hollow Knight 1.5.12620 (Unity 6, con los ensamblados TeamCherry.*). En otra
 # versión del juego dejaría el juego sin arrancar.
@@ -38,6 +37,15 @@ function Assert-CompatibleGame([string]$game) {
     $unity = ''
     $player = Join-Path $game 'UnityPlayer.dll'
     if (Test-Path -LiteralPath $player) { $unity = (Get-Item -LiteralPath $player).VersionInfo.FileVersion }
+    # La versión del juego va en su Assembly-CSharp.dll (Constants.GAME_VERSION, en UTF-16): un parche futuro con el mismo
+    # Unity pasaba la comprobación y se le copiaba un Assembly-CSharp.dll hecho para otra versión
+    $assembly = Join-Path $managed 'Assembly-CSharp.dll'
+    if ((Test-Path -LiteralPath $assembly) -and -not (Test-GameVersion $assembly)) {
+        throw (L ("Este mod es para Hollow Knight $GameVersion y tu juego es de otra versión. Actualízalo en Steam " +
+                "(Propiedades > Betas: ninguna) o, si Steam ya tiene otra más nueva, espera a una versión del mod para ella.") `
+                ("This mod is for Hollow Knight $GameVersion and your game is a different version. Update it in Steam " +
+                "(Properties > Betas: none) or, if Steam already has a newer one, wait for a mod version for it."))
+    }
     if (-not $unity -or -not $unity.StartsWith('6000.') -or -not (Test-Path -LiteralPath (Join-Path $managed 'TeamCherry.TK2D.dll'))) {
         throw (L ("Este mod es para Hollow Knight 1.5.12620 (la versión actual de Steam). Tu juego es de otra versión " +
                 "(motor Unity '$unity'). Actualízalo en Steam (Propiedades > Betas: ninguna) y vuelve a instalar.") `
@@ -73,14 +81,18 @@ function Invoke-Install([string]$game) {
 
     # 2. Copia de lo que se va a cambiar. Si ya se instaló antes (actualización), se conserva la copia de entonces
     #    (la del juego como estaba) y solo se añade lo nuevo de este paquete.
-    $script:Changing = $true
     $backupDir = Join-Path $game $BackupName
     $manifest = Join-Path $backupDir $ManifestName
     $update = Test-Path -LiteralPath $manifest
     $known = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    $replacedBefore = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
     if ($update) {
         foreach ($line in Get-Content -LiteralPath $manifest) {
-            if ($line -and -not $line.StartsWith('#')) { [void]$known.Add($line.Split('|')[1]) }
+            if ($line -and -not $line.StartsWith('#')) {
+                $parts = $line.Split('|')
+                [void]$known.Add($parts[1])
+                if ($parts[0] -eq 'replaced') { [void]$replacedBefore.Add($parts[1]) }
+            }
         }
     } else {
         New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
@@ -90,6 +102,8 @@ function Invoke-Install([string]$game) {
             '# No borres esta carpeta mientras el mod esté instalado. / Do not delete this folder while the mod is installed.')
     }
     $record = { param([string]$line) Add-Content -LiteralPath $manifest -Value $line -Encoding UTF8 }
+    # Desde aquí sí se cambia el juego (la copia y el manifiesto ya están): un fallo antes no deja nada a medias
+    $script:Changing = $true
 
     Write-Step (L 'Guardando una copia de lo que se va a cambiar...' 'Backing up what will change...')
     $replaced = 0
@@ -109,11 +123,27 @@ function Invoke-Install([string]$game) {
             }
         }
 
-        if ($known.Contains($relative)) { continue }
         $target = Join-Game $game $relative
+        $copy = Join-Path (Join-Path $backupDir 'files') ($relative -replace '/', '\')
+        $patched = $relative -ne 'steam_appid.txt' -and (Test-Modded (Join-Path $source $relative))
+        if ($known.Contains($relative)) {
+            # Un ensamblado del juego que ya no es el de la Modding API: Steam lo cambió después de instalar (el juego se
+            # actualizó o se verificó). Ese es ahora el original: si se dejaba la copia de la primera instalación, al
+            # desinstalar volvía un Assembly-CSharp.dll de una versión anterior y el juego no arrancaba
+            if ($patched -and $replacedBefore.Contains($relative) -and (Test-Path -LiteralPath $target) -and -not (Test-Modded $target)) {
+                Copy-Item -LiteralPath $target -Destination $copy -Force
+                Write-Warn (L "El juego cambió $relative desde la última instalación (¿se actualizó?): se guarda esa versión como la original." `
+                        "The game changed $relative since the last install (was it updated?): that version is kept as the original.")
+            }
+            continue
+        }
         if (Test-Path -LiteralPath $target) {
             if ($relative -eq 'steam_appid.txt') { continue }   # no se toca: se deja el del juego
-            $copy = Join-Path (Join-Path $backupDir 'files') ($relative -replace '/', '\')
+            # Ya había una Modding API (puesta a mano o con otro instalador): la copia no es el juego original
+            if ($patched -and (Test-Modded $target)) {
+                Write-Warn (L "$relative ya tenía una Modding API: al desinstalar volverá esa, no el juego original. Para el original: Steam > Propiedades > Archivos instalados > Verificar integridad." `
+                        "$relative already had a Modding API: uninstalling will put that one back, not the original game. For the original: Steam > Properties > Installed Files > Verify integrity.")
+            }
             New-Item -ItemType Directory -Force -Path (Split-Path -Parent $copy) | Out-Null
             Copy-Item -LiteralPath $target -Destination $copy -Force
             & $record "replaced|$relative"

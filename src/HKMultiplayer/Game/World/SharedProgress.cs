@@ -35,8 +35,19 @@ internal sealed class SharedProgress {
         ListAdd = 3,
         SceneBool = 4,
         SceneInt = 5,
-        GeoRock = 6
+        GeoRock = 6,
+
+        /// <summary>Suma a un contador (ver <see cref="AdditiveInts"/>).</summary>
+        IntAdd = 7
     }
+
+    /// <summary>
+    /// Contadores que se envían como suma y no como valor: los cambia solo el PC donde pasa (una larva liberada no toca los
+    /// datos en los demás) y, como valor, si los dos sumaban a la vez se perdía una suma (las recompensas del Padre de las
+    /// Larvas). No los del diario (`kills*`, `journalEntriesCompleted`): los cambian los dos PCs con la misma muerte y,
+    /// como valor, coinciden; sumados contarían doble.
+    /// </summary>
+    private static readonly HashSet<string> AdditiveInts = new() { "grubsCollected" };
 
     private struct Change {
         public Kind Kind;
@@ -51,8 +62,12 @@ internal sealed class SharedProgress {
         "version", "profileID", "awardAllAchievements", "playTime", "completionPercent", "completionPercentage",
         "showGeoUI", "showHealthUI", "lastJournalItem", "infiniteAirJump", "invinciTest", "environmentTypeDefault",
         "isFirstGame", "playerStory",
-        // Del momento de cada jugador: viajando en ciervo o tranvía, ante el aviso del mapa
-        "travelling", "atMapPrompt"
+        // Del momento de cada jugador: viajando en ciervo o tranvía, ante el aviso del mapa, llegando en un ascensor grande
+        // (`Lift Move` lo pone justo antes de cambiar de sala: compartido, el otro PC que cargara esa sala en ese momento
+        // hacía la llegada y sujetaba a su caballero a la cabina)
+        "travelling", "atMapPrompt", "liftArrival",
+        // Preferencias de interfaz y avisos de tutorial de cada uno: lo que elegía o veía uno cambiaba al otro
+        "mapKeyPref", "promptFocus", "seenJournalMsg", "seenHunterMsg", "bossDoorEntranceTextSeen", "firstGeo"
     };
 
     private static readonly FieldInfo[] BoolFields;
@@ -239,8 +254,11 @@ internal sealed class SharedProgress {
         for (var i = 0; i < IntGetters.Length; i++) {
             var value = IntGetters[i](playerData);
             if (value != _ints[i]) {
+                var delta = value - _ints[i];
                 _ints[i] = value;
-                Send(new Change { Kind = Kind.Int, Index = (ushort) i, Value = value });
+                Send(AdditiveInts.Contains(IntFields[i].Name)
+                    ? new Change { Kind = Kind.IntAdd, Index = (ushort) i, Value = delta }
+                    : new Change { Kind = Kind.Int, Index = (ushort) i, Value = value });
             }
         }
 
@@ -322,11 +340,20 @@ internal sealed class SharedProgress {
         }
 
         var key = Key(data.sceneName, data.id);
-        if (!_knownInts.TryGetValue(key, out var known) || data.value > known) {
+        if (!_knownInts.TryGetValue(key, out var known) || Replaces(data.id, data.value, known)) {
             _knownInts[key] = data.value;
             Send(new Change { Kind = Kind.SceneInt, Scene = data.sceneName, Id = data.id, Value = data.value });
         }
     }
+
+    /// <summary>
+    /// Si un número guardado de la sala sustituye al conocido. Solo hay dos tipos (`PersistentIntItem`): tótems de alma,
+    /// cuyas cargas solo bajan (gana el menor), y ascensores de la Ciudad (`Ruins Lift`), cuyo número es el piso y sube y
+    /// baja (gana el último cambio). Antes ganaba siempre el mayor: los ascensores no guardaban una bajada y quien entraba
+    /// después los encontraba en otro piso.
+    /// </summary>
+    private static bool Replaces(string id, int value, int known) =>
+        id != null && id.IndexOf("Totem", StringComparison.OrdinalIgnoreCase) >= 0 ? value < known : value != known;
 
     private void OnGeoRock(GeoRockData data) {
         if (_applying || !_active) {
@@ -380,6 +407,7 @@ internal sealed class SharedProgress {
         switch (change.Kind) {
             case Kind.Bool:
             case Kind.Int:
+            case Kind.IntAdd:
                 writer.WriteUShort(change.Index);
                 writer.WriteInt(change.Value);
                 break;
@@ -400,6 +428,7 @@ internal sealed class SharedProgress {
         switch (change.Kind) {
             case Kind.Bool:
             case Kind.Int:
+            case Kind.IntAdd:
                 change.Index = reader.ReadUShort();
                 change.Value = reader.ReadInt();
                 return change.Kind == Kind.Bool ? change.Index < BoolFields.Length : change.Index < IntFields.Length;
@@ -472,10 +501,26 @@ internal sealed class SharedProgress {
                     }
 
                     break;
+                case Kind.IntAdd: {
+                    var before = IntGetters[change.Index](playerData);
+                    var after = before + change.Value;
+                    IntSetters[change.Index](playerData, after);
+                    // Lo local que aún no se comparó sigue pendiente: se apunta solo la suma recibida
+                    if (_ints.Length > change.Index) {
+                        _ints[change.Index] += change.Value;
+                    }
+
+                    RemoteFieldChanged?.Invoke(IntFields[change.Index].Name, before, false);
+                    break;
+                }
                 case Kind.ListAdd:
                     if (ListFields[change.Index].GetValue(playerData) is List<string> list && !list.Contains(change.Id)) {
+                        var before = list.Count;
                         list.Add(change.Id);
-                        if (_listCounts.Length > change.Index) {
+                        // Solo si no había nada local sin enviar: si este PC añadió algo hace menos de 0,2 s (aún sin comparar),
+                        // la cuenta se queda y la comparación lo envía (quien lo recibe quita los repetidos). Antes la cuenta
+                        // saltaba al final y eso local no se enviaba nunca
+                        if (_listCounts.Length > change.Index && _listCounts[change.Index] == before) {
                             _listCounts[change.Index] = list.Count;
                         }
                     }
@@ -493,7 +538,7 @@ internal sealed class SharedProgress {
                     break;
                 case Kind.SceneInt: {
                     var key = Key(change.Scene, change.Id);
-                    if (!_knownInts.TryGetValue(key, out var known) || change.Value > known) {
+                    if (!_knownInts.TryGetValue(key, out var known) || Replaces(change.Id, change.Value, known)) {
                         _knownInts[key] = change.Value;
                         SceneData.instance.SaveMyState(new PersistentIntData {
                             sceneName = change.Scene, id = change.Id, value = change.Value, semiPersistent = false

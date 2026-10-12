@@ -153,10 +153,8 @@ internal sealed class Revive {
     private float _travelStartedAt = -100f;
 
     /// <summary>Punto de la Puerta de los sueños del jugador, cambiado durante un viaje a un punto (se repone al acabar).</summary>
-    private bool _dreamGateSaved;
+    private readonly DreamGatePoint _dreamGate = new();
 
-    private float _dreamGateX;
-    private float _dreamGateY;
 
     // Último sitio en que se vio al compañero en la sala del caído: por qué puerta se fue
     private string _partnerSeenScene = string.Empty;
@@ -1203,14 +1201,7 @@ internal sealed class Revive {
         var entry = string.Empty;
         var pd = PlayerData.instance;
         if (position.HasValue && pd != null) {
-            if (!_dreamGateSaved) {
-                _dreamGateX = pd.GetFloat("dreamGateX");
-                _dreamGateY = pd.GetFloat("dreamGateY");
-                _dreamGateSaved = true;
-            }
-
-            pd.SetFloat("dreamGateX", position.Value.x);
-            pd.SetFloat("dreamGateY", position.Value.y);
+            _dreamGate.Use(pd, position.Value);
             entry = SceneTravel.DreamGateEntry;
         } else if (!position.HasValue) {
             entry = GateTowards(scene);
@@ -1287,18 +1278,7 @@ internal sealed class Revive {
     }
 
     /// <summary>Repone el punto de la Puerta de los sueños del jugador.</summary>
-    private void RestoreDreamGate() {
-        if (!_dreamGateSaved) {
-            return;
-        }
-
-        _dreamGateSaved = false;
-        var pd = PlayerData.instance;
-        if (pd != null) {
-            pd.SetFloat("dreamGateX", _dreamGateX);
-            pd.SetFloat("dreamGateY", _dreamGateY);
-        }
-    }
+    private void RestoreDreamGate() => _dreamGate.Restore();
 
     /// <summary>
     /// Entrada de <paramref name="scene"/> por la que llegó el compañero: la de la puerta de esta sala hacia esa sala más
@@ -1352,6 +1332,12 @@ internal sealed class Revive {
             hero.RelinquishControl();
         }
 
+        // Al entrar en una sala el juego devuelve la entrada (FinishedEnteringScene → AcceptInput) aunque el control siga
+        // cedido, y CanCast/CanDash/CanJump solo miran la entrada: el caído lanzaba hechizos invisible donde estaba el
+        // compañero. RegainControl la devuelve al revivir
+        hero.IgnoreInput();
+        hero.hero_state = GlobalEnums.ActorStates.no_input;
+
         hero.AffectedByGravity(false);
         var body = hero.GetComponent<Rigidbody2D>();
         if (body != null) {
@@ -1367,7 +1353,8 @@ internal sealed class Revive {
         _rendererScratch.Clear();
         hero.GetComponentsInChildren(_rendererScratch);
         foreach (var renderer in _rendererScratch) {
-            if (renderer.enabled) {
+            // La luz y la viñeta siguen: sin ellas el caído veía las salas oscuras sin oscuridad
+            if (renderer.enabled && renderer != hero.heroLight && renderer != hero.vignette) {
                 renderer.enabled = false;
                 _hiddenRenderers.Add(renderer);
             }
@@ -1400,6 +1387,15 @@ internal sealed class Revive {
         var collider = hero.GetComponent<Collider2D>();
         if (collider != null) {
             collider.enabled = true;
+        }
+
+        // Un caído que entró siguiendo al compañero por una puerta de abajo se queda en DROPPING_DOWN (solo lo acaba su
+        // choque con el suelo, y su colisión estaba apagada) y CanTakeDamage pide WAITING_TO_TRANSITION: revivido en esa
+        // sala, no recibía daño hasta cambiar de sala
+        var gm = GameManager.instance;
+        if (gm == null || !gm.IsInSceneTransition) {
+            hero.transitionState = GlobalEnums.HeroTransitionState.WAITING_TO_TRANSITION;
+            hero.cState.transitioning = false;
         }
 
         hero.AffectedByGravity(true);

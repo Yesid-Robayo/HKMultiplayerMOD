@@ -742,6 +742,9 @@ internal sealed class PlayerEffects {
     // Ganchos al caballero
     // =====================================================================================================
 
+    /// <summary>Llamadas a ObjectPool.Spawn anidadas (al crear un pool nuevo se llama a sí mismo).</summary>
+    private static int _poolDepth;
+
     private static void InstallHooks() {
         if (_hooked) {
             return;
@@ -759,8 +762,19 @@ internal sealed class PlayerEffects {
 
         // Lo que sacan los amuletos del pool del juego (rayos de Grubberfly, nubes al curarse, moscas de Flukenest)
         On.ObjectPool.Spawn_GameObject_Transform_Vector3_Quaternion += (orig, prefab, parent, position, rotation) => {
-            var spawned = orig(prefab, parent, position, rotation);
-            _active?.OnPoolSpawn(prefab, spawned);
+            // Solo la llamada de fuera: al crear un pool nuevo, Spawn se llama a sí mismo y el efecto se enviaba dos veces
+            _poolDepth++;
+            GameObject spawned;
+            try {
+                spawned = orig(prefab, parent, position, rotation);
+            } finally {
+                _poolDepth--;
+            }
+
+            if (_poolDepth == 0) {
+                _active?.OnPoolSpawn(prefab, spawned);
+            }
+
             return spawned;
         };
 

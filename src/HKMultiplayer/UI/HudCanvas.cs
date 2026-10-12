@@ -82,6 +82,25 @@ internal static class HudCanvas {
     /// <summary>
     /// Ajusta el lienzo a la zona de la cámara del juego (barato: solo cambia algo si cambió la ventana). Llamar cada frame.
     /// </summary>
+    private static PlayMakerFSM _gameHudSlide;
+
+    /// <summary>
+    /// Si el juego tiene su HUD escondido (inventario, mapa, diálogos, cinemáticas: la FSM `Slide Out` del HUD lo saca de
+    /// la pantalla). El HUD del mod se esconde igual: el lienzo se dibuja encima de todo y salía sobre esas pantallas.
+    /// </summary>
+    public static bool GameHudHidden() {
+        if (_gameHudSlide == null) {
+            var canvas = GameCameras.instance != null ? GameCameras.instance.hudCanvas : null;
+            _gameHudSlide = canvas != null ? PlayMakerFSM.FindFsmOnGameObject(canvas, "Slide Out") : null;
+            if (_gameHudSlide == null) {
+                return false;
+            }
+        }
+
+        var state = _gameHudSlide.ActiveStateName;
+        return state == "Out" || state == "Go Out" || state == "Go Out Instant";
+    }
+
     public static void Sync() {
         if (_root == null) {
             return;

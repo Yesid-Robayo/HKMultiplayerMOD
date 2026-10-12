@@ -30,6 +30,9 @@ internal static class CoopSaves {
     /// <summary>Se está viendo esa introducción (al acabar se entra al mundo).</summary>
     private static bool _introPlaying;
 
+    /// <summary>Un invitado nuevo está viendo la introducción (aún no entró en el mundo).</summary>
+    public static bool IntroPlaying => _introPlaying;
+
     /// <summary>Mundo en el que se está jugando (null = partida normal o menú).</summary>
     public static CoopWorldInfo ActiveWorld { get; private set; }
 

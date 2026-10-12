@@ -36,6 +36,23 @@ internal static class CharacterData {
         "dreamNailUpgraded", "hasDreamGate", "hasSpell", "fireballLevel", "quakeLevel", "screamLevel"
     };
 
+    /// <summary>
+    /// Campos que fueron del mundo hasta la 0.25.0 y son de cada personaje desde la 0.26.0 (ver <see cref="WasShared"/>):
+    /// - <c>maxMP</c>: el juego lo pone a 66 o 99 en cada ganancia de alma según la sombra de ese jugador (33 con alma
+    ///   atada): compartido, los dos PCs se lo pisaban y el coste de revivir (que no pasa de <c>maxMP</c>) usaba el del otro.
+    /// - <c>blockerHits</c>: lo que aguanta Baldur Shell; los bloqueos de uno rompían el escudo del otro.
+    /// - <c>bankerTheft</c>, <c>bankerTheftCheck</c>: el robo de Millibelle depende del saldo, que es de cada uno.
+    /// - Dios Hogar: estatuas del Salón (<c>statueState*</c>), puertas de los Panteones (<c>bossDoorStateTier*</c>) y la
+    ///   estatua elegida. Son structs y texto, que <see cref="SharedProgress"/> no comparte: lo que completaba un invitado
+    ///   se perdía.
+    /// </summary>
+    private static readonly string[] SharedUntil026 = new[] {
+            "maxMP", "blockerHits", "bankerTheft", "bankerTheftCheck", "currentBossStatueCompletionKey"
+        }
+        .Concat(Numbered("bossDoorStateTier", 1, 5))
+        .Concat(new[] { "statueStateGruzMother", "statueStateVengefly", "statueStateBroodingMawlek", "statueStateFalseKnight", "statueStateFailedChampion", "statueStateHornet1", "statueStateHornet2", "statueStateMegaMossCharger", "statueStateMantisLords", "statueStateOblobbles", "statueStateGreyPrince", "statueStateBrokenVessel", "statueStateLostKin", "statueStateNosk", "statueStateFlukemarm", "statueStateCollector", "statueStateWatcherKnights", "statueStateSoulMaster", "statueStateSoulTyrant", "statueStateGodTamer", "statueStateCrystalGuardian1", "statueStateCrystalGuardian2", "statueStateUumuu", "statueStateDungDefender", "statueStateWhiteDefender", "statueStateHiveKnight", "statueStateTraitorLord", "statueStateGrimm", "statueStateNightmareGrimm", "statueStateHollowKnight", "statueStateElderHu", "statueStateGalien", "statueStateMarkoth", "statueStateMarmu", "statueStateNoEyes", "statueStateXero", "statueStateGorb", "statueStateRadiance", "statueStateSly", "statueStateNailmasters", "statueStateMageKnight", "statueStatePaintmaster", "statueStateZote", "statueStateNoskHornet", "statueStateMantisLordsExtra" })
+        .ToArray();
+
     /// <summary>Campos de <see cref="PlayerData"/> que son del personaje.</summary>
     private static readonly string[] FieldNames = new[] {
             "playTime",
@@ -102,6 +119,7 @@ internal static class CharacterData {
             "placedMarkers_y", "placedMarkers_w"
         }
         .Concat(AbilityFields)
+        .Concat(SharedUntil026)
         .Concat(Numbered("equippedCharm_", 1, 40))
         .Concat(Numbered("gotCharm_", 1, 40))
         .Concat(Numbered("newCharm_", 1, 40))
@@ -132,7 +150,7 @@ internal static class CharacterData {
     /// Campos que fueron del mundo hasta la 0.23.0 (las habilidades): un personaje guardado sin ellos se queda con los del
     /// mundo (lo que ya tenía, porque se compartía) y no con los de una partida nueva.
     /// </summary>
-    private static readonly HashSet<string> WasShared = new(AbilityFields);
+    private static readonly HashSet<string> WasShared = new(AbilityFields.Concat(SharedUntil026));
 
     /// <summary>Campos que se toman del host para un personaje nuevo: empieza donde reaparece el host.</summary>
     private static readonly string[] FromHostForNew = {
@@ -142,7 +160,7 @@ internal static class CharacterData {
 
     private static readonly Dictionary<string, FieldInfo> Fields = BuildFields();
 
-    private static JsonSerializer Serializer => JsonSerializer.Create(WorldStore.SaveSettings);
+    private static JsonSerializer Serializer => JsonSerializer.Create(WorldStore.NetworkSettings);
 
     private static Dictionary<string, FieldInfo> BuildFields() {
         var fields = new Dictionary<string, FieldInfo>();

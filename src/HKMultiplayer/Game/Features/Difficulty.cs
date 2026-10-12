@@ -41,7 +41,7 @@ internal static class Difficulty {
 
     private static float ScaledMultiplier(HealthManager enemy, int damage, float hitMultiplier, float healthMultiplier) {
         if (Carry.Count > 256) {
-            Carry.Clear();
+            Prune(Carry);
         }
 
         Carry.TryGetValue(enemy, out var carry);
@@ -52,6 +52,35 @@ internal static class Difficulty {
         // El juego hace RoundToInt(daño × multiplicador): con este multiplicador sale justo "whole"
         return (float) whole / damage;
     }
+
+    /// <summary>
+    /// Daño que no pasa por TakeDamage (nubes de Spore Shroom y Defender's Crest, moscas de Flukenest) con la vida extra:
+    /// antes esos golpes quitaban lo mismo con o sin ella.
+    /// </summary>
+    public static int ScaleDamage(HealthManager enemy, int damage) {
+        var multiplier = enemy != null ? Multiplier(enemy) : 1f;
+        if (damage <= 0 || multiplier <= 0f || Mathf.Approximately(multiplier, 1f)) {
+            return damage;
+        }
+
+        return Mathf.RoundToInt(damage * ScaledMultiplier(enemy, damage, 1f, multiplier));
+    }
+
+    /// <summary>Quita las entradas de enemigos ya destruidos (vaciarlo entero cambiaba a mitad del combate lo decidido).</summary>
+    private static void Prune<T>(Dictionary<HealthManager, T> map) {
+        PruneScratch.Clear();
+        foreach (var key in map.Keys) {
+            if (key == null) {
+                PruneScratch.Add(key);
+            }
+        }
+
+        foreach (var key in PruneScratch) {
+            map.Remove(key);
+        }
+    }
+
+    private static readonly List<HealthManager> PruneScratch = new();
 
     /// <summary>Vida con la que aparece un jefe que no tiene estatua: ningún enemigo normal llega.</summary>
     private const int BossStartHealth = 300;
@@ -73,8 +102,10 @@ internal static class Difficulty {
             return boss;
         }
 
+        // Solo se quitan los destruidos: vaciarlo entero hacía juzgar de nuevo a un jefe vivo por su vida de ese momento, y
+        // por debajo de 300 pasaba a "enemigo" y perdía la vida extra a mitad del combate
         if (BossCache.Count > 1024) {
-            BossCache.Clear();
+            Prune(BossCache);
         }
 
         boss = UnlockBossSceneField?.GetValue(health) as Object != null || health.hp >= BossStartHealth;

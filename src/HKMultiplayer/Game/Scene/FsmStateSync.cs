@@ -215,6 +215,12 @@ internal sealed class FsmStateSync {
         // Encuentro con diálogo: quién terminó de leer el de ahora (el controlador espera a todos)
         public bool Encounter;
         public bool LocalConvoDone;
+
+        /// <summary>
+        /// En una copia: el estado de diálogo que este jugador ya cerró (su CONVO_FINISH se avisó al controlador y no se
+        /// atendió aquí). Si el controlador se va antes de seguir, este PC lo es y sigue desde ahí.
+        /// </summary>
+        public string ConvoClosedIn;
         public readonly HashSet<ushort> ConvoDone = new();
         public bool WaitingConvo;
         public float WaitingSince;
@@ -514,6 +520,19 @@ internal sealed class FsmStateSync {
                 // hay quien lo controle aquí (al entrar, su pose llega en un segundo)
                 if (item.Controller != _session.LocalId && now - _scannedAt >= ClaimGrace) {
                     TakeControl(item, "no está quien lo controlaba");
+                }
+
+                // Este jugador ya había cerrado el diálogo en el que se quedó: antes se perdía (en la copia no se atiende
+                // y el nuevo controlador no tenía nada retenido) y el encuentro se quedaba en el diálogo sin control
+                if (item.ConvoClosedIn != null) {
+                    if (item.ConvoClosedIn == item.Fsm.ActiveStateName && !item.WaitingConvo) {
+                        item.LocalConvoDone = true;
+                        item.WaitingConvo = true;
+                        item.WaitingSince = now;
+                        Log.Info($"{item.Fsm.gameObject.name}: el diálogo ya estaba cerrado aquí; sigue cuando terminen los demás");
+                    }
+
+                    item.ConvoClosedIn = null;
                 }
 
                 anyControlled = true;
@@ -894,7 +913,7 @@ internal sealed class FsmStateSync {
     private static uint FsmId(PlayMakerFSM fsm) {
         var transform = fsm.transform;
         var cloned = transform.parent == null && transform.name.EndsWith("(Clone)", StringComparison.Ordinal);
-        return (cloned ? EnemySync.PlacedId(transform) : ScenePaths.Hash(transform)) ^ (uint) fsm.FsmName.GetHashCode();
+        return (cloned ? EnemySync.PlacedId(transform) : ScenePaths.StableHash(transform)) ^ (uint) fsm.FsmName.GetHashCode();
     }
 
     /// <summary>
@@ -1077,13 +1096,19 @@ internal sealed class FsmStateSync {
         return !item.BeforeChallenge.Contains(state);
     }
 
+    private static readonly List<PlayMakerFSM> ChallengeScratch = new();
+
     /// <summary>
     /// Un combate de batalla empezó en otro PC: el cartel para desafiar (Señores Mantis) se apaga también aquí, como
     /// hace el juego en el PC que lo aceptó (le quita la colisión y esconde la flecha). Si no, este jugador podría
     /// desafiar otra vez a mitad del combate y su caballero se quedaría sin control.
     /// </summary>
     private static void CloseChallengePrompts() {
-        foreach (var fsm in PlayMakerFSM.FsmList) {
+        // Sobre una copia: mandar DOWN o cambiar estados puede encender o apagar FSM, que cambia la lista (PlayMaker
+        // también la copia antes de recorrerla) y el bucle fallaba con el estado del combate ya apuntado
+        ChallengeScratch.Clear();
+        ChallengeScratch.AddRange(PlayMakerFSM.FsmList);
+        foreach (var fsm in ChallengeScratch) {
             if (fsm == null || fsm.FsmName != ChallengeFsm) {
                 continue;
             }
@@ -1344,6 +1369,7 @@ internal sealed class FsmStateSync {
     /// </summary>
     private bool OnConvoFinish(Tracked item) {
         if (!IsController(item)) {
+            item.ConvoClosedIn = item.Fsm.ActiveStateName;
             if (_session.CanSend) {
                 var writer = _session.Begin(ConvoDone);
                 writer.WriteUShort(_sceneHash);

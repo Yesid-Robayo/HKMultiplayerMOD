@@ -24,7 +24,14 @@ internal enum PlayerStatus : byte {
     /// Viajando en ciervo: la sala del viaje (<c>Cinematic_Stag_travel</c>) no es de juego ni de ninguna zona del mapa, así
     /// que su sala y su zona no dicen nada (el HUD de los demás ponía "en None").
     /// </summary>
-    StagTravel = 4
+    StagTravel = 4,
+
+    /// <summary>
+    /// Entrando en la partida: cargando el mundo, viendo la introducción o en el menú. Antes contaba como "en pie": si
+    /// alguien moría mientras un invitado nuevo veía la introducción (1-2 minutos), caía en vez de morir y seguía a quien
+    /// no estaba.
+    /// </summary>
+    Joining = 5
 }
 
 /// <summary>
@@ -125,7 +132,7 @@ internal sealed class PartyState {
         (member.Status == PlayerStatus.Downed || member.Paused);
 
     /// <summary>Jugadores conocidos (incluido el local).</summary>
-    public IReadOnlyList<Member> Members => _list;
+    public List<Member> Members => _list;
 
     public Member Get(ushort id) => _members.TryGetValue(id, out var member) ? member : null;
 
@@ -263,7 +270,7 @@ internal sealed class PartyState {
     private void OnActivity(SessionPlayer from, PacketReader reader) {
         var activity = (PlayerStatus) reader.ReadByte();
         var paused = reader.ReadBool();
-        if (_session == null || !_session.IsHost || activity == PlayerStatus.Downed || activity > PlayerStatus.StagTravel ||
+        if (_session == null || !_session.IsHost || activity == PlayerStatus.Downed || activity > PlayerStatus.Joining ||
             !_members.TryGetValue(from.Id, out var member)) {
             return;
         }
@@ -348,6 +355,7 @@ internal sealed class PartyState {
         PlayerStatus.Cutscene => "en una cinemática",
         PlayerStatus.Dream => "en un sueño",
         PlayerStatus.StagTravel => "viajando en ciervo",
+        PlayerStatus.Joining => "entrando en la partida",
         _ => "en pie"
     };
 

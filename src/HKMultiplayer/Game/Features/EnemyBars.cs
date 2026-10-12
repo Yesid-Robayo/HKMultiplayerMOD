@@ -115,18 +115,21 @@ internal sealed class EnemyBars {
 
     /// <summary>Llamar en LateUpdate.</summary>
     public void Update(string scene) {
-        var gm = GameManager.instance;
-        var camera = GameCameras.instance != null ? GameCameras.instance.mainCamera : null;
-        if (scene.Length == 0 || gm == null || gm.isPaused || camera == null || !HostSettings.Current.ShowEnemyBars ||
-            gm.gameState != GlobalEnums.GameState.PLAYING) {
-            SetVisible(false);
-            return;
-        }
-
+        // Los destruidos se quitan siempre: antes solo con las barras visibles (apagadas por defecto) y la lista crecía con
+        // cada enemigo de cada sala durante toda la partida
         for (var i = _tracked.Count - 1; i >= 0; i--) {
             if (_tracked[i].Health == null) {
                 _tracked.RemoveAt(i);
             }
+        }
+
+        var gm = GameManager.instance;
+        var camera = GameCameras.instance != null ? GameCameras.instance.mainCamera : null;
+        if (scene.Length == 0 || gm == null || gm.isPaused || camera == null || !HostSettings.Current.ShowEnemyBars ||
+            UI.HudCanvas.GameHudHidden() ||
+            gm.gameState != GlobalEnums.GameState.PLAYING) {
+            SetVisible(false);
+            return;
         }
 
         if (_root == null) {

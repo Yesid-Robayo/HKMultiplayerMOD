@@ -23,6 +23,10 @@ fail() { echo "package.sh: $*" >&2; exit 1; }
 
 VERSION="$(grep -oE 'const string Version = "[^"]+"' "$ROOT/src/$MOD_NAME/${MOD_NAME}Mod.cs" | cut -d'"' -f2)"
 [ -n "$VERSION" ] || fail "no se encontró la versión en src/$MOD_NAME/${MOD_NAME}Mod.cs"
+# El instalador lee la versión instalada del archivo (AssemblyVersion): si no coincide, diría otra versión
+ASSEMBLY_VERSION="$(grep -oE '<AssemblyVersion>[^<]+' "$ROOT/src/$MOD_NAME/$MOD_NAME.csproj" | cut -d'>' -f2)"
+[ "$ASSEMBLY_VERSION" = "$VERSION.0" ] || [ "$ASSEMBLY_VERSION" = "$VERSION" ] ||
+  fail "la versión del código ($VERSION) y la del .csproj ($ASSEMBLY_VERSION) no coinciden"
 NAME="$MOD_NAME-$VERSION"
 PACKAGE_DIR="$ROOT/out/package"
 STAGE="$PACKAGE_DIR/$NAME"

@@ -74,8 +74,14 @@ public sealed class GameSession : INetListener, IDisposable {
 
     public SessionPlayer LocalPlayer => _players.TryGetValue(LocalId, out var player) ? player : null;
 
-    /// <summary>Todos los jugadores, incluido el local.</summary>
-    public IEnumerable<SessionPlayer> Players => _players.Values;
+    /// <summary>
+    /// Todos los jugadores, incluido el local. Con el tipo de la colección (no IEnumerable): su enumerador es un struct y
+    /// recorrerla no crea memoria (se recorre por enemigo y frame).
+    /// </summary>
+    public Dictionary<ushort, SessionPlayer>.ValueCollection Players => _players.Values;
+
+    /// <summary>El jugador con ese número, si está.</summary>
+    public bool TryGetPlayer(ushort id, out SessionPlayer player) => _players.TryGetValue(id, out player);
 
     /// <summary>Código de la partida (solo el host).</summary>
     public string RoomCode { get; }
@@ -219,8 +225,9 @@ public sealed class GameSession : INetListener, IDisposable {
             return _localWriter;
         }
 
+        // Se dejan 2 bytes: el host añade quién lo envía al reenviarlo. Sin ellos, uno de 998-999 bytes no cabía allí
         var connection = _client.Connection;
-        var writer = MessageRoutes.IsReliable(_localType) ? connection.BeginReliable() : connection.BeginUnreliable();
+        var writer = MessageRoutes.IsReliable(_localType) ? connection.BeginReliable(2) : connection.BeginUnreliable(2);
         writer.WriteByte(_localType);
         return writer;
     }
@@ -399,11 +406,19 @@ public sealed class GameSession : INetListener, IDisposable {
                 }
 
                 var connection = target.Connection;
-                var writer = reliable ? connection.BeginReliable() : connection.BeginUnreliable();
-                writer.WriteByte(type);
-                writer.WriteUShort(from.Id);
-                writer.WriteBytes(buffer, offset, length);
-                connection.EndMessage();
+                try {
+                    var writer = reliable ? connection.BeginReliable() : connection.BeginUnreliable();
+                    writer.WriteByte(type);
+                    writer.WriteUShort(from.Id);
+                    writer.WriteBytes(buffer, offset, length);
+                    connection.EndMessage();
+                } catch (Exception e) when (e is not PacketException) {
+                    // No cabe o falla al escribirlo: se descarta este, no se deja la conexión a medio escribir
+                    connection.CancelMessage();
+                    if (++_relayErrors <= 20 || _relayErrors % 500 == 0) {
+                        _log($"No se pudo reenviar el mensaje {type} de {from.Name} a {target.Name} (van {_relayErrors}): {e.Message}");
+                    }
+                }
             }
         } finally {
             _depth--;

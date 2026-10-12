@@ -64,6 +64,14 @@ function Invoke-Uninstall([string]$game) {
             }
             'replaced' {
                 $copy = Join-Path (Join-Path $backupDir 'files') ($parts[1] -replace '/', '\')
+                # Un ensamblado que ya no es el de la Modding API lo volvió a poner Steam (actualización o "Verificar
+                # integridad") y es más nuevo que la copia: se deja. Si no, volvía uno de una versión anterior del juego
+                if ((Test-Path -LiteralPath $target) -and (Test-Path -LiteralPath $copy) -and -not (Test-Modded $copy) -and
+                    -not (Test-Modded $target) -and (Get-Sha256 $target) -ne (Get-Sha256 $copy)) {
+                    Write-Note (L "Se deja $($parts[1]): el juego lo cambió después de instalar (es su versión original más nueva)." `
+                            "$($parts[1]) is kept: the game changed it after the install (it's its newer original version).")
+                    continue
+                }
                 if (Test-Path -LiteralPath $copy) {
                     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
                     Copy-Item -LiteralPath $copy -Destination $target -Force

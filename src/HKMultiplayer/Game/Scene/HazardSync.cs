@@ -214,17 +214,13 @@ internal sealed class HazardSync {
     private void Scan() {
         var hero = HeroController.instance;
         foreach (var animator in Object.FindObjectsByType<Animator>(FindObjectsSortMode.None)) {
-            if (_hazards.Count >= MaxHazards) {
-                break;
-            }
-
             var transform = animator.transform;
             if (animator.gameObject.scene.buildIndex < 0 || EnemySync.IsEnemyObject(transform) ||
                 hero != null && transform.IsChildOf(hero.transform) || !Touchable(animator)) {
                 continue;
             }
 
-            var id = ScenePaths.Hash(transform);
+            var id = ScenePaths.StableHash(transform);
             if (_byId.ContainsKey(id)) {
                 continue;
             }
@@ -233,9 +229,20 @@ internal sealed class HazardSync {
             _byId[id] = animator;
         }
 
+        // Si hay más de los que caben, los mismos en todos los PCs (FindObjectsByType no da un orden fijo: con más de
+        // MaxHazards cada PC se quedaba con otros)
+        if (_hazards.Count > MaxHazards) {
+            _hazards.Sort((a, b) => a.Item1.CompareTo(b.Item1));
+            for (var i = MaxHazards; i < _hazards.Count; i++) {
+                _byId.Remove(_hazards[i].Item1);
+            }
+
+            _hazards.RemoveRange(MaxHazards, _hazards.Count - MaxHazards);
+        }
+
         foreach (var fsm in Object.FindObjectsByType<PlayMakerFSM>(FindObjectsSortMode.None)) {
             if (fsm.FsmName == DriftFsm && fsm.gameObject.scene.buildIndex >= 0 && _drifters.Count < MaxHazards) {
-                var driftId = ScenePaths.Hash(fsm.transform);
+                var driftId = ScenePaths.StableHash(fsm.transform);
                 if (!_drifterById.ContainsKey(driftId)) {
                     var drifter = new Drifter {
                         Id = driftId, Fsm = fsm, Transform = fsm.transform, Body = fsm.GetComponent<Rigidbody2D>()
@@ -252,7 +259,7 @@ internal sealed class HazardSync {
                 continue;
             }
 
-            var id = ScenePaths.Hash(fsm.transform);
+            var id = ScenePaths.StableHash(fsm.transform);
             if (_cyclicById.ContainsKey(id)) {
                 continue;
             }
@@ -266,7 +273,7 @@ internal sealed class HazardSync {
                 continue;
             }
 
-            var id = ScenePaths.Hash(centipede.transform);
+            var id = ScenePaths.StableHash(centipede.transform);
             if (_burrowerById.ContainsKey(id)) {
                 continue;
             }
@@ -305,7 +312,11 @@ internal sealed class HazardSync {
         var countPosition = 0;
         var count = 0;
         foreach (var (id, animator) in _hazards) {
-            if (animator == null || !animator.isActiveAndEnabled) {
+            // Solo las que van en bucle (sierras, paredes de pinchos): una que se reproduce una vez y ya acabó tiene el
+            // tiempo pasado de 1 y su parte decimal casi nunca coincide, así que el otro PC la volvía a empezar cada
+            // segundo (con sus eventos y lo que encienda); y las de cada PC (plataformas de sueño que aparecen según el
+            // caballero local) se forzaban al estado del otro
+            if (animator == null || !animator.isActiveAndEnabled || !animator.GetCurrentAnimatorStateInfo(0).loop) {
                 continue;
             }
 
@@ -560,13 +571,16 @@ internal sealed class HazardSync {
                 continue;
             }
 
+            // Solo se alinea el mismo bucle: otro estado aquí es de este PC (no se fuerza el del otro)
             var local = animator.GetCurrentAnimatorStateInfo(0);
+            if (local.fullPathHash != stateHash || !local.loop) {
+                continue;
+            }
+
             var expected = Mathf.Repeat(time + delay / Mathf.Max(local.length, 0.01f), 1f);
-            if (local.fullPathHash == stateHash) {
-                var difference = Mathf.Repeat(local.normalizedTime - expected + 0.5f, 1f) - 0.5f;
-                if (Mathf.Abs(difference) <= Tolerance) {
-                    continue;
-                }
+            var difference = Mathf.Repeat(local.normalizedTime - expected + 0.5f, 1f) - 0.5f;
+            if (Mathf.Abs(difference) <= Tolerance) {
+                continue;
             }
 
             animator.Play(stateHash, 0, expected);

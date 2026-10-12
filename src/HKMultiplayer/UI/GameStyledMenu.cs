@@ -121,14 +121,25 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         SelectFirst();
     }
 
+    /// <summary>
+    /// El que se resalta al mostrar la página: uno que se pueda usar, y mejor que no sea un campo de texto. Las opciones de
+    /// solo lectura (los ajustes del host en el invitado) no responden ni a subir o bajar (`MenuOptionHorizontal.OnMove`
+    /// no hace nada si no es interactiva): resaltada una, con mando o teclado solo se podía volver atrás. Un campo de texto
+    /// resaltado al abrir se come Aceptar y no tiene Cancelar.
+    /// </summary>
     private Selectable FirstSelectable(int page) {
-        if (_firstSelectable.TryGetValue(page, out var first) && first != null && first.gameObject.activeInHierarchy) {
+        if (_firstSelectable.TryGetValue(page, out var first) && first != null && first.gameObject.activeInHierarchy &&
+            first.IsInteractable()) {
             return first;
         }
 
-        return _pages.TryGetValue(page, out var pageObject)
-            ? pageObject.GetComponentsInChildren<Selectable>(false).FirstOrDefault()
-            : null;
+        if (!_pages.TryGetValue(page, out var pageObject)) {
+            return null;
+        }
+
+        var all = pageObject.GetComponentsInChildren<Selectable>(false);
+        return all.FirstOrDefault(s => s.IsInteractable() && s is not InputField) ??
+               all.FirstOrDefault(s => s.IsInteractable()) ?? all.FirstOrDefault();
     }
 
     protected void SelectFirst() {
@@ -293,7 +304,24 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         colors.highlightedColor = new Color(1.3f, 1.3f, 1.3f);
         colors.selectedColor = new Color(1.5f, 1.5f, 1.5f);
         input.colors = colors;
+        // Cancelar (B o Esc) sobre el campo vuelve atrás, como en los botones (InputField no lo atiende)
+        fieldObject.AddComponent<CancelToBack>().Back = OnBack;
         return input;
+    }
+
+    /// <summary>Lleva Cancelar de un campo de texto a la vuelta atrás del menú.</summary>
+    private sealed class CancelToBack : MonoBehaviour, ICancelHandler {
+        public Action Back;
+
+        public void OnCancel(BaseEventData eventData) {
+            var input = GetComponent<InputField>();
+            if (input != null && input.isFocused) {
+                input.DeactivateInputField();
+                return;
+            }
+
+            Back?.Invoke();
+        }
     }
 
     /// <summary>Opciones del mod y qué hacer al cambiarlas (con las flechas, el ratón o "aceptar").</summary>

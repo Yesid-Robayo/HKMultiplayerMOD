@@ -15,7 +15,7 @@ function L([string]$spanish, [string]$english) { if ($Spanish) { return $spanish
 
 function Get-PackageVersion {
     $file = Join-Path $PSScriptRoot 'version.txt'
-    if (Test-Path $file) { return (Get-Content $file -TotalCount 1).Trim() }
+    if (Test-Path -LiteralPath $file) { return (Get-Content -LiteralPath $file -TotalCount 1).Trim() }
     return ''
 }
 
@@ -74,7 +74,7 @@ function Get-SteamLibraries {
         $libraries.Add($root)
         $vdf = Join-Path $root 'steamapps\libraryfolders.vdf'
         if (Test-Path -LiteralPath $vdf) {
-            foreach ($line in Get-Content -LiteralPath $vdf) {
+            foreach ($line in Get-Content -LiteralPath $vdf -Encoding UTF8) {
                 if ($line -match '"path"\s+"([^"]+)"') { $libraries.Add(($Matches[1] -replace '\\\\', '\')) }
             }
         }
@@ -161,6 +161,28 @@ function Assert-GameClosed([string]$gameDir) {
 
 function Join-Game([string]$gameDir, [string]$relative) { return Join-Path $gameDir ($relative -replace '/', '\') }
 
+# Si un ensamblado lo parcheó la Modding API: los parcheados nombran ModHooks y los del juego original no. Así se sabe si
+# un archivo que el instalador cambió sigue siendo el suyo o si Steam lo volvió a poner (al actualizar el juego o
+# "Verificar integridad"), sin depender de huellas apuntadas (los manifiestos antiguos no las tienen).
+function Test-Modded([string]$file) {
+    if (-not (Test-Path -LiteralPath $file)) { return $false }
+    $text = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($file))
+    return $text.Contains('ModHooks')
+}
+
+# Versión del juego para la que es la Modding API del paquete
+$GameVersion = '1.5.12620'
+
+# Si el Assembly-CSharp.dll es de esa versión (la constante va en UTF-16; se busca con las dos alineaciones posibles)
+function Test-GameVersion([string]$file) {
+    $bytes = [System.IO.File]::ReadAllBytes($file)
+    $even = [System.Text.Encoding]::Unicode.GetString($bytes)
+    $odd = [System.Text.Encoding]::Unicode.GetString($bytes, 1, $bytes.Length - 1)
+    return $even.Contains($GameVersion) -or $odd.Contains($GameVersion)
+}
+
+function Get-Sha256([string]$file) { return (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLower() }
+
 # Versión del mod instalada en esa carpeta (vacío si no está)
 function Get-InstalledVersion([string]$gameDir) {
     $dll = Join-Game $gameDir "$ModsRelative/$ModName/$ModName.dll"
@@ -175,8 +197,8 @@ function Get-ErrorText($errorRecord) {
     $exception = $errorRecord.Exception
     while ($exception.InnerException) { $exception = $exception.InnerException }
     if ($exception -is [System.UnauthorizedAccessException]) {
-        return (L "Windows no deja escribir en la carpeta del juego. Cierra el instalador, haz clic derecho en el .bat y elige 'Ejecutar como administrador'. ($($exception.Message))" `
-                "Windows won't let the installer write to the game folder. Close the installer, right-click the .bat and choose 'Run as administrator'. ($($exception.Message))")
+        return (L "Windows no deja escribir en la carpeta del juego. Cierra el instalador, haz clic derecho en 'HKMultiplayer Setup.exe' y elige 'Ejecutar como administrador'. ($($exception.Message))" `
+                "Windows won't let the installer write to the game folder. Close the installer, right-click 'HKMultiplayer Setup.exe' and choose 'Run as administrator'. ($($exception.Message))")
     }
     if ($exception -is [System.IO.IOException] -and $exception.Message -match 'proceso|process') {
         return (L "Un archivo del juego está en uso. Cierra Hollow Knight (y Steam si sigue bloqueado) y vuelve a probar. ($($exception.Message))" `

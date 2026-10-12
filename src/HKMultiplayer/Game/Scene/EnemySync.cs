@@ -32,6 +32,13 @@ internal sealed class EnemySync {
     public const MessageType EnemyHit = (MessageType) 44;
     public const MessageType EnemyHealth = (MessageType) 45;
 
+    /// <summary>
+    /// Daño a una marioneta que no pasa por <c>HealthManager.Hit</c> (marioneta → sala; lo aplica quien la mueve): nubes de
+    /// Spore Shroom y Defender's Crest (<c>ApplyExtraDamage</c>), moscas de Flukenest (<c>SpellFluke.DoDamage</c>) y muertes
+    /// directas (<c>KillOnContact</c>, plataformas de liana que caen encima).
+    /// </summary>
+    public const MessageType EnemyDamage = (MessageType) 108;
+
     /// <summary>Un enemigo real recibió un golpe (dueño → sala): los demás ven el impacto, el destello y oyen el golpe.</summary>
     public const MessageType EnemyHitFx = (MessageType) 61;
 
@@ -70,6 +77,13 @@ internal sealed class EnemySync {
 
     /// <summary>Aviso con el que el HealthManager dice a la lógica de un enemigo que su vida llegó a cero.</summary>
     private const string ZeroHpEvent = "ZERO HP";
+
+    /// <summary>Lo que se espera tras ZERO HP para ver si la vida vuelve a subir (cambio de fase).</summary>
+    private const float ZeroHpPhaseSeconds = 0.5f;
+
+    /// <summary>Estados de muerte de la lógica de un jefe (la del Falso Caballero: Death Land, Death Open..., Cough).</summary>
+    private static bool IsDeathState(string name) =>
+        name.StartsWith("Death", StringComparison.Ordinal) || name == "Cough";
 
     /// <summary>Piezas que se mueven aparte (hijos con animación o que dañan) (dueño → sala, no fiable).</summary>
     public const MessageType EnemyParts = (MessageType) 68;
@@ -293,6 +307,9 @@ internal sealed class EnemySync {
         /// <summary>Avisos reenviados a este PC que llegaron cuando aún no lo movía (se atienden al tomarlo).</summary>
         public List<(byte Fsm, string Event, float At)> PendingEvents;
 
+        /// <summary>Golpes de otros que llegaron mientras este PC esperaba el traspaso para tomarlo.</summary>
+        public List<(HitInstance Hit, ushort From, float At)> PendingHits;
+
         public readonly List<Behaviour> Disabled = new();
 
         /// <summary>Desde qué FSM de la lista son de las trampas de la sala que dispara (0: ninguna).</summary>
@@ -312,8 +329,21 @@ internal sealed class EnemySync {
         /// </summary>
         public List<PlayMakerFSM> Detached;
 
-        /// <summary>Su lógica recibió y atendió ZERO HP en este PC (su muerte va por ella, no por HealthManager.Die).</summary>
+        /// <summary>
+        /// Su lógica recibió y atendió ZERO HP en este PC (su muerte va por ella, no por HealthManager.Die). Se quita si la
+        /// vida vuelve a subir de 0: era un cambio de fase (el Falso Caballero en cada armadura rota, Sly, Oro y Mato con
+        /// `SetHP`). Antes no se quitaba nunca y desde el primer cambio de fase el jefe quedaba "muriendo": no cambiaba de
+        /// PC aunque su jugador cayera y la marioneta repetía sus avisos a todos como si ya hubiera muerto.
+        /// </summary>
         public bool ZeroHp;
+
+        public float ZeroHpAt;
+
+        /// <summary>
+        /// Su lógica entró en un estado de muerte (`Death...`, `Cough`): la del Falso Caballero va por su cabeza y su cuerpo
+        /// nunca queda muerto en su HealthManager. No se quita.
+        /// </summary>
+        public bool DeathState;
 
         /// <summary>El PC que lo mueve avisó de que allí ya murió (sus efectos llegan con su muerte en marcha).</summary>
         public bool DeadThere;
@@ -322,7 +352,7 @@ internal sealed class EnemySync {
         /// Su muerte está en marcha aunque su vida no lo diga: la del Falso Caballero va por su cabeza (otro enemigo) y su
         /// cuerpo nunca queda muerto en su HealthManager.
         /// </summary>
-        public bool Dying => ZeroHp || DeadThere;
+        public bool Dying => ZeroHp || DeadThere || DeathState;
         public RigidbodyType2D BodyType;
         public readonly SnapshotBuffer Buffer = new();
 
@@ -395,6 +425,12 @@ internal sealed class EnemySync {
 
     private sealed class HandoverFsm {
         public ushort State;
+
+        /// <summary>El jefe ya había despertado en el PC que lo soltó.</summary>
+        public bool Awake;
+
+        /// <summary>Cómo iba su `Walker` en el PC que lo soltó (null si no tiene).</summary>
+        public WalkerData? Walker;
         public int[] Ints;
         public float[] Floats;
         public bool[] Bools;
@@ -547,6 +583,7 @@ internal sealed class EnemySync {
     private float _lastRest = -10f;
     private readonly MessageHandler _onStates;
     private readonly MessageHandler _onHit;
+    private readonly MessageHandler _onDamage;
     private readonly MessageHandler _onHealth;
     private readonly MessageHandler _onHitFx;
     private readonly MessageHandler _onSound;
@@ -605,6 +642,7 @@ internal sealed class EnemySync {
         // A la sala: lo aplica el PC que mueve ese enemigo (los demás lo tienen como marioneta)
         MessageRoutes.Register(EnemyHit, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyHealth, Route.SameScene, reliable: true);
+        MessageRoutes.Register(EnemyDamage, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyHitFx, Route.SameScene, reliable: true);
         // Fiable: activar y desactivar objetos de la arena tiene que llegar, y en orden
         MessageRoutes.Register(EnemySound, Route.SameScene, reliable: true);
@@ -624,6 +662,7 @@ internal sealed class EnemySync {
     public EnemySync() {
         _onStates = OnStates;
         _onHit = OnHit;
+        _onDamage = OnDamage;
         _onHealth = OnHealth;
         _onHitFx = OnHitFx;
         _onSound = OnSound;
@@ -649,6 +688,7 @@ internal sealed class EnemySync {
         _players = players;
         session.On(EnemyStates, _onStates);
         session.On(EnemyHit, _onHit);
+        session.On(EnemyDamage, _onDamage);
         session.On(EnemyHealth, _onHealth);
         session.On(EnemyHitFx, _onHitFx);
         session.On(EnemySound, _onSound);
@@ -674,6 +714,7 @@ internal sealed class EnemySync {
         if (_session != null) {
             _session.On(EnemyStates, null);
             _session.On(EnemyHit, null);
+            _session.On(EnemyDamage, null);
             _session.On(EnemyHealth, null);
             _session.On(EnemyHitFx, null);
             _session.On(EnemySound, null);
@@ -690,6 +731,10 @@ internal sealed class EnemySync {
             _session.On(Rested, null);
             _session.PlayerSceneChanged -= _onPlayerScene;
         }
+
+        // Lo creado en otro PC se quita antes: sin marioneta, RemoveSpawnedCopies ya no lo reconocía y los disparos, crías y
+        // bichos de los tarros copiados seguían como objetos de verdad al cerrar la sesión
+        RemoveSpawnedCopies();
 
         // Las marionetas vuelven a funcionar solas
         foreach (var enemy in _enemies) {
@@ -803,6 +848,13 @@ internal sealed class EnemySync {
                     CollectExternalParts(enemy);
                 }
 
+                // Un ZERO HP tras el que la vida volvió a subir era un cambio de fase, no la muerte
+                if (enemy.ZeroHp && !enemy.Puppet && enemy.Health != null && !enemy.Health.isDead && enemy.Health.hp > 0 &&
+                    now - enemy.ZeroHpAt > ZeroHpPhaseSeconds) {
+                    enemy.ZeroHp = false;
+                    Log.Info($"{enemy.Root.name}: ZERO HP era un cambio de fase (vuelve a tener {enemy.Health.hp} de vida)");
+                }
+
                 if (enemy.Spawned) {
                     // Copia de algo creado por quien ya no está en la sala: aquí ya nadie la mueve
                     if (enemy.Puppet && !InScene(enemy.Controller)) {
@@ -825,6 +877,11 @@ internal sealed class EnemySync {
                         !InScene(enemy.PreviousController) || now - enemy.LastSwitch > HandoverTimeout) {
                         TakeOver(enemy);
                     }
+                } else if (local && enemy.HandoverReady) {
+                    // Recién llegado a la sala (sus enemigos aún no son marionetas) y ya se lo dieron: sigue desde como lo
+                    // dejó el anterior. Antes el traspaso se descartaba y seguía con lo recién cargado (un jefe a mitad del
+                    // combate empezaba de nuevo y la marioneta del otro saltaba al sitio del principio)
+                    TakeOver(enemy);
                 } else if (!local && !enemy.Puppet && now - enemy.ScannedAt >= PuppetDelay) {
                     SetPuppet(enemy, true);
                 }
@@ -872,6 +929,13 @@ internal sealed class EnemySync {
                 // se acaba ahí, en vez de seguir y atravesar a este jugador
                 if (!enemy.Puppet || enemy.Root != null && enemy.Root.GetComponent<EnemyBullet>() != null) {
                     SendDespawn(enemy.Id);
+                }
+
+                // Una copia que volvió sola al pool (una bala, `EnemyBullet` se recicla aunque esté apagado) vuelve a estar
+                // como el juego la dejó: si no, la siguiente vez que este PC la sacara para un enemigo suyo salía apagada,
+                // sin gravedad y sin reciclarse
+                if (enemy.Puppet && enemy.Root != null) {
+                    SetPuppet(enemy, false);
                 }
 
                 Forget(enemy);
@@ -1273,7 +1337,7 @@ internal sealed class EnemySync {
                     // Los clonados en la raíz de la sala (los de las jaulas del Coliseo) se llaman igual y Unity les da a
                     // todos el mismo puesto entre hermanos: se distinguen por dónde están al cargarla, igual en todos
                     var cloned = health.transform.parent == null && health.name.EndsWith("(Clone)", StringComparison.Ordinal);
-                    var id = cloned ? CreatorId(health.gameObject) ?? PlacedId(health.transform) : ScenePaths.Hash(health.transform);
+                    var id = cloned ? CreatorId(health.gameObject) ?? PlacedId(health.transform) : ScenePaths.StableHash(health.transform);
                     if (_byId.ContainsKey(id)) {
                         id = PlacedId(health.transform) ^ 0x5bd1e995u;
                         if (_byId.ContainsKey(id)) {
@@ -1316,7 +1380,7 @@ internal sealed class EnemySync {
                     }
 
                     if (path == 0) {
-                        path = ScenePaths.Hash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode();
+                        path = ScenePaths.StableHash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode();
                     }
 
                     var id = (path ^ (uint) variable.Name.GetHashCode() * 16777619u) & ~SpawnedIdFlag;
@@ -1518,7 +1582,7 @@ internal sealed class EnemySync {
 
             var caged = new CagedEnemy {
                 Health = health, Fsm = fsm, Cage = health.transform.parent, RestState = rest,
-                Path = ScenePaths.Hash(health.transform)
+                Path = ScenePaths.StableHash(health.transform)
             };
             _caged[health] = caged;
             if (!_cagedByPath.ContainsKey(caged.Path)) {
@@ -1676,7 +1740,7 @@ internal sealed class EnemySync {
 
         var stateIndex = Array.IndexOf(action.Fsm.States, action.State);
         var actionIndex = action.State != null ? Array.IndexOf(action.State.Actions, action) : -1;
-        var id = ScenePaths.Hash(owner.transform);
+        var id = ScenePaths.StableHash(owner.transform);
         id = (id ^ (uint) action.Fsm.Name.GetHashCode()) * 16777619u;
         id = (id ^ (uint) (stateIndex << 8 | actionIndex & 0xFF)) * 16777619u;
         id &= ~SpawnedIdFlag;
@@ -2072,7 +2136,7 @@ internal sealed class EnemySync {
         // verdad (o con su muerte en marcha por ZERO HP): el Hollow Knight pasa por vida negativa entre fases y sus avisos
         // de entonces son de su combate
         var health = sound.Enemy.Health;
-        writer.WriteBool(sound.Enemy.ZeroHp || health != null && health.isDead);
+        writer.WriteBool(sound.Enemy.ZeroHp || sound.Enemy.DeathState || health != null && health.isDead);
         _session.End();
     }
 
@@ -2282,19 +2346,8 @@ internal sealed class EnemySync {
     private ushort ControllerOf(Enemy enemy, ushort roomOwner) =>
         enemy.Controller != 0 && InScene(enemy.Controller) ? enemy.Controller : roomOwner;
 
-    private bool InScene(ushort playerId) {
-        if (playerId == 0) {
-            return false;
-        }
-
-        foreach (var player in _session.Players) {
-            if (player.Id == playerId) {
-                return player.Scene == _scene;
-            }
-        }
-
-        return false;
-    }
+    private bool InScene(ushort playerId) =>
+        playerId != 0 && _session.TryGetPlayer(playerId, out var player) && player.Scene == _scene;
 
     private bool TryGetPlayerPosition(ushort playerId, out Vector3 position) {
         if (playerId == _session.LocalId) {
@@ -2624,11 +2677,17 @@ internal sealed class EnemySync {
             // fuera de la arena desde la otra pared
             var strings = variables?.StringVariables;
             var stringCount = strings == null ? 0 : Math.Min(strings.Length, MaxHandoverVars);
+            var objectTotal = variables?.GameObjectVariables == null ? 0
+                : Math.Min(variables.GameObjectVariables.Length, MaxHandoverVars);
+            // Lo que va detrás de los textos: objetos (hasta 5 bytes cada uno), física, aspecto, si estaba despierto y su
+            // Walker. Un jefe con muchos textos pasaba del tamaño del mensaje y el envío fallaba dentro del cambio de sala
+            var reserve = 1 + objectTotal * 5 + 1 + 13 + 6 + 14 + 8;
             writer.WriteByte((byte) stringCount);
             for (var v = 0; v < stringCount; v++) {
                 // Uno demasiado largo no va (el otro PC deja el suyo): no son los que eligen lados ni ataques
                 var value = strings[v].Value ?? string.Empty;
-                var fits = System.Text.Encoding.UTF8.GetByteCount(value) <= MaxHandoverString;
+                var size = System.Text.Encoding.UTF8.GetByteCount(value);
+                var fits = size <= MaxHandoverString && writer.Remaining - (size + 3) > reserve;
                 writer.WriteBool(fits);
                 if (fits) {
                     writer.WriteString(value);
@@ -2665,9 +2724,20 @@ internal sealed class EnemySync {
             // los copia con retraso), y si su lógica ya lo soltó de su padre (ver MatchPrevious)
             writer.WriteBool(enemy.Root != null && enemy.Root.activeSelf);
             var now = enemy.Root != null ? Capture(enemy, 0) : default;
-            writer.WriteByte(now.Extra);
+            var look = now.Extra;
+            if (enemy.WaitingWake) {
+                // La invulnerabilidad de la espera para despertar es de este PC: si iba, el que lo toma lo dejaba
+                // invulnerable para siempre (allí no espera y nunca la quita)
+                look = (byte) (enemy.WasInvincible ? look | InvincibleFlag : look & ~InvincibleFlag);
+            }
+
+            writer.WriteByte(look);
             writer.WriteByte(now.Damage);
             writer.WriteBool(enemy.Root != null && enemy.Transform.parent == null);
+            // Si ya despertó: el que lo toma a mitad del combate no apunta su estado de ahora como el de dormido (si no, su
+            // siguiente cambio de estado esperaba a todos y el jefe se paraba invulnerable)
+            writer.WriteBool(enemy.Awake);
+            WriteWalker(writer, enemy);
             _session.End();
         }
     }
@@ -2721,7 +2791,11 @@ internal sealed class EnemySync {
         var look = reader.ReadByte();
         var damage = reader.ReadByte();
         var detached = reader.ReadBool();
-        if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var enemy) || !enemy.Puppet || index >= count) {
+        var awake = reader.ReadBool();
+        var walker = ReadWalker(reader);
+        // También uno que aún no es marioneta porque este PC acaba de entrar en la sala (se toma igual, ver Update)
+        if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var enemy) || index >= count ||
+            !enemy.Puppet && Time.unscaledTime - enemy.ScannedAt > PuppetDelay + 1f) {
             return;
         }
 
@@ -2732,7 +2806,8 @@ internal sealed class EnemySync {
 
         enemy.Handover[index] = new HandoverFsm {
             State = state, Ints = ints, Floats = floats, Bools = bools, Strings = strings, Objects = objects, HasBody = hasBody, Velocity = velocity, Gravity = gravity,
-            BodyType = bodyType, Active = active, Look = look, Damage = damage, Detached = detached, Waited = waited
+            BodyType = bodyType, Active = active, Look = look, Damage = damage, Detached = detached, Waited = waited,
+            Awake = awake, Walker = walker
         };
         if (index == count - 1) {
             enemy.HandoverReady = true;
@@ -2752,6 +2827,7 @@ internal sealed class EnemySync {
         }
 
         ApplyPendingEvents(enemy);
+        ApplyPendingHits(enemy);
     }
 
     /// <summary>Los avisos reenviados que llegaron mientras este PC esperaba a tomarlo: ahora los atiende su lógica.</summary>
@@ -2778,6 +2854,14 @@ internal sealed class EnemySync {
         var handover = enemy.Handover;
         enemy.Handover = null;
         enemy.HandoverReady = false;
+        if (handover != null && Array.Exists(handover, h => h is { Awake: true })) {
+            enemy.Awake = true;
+        }
+
+        if (handover is { Length: > 0 } && handover[0]?.Walker is { } walkerData) {
+            ApplyWalker(enemy, walkerData);
+        }
+
         MatchPrevious(enemy, handover);
         SetPuppet(enemy, false);
         enemy.SendFull = true;
@@ -2858,6 +2942,10 @@ internal sealed class EnemySync {
                 }
 
                 // La espera de ese estado sigue por donde iba allí (si no, cada cambio de PC la empezaba de cero)
+                KeepWaited(fsm.Fsm.ActiveState, data.Waited);
+            } else if (data.State < states.Length) {
+                // Ya estaba en ese estado (parado desde que pasó a marioneta): su espera también va como allí. Antes se
+                // quedaba la de cuando se paró y el arreglo del Rey Vengamosca no valía si los dos estaban en el mismo
                 KeepWaited(fsm.Fsm.ActiveState, data.Waited);
             }
         }
@@ -3245,7 +3333,7 @@ internal sealed class EnemySync {
         }
 
         return target.scene.buildIndex >= 0
-            ? new ObjectRef { Kind = ObjectKind.Scene, Path = ScenePaths.Hash(target.transform) }
+            ? new ObjectRef { Kind = ObjectKind.Scene, Path = ScenePaths.StableHash(target.transform) }
             : default;
     }
 
@@ -3315,7 +3403,7 @@ internal sealed class EnemySync {
                 // Raro (solo variables vacías al retomarlo) y caro: se recorre la sala
                 foreach (var candidate in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include,
                              FindObjectsSortMode.None)) {
-                    if (candidate.gameObject.scene.buildIndex >= 0 && ScenePaths.Hash(candidate) == reference.Path) {
+                    if (candidate.gameObject.scene.buildIndex >= 0 && ScenePaths.StableHash(candidate) == reference.Path) {
                         return candidate.gameObject;
                     }
                 }
@@ -3403,8 +3491,11 @@ internal sealed class EnemySync {
     /// <summary>Apaga un momento las acciones del estado que crean o lanzan objetos.</summary>
     private static void MuteSpawns(HutongGames.PlayMaker.FsmState state) {
         foreach (var action in state.Actions) {
+            // También la variante Vel (lanza en OnEnter: el vómito de los Ogros Hongo, el escupitajo de los zombis, Nosk):
+            // retomado a mitad, se lanzaba otra vez y la segunda ráfaga salía como copias en los demás
             if (action.Enabled && action is HutongGames.PlayMaker.Actions.SpawnObjectFromGlobalPool or
-                    HutongGames.PlayMaker.Actions.CreateObject or HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPool) {
+                    HutongGames.PlayMaker.Actions.CreateObject or HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPool or
+                    HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolVel) {
                 action.Enabled = false;
                 MutedSpawns.Add(action);
             }
@@ -3452,6 +3543,13 @@ internal sealed class EnemySync {
                         set.gameObject.Value.name == name) {
                         return set.gameObject.Value;
                     }
+
+                    // El enemigo que saca un invocador que crea (las mosquitas del Rey Vengamosca)
+                    if (action is HutongGames.PlayMaker.Actions.CreateObject create && create.gameObject?.Value != null &&
+                        create.gameObject.Value.GetComponent<EnemySpawner>() is { enemyPrefab: { } released } &&
+                        released.name == name) {
+                        return released;
+                    }
                 }
             }
         }
@@ -3459,7 +3557,8 @@ internal sealed class EnemySync {
         return null;
     }
 
-    private void OnSpawned(HutongGames.PlayMaker.FsmStateAction action, GameObject spawned, bool pooled) {
+    private void OnSpawned(HutongGames.PlayMaker.FsmStateAction action, GameObject spawned, bool pooled,
+        string prefabName = null) {
         if (_spawningCopy || _takingOver || spawned == null || _session == null || !_session.CanSend ||
             !_enemyFsms.TryGetValue(action.Fsm, out var creator) || creator.Enemy.Puppet || !OthersInScene()) {
             return;
@@ -3493,8 +3592,15 @@ internal sealed class EnemySync {
 
         _pendingSpawns[_pendingSpawnCount++] = new PendingSpawn {
             Object = spawned, CreatorId = creator.Enemy.Id, FsmIndex = creator.Index, StateIndex = (ushort) stateIndex,
-            ActionIndex = (byte) actionIndex, Id = id, Prefab = SpawnPrefab(action)?.name ?? string.Empty
+            ActionIndex = (byte) actionIndex, Id = id, Prefab = prefabName ?? SpawnPrefab(action)?.name ?? string.Empty
         };
+
+        // Un invocador: lo que saque (si su tirada sale) se envía como creado por la misma acción, con el prefab del
+        // enemigo para que el otro PC cree ese y no otro invocador
+        if (gameplay && spawned.GetComponent<EnemySpawner>() is { } spawner && spawner.enemyPrefab != null) {
+            var enemyName = spawner.enemyPrefab.name;
+            spawner.OnEnemySpawned += released => _active?.OnSpawned(action, released, pooled: false, enemyName);
+        }
     }
 
     /// <summary>
@@ -3629,8 +3735,14 @@ internal sealed class EnemySync {
     }
 
     /// <summary>Si lo creado cuenta para el juego: hace daño al tocarlo o se le puede golpear.</summary>
+    /// <summary>
+    /// Lo que crea un enemigo y cuenta para el juego: tiene vida, daña, o es un invocador de enemigos (`EnemySpawner`, el
+    /// `Buzzer Summon` del Rey Vengamosca). El invocador lo creaba cada PC como efecto de la marioneta, cada uno tiraba su
+    /// 75 % y sacaba sus propias mosquitas, que no se compartían.
+    /// </summary>
     private static bool IsGameplay(GameObject spawned) =>
-        spawned.GetComponent<HealthManager>() != null || spawned.GetComponentInChildren<DamageHero>(true) != null;
+        spawned.GetComponent<HealthManager>() != null || spawned.GetComponentInChildren<DamageHero>(true) != null ||
+        spawned.GetComponent<EnemySpawner>() != null;
 
     private Enemy Track(GameObject root, uint id, bool pooled, bool puppet, ushort controller) {
         var health = root.GetComponent<HealthManager>();
@@ -3742,6 +3854,21 @@ internal sealed class EnemySync {
                 break;
             case HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolVel flingVel:
                 prefab = flingVel.gameObject.Value;
+                pooled = true;
+                store = null;
+                break;
+            case HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolTime flingTime:
+                prefab = flingTime.gameObject.Value;
+                pooled = true;
+                store = null;
+                break;
+            case HutongGames.PlayMaker.Actions.SpawnObjectFromGlobalPoolOverTime overTime:
+                prefab = overTime.gameObject.Value;
+                pooled = true;
+                store = null;
+                break;
+            case HutongGames.PlayMaker.Actions.SpawnObjectFromGlobalPoolOverTimeV2 overTimeV2:
+                prefab = overTimeV2.gameObject.Value;
                 pooled = true;
                 store = null;
                 break;
@@ -4203,14 +4330,18 @@ internal sealed class EnemySync {
                 hero != null && owner.transform.IsChildOf(hero.transform) ||
                 // Las trampas que dispara con un aviso a todos; o lo que, avisado por él, crea cosas que dañan (cada PC
                 // las crearía al azar en otro sitio: los barriles caían distintos en cada uno)
-                !(owner.GetComponentInChildren<DamageHero>(true) != null && events != null && Listens(fsm, events) ||
+                // También lo que escucha un aviso a todos y crea cosas que dañan sin dañar él mismo: `Barb Region` de Hornet en
+                // los Bordes del Reino (SPAWN3) crea las púas; sin esto, en el PC que la mueve no se seguían y en los demás no
+                // había (el aviso de un jefe vivo no se repite)
+                !(events != null && Listens(fsm, events) &&
+                  (owner.GetComponentInChildren<DamageHero>(true) != null || SpawnsGameplay(fsm)) ||
                   direct != null && direct.Contains(owner) && SpawnsGameplay(fsm)) ||
                 // No los controladores de combate (el del Coliseo contiene enemigos; ya los lleva un PC para todos)
                 owner.GetComponentsInChildren<HealthManager>(true).Length > 0 || FsmStateSync.IsSharedController(fsm.Fsm)) {
                 continue;
             }
 
-            (found ??= new List<(uint, PlayMakerFSM)>()).Add((ScenePaths.Hash(owner.transform), fsm));
+            (found ??= new List<(uint, PlayMakerFSM)>()).Add((ScenePaths.StableHash(owner.transform), fsm));
         }
 
         if (found == null) {
@@ -4649,7 +4780,7 @@ internal sealed class EnemySync {
                         continue;
                     }
 
-                    linked.Add(new Linked { Object = target, Path = ScenePaths.Hash(target.transform), Active = target.activeSelf });
+                    linked.Add(new Linked { Object = target, Path = ScenePaths.StableHash(target.transform), Active = target.activeSelf });
                     if (linked.Count == MaxLinked) {
                         break;
                     }
@@ -4844,6 +4975,79 @@ internal sealed class EnemySync {
                 enemy.LastHp = enemy.Health.hp;
                 enemy.ReportedDead = enemy.Health.isDead;
             }
+        }
+    }
+
+    // ---- Walker ----
+
+    /// <summary>
+    /// Lo que guarda el componente `Walker` (lo usan los enemigos que andan con las acciones StartWalker, StopWalker y
+    /// SetWalkerFacing: centinelas de la Ciudad, Husk...). Va en el traspaso: apagado en la marioneta, al retomarlo seguía
+    /// con lo que tenía antes de serlo (andaba de espaldas, giraba de golpe o andaba cuando su FSM lo había parado), y su
+    /// `Update` pone la velocidad según `currentFacing` cada frame.
+    /// </summary>
+    private struct WalkerData {
+        public byte State;
+        public byte StopReason;
+        public sbyte Facing;
+        public sbyte TurningFacing;
+        public float WalkTime;
+        public float PauseTime;
+    }
+
+    private static readonly System.Reflection.FieldInfo WalkerStateField = WalkerField("state");
+    private static readonly System.Reflection.FieldInfo WalkerStopField = WalkerField("stopReason");
+    private static readonly System.Reflection.FieldInfo WalkerFacingField = WalkerField("currentFacing");
+    private static readonly System.Reflection.FieldInfo WalkerTurningField = WalkerField("turningFacing");
+    private static readonly System.Reflection.FieldInfo WalkerWalkTimeField = WalkerField("walkTimeRemaining");
+    private static readonly System.Reflection.FieldInfo WalkerPauseTimeField = WalkerField("pauseTimeRemaining");
+
+    private static System.Reflection.FieldInfo WalkerField(string name) =>
+        typeof(Walker).GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+    private static void WriteWalker(PacketWriter writer, Enemy enemy) {
+        var walker = enemy.Root != null ? enemy.Root.GetComponent<Walker>() : null;
+        var known = walker != null && WalkerStateField != null && WalkerStopField != null && WalkerFacingField != null &&
+                    WalkerTurningField != null && WalkerWalkTimeField != null && WalkerPauseTimeField != null;
+        writer.WriteBool(known);
+        if (!known) {
+            return;
+        }
+
+        writer.WriteByte((byte) Convert.ToInt32(WalkerStateField.GetValue(walker)));
+        writer.WriteByte((byte) Convert.ToInt32(WalkerStopField.GetValue(walker)));
+        writer.WriteByte((byte) (sbyte) Mathf.Clamp((int) WalkerFacingField.GetValue(walker), -1, 1));
+        writer.WriteByte((byte) (sbyte) Mathf.Clamp((int) WalkerTurningField.GetValue(walker), -1, 1));
+        writer.WriteFloat((float) WalkerWalkTimeField.GetValue(walker));
+        writer.WriteFloat((float) WalkerPauseTimeField.GetValue(walker));
+    }
+
+    private static WalkerData? ReadWalker(PacketReader reader) {
+        if (!reader.ReadBool()) {
+            return null;
+        }
+
+        return new WalkerData {
+            State = reader.ReadByte(), StopReason = reader.ReadByte(), Facing = (sbyte) reader.ReadByte(),
+            TurningFacing = (sbyte) reader.ReadByte(), WalkTime = reader.ReadFloat(), PauseTime = reader.ReadFloat()
+        };
+    }
+
+    private static void ApplyWalker(Enemy enemy, WalkerData data) {
+        var walker = enemy.Root != null ? enemy.Root.GetComponent<Walker>() : null;
+        if (walker == null || WalkerStateField == null || data.State > 4 || data.StopReason > 1) {
+            return;
+        }
+
+        try {
+            WalkerStateField.SetValue(walker, Enum.ToObject(WalkerStateField.FieldType, (int) data.State));
+            WalkerStopField.SetValue(walker, Enum.ToObject(WalkerStopField.FieldType, (int) data.StopReason));
+            WalkerFacingField.SetValue(walker, (int) data.Facing);
+            WalkerTurningField.SetValue(walker, (int) data.TurningFacing);
+            WalkerWalkTimeField.SetValue(walker, data.WalkTime);
+            WalkerPauseTimeField.SetValue(walker, data.PauseTime);
+        } catch (Exception e) {
+            Log.Warn($"{enemy.Root.name}: no se pudo poner su Walker como iba ({e.Message})");
         }
     }
 
@@ -5082,7 +5286,10 @@ internal sealed class EnemySync {
             _incoming.Rotation = reader.ReadUShort();
             _incoming.Extra = reader.ReadByte();
             _incoming.Damage = reader.ReadByte();
-            if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var enemy) && enemy.Puppet) {
+            // Solo del PC que lo mueve: quien acaba de entrar en la sala envía en sus primeros 0,5 s el estado de todos sus
+            // enemigos (aún no son marionetas allí), recién cargados, y un tercer jugador los veía saltar al principio
+            if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var enemy) && enemy.Puppet &&
+                ControllerOf(enemy, _session.OwnerOf(_scene)) == from.Id) {
                 enemy.Buffer.Add(_incoming, time, reliableTiming);
             }
         }
@@ -5206,6 +5413,9 @@ internal sealed class EnemySync {
         _session.EndTo();
     }
 
+    private static readonly System.Reflection.FieldInfo PreventInvincibleEffectField =
+        typeof(HealthManager).GetField("preventInvincibleEffect", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
     private void OnHit(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
@@ -5219,21 +5429,67 @@ internal sealed class EnemySync {
             SpecialType = (SpecialTypes) reader.ReadByte()
         };
 
-        if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var enemy) || enemy.Puppet ||
-            enemy.Health == null || enemy.Health.isDead) {
+        if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var enemy) || enemy.Health == null || enemy.Health.isDead) {
             return;
         }
 
         hit.DamageDealt = Mathf.Clamp(hit.DamageDealt, 0, 1000);
         hit.Multiplier = Mathf.Clamp(hit.Multiplier, 0f, 10f);
-        hit.Source = _players.TryGetAvatarObject(from.Id, out var avatar) ? avatar : enemy.Root;
+        if (enemy.Puppet) {
+            // Este PC lo va a tomar (ya se lo dieron y espera el traspaso): el golpe se aplica al tomarlo. Antes se perdía
+            // en cada cambio de PC (el que lo soltó ya es marioneta y este aún no lo movía) aunque quien golpeó ya había
+            // cobrado el alma y visto el impacto
+            if (enemy.Controller == _session.LocalId) {
+                enemy.PendingHits ??= new List<(HitInstance, ushort, float)>();
+                if (enemy.PendingHits.Count < MaxPendingHits) {
+                    enemy.PendingHits.Add((hit, from.Id, Time.unscaledTime));
+                }
+            }
+
+            return;
+        }
+
+        ApplyRemoteHit(enemy, hit, from.Id);
+    }
+
+    private const int MaxPendingHits = 16;
+
+    /// <summary>Los golpes de otros que llegaron mientras este PC esperaba a tomarlo (como mucho de hace 3 s).</summary>
+    private void ApplyPendingHits(Enemy enemy) {
+        var pending = enemy.PendingHits;
+        if (pending == null || enemy.Puppet) {
+            return;
+        }
+
+        enemy.PendingHits = null;
+        var now = Time.unscaledTime;
+        foreach (var (hit, from, at) in pending) {
+            if (now - at <= PendingEventSeconds && enemy.Health != null && !enemy.Health.isDead) {
+                ApplyRemoteHit(enemy, hit, from);
+            }
+        }
+    }
+
+    private void ApplyRemoteHit(Enemy enemy, HitInstance hit, ushort from) {
+        hit.Source = _players.TryGetAvatarObject(from, out var avatar) ? avatar : enemy.Root;
         _applyingRemoteHit = true;
-        _remoteHitter = from.Id;
+        _remoteHitter = from;
+        // Un golpe de otro a un enemigo que lo bloquea (escudo de Baldur, caballero de musgo, jefe invulnerable): el
+        // retroceso, la congelación y el temblor de cámara son de quien golpeó (ya los tuvo en su PC, la marioneta copia la
+        // invulnerabilidad). Antes los sufría el caballero de este PC con cada golpe del compañero
+        var preventedBefore = PreventInvincibleEffectField != null && (bool) PreventInvincibleEffectField.GetValue(enemy.Health);
+        if (PreventInvincibleEffectField != null && !preventedBefore) {
+            enemy.Health.SetPreventInvincibleEffect(true);
+        }
+
         try {
             enemy.Health.Hit(hit);
         } finally {
             _applyingRemoteHit = false;
             _remoteHitter = 0;
+            if (PreventInvincibleEffectField != null && !preventedBefore && enemy.Health != null) {
+                enemy.Health.SetPreventInvincibleEffect(false);
+            }
         }
     }
 
@@ -5376,6 +5632,9 @@ internal sealed class EnemySync {
     /// <summary>Acción de lanzar objetos que se está ejecutando (para seguir lo que saca del pool).</summary>
     private static HutongGames.PlayMaker.FsmStateAction _flinging;
 
+    /// <summary>Llamadas a ObjectPool.Spawn anidadas (al crear un pool nuevo se llama a sí mismo).</summary>
+    private static int _poolDepth;
+
     private static void InstallHooks() {
         if (_hooked) {
             return;
@@ -5400,9 +5659,45 @@ internal sealed class EnemySync {
                 _flinging = null;
             }
         };
+        // Las que crean "con el tiempo" lo hacen en OnUpdate, no al entrar (los disparos del Hollow Knight, la lluvia de
+        // Nosk, el gas de los Fungus Flyer, el rastro de los Mushroom Roller, el de fuego de Grimm de la Pesadilla): solo
+        // existían en el PC que mueve al enemigo y el compañero ni los veía ni le dañaban
+        On.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolTime.OnUpdate += (orig, self) => {
+            _flinging = self;
+            try {
+                orig(self);
+            } finally {
+                _flinging = null;
+            }
+        };
+        On.HutongGames.PlayMaker.Actions.SpawnObjectFromGlobalPoolOverTime.OnUpdate += (orig, self) => {
+            _flinging = self;
+            try {
+                orig(self);
+            } finally {
+                _flinging = null;
+            }
+        };
+        On.HutongGames.PlayMaker.Actions.SpawnObjectFromGlobalPoolOverTimeV2.OnUpdate += (orig, self) => {
+            _flinging = self;
+            try {
+                orig(self);
+            } finally {
+                _flinging = null;
+            }
+        };
         On.ObjectPool.Spawn_GameObject_Transform_Vector3_Quaternion += (orig, prefab, parent, position, rotation) => {
-            var spawned = orig(prefab, parent, position, rotation);
-            if (_flinging != null && spawned != null && IsGameplay(spawned)) {
+            // Si el pool aún no tiene copias de ese prefab, Spawn crea el pool y se llama a sí mismo: solo cuenta la llamada
+            // de fuera (si no, el mismo objeto se apuntaba dos veces y el otro PC recibía una copia huérfana)
+            _poolDepth++;
+            GameObject spawned;
+            try {
+                spawned = orig(prefab, parent, position, rotation);
+            } finally {
+                _poolDepth--;
+            }
+
+            if (_poolDepth == 0 && _flinging != null && spawned != null && IsGameplay(spawned)) {
                 _active?.OnSpawned(_flinging, spawned, pooled: true);
             }
 
@@ -5415,6 +5710,12 @@ internal sealed class EnemySync {
                 return;
             }
 
+            // El ácido, los pinchos y las prensas también dañan al enemigo real en el PC que lo mueve: reenviado, contaba
+            // dos veces
+            if (IsWorldHazard(hit)) {
+                return;
+            }
+
             sync.SendHit(enemy, hit);
             if (hit.AttackType == AttackTypes.Nail) {
                 sync.ForwardNailTriggers(enemy, self.gameObject);
@@ -5424,6 +5725,46 @@ internal sealed class EnemySync {
                 // Efectos del golpe y alma para quien golpea, sin quitar vida aquí (la quita el dueño)
                 HitWithoutDamage(self, hit, orig);
             }
+        };
+
+        // Una marioneta no retrocede por su cuenta: su posición llega del PC que la mueve, retroceso incluido. Los golpes que
+        // se reproducen en ella (también el aguijón onírico) pasaban por RecoilByDirection: con `freezeInPlace` disparaba
+        // OnHandleFreeze, que en los Tiktik (`Climber.Stun`) volvía a arrancar su corrutina de andar aunque estuviera
+        // apagado, y además mandaba RECOIL HORIZONTAL / HIT LEFT... a sus FSM, que se reenviaban al PC que la mueve
+        On.Recoil.RecoilByDirection += (orig, self, direction, magnitude) => {
+            var sync = _active;
+            var health = sync != null && self != null ? self.GetComponent<HealthManager>() : null;
+            if (health != null && sync._byHealth.TryGetValue(health, out var enemy) && enemy.Puppet) {
+                return;
+            }
+
+            orig(self, direction, magnitude);
+        };
+
+        // Daño que no pasa por Hit: nubes de Spore Shroom y Defender's Crest. Se mide lo que quitó (con la vida subida para
+        // que no muera dentro) y se aplica aquí con la vida extra de los jefes o, en una marioneta, se envía a quien la mueve
+        On.HealthManager.ApplyExtraDamage += (orig, self, damage) =>
+            MeasuredDamage(self, DamageKind.Extra, () => orig(self, damage));
+        // Moscas de Flukenest: restan la vida directamente y llaman a Die
+        On.SpellFluke.DoDamage += (orig, self, target, recursion, burst) => {
+            var health = target != null ? target.GetComponent<HealthManager>() : null;
+            if (health == null) {
+                orig(self, target, recursion, burst);
+                return;
+            }
+
+            MeasuredDamage(health, DamageKind.Subtract, () => orig(self, target, recursion, burst));
+        };
+        // Una marioneta no muere aquí por su cuenta (KillOnContact, liana que cae encima...): lo decide quien la mueve, que
+        // avisa de la muerte. Antes moría solo en este PC (geo y diario aquí) y en el otro seguía vivo
+        On.HealthManager.Die += (orig, self, direction, attackType, ignoreEvasion) => {
+            var sync = _active;
+            if (sync != null && !self.isDead && sync._byHealth.TryGetValue(self, out var enemy) && enemy.Puppet) {
+                sync.SendDamage(enemy, DamageKind.Kill, 0, attackType);
+                return;
+            }
+
+            orig(self, direction, attackType, ignoreEvasion);
         };
 
         // Estados de la lógica de los enemigos reales: los que suenan, también en las marionetas
@@ -5439,6 +5780,11 @@ internal sealed class EnemySync {
 
             orig(self, toState);
             var sync = _active;
+            if (sync?._session != null && toState != null && IsDeathState(toState.Name) &&
+                sync._enemyFsms.TryGetValue(self, out var dying) && !dying.Enemy.Puppet) {
+                dying.Enemy.DeathState = true;
+            }
+
             if (sync?._session != null && toState != null && sync._soundFsms.Count > 0) {
                 sync.OnFsmState(self, toState);
             }
@@ -5467,6 +5813,7 @@ internal sealed class EnemySync {
             if (fsmEvent?.Name == ZeroHpEvent && _active != null && _active._enemyFsms.TryGetValue(self, out var dying) &&
                 !dying.Enemy.Puppet && Handles(self, ZeroHpEvent)) {
                 dying.Enemy.ZeroHp = true;
+                dying.Enemy.ZeroHpAt = Time.unscaledTime;
             }
 
             orig(self, fsmEvent, eventData);
@@ -5525,19 +5872,8 @@ internal sealed class EnemySync {
             _active?.OnLocalRest();
         };
 
-        // Descansar en un banco (el juego fija ahí el punto de reaparición)
-        On.PlayerData.SetBenchRespawn_RespawnMarker_string_int += (orig, self, marker, scene, type) => {
-            orig(self, marker, scene, type);
-            _active?.OnLocalRest();
-        };
-        On.PlayerData.SetBenchRespawn_string_string_bool += (orig, self, marker, scene, facingRight) => {
-            orig(self, marker, scene, facingRight);
-            _active?.OnLocalRest();
-        };
-        On.PlayerData.SetBenchRespawn_string_string_int_bool += (orig, self, marker, scene, type, facingRight) => {
-            orig(self, marker, scene, type, facingRight);
-            _active?.OnLocalRest();
-        };
+        // SetBenchRespawn no es descansar: lo llaman los puntos de reaparición al cruzarlos (`RespawnTrigger`), y estaba
+        // enganchado: cruzar uno devolvía antes de tiempo los enemigos muertos de la sala
 
         // Los golpes de otros aplicados en este PC no dan alma a este jugador
         On.HeroController.SoulGain += (orig, self) => {
@@ -5660,6 +5996,105 @@ internal sealed class EnemySync {
         }
     }
 
+    private enum DamageKind : byte {
+        /// <summary><c>ApplyExtraDamage</c>: nubes de Spore Shroom, Defender's Crest y estiércol.</summary>
+        Extra,
+
+        /// <summary>Resta directa (<c>SpellFluke.DoDamage</c>).</summary>
+        Subtract,
+
+        /// <summary>Muerte directa (<c>Die</c> sin pasar por la vida).</summary>
+        Kill
+    }
+
+    /// <summary>
+    /// Golpes del mundo, no de un jugador: ácido, salpicadura y agua de la Ciudad, y los genéricos de 50 o más (pinchos,
+    /// prensas de los ascensores, pinchos del Coliseo: <c>damages_enemy</c> con 50 o 9999). Ningún ataque del caballero ni
+    /// de sus acompañantes llega a 50.
+    /// </summary>
+    private static bool IsWorldHazard(HitInstance hit) =>
+        hit.AttackType is AttackTypes.Acid or AttackTypes.Splatter or AttackTypes.RuinsWater ||
+        hit.AttackType == AttackTypes.Generic && hit.DamageDealt >= 50;
+
+    /// <summary>
+    /// Ejecuta algo que resta vida sin pasar por Hit y lo mide: con la vida subida antes, no puede morir dentro. En una
+    /// marioneta la vida queda como estaba y el daño va a quien la mueve; en un enemigo real se aplica con la vida extra
+    /// del host (<see cref="Features.Difficulty"/>, que solo actuaba en TakeDamage) y muere si llega a 0.
+    /// </summary>
+    private static void MeasuredDamage(HealthManager health, DamageKind kind, Action run) {
+        var sync = _active;
+        if (sync == null || health == null || health.isDead) {
+            run();
+            return;
+        }
+
+        const int Reserve = 100000;
+        var before = health.hp;
+        health.hp = before + Reserve;
+        try {
+            run();
+        } finally {
+            var dealt = before + Reserve - health.hp;
+            health.hp = before;
+            if (dealt > 0) {
+                if (sync._byHealth.TryGetValue(health, out var enemy) && enemy.Puppet) {
+                    sync.SendDamage(enemy, kind, dealt, AttackTypes.Generic);
+                } else {
+                    ApplyDamage(health, kind, dealt, AttackTypes.Generic);
+                }
+            }
+        }
+    }
+
+    /// <summary>Lo que hace el juego con ese daño, con la vida extra de los jefes.</summary>
+    private static void ApplyDamage(HealthManager health, DamageKind kind, int damage, AttackTypes attackType) {
+        if (health == null || health.isDead) {
+            return;
+        }
+
+        if (kind == DamageKind.Kill) {
+            health.Die(null, attackType, true);
+            return;
+        }
+
+        health.hp = Math.Max(health.hp - Features.Difficulty.ScaleDamage(health, damage), -50);
+        if (health.hp <= 0) {
+            health.Die(null, attackType, kind == DamageKind.Extra);
+        }
+    }
+
+    private void SendDamage(Enemy enemy, DamageKind kind, int damage, AttackTypes attackType) {
+        if (_session == null || !_session.CanSend || enemy.Health == null || enemy.Health.isDead) {
+            return;
+        }
+
+        var writer = _session.Begin(EnemyDamage);
+        writer.WriteUShort(_sceneHash);
+        writer.WriteUInt(enemy.Id);
+        writer.WriteByte((byte) kind);
+        writer.WriteInt(damage);
+        writer.WriteByte((byte) attackType);
+        _session.End();
+    }
+
+    private void OnDamage(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        var kind = (DamageKind) reader.ReadByte();
+        var damage = Mathf.Clamp(reader.ReadInt(), 0, 1000);
+        var attackType = (AttackTypes) reader.ReadByte();
+        if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var enemy) || enemy.Puppet || enemy.Health == null ||
+            enemy.Health.isDead || kind > DamageKind.Kill) {
+            return;
+        }
+
+        if (kind == DamageKind.Kill) {
+            Log.Info($"{enemy.Root.name}: muere en el PC de {from.Name} (sin golpe)");
+        }
+
+        ApplyDamage(enemy.Health, kind, damage, attackType);
+    }
+
     private void SendHit(Enemy enemy, HitInstance hit) {
         if (!_session.CanSend || hit.DamageDealt <= 0 || enemy.Health.isDead) {
             return;
@@ -5690,7 +6125,11 @@ internal sealed class EnemySync {
     /// <summary>Jugadores caídos o en pausa (no mueven enemigos), para el modo de prueba.</summary>
     private string DescribeInactive() {
         var text = new StringBuilder();
-        foreach (var player in _session?.Players ?? Array.Empty<SessionPlayer>()) {
+        if (_session == null) {
+            return string.Empty;
+        }
+
+        foreach (var player in _session.Players) {
             if (Features.PartyState.IsInactive(player.Id)) {
                 text.Append(text.Length > 0 ? "," : string.Empty).Append(player.Id);
             }

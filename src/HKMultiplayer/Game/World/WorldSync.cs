@@ -173,23 +173,32 @@ internal sealed class WorldSync {
         JoinStatus = Lang.T("Conectado. Recibiendo el mundo del host...", "Connected. Receiving the host's world...");
     }
 
+    /// <summary>
+    /// El mundo del host llegó pero no se pudo cargar: la conexión ya no sirve (el host solo lo envía una vez por
+    /// conexión) y seguir conectado solo estorbaba (el invitado contaba como "en pie" desde el menú).
+    /// </summary>
+    public event Action<string> WorldRejected;
+
     private void ReceiveWorld(byte[] data) {
         if (!CoopSaves.CanStart) {
             Log.Warn("Llegó el mundo del host pero no estamos en el menú principal: se ignora");
+            WorldRejected?.Invoke(Lang.T("El mundo llegó fuera del menú principal", "The world arrived outside the main menu"));
             return;
         }
 
         SaveGameData world;
         try {
-            world = JsonConvert.DeserializeObject<SaveGameData>(Decompress(data, MaxWorldChars), WorldStore.SaveSettings);
+            world = JsonConvert.DeserializeObject<SaveGameData>(Decompress(data, MaxWorldChars), WorldStore.NetworkSettings);
         } catch (Exception e) when (e is JsonException or InvalidDataException) {
             Log.Error($"El mundo recibido no es válido: {e.Message}");
             JoinStatus = Lang.T("El mundo recibido no es válido", "The received world is not valid");
+            WorldRejected?.Invoke(JoinStatus);
             return;
         }
 
         if (world?.playerData == null || world.sceneData == null) {
             JoinStatus = Lang.T("El mundo recibido no es válido", "The received world is not valid");
+            WorldRejected?.Invoke(JoinStatus);
             return;
         }
 

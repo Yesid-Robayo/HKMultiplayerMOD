@@ -24,7 +24,7 @@ internal static class DropSeeds {
     /// <summary>Cuántas veces soltó algo cada objeto en esta sala (una roca de geo suelta en cada golpe).</summary>
     private static readonly Dictionary<uint, int> Drops = new();
 
-    private static string _scene = string.Empty;
+    private static int _scene;
 
     public static void InstallHooks() {
         if (_hooked) {
@@ -32,45 +32,87 @@ internal static class DropSeeds {
         }
 
         _hooked = true;
-        On.FlingUtils.SpawnAndFling += (orig, config, spawnPoint, offset) => {
-            if (spawnPoint == null) {
-                return orig(config, spawnPoint, offset);
+        // Sin partida, lo primero es llamar al juego: estas acciones se ejecutan sin parar (SendRandomEvent en la lógica de
+        // casi todos los enemigos) y antes cada una creaba un cierre y calculaba huellas también jugando solo
+        On.FlingUtils.SpawnAndFling += (orig, config, spawnPoint, offset) =>
+            !Enabled || spawnPoint == null ? orig(config, spawnPoint, offset) : SeededFling(orig, config, spawnPoint, offset);
+        On.Breakable.Break += (orig, self, angleMin, angleMax, impact) => {
+            if (!Enabled) {
+                orig(self, angleMin, angleMax, impact);
+                return;
             }
 
-            // De un enemigo, solo su geo (lo demás que lance va con su sincronización y solo en el PC que lo mueve: contarlo
-            // descuadraría la cuenta). Un enemigo compartido tiene el mismo número en todos los PCs aunque sea una copia
-            var health = spawnPoint.GetComponent<HealthManager>();
-            var enemy = health != null || EnemySync.IsEnemyObject(spawnPoint);
-            if (enemy && (config.Prefab == null || !config.Prefab.name.StartsWith("Geo", StringComparison.Ordinal))) {
-                return orig(config, spawnPoint, offset);
-            }
-
-            GameObject[] spawned = null;
-            Seeded(spawnPoint, EnemySync.SyncIdOf(health), () => spawned = orig(config, spawnPoint, offset));
-            return spawned;
+            SeededBreak(orig, self, angleMin, angleMax, impact);
         };
-        On.Breakable.Break += (orig, self, angleMin, angleMax, impact) =>
-            Seeded(self.transform, 0u, () => orig(self, angleMin, angleMax, impact));
-        On.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPool.OnEnter += (orig, self) =>
-            SeededAction(self, () => orig(self));
-        On.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolVel.OnEnter += (orig, self) =>
-            SeededAction(self, () => orig(self));
+        On.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPool.OnEnter += (orig, self) => {
+            if (!Enabled) {
+                orig(self);
+                return;
+            }
+
+            SeededPoolFling(orig, self);
+        };
+        On.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolVel.OnEnter += (orig, self) => {
+            if (!Enabled) {
+                orig(self);
+                return;
+            }
+
+            SeededPoolFlingVel(orig, self);
+        };
         // Un objeto brillante que sale volando (de un cofre, de un jefe) elige al azar el lado y luego el ángulo
-        On.HutongGames.PlayMaker.Actions.SendRandomEvent.OnEnter += (orig, self) => ShinyAction(self, () => orig(self));
-        On.HutongGames.PlayMaker.Actions.FlingObject.OnEnter += (orig, self) => ShinyAction(self, () => orig(self));
+        On.HutongGames.PlayMaker.Actions.SendRandomEvent.OnEnter += (orig, self) => {
+            if (!Enabled || self.Fsm?.Name != ShinyFsm) {
+                orig(self);
+                return;
+            }
+
+            SeededRandomEvent(orig, self);
+        };
+        On.HutongGames.PlayMaker.Actions.FlingObject.OnEnter += (orig, self) => {
+            if (!Enabled || self.Fsm?.Name != ShinyFsm) {
+                orig(self);
+                return;
+            }
+
+            SeededFlingObject(orig, self);
+        };
     }
 
-    private const string ShinyFsm = "Shiny Control";
+    // Cada uno en su método: un cierre sobre los parámetros del gancho se crearía en cada llamada, aunque no se use
 
-    /// <summary>Solo en la lógica de los objetos brillantes: en las demás, ese azar es su comportamiento de siempre.</summary>
-    private static void ShinyAction(HutongGames.PlayMaker.FsmStateAction action, Action run) {
-        if (action.Fsm?.Name != ShinyFsm) {
-            run();
-            return;
+    private static GameObject[] SeededFling(On.FlingUtils.orig_SpawnAndFling orig, FlingUtils.Config config,
+        Transform spawnPoint, Vector3 offset) {
+        // De un enemigo, solo su geo (lo demás que lance va con su sincronización y solo en el PC que lo mueve: contarlo
+        // descuadraría la cuenta). Un enemigo compartido tiene el mismo número en todos los PCs aunque sea una copia
+        var health = spawnPoint.GetComponent<HealthManager>();
+        var enemy = health != null || EnemySync.IsEnemyObject(spawnPoint);
+        if (enemy && (config.Prefab == null || !config.Prefab.name.StartsWith("Geo", StringComparison.Ordinal))) {
+            return orig(config, spawnPoint, offset);
         }
 
-        SeededAction(action, run);
+        GameObject[] spawned = null;
+        Seeded(spawnPoint, EnemySync.SyncIdOf(health), () => spawned = orig(config, spawnPoint, offset));
+        return spawned;
     }
+
+    private static void SeededBreak(On.Breakable.orig_Break orig, Breakable self, float angleMin, float angleMax, float impact) =>
+        Seeded(self.transform, 0u, () => orig(self, angleMin, angleMax, impact));
+
+    private static void SeededPoolFling(On.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPool.orig_OnEnter orig,
+        FlingObjectsFromGlobalPool self) => SeededAction(self, () => orig(self));
+
+    private static void SeededPoolFlingVel(On.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolVel.orig_OnEnter orig,
+        FlingObjectsFromGlobalPoolVel self) => SeededAction(self, () => orig(self));
+
+    private static void SeededRandomEvent(On.HutongGames.PlayMaker.Actions.SendRandomEvent.orig_OnEnter orig,
+        SendRandomEvent self) => SeededAction(self, () => orig(self));
+
+    private static void SeededFlingObject(On.HutongGames.PlayMaker.Actions.FlingObject.orig_OnEnter orig,
+        FlingObject self) => SeededAction(self, () => orig(self));
+
+    /// <summary>Solo en la lógica de los objetos brillantes: en las demás, ese azar es su comportamiento de siempre.</summary>
+    private const string ShinyFsm = "Shiny Control";
 
     /// <summary>
     /// Lanzamientos de la lógica de la sala (rocas de geo, cofres): los de un enemigo no, que van con su sincronización
@@ -85,7 +127,7 @@ internal static class DropSeeds {
             return;
         }
 
-        var key = ScenePaths.Hash(owner.transform);
+        var key = ScenePaths.StableHash(owner.transform);
         foreach (var c in action.State.Name) {
             key = (key ^ c) * 16777619u;
         }
@@ -100,13 +142,14 @@ internal static class DropSeeds {
             return;
         }
 
-        var scene = source.gameObject.scene.name;
+        // Por el identificador de la sala, sin leer su nombre (crea una cadena en cada lanzamiento)
+        var scene = source.gameObject.scene.handle;
         if (scene != _scene) {
             _scene = scene;
             Drops.Clear();
         }
 
-        var key = id != 0 ? id : ScenePaths.Hash(source);
+        var key = id != 0 ? id : ScenePaths.StableHash(source);
         Drops.TryGetValue(key, out var count);
         Drops[key] = count + 1;
 

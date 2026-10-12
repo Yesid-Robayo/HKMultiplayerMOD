@@ -190,6 +190,7 @@ internal sealed class PartnerHud {
     public void Update(string scene) {
         var gm = GameManager.instance;
         var playing = _session != null && _party != null && scene.Length > 0 && gm != null && !gm.isPaused &&
+                      !UI.HudCanvas.GameHudHidden() &&
                       gm.gameState == GlobalEnums.GameState.PLAYING && HeroController.instance != null;
         if (!playing) {
             SetVisible(false);
@@ -269,6 +270,7 @@ internal sealed class PartnerHud {
             : elsewhere && member.Status == PlayerStatus.Cutscene ? 1001
             : elsewhere && member.Status == PlayerStatus.Dream ? 1002
             : elsewhere && member.Status == PlayerStatus.StagTravel ? 1003
+            : member.Status == PlayerStatus.Joining ? 1005
             // Sin zona (salas de paso como las cinemáticas del juego): nada, no "en None"
             : vitals != null && vitals.Zone != localZone && elsewhere && vitals.Zone != NoZone ? vitals.Zone : -2;
         if (statusKey != slot.StatusKey) {
@@ -278,6 +280,7 @@ internal sealed class PartnerHud {
                 1001 => Lang.T("viendo una cinemática", "watching a cutscene"),
                 1002 => Lang.T("en un sueño", "in a dream"),
                 1003 => Lang.T("viajando en ciervo", "riding the stag"),
+                1005 => Lang.T("entrando", "joining"),
                 1004 => Lang.T("en pausa", "paused"),
                 >= 0 => Lang.T($"en {Zones.Name((byte) statusKey)}", $"in {Zones.Name((byte) statusKey)}"),
                 _ => string.Empty

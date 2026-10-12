@@ -369,6 +369,13 @@ internal sealed class Skins {
         if (skin != null && _skins.TryGetValue(skin.Hash, out var known)) {
             known.Name = skin.Name;
             known.Package ??= skin.Package;
+            // La huella solo cubre lo que se envía: la conocida (recibida de un compañero, o de la caché) no tiene el HUD,
+            // el geo ni el orbe propios, y antes se perdían; y dos carpetas que solo se diferencian en esos archivos
+            // tienen la misma huella (el HUD no cambiaba)
+            if (MergeLocalFiles(known, skin)) {
+                _sharedAppliedHash = null;
+            }
+
             skin = known;
         }
 
@@ -385,6 +392,35 @@ internal sealed class Skins {
         if (previous != null && previous != skin && !InUse(previous.Hash)) {
             Forget(previous.Hash);
         }
+    }
+
+    /// <summary>Pone en la skin conocida los archivos de la leída de la carpeta que falten o sean otros. True si cambió algo.</summary>
+    private static bool MergeLocalFiles(Skin known, Skin read) {
+        if (read.Files == null) {
+            return false;
+        }
+
+        known.Files ??= new Dictionary<string, byte[]>();
+        var changed = false;
+        foreach (var pair in read.Files) {
+            if (known.Files.TryGetValue(pair.Key, out var old) && old.Length == pair.Value.Length && old.SequenceEqual(pair.Value)) {
+                continue;
+            }
+
+            known.Files[pair.Key] = pair.Value;
+            if (known.Textures.TryGetValue(pair.Key, out var texture)) {
+                if (texture != null) {
+                    UnityEngine.Object.Destroy(texture);
+                }
+
+                known.Textures.Remove(pair.Key);
+            }
+
+            known.Failed.Remove(pair.Key);
+            changed = true;
+        }
+
+        return changed;
     }
 
     /// <summary>Lee una carpeta de skin, la comprueba y la empaqueta (en otro hilo).</summary>
@@ -665,8 +701,17 @@ internal sealed class Skins {
     private void OnPlayerLeft(SessionPlayer player) {
         if (_worn.TryGetValue(player.Id, out var worn)) {
             _worn.Remove(player.Id);
-            if (worn.Hash is { Length: > 0 } hash && !InUse(hash)) {
-                Forget(hash);
+            if (worn.Hash is { Length: > 0 } hash) {
+                // Su skin pedida que nunca llegó (se fue a mitad del envío) se puede volver a pedir: antes se quedaba como
+                // pedida y, si volvía, nadie la pedía otra vez ("recibiéndola..." toda la partida)
+                if (!_skins.ContainsKey(hash)) {
+                    _requested.Remove(hash);
+                    _waiting.Remove(hash);
+                }
+
+                if (!InUse(hash)) {
+                    Forget(hash);
+                }
             }
         }
     }

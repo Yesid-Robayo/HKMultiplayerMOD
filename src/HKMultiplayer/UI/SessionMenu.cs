@@ -527,6 +527,7 @@ internal sealed class SessionMenu : GameStyledMenu {
                     text.Append(member.Status switch {
                         PlayerStatus.Cutscene => Lang.T("viendo una cinemática", "watching a cutscene"),
                         PlayerStatus.Dream => Lang.T("en un sueño", "in a dream"),
+                        PlayerStatus.Joining => Lang.T("entrando en la partida", "joining the game"),
                         _ => entry.Zone == (byte) MapZone.NONE ? Lang.T("cambiando de sala", "changing rooms") : Zones.Name(entry.Zone)
                     });
                 }

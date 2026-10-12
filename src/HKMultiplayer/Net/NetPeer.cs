@@ -70,6 +70,9 @@ public abstract class NetPeer : IDisposable {
                 HandleDatagram(datagram.Buffer, datagram.Length, datagram.From, now);
             } catch (PacketException e) {
                 LogWarning($"Datagrama descartado de {datagram.From}: {e.Message}");
+            } catch (Exception e) {
+                // Uno que falla no corta los demás datagramas ni el tick de este frame
+                LogWarning($"Fallo con un datagrama de {datagram.From}: {e}");
             } finally {
                 Transport.Return(datagram.Buffer);
             }
@@ -91,12 +94,35 @@ public abstract class NetPeer : IDisposable {
                 continue;
             }
 
-            if (now - connection.LastReceive > NetConstants.TimeoutSeconds) {
-                CloseConnection(connection, DisconnectReason.Timeout, false);
-                continue;
-            }
+            try {
+                if (now - connection.LastReceive > NetConstants.TimeoutSeconds) {
+                    CloseConnection(connection, DisconnectReason.Timeout, false);
+                    continue;
+                }
 
-            connection.SendTick(now, _plain, _datagram, _packetWriter);
+                connection.SendTick(now, _plain, _datagram, _packetWriter);
+            } catch (Exception e) {
+                // Un fallo con una conexión (o en quien escucha su desconexión) no deja sin tick a las demás
+                LogWarning($"Fallo en el tick de {connection.EndPoint}: {e}");
+            }
+        }
+    }
+
+    /// <summary>Avisa a quien escucha de una conexión nueva; un fallo suyo no sale del transporte.</summary>
+    protected void NotifyConnected(NetConnection connection) {
+        try {
+            Listener.OnConnected(connection);
+        } catch (Exception e) {
+            LogWarning($"Fallo al avisar de la conexión de {connection.EndPoint}: {e}");
+        }
+    }
+
+    /// <summary>Avisa a quien escucha de una desconexión; un fallo suyo no sale del transporte.</summary>
+    protected void NotifyDisconnected(NetConnection connection, DisconnectReason reason) {
+        try {
+            Listener.OnDisconnected(connection, reason);
+        } catch (Exception e) {
+            LogWarning($"Fallo al avisar de la desconexión de {connection?.EndPoint}: {e}");
         }
     }
 

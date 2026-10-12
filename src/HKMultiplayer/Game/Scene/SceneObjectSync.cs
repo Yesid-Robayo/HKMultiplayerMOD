@@ -42,6 +42,12 @@ internal sealed class SceneObjectSync {
     public const MessageType GeoRockHits = (MessageType) 48;
     public const MessageType StalactiteFall = (MessageType) 49;
 
+    /// <summary>
+    /// Se golpeó la palanca de un puente de la Ciudad de las Lágrimas (`BridgeLever`, `Fungus2_21`): es C# sin FSM ni
+    /// guardable y solo mira su dato al cargar la sala, así que el puente solo se abría en el PC de quien la golpeaba.
+    /// </summary>
+    public const MessageType BridgeLeverHit = (MessageType) 109;
+
     private const string HitsVariable = "Hits";
     private const string BrokenState = "Broken";
 
@@ -61,6 +67,11 @@ internal sealed class SceneObjectSync {
     private readonly List<Rock> _rocks = new();
     private readonly Dictionary<string, Rock> _rocksById = new();
     private readonly Dictionary<uint, StalactiteControl> _stalactites = new();
+    private readonly Dictionary<uint, BridgeLever> _levers = new();
+    private readonly MessageHandler _onBridgeLever;
+
+    private static readonly System.Reflection.FieldInfo LeverActivatedField =
+        typeof(BridgeLever).GetField("activated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
     private readonly MessageHandler _onRockHits;
     private readonly MessageHandler _onStalactite;
 
@@ -130,12 +141,14 @@ internal sealed class SceneObjectSync {
         MessageRoutes.Register(ObjectActivated, Route.SameScene, reliable: true);
         MessageRoutes.Register(GeoRockHits, Route.SameScene, reliable: true);
         MessageRoutes.Register(StalactiteFall, Route.SameScene, reliable: true);
+        MessageRoutes.Register(BridgeLeverHit, Route.SameScene, reliable: true);
     }
 
     public SceneObjectSync() {
         _onActivated = OnActivated;
         _onRockHits = OnRockHits;
         _onStalactite = OnStalactite;
+        _onBridgeLever = OnBridgeLever;
         _onPlayerScene = OnPlayerScene;
     }
 
@@ -146,6 +159,7 @@ internal sealed class SceneObjectSync {
         session.On(ObjectActivated, _onActivated);
         session.On(GeoRockHits, _onRockHits);
         session.On(StalactiteFall, _onStalactite);
+        session.On(BridgeLeverHit, _onBridgeLever);
         session.PlayerSceneChanged += _onPlayerScene;
         _active = this;
         InstallHooks();
@@ -157,6 +171,7 @@ internal sealed class SceneObjectSync {
             _session.On(ObjectActivated, null);
             _session.On(GeoRockHits, null);
             _session.On(StalactiteFall, null);
+            _session.On(BridgeLeverHit, null);
             _session.PlayerSceneChanged -= _onPlayerScene;
         }
 
@@ -174,6 +189,7 @@ internal sealed class SceneObjectSync {
         _rocks.Clear();
         _rocksById.Clear();
         _stalactites.Clear();
+        _levers.Clear();
         _pendingActivated.Clear();
         _pendingRocks.Clear();
         _sendSnapshot = false;
@@ -359,7 +375,7 @@ internal sealed class SceneObjectSync {
                 continue;
             }
 
-            var id = BreakableIdPrefix + (ScenePaths.Hash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode()).ToString("x8");
+            var id = BreakableIdPrefix + (ScenePaths.StableHash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode()).ToString("x8");
             if (_byId.ContainsKey(id)) {
                 continue;
             }
@@ -402,7 +418,11 @@ internal sealed class SceneObjectSync {
 
         foreach (var stalactite in Object.FindObjectsByType<StalactiteControl>(FindObjectsInactive.Include,
                      FindObjectsSortMode.None)) {
-            _stalactites[ScenePaths.Hash(stalactite.transform)] = stalactite;
+            _stalactites[ScenePaths.StableHash(stalactite.transform)] = stalactite;
+        }
+
+        foreach (var lever in Object.FindObjectsByType<BridgeLever>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+            _levers[ScenePaths.StableHash(lever.transform)] = lever;
         }
     }
 
@@ -497,8 +517,25 @@ internal sealed class SceneObjectSync {
         // El juego pone lo guardado en el objeto: esa es su línea base (no algo que acabe de pasar aquí)
         On.PersistentBoolItem.Start += (orig, self) => {
             orig(self);
-            StartedItems.Add(self);
-            _active?.OnPersistentStart(self);
+            // Solo con partida (se vacía al cerrarla): jugando solo crecía sin límite
+            if (_active != null) {
+                StartedItems.Add(self);
+                _active.OnPersistentStart(self);
+            }
+        };
+
+        // La palanca del puente: se avisa si este golpe la activó (su OnTriggerEnter2D pone `activated` y abre el puente)
+        On.BridgeLever.OnTriggerEnter2D += (orig, self, collision) => {
+            var before = LeverActivatedField != null && (bool) LeverActivatedField.GetValue(self);
+            orig(self, collision);
+            var sync = _active;
+            if (!before && LeverActivatedField != null && (bool) LeverActivatedField.GetValue(self) &&
+                sync?._session != null && sync._session.CanSend && sync._scene.Length > 0) {
+                var writer = sync._session.Begin(BridgeLeverHit);
+                writer.WriteUShort(sync._sceneHash);
+                writer.WriteUInt(ScenePaths.StableHash(self.transform));
+                sync._session.End();
+            }
         };
 
         On.StalactiteControl.Fall += (orig, self, delay) => {
@@ -506,7 +543,7 @@ internal sealed class SceneObjectSync {
             if (!_applyingRemoteFall && sync?._session != null && sync._session.CanSend && sync._scene.Length > 0) {
                 var writer = sync._session.Begin(StalactiteFall);
                 writer.WriteUShort(sync._sceneHash);
-                writer.WriteUInt(ScenePaths.Hash(self.transform));
+                writer.WriteUInt(ScenePaths.StableHash(self.transform));
                 sync._session.End();
             }
 
@@ -540,6 +577,33 @@ internal sealed class SceneObjectSync {
     private static bool HasStarted(Tracked item) =>
         item.Persistent == null || StartedItems.Contains(item.Persistent) ||
         item.ActiveSeenFrame >= 0 && Time.frameCount > item.ActiveSeenFrame && item.Persistent.isActiveAndEnabled;
+
+    /// <summary>
+    /// Otro PC golpeó la palanca del puente: aquí se abre igual (palanca, colisión y secciones con su animación), sin el
+    /// rugido ni el temblor de cámara de quien la golpeó. El dato del mundo (`cityBridge1/2`) llega por SharedProgress.
+    /// </summary>
+    private void OnBridgeLever(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        if (sceneHash != _sceneHash || !_levers.TryGetValue(id, out var lever) || lever == null || LeverActivatedField == null ||
+            (bool) LeverActivatedField.GetValue(lever)) {
+            return;
+        }
+
+        LeverActivatedField.SetValue(lever, true);
+        if (lever.bridgeCollider != null) {
+            lever.bridgeCollider.enabled = true;
+        }
+
+        lever.GetComponent<tk2dSpriteAnimator>()?.Play("Lever Hit");
+        foreach (var section in lever.sections) {
+            if (section != null) {
+                section.Open(lever);
+            }
+        }
+
+        Log.Info($"Puente {lever.name}: lo abrió {from.Name}");
+    }
 
     private void OnStalactite(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
