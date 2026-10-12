@@ -956,6 +956,32 @@ internal sealed class Skins {
     }
 
     /// <summary>
+    /// El cuerpo de un caído lleva la skin de su dueño. Es otro objeto con la colección del caballero, y la skin del
+    /// cuerpo va en el renderer de cada uno (no en la colección): el cuerpo salía con el dibujo del juego.
+    /// </summary>
+    public void ApplyToBodies(IReadOnlyDictionary<ushort, DownedBody> bodies) {
+        if (_session == null || bodies.Count == 0) {
+            return;
+        }
+
+        foreach (var pair in bodies) {
+            var body = pair.Value;
+            if (body == null) {
+                continue;
+            }
+
+            Skin skin = null;
+            if (pair.Key == _session.LocalId) {
+                skin = _local;
+            } else if (ShowOthers && _worn.TryGetValue(pair.Key, out var worn) && worn.Hash.Length > 0) {
+                _skins.TryGetValue(worn.Hash, out skin);
+            }
+
+            ApplyTo(body.Renderer, body.Sprite, skin);
+        }
+    }
+
+    /// <summary>
     /// Pone en el renderer la textura de la skin para la colección que muestra ahora (o la normal). Cada frame: el
     /// sprite cambia de colección según la animación. Se conserva lo demás del bloque (el destello al recibir daño).
     /// </summary>

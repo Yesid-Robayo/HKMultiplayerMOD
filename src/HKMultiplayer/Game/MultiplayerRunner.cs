@@ -258,6 +258,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             BossBar.Update(scene);
             EnemyBars.Update(scene);
             Skins.LateUpdate(scene);
+            Skins.ApplyToBodies(Revive.Bodies);
             Cutscenes.Update();
             Presentations.Update();
             Dreams.Update(scene);

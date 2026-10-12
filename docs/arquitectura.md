@@ -727,7 +727,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   hasta 4096x4096; la huella se comprueba en otro hilo. Las recibidas se guardan en `Mods/HKMultiplayer/SkinCache`
   (`<huella>.hksk`, hasta 256 MB, se borran las usadas hace más tiempo): la siguiente partida con esa skin la lee de ahí
   (comprobándola igual) y no la pide. Cuerpo con un bloque de propiedades por renderer; hechizos, amuletos y HUD propios en los
-  materiales compartidos; efectos del compañero (sus copias bajo el avatar) con su skin. Crear la textura de una hoja de
+  materiales compartidos; efectos del compañero (sus copias bajo el avatar) con su skin. El cuerpo de un caído (otro
+  objeto con la colección del caballero) lleva también la skin de su dueño, con el mismo bloque: antes salía con el
+  dibujo del juego. Crear la textura de una hoja de
   4096 cuesta 0,15-0,25 s (el juego descomprime el PNG en el hilo principal): se hace en pausa o al cambiar de sala (si
   no llega ese momento en 3 s, fuera de un combate de jefe, con un tirón corto). Cada PC elige si ve las skins de los demás.
   El orbe de alma lleno propio (`OrbFull.png`) cambia el sprite de `Soul Orb/Orb Full` y de los fotogramas de su pulso
@@ -983,7 +985,8 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   muertos: el invitado se sienta en el banco de `Town` y al volver están todos; muertos otra vez, mueren los dos y al
   volver están todos. En `Town`, el invitado mata su sombra y luego la copia de la del host: la música de sombra vuelve
   a la normal ("La música de la sombra vuelve a la normal"). En `Fungus2_15`: se desafía, muere el primer Señor Mantis,
-  los dos salen vivos a `Fungus2_14` y vuelven; al desafiar otra vez sale con 210 de vida en los dos PCs.
+  los dos salen vivos a `Fungus2_14` y vuelven; al desafiar otra vez sale con 210 de vida en los dos PCs. El host
+  con la skin Rick Knight cae en `Town`: su cuerpo tendido sale con Rick en los dos PCs.
 
 ## Pendientes
 

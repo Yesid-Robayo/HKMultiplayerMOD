@@ -1036,7 +1036,7 @@ internal sealed class Revive {
         }
     }
 
-    /// <summary>Cuerpos que se dibujan en esta sala (para las flechas del HUD).</summary>
+    /// <summary>Cuerpos que se dibujan en esta sala (para las flechas del HUD y la skin de cada uno).</summary>
     public IReadOnlyDictionary<ushort, DownedBody> Bodies => _bodies;
 
     // ---- Caído: seguir al compañero ----

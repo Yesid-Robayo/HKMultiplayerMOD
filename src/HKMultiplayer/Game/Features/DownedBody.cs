@@ -18,6 +18,11 @@ internal sealed class DownedBody {
 
     private readonly GameObject _root;
 
+    /// <summary>El sprite del cuerpo, para ponerle la skin de su dueño (ver <see cref="Skins.ApplyToBody"/>).</summary>
+    public tk2dSprite Sprite { get; }
+
+    public MeshRenderer Renderer { get; }
+
     /// <summary>El "† Nombre" (null si no hay fuente).</summary>
     private Transform _label;
 
@@ -39,6 +44,8 @@ internal sealed class DownedBody {
         var sprite = spriteObject.AddComponent<tk2dSprite>();
         sprite.SetSprite(heroSprite.Collection, heroSprite.spriteId);
         var renderer = spriteObject.GetComponent<MeshRenderer>();
+        Sprite = sprite;
+        Renderer = renderer;
         if (heroRenderer != null) {
             renderer.sortingLayerID = heroRenderer.sortingLayerID;
             renderer.sortingOrder = heroRenderer.sortingOrder;
