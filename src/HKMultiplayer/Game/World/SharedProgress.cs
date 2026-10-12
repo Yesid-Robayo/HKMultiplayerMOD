@@ -360,13 +360,11 @@ internal sealed class SharedProgress {
     }
 
     /// <summary>
-    /// Si un número guardado de la sala sustituye al conocido. Solo hay dos tipos (`PersistentIntItem`): tótems de alma,
-    /// cuyas cargas solo bajan (gana el menor), y ascensores de la Ciudad (`Ruins Lift`), cuyo número es el piso y sube y
-    /// baja (gana el último cambio). Antes ganaba siempre el mayor: los ascensores no guardaban una bajada y quien entraba
-    /// después los encontraba en otro piso.
+    /// Si un número guardado de la sala sustituye al conocido: gana el último cambio. Los únicos que se comparten son los
+    /// ascensores de la Ciudad (`Ruins Lift`), cuyo número es el piso y sube y baja; antes ganaba siempre el mayor y no
+    /// guardaban una bajada. Los tótems de alma son semipersistentes (se rellenan al descansar) y no se comparten.
     /// </summary>
-    private static bool Replaces(string id, int value, int known) =>
-        id != null && id.IndexOf("Totem", StringComparison.OrdinalIgnoreCase) >= 0 ? value < known : value != known;
+    private static bool Replaces(string id, int value, int known) => value != known;
 
     private void OnGeoRock(GeoRockData data) {
         if (_applying || !_active) {

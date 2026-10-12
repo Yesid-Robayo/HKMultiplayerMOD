@@ -441,7 +441,7 @@ internal sealed class Revive {
 
             // Si había otros caídos, el host los hace morir también
             if (_session != null && _session.CanSend && reason == NobodyStanding) {
-                SendDowned(UnitySceneManager.GetActiveScene().name, hero.transform.position);
+                SendDowned(UnitySceneManager.GetActiveScene().name, hero.transform.position, hero.cState.facingRight);
             }
 
             return orig(hero);
@@ -452,7 +452,7 @@ internal sealed class Revive {
         Log.Info($"Caído en {scene} ({position.x:0.0}, {position.y:0.0})");
         CancelActions(hero);
         EnterDowned(scene, position);
-        SendDowned(scene, position);
+        SendDowned(scene, position, hero.cState.facingRight);
         return EmptyRoutine();
     }
 
@@ -522,11 +522,14 @@ internal sealed class Revive {
         return true;
     }
 
-    private void SendDowned(string scene, Vector3 position) {
+    private void SendDowned(string scene, Vector3 position, bool facingRight) {
         var writer = _session.Begin(Downed);
         writer.WriteString(scene);
         writer.WriteFloat(position.x);
         writer.WriteFloat(position.y);
+        // Hacia dónde mira al caer: su cuerpo mira igual en todos. Antes cada PC lo tomaba de su avatar al llegar el
+        // estado, cuando su caballero escondido ya iba pegado al del compañero, y podía salir al revés
+        writer.WriteBool(facingRight);
         _session.End();
     }
 
@@ -621,6 +624,7 @@ internal sealed class Revive {
         var scene = reader.ReadString(128);
         var x = reader.ReadFloat();
         var y = reader.ReadFloat();
+        var facingRight = reader.ReadBool();
         if (_session == null || !_session.IsHost) {
             return;
         }
@@ -642,7 +646,7 @@ internal sealed class Revive {
         }
 
         Log.Info($"{from.Name} cayó en {scene}; su cámara sigue a {partner.Name}");
-        _party.SetStatus(from.Id, PlayerStatus.Downed, scene, x, y, partner.Id);
+        _party.SetStatus(from.Id, PlayerStatus.Downed, scene, x, y, partner.Id, facingRight);
 
         // Quienes seguían al que acaba de caer pasan a seguir al que sigue en pie
         RetargetFollowers(from.Id);
@@ -981,9 +985,7 @@ internal sealed class Revive {
             return fall;
         }
 
-        var facingRight = id == _session.LocalId
-            ? hero.cState.facingRight
-            : _players.AvatarOf(id) is { SpriteTransform: { } sprite } && sprite.lossyScale.x < 0f;
+        var facingRight = id == _session.LocalId ? hero.cState.facingRight : _party?.Get(id) is { BodyFacingRight: true };
         fall = (Time.unscaledTime, facingRight);
         _falls[id] = fall;
         return fall;

@@ -251,7 +251,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 foreach (var item in SceneData.instance.persistentIntItems.Where(i => i.sceneName == args[1])) {
-                    Log.Info($"{Tag}sd int {item.id}={item.value}");
+                    Log.Info($"{Tag}sd int {item.id}={item.value}{(item.semiPersistent ? " (semipersistente)" : string.Empty)}");
                 }
 
                 break;

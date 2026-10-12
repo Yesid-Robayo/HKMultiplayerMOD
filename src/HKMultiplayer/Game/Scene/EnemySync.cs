@@ -1421,6 +1421,14 @@ internal sealed class EnemySync {
     }
 
     /// <summary>Número compartido del enemigo (igual en todos los PCs), o 0 si no es uno de los compartidos.</summary>
+    /// <summary>
+    /// Si el enemigo ya está muriendo (aquí o en el PC que lo mueve), aunque su vida no llegue a 0: el Falso Caballero
+    /// muere por la cabeza y su cuerpo vuelve a tener vida en cada fase.
+    /// </summary>
+    internal static bool IsDying(HealthManager health) =>
+        health != null && _active != null && _active._byHealth.TryGetValue(health, out var enemy) &&
+        (enemy.DeathState || enemy.Puppet && enemy.DeadThere);
+
     internal static uint SyncIdOf(HealthManager health) =>
         health != null && _active != null && _active._byHealth.TryGetValue(health, out var enemy) ? enemy.Id : 0u;
 
@@ -2229,7 +2237,9 @@ internal sealed class EnemySync {
             return;
         }
 
-        enemy.DeadThere |= deadThere;
+        // Lo último que dice quien lo mueve: un ZERO HP de cambio de fase (el Falso Caballero en cada armadura) se quita
+        // allí a los 0,5 s; si aquí se quedaba puesto, la marioneta lo daba por muerto el resto del combate
+        enemy.DeadThere = deadThere;
 
         if (enemy.Detached != null && enemy.Detached.Contains(enemy.Fsms[fsmIndex])) {
             return;

@@ -64,6 +64,9 @@ internal sealed class PartyState {
         public float BodyX;
         public float BodyY;
 
+        /// <summary>Caído: hacia dónde miraba al caer (su cuerpo mira igual en todos los PCs).</summary>
+        public bool BodyFacingRight;
+
         /// <summary>Caído: el compañero en pie al que sigue su cámara.</summary>
         public ushort Partner;
 
@@ -217,7 +220,7 @@ internal sealed class PartyState {
     /// El host cambia el estado de un jugador y lo reparte a todos. Para un caído, dónde está su cuerpo y a quién sigue.
     /// </summary>
     public void SetStatus(ushort id, PlayerStatus status, string bodyScene = null, float x = 0f, float y = 0f,
-        ushort partner = 0) {
+        ushort partner = 0, bool facingRight = false) {
         if (_session == null || !_session.IsHost || !_members.TryGetValue(id, out var member)) {
             return;
         }
@@ -232,6 +235,7 @@ internal sealed class PartyState {
         member.BodyScene = status == PlayerStatus.Downed ? bodyScene ?? string.Empty : string.Empty;
         member.BodyX = x;
         member.BodyY = y;
+        member.BodyFacingRight = facingRight;
         member.Partner = status == PlayerStatus.Downed ? partner : (ushort) 0;
         Broadcast();
         StatusChanged?.Invoke(member, previous);
@@ -305,6 +309,7 @@ internal sealed class PartyState {
             writer.WriteString(member.BodyScene);
             writer.WriteFloat(member.BodyX);
             writer.WriteFloat(member.BodyY);
+            writer.WriteBool(member.BodyFacingRight);
             writer.WriteBool(member.Paused);
         }
 
@@ -329,6 +334,7 @@ internal sealed class PartyState {
             var scene = reader.ReadString(128);
             var x = reader.ReadFloat();
             var y = reader.ReadFloat();
+            var facingRight = reader.ReadBool();
             var paused = reader.ReadBool();
             if (!_members.TryGetValue(id, out var member)) {
                 continue;
@@ -343,6 +349,7 @@ internal sealed class PartyState {
             member.BodyScene = scene;
             member.BodyX = x;
             member.BodyY = y;
+            member.BodyFacingRight = facingRight;
             if (changed) {
                 Log.Info($"{member.Name}: {Describe(status)}");
                 StatusChanged?.Invoke(member, previous);

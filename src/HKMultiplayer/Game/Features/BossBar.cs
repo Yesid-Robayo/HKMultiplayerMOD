@@ -166,7 +166,9 @@ internal sealed class BossBar {
         var used = 0;
         foreach (var tracked in _tracked) {
             var health = tracked.Health;
+            // También el que ya está muriendo: el cuerpo del Falso Caballero vuelve a tener vida y su barra se quedaba
             if (used >= MaxBars || !health.gameObject.activeInHierarchy || health.isDead || health.hp <= 0 ||
+                Scene.EnemySync.IsDying(health) ||
                 health.hp >= MaxSensibleHealth || !OnScreen(camera, tracked)) {
                 continue;
             }
