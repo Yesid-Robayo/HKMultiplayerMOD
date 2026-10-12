@@ -136,6 +136,9 @@ public sealed class NetConnection : ReliableReceiver.ISink {
 
     internal double LastReceive => _lastReceive;
 
+    /// <summary>Si ya llegó algún paquete auténtico (cifrado con las claves del código).</summary>
+    internal bool ReceivedAny => _receivedAny;
+
     // =====================================================================================================
     // Envío desde las capas superiores
     // =====================================================================================================

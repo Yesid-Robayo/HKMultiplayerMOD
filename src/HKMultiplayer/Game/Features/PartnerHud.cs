@@ -73,6 +73,10 @@ internal sealed class PartnerHud {
         public MaskRow Overhead;
         public string ShownName;
         public int StatusKey = -1;
+
+        /// <summary>Idioma con el que se escribió el estado: al cambiarlo se vuelve a escribir.</summary>
+        public TeamCherry.Localization.LanguageCode StatusLanguage;
+
         public int Soul = -1;
     }
 
@@ -273,8 +277,12 @@ internal sealed class PartnerHud {
             : member.Status == PlayerStatus.Joining ? 1005
             // Sin zona (salas de paso como las cinemáticas del juego): nada, no "en None"
             : vitals != null && vitals.Zone != localZone && elsewhere && vitals.Zone != NoZone ? vitals.Zone : -2;
-        if (statusKey != slot.StatusKey) {
+        // El texto también depende del idioma ("en Bocasucia" / "in Dirtmouth"): antes se quedaba en el de antes del
+        // cambio hasta que el compañero cambiara de zona
+        var language = TeamCherry.Localization.Language.CurrentLanguage();
+        if (statusKey != slot.StatusKey || language != slot.StatusLanguage) {
             slot.StatusKey = statusKey;
+            slot.StatusLanguage = language;
             slot.Status.text = statusKey switch {
                 1000 => Lang.T("caído", "down"),
                 1001 => Lang.T("viendo una cinemática", "watching a cutscene"),

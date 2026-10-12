@@ -164,6 +164,14 @@ public sealed class NetServer : NetPeer {
         }
     }
 
+    /// <summary>
+    /// A un saludo a medias no se le envía nada hasta que llegue un paquete auténtico suyo: un Hello no va autenticado y
+    /// su dirección se puede falsificar, y antes cada uno hacía que el host enviara 60 paquetes por segundo durante 10 s
+    /// a esa dirección (se podía usar para lanzar tráfico contra otro). Lo primero que envía el cliente ya va cifrado.
+    /// </summary>
+    protected override bool CanSend(NetConnection connection) =>
+        connection.State != ConnectionState.Handshaking || connection.ReceivedAny;
+
     /// <summary>Texto que el servidor cifra en el Challenge para demostrar que conoce el código.</summary>
     internal static readonly byte[] ChallengeProof = System.Text.Encoding.ASCII.GetBytes("HKMU-OK!");
 

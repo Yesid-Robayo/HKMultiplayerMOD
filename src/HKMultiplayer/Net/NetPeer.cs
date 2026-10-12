@@ -100,7 +100,9 @@ public abstract class NetPeer : IDisposable {
                     continue;
                 }
 
-                connection.SendTick(now, _plain, _datagram, _packetWriter);
+                if (CanSend(connection)) {
+                    connection.SendTick(now, _plain, _datagram, _packetWriter);
+                }
             } catch (Exception e) {
                 // Un fallo con una conexión (o en quien escucha su desconexión) no deja sin tick a las demás
                 LogWarning($"Fallo en el tick de {connection.EndPoint}: {e}");
@@ -157,6 +159,9 @@ public abstract class NetPeer : IDisposable {
     protected abstract void UpdateHandshakes(double now);
 
     /// <summary>Un paquete de datos no se pudo descifrar.</summary>
+    /// <summary>Si a esta conexión se le envían paquetes en cada tick.</summary>
+    protected virtual bool CanSend(NetConnection connection) => true;
+
     protected virtual void OnUndecryptable(NetConnection connection) {
     }
 

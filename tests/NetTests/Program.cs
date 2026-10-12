@@ -38,6 +38,10 @@ public static partial class Program {
         Run("Memoria creada por paquete en régimen estable", SteadyStateAllocations);
         Run("Memoria del cifrado por paquete", CipherAllocations);
         Run("ReadName: los mismos bytes dan la misma cadena", ReadNameReusesStrings);
+        Run("Datos grandes falsos: como mucho 2 a medio recibir (no agotan la memoria)", LargeFloodBounded);
+        Run("Datos grandes: un trozo con otro tamaño abandona la transferencia sin cortar", LargeInconsistentChunk);
+        Run("Saludo falso desde la dirección de un jugador conectado: no lo echa", SpoofedHelloIgnored);
+        Run("Avalancha de saludos: pocos se atienden y el jugador sigue conectado", HelloFloodBounded);
         RunSessionTests();
         RunInterpolationTests();
 
@@ -166,8 +170,9 @@ public static partial class Program {
 
         public void OnLargeMessage(NetConnection connection, byte kind, byte[] data) => Large.Add(data);
 
-        public void Log(string message) {
-        }
+        public readonly List<string> Logs = new();
+
+        public void Log(string message) => Logs.Add(message);
     }
 
     // =====================================================================================================
@@ -327,6 +332,117 @@ public static partial class Program {
         pair.Client.Connection.Disconnect();
         Assert(pair.Pump(() => pair.ServerListener.Disconnects.Count == 1, 3), "el servidor no se enteró");
         Assert(pair.ServerListener.Disconnects[0] == DisconnectReason.Closed, "motivo incorrecto");
+    }
+
+    /// <summary>Envía un trozo de transferencia grande hecho a mano (como haría un cliente modificado).</summary>
+    private static void SendFakeChunk(NetConnection connection, ushort id, uint total, uint position, int length) {
+        var writer = connection.BeginReliable();
+        writer.WriteByte(ControlMessage.LargeChunk);
+        writer.WriteUShort(id);
+        writer.WriteByte(9);
+        writer.WriteUInt(total);
+        writer.WriteUInt(position);
+        writer.WriteBytes(new byte[length], 0, length);
+        connection.EndMessage();
+    }
+
+    private static void LargeFloodBounded() {
+        var pair = new Pair();
+        pair.ConnectOrFail();
+        GC.Collect();
+        var before = GC.GetTotalMemory(true);
+        // 20 transferencias de 64 MB que nunca acaban: sin límite reservarían 1,28 GB con 20 KB enviados
+        for (ushort id = 100; id < 120; id++) {
+            SendFakeChunk(pair.Client.Connection, id, NetConnection.MaxLargeTransfer, 0, 900);
+        }
+
+        pair.Pump(() => false, 0.5);
+        var grown = GC.GetTotalMemory(false) - before;
+        Assert(grown < 3L * NetConnection.MaxLargeTransfer, $"la memoria creció {grown / 1048576} MB");
+        Assert(pair.ServerListener.Logs.Any(l => l.Contains("Demasiadas transferencias grandes")), "no se avisó");
+        Assert(pair.Client.IsConnected, "se cayó la conexión");
+        Console.Write($"[+{grown / 1048576} MB] ");
+    }
+
+    private static void LargeInconsistentChunk() {
+        var pair = new Pair();
+        pair.ConnectOrFail();
+        // Primer trozo: 100 bytes en total. Segundo, el mismo id diciendo 4000 y escribiendo en 3000: antes se copiaba
+        // fuera del array (el fallo cortaba el procesado del paquete)
+        SendFakeChunk(pair.Client.Connection, 7, 100, 0, 50);
+        SendFakeChunk(pair.Client.Connection, 7, 4000, 3000, 500);
+        pair.Pump(() => false, 0.3);
+        Assert(pair.ServerListener.Logs.Any(l => l.Contains("incoherente")), "no se abandonó");
+        Assert(pair.ServerListener.Large.Count == 0, "se entregó una transferencia rota");
+
+        // Lo que va detrás sigue llegando
+        var data = new byte[5000];
+        new Random(3).NextBytes(data);
+        pair.Client.Connection.SendLarge(9, data, data.Length);
+        var writer = pair.Client.Connection.BeginReliable();
+        writer.WriteByte(20);
+        writer.WriteUInt(77);
+        pair.Client.Connection.EndMessage();
+        Assert(pair.Pump(() => pair.ServerListener.Large.Count == 1 && pair.ServerListener.Reliable.Contains(77), 5),
+            "lo siguiente no llegó");
+        Assert(pair.ServerListener.Large[0].SequenceEqual(data), "datos distintos");
+    }
+
+    /// <summary>Un Hello válido de otro cliente (claves nuevas), capturado en una red aparte.</summary>
+    private static byte[] CaptureHello() {
+        var other = new SimulatedNetwork { Capture = true };
+        var client = new NetClient(other.Create(5000), new Listener("otro"));
+        client.Connect(new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 1000), "ABCD-EFGH", "Falso", "1.0");
+        var end = NetPeer.Now + 10;
+        while (other.Captured.Count == 0 && NetPeer.Now < end) {
+            client.Update();
+            Thread.Sleep(1);
+        }
+
+        Assert(other.Captured.Count > 0, "no salió ningún Hello");
+        return other.Captured[0].Data;
+    }
+
+    private static void SpoofedHelloIgnored() {
+        var pair = new Pair();
+        pair.ConnectOrFail();
+        var hello = CaptureHello();
+        // Desde la dirección del jugador (suplantada), mientras él sigue enviando: antes se cerraba su conexión
+        var playerAddress = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 2000);
+        for (var i = 0; i < 5; i++) {
+            pair.Network.Inject(hello, 1000, playerAddress);
+            pair.Pump(() => false, 0.1);
+        }
+
+        pair.Pump(() => false, 1);
+        Assert(pair.ServerListener.Disconnects.Count == 0, $"el servidor lo desconectó ({pair.ServerListener.Disconnects.FirstOrDefault()})");
+        Assert(pair.Client.IsConnected, "el jugador perdió la conexión");
+        var writer = pair.Client.Connection.BeginReliable();
+        writer.WriteByte(20);
+        writer.WriteUInt(5);
+        pair.Client.Connection.EndMessage();
+        Assert(pair.Pump(() => pair.ServerListener.Reliable.Contains(5), 3), "la conexión ya no entrega");
+    }
+
+    private static void HelloFloodBounded() {
+        var pair = new Pair();
+        pair.ConnectOrFail();
+        var hello = CaptureHello();
+        pair.Network.Capture = true;
+        // 300 saludos desde direcciones distintas en el mismo instante: cada uno atendido costaría un X25519 + HKDF
+        var watch = Stopwatch.StartNew();
+        for (var i = 0; i < 300; i++) {
+            pair.Network.Inject(hello, 1000, new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 10000 + i));
+        }
+
+        pair.Pump(() => false, 1);
+        // Lo único que se envía a esas direcciones es el Challenge de los atendidos: nada más mientras no respondan
+        var sent = pair.Network.Captured.Where(c => c.To >= 10000).ToList();
+        var answered = sent.Count(c => c.Data[4] == (byte) DatagramType.Challenge);
+        Assert(answered <= NetConstants.MaxPendingConnections, $"se atendieron {answered} saludos");
+        Assert(sent.Count == answered, $"se enviaron {sent.Count - answered} paquetes más a direcciones sin verificar");
+        Assert(pair.Client.IsConnected && pair.ServerListener.Disconnects.Count == 0, "el jugador perdió la conexión");
+        Console.Write($"[{answered} de 300 atendidos, {watch.ElapsedMilliseconds} ms] ");
     }
 
     private static byte[] Hex(string hex) {

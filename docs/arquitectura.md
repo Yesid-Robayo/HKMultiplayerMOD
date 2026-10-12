@@ -796,7 +796,11 @@ detalle allí):
   personaje (`SharedUntil026`: los guardados antes toman el valor del mundo). Cada personaje guardado deja un `.bak`.
 - **Cargas** (`CoopSaves.CanStart`): falso los 5 s siguientes a empezar una carga, para que el mundo del host no empiece
   otra encima mientras el juego sigue en el menú.
-- **Red**: `PacketReader.ReadName` reutiliza las cadenas de nombres de estado, evento y prefab que ya llegaron.
+- **Red**: `PacketReader.ReadName` reutiliza las cadenas de nombres de estado, evento y prefab que ya llegaron. El
+  servidor no envía nada a un saludo a medias hasta recibir de él un paquete auténtico (`NetServer.CanSend`): un `Hello`
+  no va autenticado y su dirección se puede falsificar, y antes cada uno hacía que el host enviara 60 paquetes por
+  segundo durante 10 s a esa dirección.
+- **HUD del compañero**: el texto de estado ("en <zona>") se vuelve a escribir al cambiar el idioma del juego.
 - **Desinstalar**: la regla de "Steam cambió este archivo, se deja" es solo para los del juego; un mod puesto a mano
   en `Mods` antes de instalar se devuelve. La caché de skins se borra siempre.
 - **Panteones**: dentro de uno (`BossSequenceController.IsInSequence`) el invitado no envía su personaje, ni al
@@ -806,7 +810,9 @@ detalle allí):
 - **Órdenes de prueba nuevas**: `pdadd` (suma como el juego), `towall` (deslizarse por una pared), `fsmstates` (estado
   de todas las FSM de un nombre, sin límite), `givegeo`, `selected`, `uiselect` y `uicancel` (menús sin mando real),
   `transitionState` en `hero`, `pdget` con listas y estructuras (en JSON), `pdjson` (escribir un dato en JSON),
-  `bossseq si|no` (simular un Panteón) y `hitenemytype` (golpe de un tipo concreto). `sdlist` marca lo semipersistente.
+  `bossseq si|no` (simular un Panteón), `hitenemytype` (golpe de un tipo concreto), `langset` (cambiar el idioma como
+  desde el menú), `toggles` (objetos que el juego enciende o apaga según un dato) y `moveenemy` (llevar un enemigo a un
+  punto). `sdlist` marca lo semipersistente.
 
 ## Código del juego
 
@@ -986,7 +992,9 @@ Decisiones aprobadas por el usuario para M5 (las marcadas "elegido" las escogió
   API de GitHub la lista de versiones sin parar la ventana (`WebClient.DownloadStringAsync`; se publican como
   pre-release, así que no sirve `latest`). Si hay una más nueva que el paquete, sale un cartel arriba a la derecha con
   un enlace para descargarla. *Novedades* enseña en una ventana el apartado "Novedades de la X" (o "What's new in X")
-  de las notas de esa versión, o de la del paquete si no hay otra más nueva, pasado de Markdown a texto. En
+  de las notas de esa versión, o de la del paquete si no hay otra más nueva, pasado de Markdown a texto. Si la lista
+  aún no llegó, la pide en ese momento esperando como mucho 10 s sin parar la ventana; solo cuenta la respuesta de esa
+  consulta (la cancelada de un intento anterior sin internet daba por acabado el siguiente). En
   PowerShell 5.1 `ConvertFrom-Json` da la lista como un solo objeto: hay que guardarla en una variable antes de
   filtrarla. La ventana tiene su propio programa para la barra de tareas (`SetCurrentProcessExplicitAppUserModelID`):
   si no, Windows la agrupaba con PowerShell y enseñaba su icono. Con `/install` o `/uninstall` y la ruta trabaja en la

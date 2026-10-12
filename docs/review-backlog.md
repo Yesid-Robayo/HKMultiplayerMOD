@@ -17,16 +17,18 @@ Lo que **no** cubre: cómo se siente cada combate jugando entre dos personas, y 
 **Estado en la 0.26.0:** 171 de 172 cerradas (arregladas o revisadas con su motivo). Queda abierta en parte J8 (efectos
 del caballero que no se ven en el compañero).
 
-**Pruebas (12/10/2026):** 82 entradas probadas en el juego con dos copias (línea **Probado en el juego**) y 16 más
-comprobadas con las rutas, NetTests o la prueba del instalador (línea **Comprobado**). Al probar salieron 12 fallos, ya
-arreglados: el tranvía de las estaciones, las crías que no pasaban de PC, el despertar pendiente en el traspaso, la
-espera de una arena con zona fina, el cuerpo del caído mirando al revés, la barra de vida del Falso Caballero, la marca
-"ya muerto" pegada en la marioneta, los tótems (no se comparten: semipersistentes), el mod puesto a mano que el
-desinstalador no devolvía, la espera de los jefes, que ahora no tiene límite, el guardado del propio juego que se
-enviaba dentro de un Panteón (S5) y el encuentro que se quedaba esperando el diálogo de quien lo controla si caía a
-mitad (F11). Seis entradas tienen una línea **No se puede reproducir aquí** con el motivo. Lo que queda sin probar en el
-juego es lo que no se puede preparar con las copias (tres jugadores, el juego como administrador, Lumafly/Scarab,
-mandos) o es interno (rendimiento, carreras de red); está en las entradas sin esas líneas.
+**Pruebas (12/10/2026):** 92 entradas probadas con dos copias del juego o del instalador (línea **Probado en el
+juego** o **Probado**) y 18 más comprobadas con las rutas, NetTests o la prueba del instalador (línea **Comprobado**). Al
+probar salieron 15 fallos, ya arreglados: el tranvía de las estaciones, las crías que no pasaban de PC, el despertar
+pendiente en el traspaso, la espera de una arena con zona fina, el cuerpo del caído mirando al revés, la barra de vida
+del Falso Caballero, la marca "ya muerto" pegada en la marioneta, los tótems (no se comparten: semipersistentes), el mod
+puesto a mano que el desinstalador no devolvía, la espera de los jefes (ahora sin límite), el guardado del propio juego
+dentro de un Panteón (S5), el encuentro que esperaba el diálogo de un caído (F11), el HUD del compañero que no cambiaba
+de idioma (U4), *Novedades* tras un intento sin internet (I10) y los paquetes que el host enviaba a cualquier dirección
+que saludara (N5). Seis entradas tienen una línea **No se puede reproducir aquí** con el motivo. Lo que queda sin probar
+es interno (rendimiento, carreras dentro de un frame, protecciones contra fallos), necesita algo que no hay aquí (tres
+jugadores, el juego como administrador, otra versión del juego, una biblioteca de Steam con tildes) o son las entradas
+revisadas sin cambios.
 
 Cómo leerla:
 
@@ -581,6 +583,7 @@ Del volcado de FSM:
 - [x] **H7 · baja · nota.** `QuestNpcSync` no trata `DeactivateIfPlayerdataFalseDelayed`.
   - **Volcado de FSM:** Solo existe en `GG_Atrium` (`top2`, el camino oculto).
   - **Arreglado en 0.26.0:** `DeactivateIfPlayerdataFalseDelayed` va como `DeactivateIfPlayerdataFalse`; se apunta al apagar el objeto (`DoCheck`, tras su espera).
+  - **Probado en el juego (12/10/2026):** en `GG_Atrium`, `top2` empieza apagado en los dos; el invitado pone `finalBossDoorUnlocked` y el host lo enciende ("cambió en otro PC, se enciende como al cargar la sala").
 - [x] **H8 · baja · sin comprobar.** Vueltas al menú que no pasan por los ganchos de `ReturnToMainMenu`
   (`CollectGuestsThen`, `CancelDowned`): `QuitToMenu` (juego `GameManager.cs:3419`), `EmergencyReturnToMenu` (`3513`)
   y la muerte en Alma de Acero (va a `PermaDeath`).
@@ -679,6 +682,7 @@ Del volcado de FSM:
   `VinePlatform.cs:101-108`): muertes dobles o solo locales.
   - **Volcado de FSM:** `VinePlatform` solo en `Fungus1_06/07/09/13/14/21/22` y `GG_Atrium_Roof`; el volcado no dice si hay enemigos debajo.
   - **Arreglado en 0.26.0:** Cubierto por E2: una marioneta ya no muere en local, se avisa a quien la mueve (que también tiene la liana cayendo).
+  - **Probado en el juego (12/10/2026):** en `Fungus1_07`, con dos Mossman bajo una liana que mueve el host, el invitado la corta: en su PC la liana no los mata, avisa al host ("muere en el PC de Invitado"), el host los mata y el invitado lo recibe (Splatter). Cada uno muere una vez en cada PC.
 - [x] **O15 · baja · descartado.** Plataformas que se desmoronan y vuelven, llevadas por una FSM sin `Activated`
   ni nombre de palanca: probablemente no se copian y cada PC tiene la suya (como O5).
   - **Volcado de FSM:** Todos los suelos que se desmoronan por FSM llevan `PersistentBoolItem` + `Activated` y ya los siguen `FsmStateSync`/`SceneObjectSync`; ninguno vuelve a aparecer (`collapse small`, `break_floor`, `quake_floor_shake`, `Garden Slide Floor`, `Resting Grounds Slide Floor`, `Chain Platform` de `Ruins1_28`, `Detect Quake` de `Mines_01`/`Mines_35`).
@@ -823,6 +827,7 @@ Del volcado de FSM:
   agotar la memoria del otro con unos pocos paquetes de 1 KB. Arreglo: 1 o 2 en curso por conexión, límite por tipo y
   caducidad.
   - **Arreglado en 0.26.0:** Como mucho 2 transferencias grandes a medio recibir, caducan a los 30 s y un trozo con otro tamaño total la abandona.
+  - **Comprobado (12/10/2026):** pruebas nuevas en NetTests: 20 transferencias falsas de 64 MB solo reservan 128 MB (2 a la vez) y avisan; un trozo con otro tamaño abandona la transferencia y lo siguiente llega.
 - [x] **N5 · media · sin comprobar.** Saludo (`NetServer.HandleHandshake`, [:86-107](../src/HKMultiplayer/Net/NetServer.cs#L86)):
   un `Hello` sin autenticar desde la dirección de un invitado ya conectado, con claves nuevas, cierra esa conexión (se
   puede echar a alguien suplantando su dirección). Muchos `Hello` con claves nuevas desde una dirección obligan a un
@@ -830,6 +835,7 @@ Del volcado de FSM:
   cerrar la anterior: puede congelar al host. Arreglo: nunca soltar una conexión autenticada por un `Hello` y limitar
   los `Hello` por dirección.
   - **Arreglado en 0.26.0:** Un `Hello` desde la dirección de un jugador que envió algo en los últimos 3 s se ignora; como mucho 10 saludos nuevos por segundo.
+  - **Comprobado (12/10/2026):** pruebas nuevas en NetTests: un `Hello` falsificado desde la dirección de un jugador conectado no lo echa; de 300 saludos a la vez se atienden 8. Salió que el host enviaba 60 paquetes por segundo durante 10 s a cada dirección que mandaba un `Hello`, sin comprobar nada (servía para lanzar tráfico contra otro): ahora no se envía nada hasta recibir un paquete auténtico.
 - [x] **N6 · baja · sin comprobar.** El código de partida (40 bits, 32^8, [RoomCode.cs](../src/HKMultiplayer/Net/Crypto/RoomCode.cs))
   se puede sacar a fuerza bruta sin conexión a partir de la prueba del saludo ([NetServer.cs:117-126](../src/HKMultiplayer/Net/NetServer.cs#L117))
   si alguien llega al puerto. Arreglo: un PAKE (CPace/SPAKE2), o al menos un KDF lento sobre el código y un código
@@ -1054,6 +1060,7 @@ Del volcado de FSM:
   ([Skins.cs:911](../src/HKMultiplayer/Game/Features/Skins.cs#L911)): las máscaras del compañero salen en blanco.
   Crearlas desde la textura del juego o rehacerlas al cambiar de skin.
   - **Arreglado en 0.26.0:** Se crean desde la textura del juego (`Skins.VanillaTextureOf`).
+  - **Probado en el juego (12/10/2026):** con la skin de Rick (que trae `Hud.png`) puesta, se rehacen las máscaras del compañero y luego se quita la skin: siguen viéndose bien, no en blanco (captura).
 - [x] **K5 · baja · sin comprobar.** El cuerpo del caballero local pasa por un bloque de propiedades cada frame
   ([Skins.cs:934](../src/HKMultiplayer/Game/Features/Skins.cs#L934), [:1000-1011](../src/HKMultiplayer/Game/Features/Skins.cs#L1000)),
   también jugando solo y sin skin del mod: escribe `VanillaTextures["Knight"]`, tomada una vez ([:1079](../src/HKMultiplayer/Game/Features/Skins.cs#L1079)).
@@ -1129,6 +1136,7 @@ Del volcado de FSM:
   ([Zones.cs:129](../src/HKMultiplayer/Game/Features/Zones.cs#L129)) no lo llama nadie y el HUD ("en <zona>") y
   *Compañeros* se quedan en el primer idioma. Vaciarlo con `GameManager.RefreshLanguageText`.
   - **Arreglado en 0.26.0:** `Zones.Name` vacía la caché si cambia el idioma.
+  - **Probado en el juego (12/10/2026):** con `langset`, el nombre de zona del compañero pasa de "Bocasucia" a "Dirtmouth" y vuelve. Salió que el HUD del compañero guardaba el texto ("en Cruces Olvidados") hasta que el compañero cambiara de zona: ahora se rehace al cambiar el idioma (probado: pasa a "in Forgotten Crossroads").
 - [x] **U5 · baja · sin comprobar.** Un jefe puede cambiar de tipo a mitad del combate: `Difficulty.IsBoss` vacía toda
   su caché al pasar de 1024 entradas ([Difficulty.cs:304-306](../src/HKMultiplayer/Game/Features/Difficulty.cs#L304)) y
   cada `OnEnable` de la sesión añade una. Tras vaciarla, un jefe sin `unlockBossScene` se vuelve a juzgar por su vida
@@ -1146,6 +1154,7 @@ Del volcado de FSM:
   no mira si la sala o su zona están activas (el mapa rápido apaga las demás zonas, `GameMap.cs:494-520`, y las salas
   sin mapa están apagadas). Pedir `room.activeInHierarchy`.
   - **Arreglado en 0.26.0:** Solo si la sala del mapa está activa.
+  - **Probado en el juego (12/10/2026):** con el mapa rápido, el icono del compañero se ve si está en una sala de esa zona (los dos en el Cruce, captura) y queda oculto si está en otra zona (host en el pueblo, invitado en el Cruce).
 - [x] **U8 · baja · sin comprobar.** El HUD del compañero puede no salir sin avisar: si se encuentra la colección del
   HUD pero no los nombres de sus sprites (tras un cambio de skin o atlas), `HudSprites.TryLoad`
   ([HudSprites.cs:56-77](../src/HKMultiplayer/UI/HudSprites.cs#L56)) devuelve falso siempre y `PartnerHud` nunca se
@@ -1181,6 +1190,7 @@ Del volcado de FSM:
   el fallo llega tras `$script:Changing = $true` y se dice "si se paró a medias, desinstala..." sin haber cambiado
   nada: poner `Changing` después de crear la copia y el manifiesto.
   - **Arreglado en 0.26.0:** El mensaje habla del `.exe` y `Changing` se pone cuando ya están la copia y el manifiesto.
+  - **Probado (12/10/2026):** sin permiso de escritura en la carpeta del juego (copia con `icacls /deny`), el mensaje pide abrir `HKMultiplayer Setup.exe` como administrador, no crea `HKMultiplayer-backup` y no dice "si se quedó a medias". Lo de `Program Files` con administrador de verdad no se puede probar aquí.
 - [x] **I4 · baja · sin comprobar.** `libraryfolders.vdf` se lee como ANSI ([common.ps1:77](../tools/installer/common.ps1#L77)):
   `Get-Content` sin `-Encoding UTF8` en PowerShell 5.1 estropea rutas de bibliotecas de Steam con tildes. Añadir
   `-Encoding UTF8`.
@@ -1189,6 +1199,7 @@ Del volcado de FSM:
   `Test-Path` sin `-LiteralPath` da falso, la versión sale vacía y no sale el aviso de versión nueva. Usar
   `-LiteralPath` ahí y en `Get-Content`.
   - **Arreglado en 0.26.0:** `-LiteralPath` en `Get-PackageVersion`.
+  - **Probado (12/10/2026):** con el paquete en `pkg [i5]`, la instalación dice "HKMultiplayer 0.26.0" e instala y desinstala bien.
 - [x] **I6 · baja · sin comprobar.** Códigos de salida engañosos ([setup.ps1:32-38](../tools/installer/setup.ps1#L32)):
   desinstalar da 0 sin nada instalado y con problemas al reponer. Devolver 2 si `Invoke-Uninstall` da `$false`.
   - **Arreglado en 0.26.0:** Desinstalar sin dejarlo limpio devuelve 2.
@@ -1201,14 +1212,17 @@ Del volcado de FSM:
   repone una API y dice que el juego quedó como estaba. Si la huella del archivo es la del paquete, no tratarlo como
   original y avisar.
   - **Arreglado en 0.26.0:** Si el archivo del juego ya estaba parcheado, se avisa de que la copia no es el original.
+  - **Probado (12/10/2026):** en una copia con `Assembly-CSharp.dll` ya parcheado, avisa de que al desinstalar volverá esa Modding API y no el juego original.
 - [x] **I9 · baja · sin comprobar.** Otros mods se apartan a `Mods\Disabled` en cada instalación y actualización sin
   preguntar ([install.ps1:150-172](../tools/installer/install.ps1#L150)): uno que el usuario volvió a activar se
   vuelve a apartar (el registro sí lo dice). Listarlos en la confirmación.
   - **Arreglado en 0.26.0:** Antes de instalar, la ventana pregunta con la lista de mods que se van a apartar (`Get-OtherMods`).
+  - **Probado (12/10/2026):** `Get-OtherMods` (lo que lista la ventana antes de instalar) da `Satchel` antes de instalar, nada una vez instalado y otra vez `Satchel` si el jugador lo vuelve a activar a mano; al instalar, se aparta diciéndolo. La ventana de confirmación en sí no se abrió (habría detectado el juego de Steam real).
 - [x] **I10 · baja · sin comprobar.** *Novedades* puede congelar la ventana ([setup.ps1:444](../tools/installer/setup.ps1#L444)):
   si la consulta en segundo plano falló, usa `WebClient.DownloadString` en el hilo de la ventana (hasta ~100 s). Las
   etiquetas que `[Version]` no entiende (`v0.26.0-hotfix`) se ignoran sin avisar.
   - **Arreglado en 0.26.0:** *Novedades* espera la consulta sin parar la ventana (como mucho 10 s); las etiquetas toman los números del principio (`v0.26.0-hotfix` es 0.26.0).
+  - **Probado (12/10/2026):** con las funciones de `setup.ps1` dentro del bucle de una ventana: sin internet tarda 10,1 s sin congelarla; las etiquetas `v0.26.0-hotfix` cuentan como 0.26.0. Salió que, tras un intento sin internet, el siguiente con internet fallaba al momento (el aviso de cancelación del primero llegaba durante la espera del segundo): ahora solo cuenta la consulta en curso (probado: llegan las 8 versiones).
 - [x] **I11 · baja · sin comprobar.** `package.sh` toma la versión solo de `const string Version` y no la compara con
   `<AssemblyVersion>` del csproj, que es la que lee `Get-InstalledVersion`: si se olvida subir una, sale mal la
   versión instalada. Fallar si no coinciden.

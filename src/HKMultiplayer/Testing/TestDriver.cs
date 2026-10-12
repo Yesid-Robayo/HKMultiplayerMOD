@@ -614,6 +614,19 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "moveenemy":
+                // moveenemy <inicio del nombre>|<x>|<y>: lleva ese enemigo (vivo y encendido) a ese punto, p. ej. bajo una liana
+                var moveArgs = string.Join(" ", args.Skip(1)).Split('|');
+                var moved = FindObjectsByType<HealthManager>(FindObjectsSortMode.None)
+                    .FirstOrDefault(h => h.name.StartsWith(moveArgs[0]) && !h.GetIsDead());
+                if (moved == null) {
+                    Log.Warn($"{Tag}no hay ningún enemigo vivo '{moveArgs[0]}'");
+                } else {
+                    moved.transform.position = new Vector3(ParseFloat(moveArgs[1]), ParseFloat(moveArgs[2]), moved.transform.position.z);
+                    Log.Info($"{Tag}{moved.name} llevado a {moved.transform.position}");
+                }
+
+                break;
             case "tpenemy":
                 // tpenemy <inicio del nombre>: este jugador va junto a ese enemigo
                 if (runner.Enemies.TryGetPosition(string.Join(" ", args.Skip(1)), out var enemyPosition)) {
@@ -1040,6 +1053,25 @@ internal sealed class TestDriver : MonoBehaviour {
                 // langget <hoja> <clave>: texto del juego en su idioma (p. ej. "Titles FALSE_KNIGHT_MAIN")
                 Log.Info($"{Tag}texto {args[1]}/{args[2]}=" + (TeamCherry.Localization.Language.Has(args[2], args[1])
                     ? TeamCherry.Localization.Language.Get(args[2], args[1]) : "(no existe)"));
+                break;
+            case "toggles":
+                // Objetos que el juego enciende o apaga según un sí/no (DeactivateIf*, ActivateIf*): dato, valor y si están encendidos
+                foreach (var toggle in FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+                    var typeName = toggle.GetType().Name;
+                    if (!typeName.StartsWith("DeactivateIfPlayerdata") && !typeName.StartsWith("ActivateIfPlayerdata")) {
+                        continue;
+                    }
+
+                    var boolName = toggle.GetType().GetField("boolName")?.GetValue(toggle) as string;
+                    Log.Info($"{Tag}interruptor {toggle.name} {typeName} {boolName}={(string.IsNullOrEmpty(boolName) ? "-" : PlayerData.instance.GetBool(boolName).ToString())} " +
+                             $"encendido={toggle.gameObject.activeSelf}");
+                }
+
+                break;
+            case "langset":
+                // langset <código>: cambia el idioma del juego como desde el menú (p. ej. EN, ES, FR)
+                Log.Info($"{Tag}idioma {args[1]}: {TeamCherry.Localization.Language.SwitchLanguage(args[1])}");
+                GameManager.instance.RefreshLocalization();
                 break;
             case "covers":
                 // Lo que se dibuja delante de la cámara y la tapa (grande, sobre su centro): máscaras de zonas ocultas...

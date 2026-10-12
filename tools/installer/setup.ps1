@@ -459,12 +459,15 @@ function Show-Notes {
         $script:NotesDone = $false
         try {
             $client = New-WebClient
+            $script:NotesRequest = $client
             $client.Add_DownloadStringCompleted({
                     param($sender, $e)
                     if (-not $e.Cancelled -and -not $e.Error) {
                         try { Set-Releases $e.Result } catch { }
                     }
-                    $script:NotesDone = $true
+                    # Solo la consulta en curso: la cancelada de un intento anterior (sin internet) llegaba durante la
+                    # espera del siguiente y lo daba por acabado sin respuesta
+                    if ([object]::ReferenceEquals($sender, $script:NotesRequest)) { $script:NotesDone = $true }
                     $sender.Dispose()
                 })
             $client.DownloadStringAsync([Uri]$releasesApi)
