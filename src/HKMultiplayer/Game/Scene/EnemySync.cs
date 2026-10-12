@@ -236,6 +236,13 @@ internal sealed class EnemySync {
         /// </summary>
         public bool Created;
 
+        /// <summary>
+        /// Si el juego lo deja muerto hasta el banco (lleva <c>PersistentBoolItem</c>). Los que no lo llevan (los jefes de
+        /// arena, como el primer Señor Mantis) vuelven cada vez que se carga la sala; si el host los recordaba muertos,
+        /// al volver a intentarlo el combate empezaba sin ellos.
+        /// </summary>
+        public bool StaysDead;
+
         /// <summary>Quién lo mueve (0: el dueño de la sala) y quién lo movía antes del último cambio.</summary>
         public ushort Controller;
 
@@ -898,7 +905,7 @@ internal sealed class EnemySync {
                 enemy.ReportedDead = true;
                 enemy.DiedAt = Time.unscaledTime;
                 _healthOut.Add((enemy.Id, HealthKind.Died, 0));
-                if (!enemy.Spawned && !enemy.Created && !RepeatsEveryVisit(_scene)) {
+                if (enemy.StaysDead && !enemy.Spawned && !enemy.Created && !RepeatsEveryVisit(_scene)) {
                     _killedOut.Add(enemy.Id);
                 }
             } else if (enemy.Health.hp != enemy.LastHp || snapshot) {
@@ -1346,7 +1353,8 @@ internal sealed class EnemySync {
             Renderer = health.GetComponent<Renderer>(),
             Collider = health.GetComponent<Collider2D>(),
             Damage = health.GetComponent<DamageHero>(),
-            LastHp = health.hp
+            LastHp = health.hp,
+            StaysDead = health.GetComponent<PersistentBoolItem>() != null
         };
         enemy.ScannedAt = Time.unscaledTime;
         _enemies.Add(enemy);

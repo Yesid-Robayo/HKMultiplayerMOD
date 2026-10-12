@@ -410,7 +410,10 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - El host recuerda los enemigos muertos de cada sala (aunque se quede vacía) hasta que alguien descansa en un banco
     o muere: es cuando el juego hace que vuelvan (`GameManager.ResetSemiPersistentItems`, enganchado; lo llaman el banco
     y `PlayerDead`). Antes se miraba `SetBenchRespawn`, que el banco no llama (pone el punto de reaparición dato a dato):
-    ni sentarse ni morir devolvía los enemigos.
+    ni sentarse ni morir devolvía los enemigos. Solo los que el juego deja muertos hasta el banco (llevan
+    `PersistentBoolItem`): los jefes de arena no lo llevan y vuelven cada vez que se carga la sala. Antes el host
+    recordaba también a esos: tras matar al primer Señor Mantis y volver, el desafío cerraba la jaula y no salía. Con
+    alguien en la sala, quien entra sabe qué murió por la foto del dueño de la sala, no por esta memoria.
   - Un enemigo destruido durante un cambio de sala (`GameManager.IsInSceneTransition`) no cuenta como muerto: la sala
     se está descargando. Al recargar la misma sala ("Recargar sala", "Ir con" a la sala en la que ya se está) su nombre
     no cambia hasta que la nueva está lista, y antes todos sus enemigos se daban por muertos hasta el banco: el Falso
@@ -979,7 +982,8 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   el host baja a la vez; el host lo sube después desde abajo y en el invitado sube igual. Enemigos de `Crossroads_01`
   muertos: el invitado se sienta en el banco de `Town` y al volver están todos; muertos otra vez, mueren los dos y al
   volver están todos. En `Town`, el invitado mata su sombra y luego la copia de la del host: la música de sombra vuelve
-  a la normal ("La música de la sombra vuelve a la normal").
+  a la normal ("La música de la sombra vuelve a la normal"). En `Fungus2_15`: se desafía, muere el primer Señor Mantis,
+  los dos salen vivos a `Fungus2_14` y vuelven; al desafiar otra vez sale con 210 de vida en los dos PCs.
 
 ## Pendientes
 
