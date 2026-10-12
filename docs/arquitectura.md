@@ -299,11 +299,14 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     se retiene el aviso de la zona (un `Trigger2dEvent` del estado de ahora), no los demás del encuentro ya empezado.
     Una zona fina (menos de 2 de grosor: una línea a la entrada de la arena, como la del Campeón Fallido) se cruza:
     cuenta como dentro estar en ella o ya al otro lado, en el de la arena (hacia donde iba el caballero al tocarla). Si
-    no, el primero en cruzarla salía de ella enseguida, la espera se olvidaba y el combate no empezaba nunca.
+    no, el primero en cruzarla salía de ella enseguida, la espera se olvidaba y el combate no empezaba nunca. Si todos
+    están ya al mismo lado de la línea, cuenta como dentro: quien entraba quieto o mirando atrás dejaba el lado al revés.
   - Jefes que se despiertan al ver al caballero (Hornet 1, Guardián de Cristal...): se apunta en qué estado duerme su
     lógica principal y su primer cambio desde ahí es despertar. Si algún jugador de la sala está a más de 25 de él,
     ese cambio se retiene (el mismo aviso) y el jefe es invulnerable mientras: golpearlo no lo despierta ni le quita
-    vida. Despierta en cuanto están todos cerca. No esperan los de una arena que ya espera a que entren todos (su
+    vida. Despierta en cuanto están todos cerca, sin límite de tiempo (también espera a quien está en pausa); no se
+    espera a quien está caído, en otra sala o sin avatar en este PC. Si el jefe cambia de PC mientras espera, el
+    traspaso lleva el despertar pendiente y el nuevo sigue esperando. No esperan los de una arena que ya espera a que entren todos (su
     `HealthManager` tiene `battleScene` y esa arena es una zona con FSM o la lleva un controlador compartido, como el
     Coliseo; Oblobble entra volando desde muy arriba y, si esperaba, se quedaba invulnerable para siempre) ni los que
     crea una jaula. La arena de Mawlek no tiene zona propia (solo las de la cámara): Mawlek sí espera. Tampoco se retiene
@@ -631,7 +634,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
 - **Barra del jefe** (`BossBar`): los jefes se apuntan al encenderse (`HealthManager.OnEnable`), con el nombre de su
   entrada del diario; la vida máxima es la mayor vista. Jefe (`Difficulty.IsBoss`, también para la vida extra) es quien
   tiene estatua en el Salón de los Dioses (`unlockBossScene`) o aparece con 300 de vida o más; se decide una vez por
-  enemigo. Los de los sueños (Tirano de Almas, Príncipe Gris Zote) no tienen estatua y antes se quedaban sin barra. Con barras visibles, `Notice.SetLift` sube los avisos (abajo a
+  enemigo. Los de los sueños (Tirano de Almas, Príncipe Gris Zote) no tienen estatua y antes se quedaban sin barra.
+  Se quita en cuanto su muerte está en marcha (`EnemySync.IsDying`): el Falso Caballero muere por la cabeza y su
+  cuerpo vuelve a tener vida en cada fase. Con barras visibles, `Notice.SetLift` sube los avisos (abajo a
   la derecha) por encima de ellas: el de dos líneas pisaba la barra.
 - **Barras de enemigos** (`EnemyBars`, ajuste del host, apagado por defecto): como la barra del jefe, los enemigos que
   no son jefes se apuntan al encenderse; cada frame se dibuja una barra pequeña (hasta 16, creadas una vez) sobre los
@@ -776,13 +781,23 @@ detalle allí):
   quepa. Los creados en combate con vida pasan a otro si quien los mueve cae o pausa.
 - **Objetos que activa solo un caballero** (`SceneObjectSync`): la palanca del puente (109) y, con el mensaje 110
   (`LocalTrigger`), las plataformas que giran o caen al pisarlas y los huevos de Cañón de Niebla.
-- **FSM compartidas**: el tranvía, el ascensor del Palacio Blanco y las plataformas del Coliseo y de la Radiancia tienen
-  controlador. Las copias no tocan al caballero local ni abren diálogos.
+- **FSM compartidas**: el tranvía (el vagón `Tram Control` y el de las estaciones `Tram Main`), el ascensor del Palacio
+  Blanco y las plataformas del Coliseo y de la Radiancia tienen controlador. Las copias no tocan al caballero local ni
+  abren diálogos.
+- **Marioneta muriendo**: lo que dice quien mueve al enemigo ("ya muerto allí", con sus avisos) vale lo último que
+  llega: un `ZERO HP` de cambio de fase se quita allí a los 0,5 s y antes se quedaba aquí el resto del combate.
+- **Cuerpo del caído**: mira hacia donde miraba al caer en todos los PCs (va en el aviso de caída y en el estado del
+  grupo) y al volver a la sala ya está tumbado.
 - **Datos del personaje**: `maxMP`, estatuas y puertas de los Panteones, `blockerHits` y el robo del banquero son de cada
   personaje (`SharedUntil026`: los guardados antes toman el valor del mundo). Cada personaje guardado deja un `.bak`.
 - **Cargas** (`CoopSaves.CanStart`): falso los 5 s siguientes a empezar una carga, para que el mundo del host no empiece
   otra encima mientras el juego sigue en el menú.
 - **Red**: `PacketReader.ReadName` reutiliza las cadenas de nombres de estado, evento y prefab que ya llegaron.
+- **Desinstalar**: la regla de "Steam cambió este archivo, se deja" es solo para los del juego; un mod puesto a mano
+  en `Mods` antes de instalar se devuelve. La caché de skins se borra siempre.
+- **Órdenes de prueba nuevas**: `pdadd` (suma como el juego), `towall` (deslizarse por una pared), `fsmstates` (estado
+  de todas las FSM de un nombre, sin límite), `givegeo`, `selected`, `uiselect` y `uicancel` (menús sin mando real), y
+  `transitionState` en `hero`.
 
 ## Código del juego
 
