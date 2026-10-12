@@ -171,10 +171,13 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     con el estado recibido e interpolación; sus colisiones de daño siguen funcionando para el jugador local. Quien
     entra en la sala recibe del dueño la vida de cada enemigo: se aplica aunque el enemigo aún no sea marioneta (lo
     pasa a ser un poco después de cargar la sala); solo se ignora la vida de los que mueve este PC.
-  - Traspaso: el que lo suelta envía cómo iba (estado, números y objetos de cada FSM, velocidad, gravedad y tipo de
+  - Traspaso: el que lo suelta envía cómo iba (estado, números, textos y objetos de cada FSM, velocidad, gravedad y tipo de
     cuerpo) y el nuevo lo sigue desde ahí. Los objetos van como "su caballero" (en quien lo recibe, el suyo), "una
     pieza del enemigo" o "un objeto de la sala" por su ruta, y solo rellenan las variables vacías: la marioneta no pasó
-    por los estados que las guardan (el escupidor guarda al caballero al alertarse). También al salir de la sala o morir (aún dentro, al empezar el cambio de sala): un jefe no
+    por los estados que las guardan (el escupidor guarda al caballero al alertarse). Los textos van desde 0.25.0: los
+    Señores Mantis de la segunda fase eligen pared y guardan hacia dónde lanzar (`Shot Event`, "WIDE L"...) antes de
+    lanzar; retomados entre medias, lanzaban con el texto de su lanzamiento anterior (o vacío) y la guadaña salía de la
+    arena y volvía. También al salir de la sala o morir (aún dentro, al empezar el cambio de sala): un jefe no
     repite su presentación.
   - Los golpes del jugador local a una marioneta van al PC que la mueve, que los aplica al enemigo real. Cualquier
     aviso de fuera que llegue a una marioneta (el de daño del ataque, la zona de la arena en la que entró el caballero,
@@ -307,6 +310,12 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
   - Charged Lumafly (`zap drift`, Cañón de Niebla): flotan a la deriva sin vida. Los mueve el dueño de la sala, que
     envía dónde está cada uno 10 veces por segundo (mensaje 105, no fiable, a la sala); en los demás su deriva se para y
     siguen esa posición suavizada. Su descarga (`zap control`) sigue siendo de cada PC: daña a su caballero.
+  - Garpedes (`BigCentipede`, los gusanos gigantes de Nido Profundo): avanzan en línea recta a velocidad fija, se meten
+    bajo tierra en su salida y, tras una espera fija, salen otra vez por su entrada (2,6 antes). Su vuelta empieza al
+    cargar la sala. Por dónde van a lo largo del recorrido dice en qué punto de la vuelta están (bajo tierra siguen
+    avanzando): el dueño lo envía cada segundo (mensaje 107, no fiable, a la sala) y los demás, si se desvían más de
+    0,1 s, se mueven ahí y se meten o salen como el juego (`Burrow`/`UnBurrow`). Sus secciones son hijas y se esconden
+    solas según por dónde van.
   - Goam (`Worm Control`, Cruces Olvidados): salen y se esconden con esperas fijas desde que carga la sala y no tienen
     vida, así que no son enemigos compartidos. `HazardSync` los alinea (mensaje 104, no fiable, a la sala): el dueño
     envía cada segundo en qué estado de espera va cada uno y cuánto lleva, y los demás pasan a ese estado y ajustan la
@@ -546,7 +555,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 Decisiones aprobadas en [Decisiones de M5](#decisiones-de-m5). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
-mensajes nuevos van del 73 al 106 (el 98 es de `EnemySync`, el 104 y el 105 de `HazardSync` y el 106 de
+mensajes nuevos van del 73 al 107 (el 98 es de `EnemySync`, el 104, el 105 y el 107 de `HazardSync` y el 106 de
 `StagTogether`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
 juego (16:9; con otra proporción el juego deja franjas) y escala con su alto como el HUD del juego; las piezas se crean
 una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
@@ -987,6 +996,12 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   a la normal ("La música de la sombra vuelve a la normal"). En `Fungus2_15`: se desafía, muere el primer Señor Mantis,
   los dos salen vivos a `Fungus2_14` y vuelven; al desafiar otra vez sale con 210 de vida en los dos PCs. El host
   con la skin Rick Knight cae en `Town`: su cuerpo tendido sale con Rick en los dos PCs.
+- **0.25.0** (copias D y E, 12 oct 2026), de la tercera partida real: en `Deepnest_16` los tres Garpedes van por el
+  mismo punto en los dos PCs (a 0,01 s) y en 25 s no hace falta ninguna corrección más. Con 120 ms de lag simulado,
+  en la segunda fase de los Señores Mantis y cambiando a los jugadores de lado cada 2,3 s, los Mantis se retoman
+  entre elegir pared y lanzar (`Throw Antic 2`, `Throw 2`) y su `Shot Event` llega del otro PC (antes se quedaba el
+  anterior, a veces vacío). Una Incubadora de Excavadores muerta en `Deepnest_26b` sigue muerta en los dos al salir
+  y volver (los bichos normales vuelven al volver a entrar, como en el juego sin mod).
 
 ## Pendientes
 

@@ -24,11 +24,35 @@ namespace HKMultiplayer.Game.Scene;
 /// y acababan en sitios distintos. Los mueve el dueño de la sala, que envía dónde está cada uno 10 veces por segundo; en
 /// los demás su deriva se para y siguen esa posición suavizada. Su descarga sigue siendo de cada PC (daña a su caballero).
 /// </para>
+/// <para>
+/// Y los gusanos gigantes de Nido Profundo (Garpedes, `BigCentipede`): avanzan en línea recta a velocidad fija, se meten
+/// bajo tierra en su salida y, tras una espera fija, vuelven a salir por su entrada. Su vuelta empieza al cargar la sala,
+/// así que en cada PC iban por un sitio distinto. Por dónde van (a lo largo de su recorrido) dice en qué punto de la
+/// vuelta están: el dueño envía cada segundo ese punto y los demás se ponen ahí si se desvían.
+/// </para>
 /// </summary>
 internal sealed class HazardSync {
     public const MessageType Phases = (MessageType) 70;
     public const MessageType CyclePhases = (MessageType) 104;
     public const MessageType DriftPositions = (MessageType) 105;
+    public const MessageType BurrowPhases = (MessageType) 107;
+
+    /// <summary>Lo que retrocede el gusano desde su entrada al volver a salir (fijo en `BigCentipede.UnBurrow`).</summary>
+    private const float BurrowBackOffset = 2.6f;
+
+    /// <summary>Desfase de un gusano (s de su vuelta) a partir del cual se corrige.</summary>
+    private const float BurrowTolerance = 0.1f;
+
+    private static readonly System.Reflection.FieldInfo CentipedeSpeed = typeof(BigCentipede).GetField("moveSpeed", Private);
+    private static readonly System.Reflection.FieldInfo CentipedeBurrowTime = typeof(BigCentipede).GetField("burrowTime", Private);
+    private static readonly System.Reflection.FieldInfo CentipedeBurrowing = typeof(BigCentipede).GetField("isBurrowing", Private);
+    private static readonly System.Reflection.FieldInfo CentipedeBurrowTimer = typeof(BigCentipede).GetField("burrowTimer", Private);
+    private static readonly System.Reflection.MethodInfo CentipedeBurrow = typeof(BigCentipede).GetMethod("Burrow", Private);
+    private static readonly System.Reflection.MethodInfo CentipedeUnBurrow = typeof(BigCentipede).GetMethod("UnBurrow", Private);
+
+    private readonly List<(uint Id, BigCentipede Centipede)> _burrowers = new();
+    private readonly Dictionary<uint, BigCentipede> _burrowerById = new();
+    private readonly MessageHandler _onBurrowPhases;
 
     /// <summary>FSM de los peligros que flotan a la deriva.</summary>
     private const string DriftFsm = "zap drift";
@@ -102,12 +126,14 @@ internal sealed class HazardSync {
         MessageRoutes.Register(Phases, Route.SameScene, reliable: false);
         MessageRoutes.Register(CyclePhases, Route.SameScene, reliable: false);
         MessageRoutes.Register(DriftPositions, Route.SameScene, reliable: false);
+        MessageRoutes.Register(BurrowPhases, Route.SameScene, reliable: false);
     }
 
     public HazardSync() {
         _onPhases = OnPhases;
         _onCyclePhases = OnCyclePhases;
         _onDriftPositions = OnDriftPositions;
+        _onBurrowPhases = OnBurrowPhases;
     }
 
     public void Attach(GameSession session) {
@@ -115,6 +141,7 @@ internal sealed class HazardSync {
         session.On(Phases, _onPhases);
         session.On(CyclePhases, _onCyclePhases);
         session.On(DriftPositions, _onDriftPositions);
+        session.On(BurrowPhases, _onBurrowPhases);
         Clear();
     }
 
@@ -122,6 +149,7 @@ internal sealed class HazardSync {
         _session?.On(Phases, null);
         _session?.On(CyclePhases, null);
         _session?.On(DriftPositions, null);
+        _session?.On(BurrowPhases, null);
         foreach (var drifter in _drifters) {
             StopFollowing(drifter);
         }
@@ -137,6 +165,8 @@ internal sealed class HazardSync {
         _cyclicById.Clear();
         _drifters.Clear();
         _drifterById.Clear();
+        _burrowers.Clear();
+        _burrowerById.Clear();
         _scene = string.Empty;
         _sceneHash = 0;
     }
@@ -169,14 +199,15 @@ internal sealed class HazardSync {
         }
 
         UpdateDrifters();
-        if (_hazards.Count + _cyclic.Count == 0 || !_session.CanSend || !_session.IsLocalSceneOwner ||
-            Time.unscaledTime < _nextSend || !OthersInScene()) {
+        if (_hazards.Count + _cyclic.Count + _burrowers.Count == 0 || !_session.CanSend ||
+            !_session.IsLocalSceneOwner || Time.unscaledTime < _nextSend || !OthersInScene()) {
             return;
         }
 
         _nextSend = Time.unscaledTime + SendInterval;
         Send();
         SendCycles();
+        SendBurrowers();
     }
 
     /// <summary>Animados con algo que daña o que es sólido (lo que se puede tocar), sin enemigos ni el caballero.</summary>
@@ -228,6 +259,20 @@ internal sealed class HazardSync {
 
             _cyclic.Add((id, fsm));
             _cyclicById[id] = fsm;
+        }
+
+        foreach (var centipede in Object.FindObjectsByType<BigCentipede>(FindObjectsSortMode.None)) {
+            if (_burrowers.Count >= MaxHazards || centipede.gameObject.scene.buildIndex < 0) {
+                continue;
+            }
+
+            var id = ScenePaths.Hash(centipede.transform);
+            if (_burrowerById.ContainsKey(id)) {
+                continue;
+            }
+
+            _burrowers.Add((id, centipede));
+            _burrowerById[id] = centipede;
         }
     }
 
@@ -528,10 +573,145 @@ internal sealed class HazardSync {
         }
     }
 
+    /// <summary>Los gusanos ya empezados: en qué punto de su vuelta va cada uno.</summary>
+    private void SendBurrowers() {
+        PacketWriter writer = null;
+        var countPosition = 0;
+        var count = 0;
+        foreach (var (id, centipede) in _burrowers) {
+            if (centipede == null || !centipede.isActiveAndEnabled || !TryGetCycle(centipede, out var cycle)) {
+                continue;
+            }
+
+            if (writer == null || count == PerMessage) {
+                if (writer != null) {
+                    Finish(writer, countPosition, count);
+                }
+
+                writer = _session.Begin(BurrowPhases);
+                writer.WriteUShort(_sceneHash);
+                countPosition = writer.Position;
+                writer.WriteByte(0);
+                count = 0;
+            }
+
+            writer.WriteUInt(id);
+            writer.WriteFloat(PhaseOf(centipede, cycle));
+            count++;
+        }
+
+        if (writer != null) {
+            Finish(writer, countPosition, count);
+        }
+    }
+
+    private void OnBurrowPhases(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var count = reader.ReadByte();
+        // Lo que tardó en llegar: el gusano del dueño ya va por delante
+        var delay = (float) (_session.Rtt / 2);
+        for (var i = 0; i < count; i++) {
+            var id = reader.ReadUInt();
+            var phase = reader.ReadFloat() + delay;
+            if (sceneHash != _sceneHash || from.Scene != _scene || !_burrowerById.TryGetValue(id, out var centipede) ||
+                centipede == null || !centipede.isActiveAndEnabled || !TryGetCycle(centipede, out var cycle)) {
+                continue;
+            }
+
+            // Por el camino más corto en la vuelta: justo antes y justo después de volver a salir es casi lo mismo
+            var target = Mathf.Repeat(phase, cycle.Period);
+            var local = PhaseOf(centipede, cycle);
+            var difference = Mathf.Repeat(target - local + cycle.Period / 2f, cycle.Period) - cycle.Period / 2f;
+            if (Mathf.Abs(difference) <= BurrowTolerance) {
+                continue;
+            }
+
+            if (TestMode) {
+                Log.Info($"[TEST] {centipede.name}: se alinea con el dueño ({local:0.00} -> {target:0.00} de {cycle.Period:0.00} s)");
+            }
+
+            SetPhase(centipede, cycle, target);
+        }
+    }
+
+    /// <summary>
+    /// La vuelta de un gusano, en unidades de su recorrido: dónde vuelve a salir (`Start`), dónde se mete (`Exit`), su
+    /// velocidad y cuánto dura entera (el camino hasta meterse más la espera bajo tierra, en la que sigue avanzando).
+    /// </summary>
+    private struct CentipedeCycle {
+        public Vector2 Direction;
+        public float Start;
+        public float Exit;
+        public float Speed;
+        public float Travel;
+        public float Period;
+    }
+
+    /// <summary>Solo si ya pasó su `Start` (antes no tiene dirección ni entrada) y los campos del juego existen.</summary>
+    private static bool TryGetCycle(BigCentipede centipede, out CentipedeCycle cycle) {
+        cycle = default;
+        var direction = centipede.Direction;
+        if (direction.sqrMagnitude < 0.5f || CentipedeSpeed == null || CentipedeBurrowTime == null ||
+            CentipedeBurrowing == null || CentipedeBurrowTimer == null || CentipedeBurrow == null ||
+            CentipedeUnBurrow == null) {
+            return false;
+        }
+
+        cycle.Direction = direction;
+        cycle.Speed = (float) CentipedeSpeed.GetValue(centipede);
+        cycle.Start = Vector2.Dot(centipede.EntryPoint, direction) - BurrowBackOffset;
+        cycle.Exit = Vector2.Dot(centipede.ExitPoint, direction);
+        if (cycle.Speed <= 0.01f || cycle.Exit <= cycle.Start) {
+            return false;
+        }
+
+        cycle.Travel = (cycle.Exit - cycle.Start) / cycle.Speed;
+        cycle.Period = cycle.Travel + (float) CentipedeBurrowTime.GetValue(centipede);
+        return true;
+    }
+
+    /// <summary>Segundos desde que volvió a salir: se sabe por dónde va, también bajo tierra (ahí sigue avanzando).</summary>
+    private static float PhaseOf(BigCentipede centipede, CentipedeCycle cycle) =>
+        (Vector2.Dot(centipede.transform.position, cycle.Direction) - cycle.Start) / cycle.Speed;
+
+    /// <summary>
+    /// Lo pone en ese punto de la vuelta: lo mueve a lo largo de su recorrido (con sus secciones, que son sus hijas) y,
+    /// si cambia de estar fuera a bajo tierra o al revés, hace lo que hace el juego en ese cambio (polvo, se esconde).
+    /// Las secciones se esconden y se muestran solas según por dónde van.
+    /// </summary>
+    private static void SetPhase(BigCentipede centipede, CentipedeCycle cycle, float phase) {
+        var transform = centipede.transform;
+        var shift = cycle.Start + phase * cycle.Speed - Vector2.Dot(transform.position, cycle.Direction);
+        var position = (Vector2) transform.position + cycle.Direction * shift;
+        transform.position = new Vector3(position.x, position.y, transform.position.z);
+        var body = centipede.GetComponent<Rigidbody2D>();
+        if (body != null) {
+            body.position = position;
+        }
+
+        var burrowing = (bool) CentipedeBurrowing.GetValue(centipede);
+        if (phase > cycle.Travel) {
+            if (!burrowing) {
+                CentipedeBurrow.Invoke(centipede, null);
+            }
+
+            CentipedeBurrowTimer.SetValue(centipede, phase - cycle.Travel);
+        } else if (burrowing) {
+            CentipedeUnBurrow.Invoke(centipede, new object[] { false });
+        }
+    }
+
     /// <summary>Para el modo de prueba: cuántos se siguen y en qué punto van los que están animándose.</summary>
     public string Describe() {
         var builder = new System.Text.StringBuilder($"peligros animados: {_hazards.Count}, con esperas: {_cyclic.Count}, " +
-                                                    $"a la deriva: {_drifters.Count} a las {System.DateTime.UtcNow:HH:mm:ss.fff}");
+                                                    $"a la deriva: {_drifters.Count}, gusanos: {_burrowers.Count} " +
+                                                    $"a las {System.DateTime.UtcNow:HH:mm:ss.fff}");
+        foreach (var (_, centipede) in _burrowers) {
+            if (centipede != null && TryGetCycle(centipede, out var cycle)) {
+                builder.Append($" {centipede.name}={PhaseOf(centipede, cycle):0.00}/{cycle.Period:0.00}");
+            }
+        }
+
         foreach (var drifter in _drifters) {
             if (drifter.Transform != null) {
                 builder.Append($" {drifter.Transform.name}=({drifter.Transform.position.x:0.00},{drifter.Transform.position.y:0.00})" +

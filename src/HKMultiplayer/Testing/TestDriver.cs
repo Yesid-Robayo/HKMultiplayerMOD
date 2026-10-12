@@ -1142,6 +1142,34 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "darkness":
+                // darkness: las cámaras (qué capas ven) y lo que ve la de la oscuridad (los recortes de luz)
+                foreach (var camera in Camera.allCameras) {
+                    var layers = Enumerable.Range(0, 32).Where(l => (camera.cullingMask & 1 << l) != 0)
+                        .Select(l => $"{l}:{LayerMask.LayerToName(l)}");
+                    Log.Info($"{Tag}cámara {camera.name} prof={camera.depth} textura={(camera.targetTexture != null ? camera.targetTexture.name : "-")} " +
+                             $"capas=[{string.Join(",", layers)}]");
+                }
+
+                var darknessCamera = FindObjectsByType<DarknessCameraEffect>(FindObjectsSortMode.None).FirstOrDefault()
+                    ?.GetComponent<Camera>();
+                var darknessShown = 0;
+                foreach (var renderer in FindObjectsByType<Renderer>(FindObjectsSortMode.None)) {
+                    var inDarkness = darknessCamera != null && (darknessCamera.cullingMask & 1 << renderer.gameObject.layer) != 0;
+                    if (!inDarkness && renderer.transform.parent?.name != "Vignette" && renderer.name != "Vignette" ||
+                        darknessShown++ >= 30) {
+                        continue;
+                    }
+
+                    var sprite = renderer is SpriteRenderer spriteRenderer && spriteRenderer.sprite != null
+                        ? spriteRenderer.sprite.name : "-";
+                    Log.Info($"{Tag}oscuridad {PathOf(renderer.transform)} capa={LayerMask.LayerToName(renderer.gameObject.layer)} " +
+                             $"activo={renderer.enabled} sprite={sprite} shader={(renderer.sharedMaterial != null ? renderer.sharedMaterial.shader.name : "-")} " +
+                             $"orden={renderer.sortingLayerName}/{renderer.sortingOrder} pos={renderer.transform.position} " +
+                             $"escala={renderer.transform.lossyScale} tam={renderer.bounds.size}");
+                }
+
+                break;
             case "fsmall":
                 // fsmall <ruta del objeto>: acciones de todas las FSM del objeto y sus hijos, también inactivos. Si no
                 // está en la sala, se busca por nombre entre todo lo cargado (prefabs del pool, como "Fireball Top"):

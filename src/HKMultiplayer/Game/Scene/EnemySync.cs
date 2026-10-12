@@ -154,6 +154,9 @@ internal sealed class EnemySync {
 
     private const int MaxHandoverVars = 48;
 
+    /// <summary>Largo máximo de cada texto del traspaso (nombres de eventos y de estados).</summary>
+    private const int MaxHandoverString = 64;
+
     /// <summary>Si no llega cómo iba, el nuevo lo mueve igualmente pasado este tiempo (desde el principio de su lógica).</summary>
     private const float HandoverTimeout = 1.5f;
 
@@ -395,6 +398,13 @@ internal sealed class EnemySync {
         public int[] Ints;
         public float[] Floats;
         public bool[] Bools;
+
+        /// <summary>
+        /// Sus textos: algunos ataques eligen en uno el lado y lo usan en otro (los Señores Mantis de la segunda fase
+        /// guardan en `Shot Event` hacia dónde va su guadaña).
+        /// </summary>
+        public string[] Strings;
+
         public ObjectRef[] Objects;
         public bool HasBody;
         public Vector2 Velocity;
@@ -2609,6 +2619,22 @@ internal sealed class EnemySync {
                 writer.WriteBool(bools[v].Value);
             }
 
+            // Sus textos: el Señor Mantis de la segunda fase elige pared y guarda hacia dónde lanzar (`Shot Event`) antes
+            // de llegar a ella; retomado entre medias, lanzaba con el texto de su lanzamiento anterior, a veces hacia
+            // fuera de la arena desde la otra pared
+            var strings = variables?.StringVariables;
+            var stringCount = strings == null ? 0 : Math.Min(strings.Length, MaxHandoverVars);
+            writer.WriteByte((byte) stringCount);
+            for (var v = 0; v < stringCount; v++) {
+                // Uno demasiado largo no va (el otro PC deja el suyo): no son los que eligen lados ni ataques
+                var value = strings[v].Value ?? string.Empty;
+                var fits = System.Text.Encoding.UTF8.GetByteCount(value) <= MaxHandoverString;
+                writer.WriteBool(fits);
+                if (fits) {
+                    writer.WriteString(value);
+                }
+            }
+
             // Sus variables de objeto (el caballero al que sigue, él mismo...): las que guarda al despertar no las tiene
             // la marioneta, que no pasó por ahí
             var objects = variables?.GameObjectVariables;
@@ -2668,6 +2694,11 @@ internal sealed class EnemySync {
             bools[v] = reader.ReadBool();
         }
 
+        var strings = new string[reader.ReadByte()];
+        for (var v = 0; v < strings.Length; v++) {
+            strings[v] = reader.ReadBool() ? reader.ReadString(MaxHandoverString) : null;
+        }
+
         var objects = new ObjectRef[reader.ReadByte()];
         for (var v = 0; v < objects.Length; v++) {
             objects[v].Kind = (ObjectKind) reader.ReadByte();
@@ -2700,7 +2731,7 @@ internal sealed class EnemySync {
         }
 
         enemy.Handover[index] = new HandoverFsm {
-            State = state, Ints = ints, Floats = floats, Bools = bools, Objects = objects, HasBody = hasBody, Velocity = velocity, Gravity = gravity,
+            State = state, Ints = ints, Floats = floats, Bools = bools, Strings = strings, Objects = objects, HasBody = hasBody, Velocity = velocity, Gravity = gravity,
             BodyType = bodyType, Active = active, Look = look, Damage = damage, Detached = detached, Waited = waited
         };
         if (index == count - 1) {
@@ -2778,6 +2809,20 @@ internal sealed class EnemySync {
 
             for (var v = 0; v < data.Bools.Length && v < variables.BoolVariables.Length; v++) {
                 variables.BoolVariables[v].Value = data.Bools[v];
+            }
+
+            for (var v = 0; v < data.Strings.Length && v < variables.StringVariables.Length; v++) {
+                var variable = variables.StringVariables[v];
+                if (data.Strings[v] == null) {
+                    continue;
+                }
+
+                if (TestMode && variable.Value != data.Strings[v]) {
+                    Log.Info($"[TEST] {enemy.Root.name}/{fsm.FsmName}: al retomarlo {variable.Name} pasa de " +
+                             $"'{variable.Value}' a '{data.Strings[v]}'");
+                }
+
+                variable.Value = data.Strings[v];
             }
 
             // Solo las vacías aquí: las que ya apuntan a algo las preparó su propia lógica en este PC
@@ -3576,7 +3621,8 @@ internal sealed class EnemySync {
         var text = string.Empty;
         foreach (var fsm in spawned.GetComponents<PlayMakerFSM>()) {
             var speed = fsm.FsmVariables.FindFsmFloat("Speed");
-            text += $"[{fsm.FsmName}:{fsm.ActiveStateName}{(speed != null ? $" Speed={speed.Value:0.##}" : string.Empty)}]";
+            var bools = string.Concat(System.Linq.Enumerable.Select(fsm.FsmVariables.BoolVariables, b => $" {b.Name}={b.Value}"));
+            text += $"[{fsm.FsmName}:{fsm.ActiveStateName}{(speed != null ? $" Speed={speed.Value:0.##}" : string.Empty)}{bools}]";
         }
 
         return text;
