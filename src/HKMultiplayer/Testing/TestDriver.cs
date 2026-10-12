@@ -1177,6 +1177,12 @@ internal sealed class TestDriver : MonoBehaviour {
                     : Path.Combine(Application.persistentDataPath, "fsmdump");
                 Log.Info($"{Tag}fsmdumpall {FsmDumper.DumpLoadedScenes(dumpFolder)}");
                 break;
+            case "fsmdumpauto":
+                // fsmdumpauto <carpeta>|no: vuelca cada sala al activarse (si no está ya en la carpeta), antes de que su
+                // lógica saque al caballero (las salas de sueño lo echan nada más cargar si no se entró soñando)
+                FsmDumper.SetAuto(args.Length > 1 && args[1] != "no" ? string.Join(" ", args.Skip(1)) : null, this);
+                Log.Info($"{Tag}fsmdumpauto {(args.Length > 1 ? args[1] : "no")}");
+                break;
             case "scenelist":
                 // scenelist: todas las salas del juego, una por línea (para recorrerlas con fsmdumpall)
                 foreach (var sceneName in FsmDumper.BuildSceneNames()) {

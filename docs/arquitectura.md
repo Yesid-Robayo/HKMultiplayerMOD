@@ -767,7 +767,7 @@ y nunca se sube.
   tiempos y valores. Eso son datos guardados en las escenas (`level*`). Dos formas de verlas:
   - **FSMViewAvalonia** (herramienta de la comunidad): abre las escenas del juego y dibuja cada FSM como un diagrama,
     sin abrir el juego. Es la cómoda para mirarlas a ojo.
-  - **Volcarlas a texto desde el mod**: `bash tools/dump-fsms.sh` recorre todas las salas del juego (483, sin menús ni
+  - **Volcarlas a texto desde el mod**: `bash tools/dump-fsms.sh` recorre todas las salas del juego (481, sin menús ni
     vídeos) con sus propias copias (`test-instances/l`, `m`, `n`, `o`; 3 a la vez, unos 20-30 minutos) y escribe
     `decomp/fsm/<sala>.txt` con la orden `fsmdumpall` del modo de prueba (`Testing/FsmDumper`): las FSM de la sala y de
     las que se cargan con ella (`_boss`), también las apagadas, tal como quedan en el juego después de lo que cambian el

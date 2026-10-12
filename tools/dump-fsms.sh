@@ -49,16 +49,20 @@ start_worker() {
   sleep 8
   wait_playable "$inst" 180 || { echo "$inst: no llegó a una sala jugable" >&2; return 1; }
   send "$inst" "god"
+  # Cada sala se vuelca al activarse: las de sueño sacan al caballero nada más cargar si no se entró soñando
+  send "$inst" "fsmdumpauto $OUT_WIN"
   sleep 2
 }
 
-# Vuelca una sala; 0 si quedó escrita
+# Vuelca una sala; 0 si quedó escrita. El volcado automático (fsmdumpauto) la escribe al activarse; si no salió (ya
+# estaba en ella), se pide a mano
 dump_scene() {
   local inst="$1" scene="$2" since current deadline
   since=$(log_lines "$inst")
   send "$inst" "warp $scene 0 0"
   deadline=$((SECONDS + 45))
   while [ $SECONDS -lt $deadline ]; do
+    [ -s "$OUT/$scene.txt" ] && return 0
     current="$(status_field "$(status_of "$inst")" scene)"
     [ "$current" = "$scene" ] && break
     # Si no se puede viajar ahora (cambio de sala en curso), se vuelve a pedir
@@ -67,10 +71,12 @@ dump_scene() {
     fi
     sleep 1
   done
+  [ -s "$OUT/$scene.txt" ] && return 0
   [ "$current" = "$scene" ] || return 1
 
   # Que arranquen sus FSM y se carguen las salas que van con ella (las _boss)
   sleep 3
+  [ -s "$OUT/$scene.txt" ] && return 0
   since=$(log_lines "$inst")
   send "$inst" "fsmdumpall $OUT_WIN"
   wait_log_since "$inst" "$since" "fsmdumpall $scene:|'fsmdumpall .*' falló" 90 >/dev/null || return 1

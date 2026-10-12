@@ -302,6 +302,43 @@ internal static class FsmDumper {
         }
     }
 
+    private static string _autoFolder;
+    private static MonoBehaviour _autoHost;
+    private static bool _autoHooked;
+
+    /// <summary>
+    /// Con carpeta, vuelca cada sala en cuanto se activa (un frame después, con sus salas añadidas ya cargadas) si aún no
+    /// tiene archivo; con null, deja de hacerlo.
+    /// </summary>
+    public static void SetAuto(string folder, MonoBehaviour host) {
+        _autoFolder = folder;
+        _autoHost = host;
+        if (_autoHooked) {
+            return;
+        }
+
+        _autoHooked = true;
+        UnitySceneManager.activeSceneChanged += (_, next) => {
+            if (_autoFolder != null && _autoHost != null && next.buildIndex >= 0 &&
+                !File.Exists(Path.Combine(_autoFolder, next.name + ".txt"))) {
+                _autoHost.StartCoroutine(AutoDump(next.name));
+            }
+        };
+    }
+
+    private static System.Collections.IEnumerator AutoDump(string scene) {
+        yield return null;
+        if (_autoFolder == null || UnitySceneManager.GetActiveScene().name != scene) {
+            yield break;
+        }
+
+        try {
+            Util.Log.Info($"[TEST] fsmdumpall {DumpLoadedScenes(_autoFolder)}");
+        } catch (Exception e) {
+            Util.Log.Error($"[TEST] 'fsmdumpall {scene}' falló: {e}");
+        }
+    }
+
     /// <summary>Nombres de todas las salas del juego (por su ruta en la compilación), para recorrerlas.</summary>
     public static IEnumerable<string> BuildSceneNames() {
         for (var i = 0; i < UnitySceneManager.sceneCountInBuildSettings; i++) {
