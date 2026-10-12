@@ -434,6 +434,10 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     `PersistentBoolItem`): los jefes de arena no lo llevan y vuelven cada vez que se carga la sala. Antes el host
     recordaba también a esos: tras matar al primer Señor Mantis y volver, el desafío cerraba la jaula y no salía. Con
     alguien en la sala, quien entra sabe qué murió por la foto del dueño de la sala, no por esta memoria.
+  - Si descansa uno solo, los enemigos no vuelven para nadie: los datos de la sala del otro (semipersistentes, de cada
+    PC) los siguen marcando muertos y al cargarla vuelven a morir. Los dos PCs coinciden; para que vuelvan, descansan
+    (o mueren) los dos. Decidido así a propósito: si el descanso de uno los devolviera también en el otro, le
+    aparecerían enemigos delante sin haber hecho nada, en mitad de su camino o de un combate en otra sala.
   - Un enemigo destruido durante un cambio de sala (`GameManager.IsInSceneTransition`) no cuenta como muerto: la sala
     se está descargando. Al recargar la misma sala ("Recargar sala", "Ir con" a la sala en la que ya se está) su nombre
     no cambia hasta que la nueva está lista, y antes todos sus enemigos se daban por muertos hasta el banco: el Falso
