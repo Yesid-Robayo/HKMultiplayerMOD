@@ -351,6 +351,11 @@ internal sealed class HostSettings {
         ResetToDefaults();
         if (world.Length > 0) {
             var path = PathFor(world);
+            // Si se cerró justo entre borrar el viejo y mover el nuevo, queda el nuevo como .tmp
+            if (!File.Exists(path) && File.Exists(path + ".tmp")) {
+                path += ".tmp";
+            }
+
             try {
                 if (File.Exists(path)) {
                     var json = JObject.Parse(File.ReadAllText(path));
@@ -383,7 +388,15 @@ internal sealed class HostSettings {
         }
 
         try {
-            File.WriteAllText(PathFor(world), json.ToString(Formatting.Indented), new UTF8Encoding(false));
+            // Aparte y luego en su sitio: si el juego se cerraba a mitad de escribirlo, el mundo volvía a los ajustes por
+            // defecto
+            var path = PathFor(world);
+            File.WriteAllText(path + ".tmp", json.ToString(Formatting.Indented), new UTF8Encoding(false));
+            if (File.Exists(path)) {
+                File.Delete(path);
+            }
+
+            File.Move(path + ".tmp", path);
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
             Log.Warn($"No se pudieron guardar los ajustes del mundo: {e.Message}");
         }

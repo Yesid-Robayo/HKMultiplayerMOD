@@ -46,6 +46,7 @@ public sealed class NetClient : NetPeer {
 
         _server = server;
         _roomCode = roomCode;
+        KeyExchange.Prepare(roomCode);
         _name = name;
         _version = version;
         _exchange = new KeyExchange();

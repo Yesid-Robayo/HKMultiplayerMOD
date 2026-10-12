@@ -300,8 +300,10 @@ internal sealed class PartnerMap {
     /// <summary>Donde iría la brújula en esa sala y ese punto (la misma cuenta que <c>GameMap.Update</c>).</summary>
     private bool TryGetIconPosition(GameMap map, Entry entry, out Vector3 position) {
         position = default;
+        // Solo si la sala se ve en el mapa abierto: el mapa rápido apaga las demás zonas y las salas sin mapear están
+        // apagadas (el icono salía flotando sobre negro)
         var room = FindRoom(map, entry.Scene);
-        if (room == null || room.transform.parent == null) {
+        if (room == null || room.transform.parent == null || !room.activeInHierarchy) {
             return false;
         }
 

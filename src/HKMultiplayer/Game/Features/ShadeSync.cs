@@ -568,9 +568,20 @@ internal sealed class ShadeSync {
     private IEnumerator KillOwnShade() {
         _recovering = true;
         try {
+            // Sin caballero o sin sala (en una cinemática, en el ciervo) se espera a tenerlos, como mucho un minuto: antes se
+            // rendía sin volver a informar, el host ya la daba por muerta y la sombra desaparecía para los demás sin
+            // devolver el geo
+            var waitUntil = Time.unscaledTime + 60f;
+            while ((HeroController.instance == null || GameManager.instance == null || GameManager.instance.sm == null) &&
+                   Time.unscaledTime < waitUntil) {
+                yield return new WaitForSecondsRealtime(1f);
+            }
+
             var shade = FindOwnShade();
             if (shade == null) {
-                var prefab = GameManager.instance.sm != null ? GameManager.instance.sm.hollowShadeObject : null;
+                var prefab = GameManager.instance != null && GameManager.instance.sm != null
+                    ? GameManager.instance.sm.hollowShadeObject
+                    : null;
                 var hero = HeroController.instance;
                 if (prefab == null || hero == null) {
                     yield break;
@@ -590,9 +601,9 @@ internal sealed class ShadeSync {
 
             // Se informa enseguida de cómo quedó (si no se pudo, la sombra sigue y los demás vuelven a verla)
             yield return new WaitForSeconds(1f);
+        } finally {
             _ownSent = false;
             _nextPoll = 0f;
-        } finally {
             _recovering = false;
         }
     }

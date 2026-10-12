@@ -44,6 +44,7 @@ internal static class HudSprites {
     private static readonly Entry[] Entries = { new(), new(), new() };
     private static tk2dSpriteCollectionData _collection;
     private static bool _loaded;
+    private static float _retryAt;
 
     public static Sprite FullMask => Entries[(int) Kind.Full].Sprite;
     public static Sprite EmptyMask => Entries[(int) Kind.Empty].Sprite;
@@ -55,8 +56,21 @@ internal static class HudSprites {
     /// <summary>Carga los sprites la primera vez que el HUD del juego existe. Devuelve si hay máscara llena.</summary>
     public static bool TryLoad() {
         if (_loaded) {
-            return FullMask != null;
+            // Sin máscara llena (no se encontró el sprite) o con su textura ya destruida (se cambió una skin del HUD): se
+            // vuelve a intentar cada 10 s. Antes el HUD del compañero no salía en toda la partida, sin más aviso
+            if (FullMask != null && FullMask.texture != null) {
+                return true;
+            }
+
+            if (Time.unscaledTime < _retryAt) {
+                return false;
+            }
+
+            _loaded = false;
+            _collection = null;
         }
+
+        _retryAt = Time.unscaledTime + 10f;
 
         foreach (var candidate in Resources.FindObjectsOfTypeAll<tk2dSpriteCollectionData>()) {
             if (candidate.name == CollectionName || candidate.spriteCollectionName == CollectionName) {
@@ -74,6 +88,10 @@ internal static class HudSprites {
         Load(Kind.Empty, EmptyNames);
         Load(Kind.Blue, BlueNames);
         Log.Info($"Sprites del HUD: llena={Describe(Kind.Full)} vacía={Describe(Kind.Empty)} azul={Describe(Kind.Blue)}");
+        if (FullMask == null) {
+            Log.Warn("No se encontró la máscara llena del HUD: el HUD del compañero no se verá (se vuelve a intentar)");
+        }
+
         return FullMask != null;
     }
 
@@ -101,7 +119,10 @@ internal static class HudSprites {
 
     /// <summary>Sprite sobre la región del atlas que ocupa la definición de tk2d.</summary>
     private static bool Create(tk2dSpriteDefinition definition, Entry entry) {
-        var texture = definition.material != null ? definition.material.mainTexture as Texture2D : null;
+        // La del juego aunque el HUD propio lleve skin: creadas sobre la de la skin, al cambiarla o quitarla esa textura se
+        // destruía y las máscaras del compañero salían en blanco
+        var texture = Game.Features.Skins.VanillaTextureOf(_collection.spriteCollectionName) ??
+                      (definition.material != null ? definition.material.mainTexture as Texture2D : null);
         if (texture == null || definition.uvs == null || definition.uvs.Length < 4) {
             return false;
         }

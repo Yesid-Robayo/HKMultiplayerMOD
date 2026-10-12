@@ -109,12 +109,37 @@ internal sealed class QuestNpcSync {
     // =====================================================================================================
 
     /// <summary>
+    /// Otro jugador pagó el ascensor de Cruces a la Ciudad (`Toll Machine Lift` pone `cityLift1` y manda TOLL LIFT PAY solo
+    /// en su PC): el ascensor de esta sala que lo espera (`elev_main`, FSM `Lift lower`, estado "Up") baja también aquí.
+    /// Antes el compañero lo veía arriba hasta volver a entrar.
+    /// </summary>
+    private static void CallPaidLift() {
+        foreach (var fsm in PlayMakerFSM.FsmList.ToArray()) {
+            if (fsm == null || fsm.Fsm?.ActiveState == null || fsm.gameObject.scene.buildIndex < 0) {
+                continue;
+            }
+
+            foreach (var transition in fsm.Fsm.ActiveState.Transitions) {
+                if (transition.EventName == "TOLL LIFT PAY") {
+                    Log.Info($"{fsm.gameObject.name}/{fsm.FsmName}: otro jugador pagó el ascensor, baja también aquí");
+                    fsm.SendEvent("TOLL LIFT PAY");
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// El progreso compartido acaba de poner un dato del mundo con lo que llegó de otro PC (<paramref name="before"/>: el
     /// valor que tenía; en los sí/no, 0 o 1).
     /// </summary>
     public void OnRemoteChange(string field, int before, bool isBool) {
         if (_scene.Length == 0) {
             return;
+        }
+
+        if (isBool && before == 0 && field == "cityLift1") {
+            CallPaidLift();
         }
 
         _remoteChangedAt[field] = Time.unscaledTime;
@@ -146,8 +171,11 @@ internal sealed class QuestNpcSync {
         }
 
         // La conversación de este jugador empieza cuando su caballero pierde el control y acaba cuando lo recupera
+        // Sin control por otra cosa no es una conversación: la presentación de jefe de otro PC (hasta 30 s), el banco. Antes
+        // contaba igual y, mientras, una FSM que leía ese dato podía leer el valor viejo o perder una suma de verdad
         var hero = HeroController.instance;
-        if (hero != null && hero.controlReqlinquished) {
+        if (hero != null && hero.controlReqlinquished && !Features.BossPresentation.PartnerLocked &&
+            PlayerData.instance is { atBench: false }) {
             if (_conversationStart < 0f) {
                 _conversationStart = Time.unscaledTime;
             }

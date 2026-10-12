@@ -49,6 +49,7 @@ public sealed class NetServer : NetPeer {
     public NetServer(ITransport transport, INetListener listener, string roomCode, int maxClients, ushort firstId = 1)
         : base(transport, listener) {
         _roomCode = roomCode;
+        KeyExchange.Prepare(roomCode);
         _maxClients = maxClients;
         for (ushort id = 0; id < firstId; id++) {
             _usedIds.Add(id);

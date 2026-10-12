@@ -58,6 +58,8 @@ internal sealed class PartyActions {
         }
 
         _pending = Pending.None;
+        // El geo que llegó sin caballero es de este mundo: no se paga en la partida siguiente (podía ser otro mundo)
+        _pendingGeo = 0;
     }
 
     // =====================================================================================================
@@ -81,7 +83,8 @@ internal sealed class PartyActions {
         }
 
         if (amount <= 0) {
-            return Lang.T("Elige cuánto geo dar", "Choose how much geo to give");
+            return pd.geo <= 0 ? Lang.T("No tienes geo", "You don't have any geo")
+                : Lang.T("Elige cuánto geo dar", "Choose how much geo to give");
         }
 
         if (pd.geo < amount) {
@@ -108,21 +111,25 @@ internal sealed class PartyActions {
         var accepted = HostSettings.Current.AllowGeoGifts && target != null && targetId != from.Id;
         if (accepted) {
             Log.Info($"{from.Name} regala {amount} geo a {target.Name}");
-            SendGeo(targetId, from.Name, amount, refund: false);
+            // Si el destinatario se fue entre medias, se devuelve (antes quien regalaba ya lo había pagado y se perdía)
+            if (!SendGeo(targetId, from.Name, amount, refund: false)) {
+                SendGeo(from.Id, target.Name, amount, refund: true);
+            }
         } else {
             SendGeo(from.Id, target?.Name ?? Lang.T("tu compañero", "your partner"), amount, refund: true);
         }
     }
 
-    private void SendGeo(ushort to, string name, int amount, bool refund) {
+    /// <summary>Envía el geo a ese jugador. False si ya no está.</summary>
+    private bool SendGeo(ushort to, string name, int amount, bool refund) {
         if (to == _session.LocalId) {
             HandleGeo(name, amount, refund);
-            return;
+            return true;
         }
 
         var player = PartyState.Current?.Get(to)?.Player;
         if (player?.Connection == null) {
-            return;
+            return false;
         }
 
         var writer = _session.BeginTo(player, GeoReceived);
@@ -130,6 +137,7 @@ internal sealed class PartyActions {
         writer.WriteInt(amount);
         writer.WriteBool(refund);
         _session.EndTo();
+        return true;
     }
 
     private void OnReceived(SessionPlayer from, PacketReader reader) {

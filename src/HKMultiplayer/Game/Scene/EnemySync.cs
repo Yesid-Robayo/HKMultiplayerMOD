@@ -294,6 +294,18 @@ internal sealed class EnemySync {
         public HutongGames.PlayMaker.FsmState HeldWake;
         public bool WaitingWake;
 
+        /// <summary>El tipo de ataque con el que murió aquí (va en el aviso de su muerte).</summary>
+        public AttackTypes KilledBy;
+
+        /// <summary>
+        /// Murió en otro PC y aquí su lógica hace su muerte: lo que saque del pool no se envía (el otro ya lo hizo; antes
+        /// los efectos de muerte salían dobles).
+        /// </summary>
+        public bool DiedElsewhere;
+
+        /// <summary>Desde cuándo espera a que estén todos cerca para despertar.</summary>
+        public float WaitingWakeSince;
+
         /// <summary>Si su arena espera a todos (<see cref="ArenaWaits"/>): 0 sin mirar aún, 1 sí, -1 no.</summary>
         public sbyte ArenaWaits;
         public bool WasInvincible;
@@ -388,6 +400,9 @@ internal sealed class EnemySync {
 
         /// <summary>Su ruta en la sala al cargarla, dentro de la jaula: igual en todos los PCs.</summary>
         public uint Path;
+
+        /// <summary>Su vida en la jaula al cargar la sala (la que tiene al volver a salir).</summary>
+        public int FullHp;
     }
 
     /// <summary>Pieza de un enemigo y lo último enviado de ella.</summary>
@@ -859,9 +874,14 @@ internal sealed class EnemySync {
                     // Copia de algo creado por quien ya no está en la sala: aquí ya nadie la mueve
                     if (enemy.Puppet && !InScene(enemy.Controller)) {
                         RemoveSpawned(enemy);
+                        continue;
                     }
 
-                    continue;
+                    // Los proyectiles siguen siempre a quien los creó; los bichos con vida pueden pasar a otro (ver
+                    // AssignControllers) y siguen como los demás enemigos
+                    if (enemy.Health == null) {
+                        continue;
+                    }
                 }
 
                 // Los muertos se quedan como están (su muerte sigue su curso)
@@ -978,7 +998,9 @@ internal sealed class EnemySync {
             if (dead) {
                 enemy.ReportedDead = true;
                 enemy.DiedAt = Time.unscaledTime;
-                _healthOut.Add((enemy.Id, HealthKind.Died, 0));
+                // Con el tipo de ataque que lo mató (en el número, que en una muerte no se usaba): las muertes por
+                // salpicadura o por el agua de la Ciudad no sueltan geo y las de ácido, agua o hechizo dejan otro cadáver
+                _healthOut.Add((enemy.Id, HealthKind.Died, (int) enemy.KilledBy));
                 if (enemy.StaysDead && !enemy.Spawned && !enemy.Created && !RepeatsEveryVisit(_scene)) {
                     _killedOut.Add(enemy.Id);
                 }
@@ -1582,7 +1604,7 @@ internal sealed class EnemySync {
 
             var caged = new CagedEnemy {
                 Health = health, Fsm = fsm, Cage = health.transform.parent, RestState = rest,
-                Path = ScenePaths.StableHash(health.transform)
+                Path = ScenePaths.StableHash(health.transform), FullHp = health.hp
             };
             _caged[health] = caged;
             if (!_cagedByPath.ContainsKey(caged.Path)) {
@@ -1708,6 +1730,11 @@ internal sealed class EnemySync {
         }
 
         caged.Health.SetIsDead(false);
+        // Vuelve con la vida de la jaula: si después este PC la soltaba como original, enviaba a todos su vida vieja
+        if (caged.FullHp > 0) {
+            caged.Health.hp = caged.FullHp;
+        }
+
         if (caged.Health.GetComponent<Rigidbody2D>() is { } body) {
             body.velocity = Vector2.zero;
         }
@@ -1912,6 +1939,11 @@ internal sealed class EnemySync {
     /// </summary>
     private static bool ShouldRunEffect(Enemy enemy, HutongGames.PlayMaker.FsmStateAction action) {
         switch (action) {
+            // La reaparición tras los pinchos es para el caballero de cada PC (la Radiancia la sube con la pelea en
+            // `Climb Plats1`): sin ella, el compañero que caía al abismo reaparecía en el punto viejo
+            case HutongGames.PlayMaker.Actions.CallMethodProper { methodName.Value: "SetHazardRespawn" } respawn:
+                var respawnHero = HeroController.instance;
+                return respawnHero != null && action.Fsm.GetOwnerDefaultTarget(respawn.gameObject) == respawnHero.gameObject;
             case HutongGames.PlayMaker.Actions.SpawnRandomObjects random:
                 return random.gameObject.Value != null && !IsGeo(random.gameObject.Value);
             case HutongGames.PlayMaker.Actions.SpawnRandomObjectsOverTime overTime:
@@ -2369,7 +2401,13 @@ internal sealed class EnemySync {
         _controlOut.Clear();
         _childScratch.Clear();
         foreach (var enemy in _enemies) {
-            if (enemy.Spawned || enemy.Root == null || enemy.Health == null || enemy.Health.isDead) {
+            if (enemy.Root == null || enemy.Health == null || enemy.Health.isDead) {
+                continue;
+            }
+
+            // Lo creado en combate sigue con quien lo creó, salvo los bichos con vida (crías, los de los tarros) si ese
+            // está caído o en pausa: antes se quedaban quietos o persiguiendo al caído y en los demás PCs no hacían nada
+            if (enemy.Spawned && !Features.PartyState.IsInactive(ControllerOf(enemy, roomOwner))) {
                 continue;
             }
 
@@ -2597,6 +2635,14 @@ internal sealed class EnemySync {
     /// a ser marioneta; el nuevo lo sigue desde ahí en cuanto lo recibe.
     /// </summary>
     private void ApplyControl(Enemy enemy, ushort controller) {
+        // Un traspaso guardado que no es para este PC se tira también si el control no cambia según este PC (el que lo
+        // envió ya se fue y aquí ya se daba por movido por el dueño): con 3 o más jugadores, uno viejo se usaba minutos
+        // después en otro cambio
+        if (controller != _session.LocalId) {
+            enemy.Handover = null;
+            enemy.HandoverReady = false;
+        }
+
         var previous = ControllerOf(enemy, _session.OwnerOf(_scene));
         if (previous == controller) {
             return;
@@ -2638,6 +2684,8 @@ internal sealed class EnemySync {
         if (!_session.CanSend || enemy.Fsms == null) {
             return;
         }
+
+        ReleaseRoarLock(enemy);
 
         var fsmCount = Math.Min(enemy.Fsms.Length, byte.MaxValue);
         for (var i = 0; i < fsmCount; i++) {
@@ -3185,6 +3233,7 @@ internal sealed class EnemySync {
         enemy.HeldWake = to;
         if (!enemy.WaitingWake) {
             enemy.WaitingWake = true;
+            enemy.WaitingWakeSince = Time.unscaledTime;
             enemy.WasInvincible = enemy.Health.IsInvincible;
             enemy.Health.IsInvincible = true;
             Log.Info($"{enemy.Root.name}: espera a que estén todos cerca para despertar");
@@ -3192,6 +3241,9 @@ internal sealed class EnemySync {
 
         return true;
     }
+
+    /// <summary>Lo que un jefe espera como mucho a que estén todos cerca para despertar.</summary>
+    private const float WakeHoldSeconds = 60f;
 
     private void WakeUp(Enemy enemy) {
         enemy.Awake = true;
@@ -3221,7 +3273,9 @@ internal sealed class EnemySync {
                 continue;
             }
 
-            if (OthersInScene() && !EveryoneNear(enemy) && !InBattleScene(enemy)) {
+            // Como mucho un minuto: si falta el avatar de alguien o está lejos en pausa, el jefe esperaba invulnerable sin fin
+            if (OthersInScene() && !EveryoneNear(enemy) && !InBattleScene(enemy) &&
+                now - enemy.WaitingWakeSince < WakeHoldSeconds) {
                 if (now >= enemy.NextWaitNotice) {
                     enemy.NextWaitNotice = now + 4f;
                     HKMultiplayer.UI.Notice.Show(Lang.T($"Esperando a {MissingNear(enemy)} para empezar el combate", $"Waiting for {MissingNear(enemy)} to start the fight"), 3.5f);
@@ -3560,7 +3614,8 @@ internal sealed class EnemySync {
     private void OnSpawned(HutongGames.PlayMaker.FsmStateAction action, GameObject spawned, bool pooled,
         string prefabName = null) {
         if (_spawningCopy || _takingOver || spawned == null || _session == null || !_session.CanSend ||
-            !_enemyFsms.TryGetValue(action.Fsm, out var creator) || creator.Enemy.Puppet || !OthersInScene()) {
+            !_enemyFsms.TryGetValue(action.Fsm, out var creator) || creator.Enemy.Puppet || creator.Enemy.DiedElsewhere ||
+            !OthersInScene()) {
             return;
         }
 
@@ -3580,6 +3635,15 @@ internal sealed class EnemySync {
 
         uint id = 0;
         if (gameplay) {
+            // El pool lo recicló y lo volvió a sacar en el mismo frame, antes de que UpdateReal viera que se fue: la entrada
+            // vieja se acaba (si no, dos entradas con el mismo objeto y dos copias en el otro PC)
+            for (var i = _enemies.Count - 1; i >= 0; i--) {
+                if (_enemies[i].Spawned && _enemies[i].Root == spawned) {
+                    SendDespawn(_enemies[i].Id);
+                    Forget(_enemies[i]);
+                }
+            }
+
             id = NextSpawnedId();
             Track(spawned, id, pooled, puppet: false, _session.LocalId);
         }
@@ -4061,6 +4125,10 @@ internal sealed class EnemySync {
 
     private static void KeepPendingEvent(Enemy enemy, byte fsmIndex, string eventName) {
         enemy.PendingEvents ??= new List<(byte, string, float)>();
+        // Los viejos se quitan antes de mirar el límite: un PC que nunca lo toma llenaba la lista y después se perdían
+        // los nuevos aunque sí lo tomara
+        var now = Time.unscaledTime;
+        enemy.PendingEvents.RemoveAll(e => now - e.At > PendingEventSeconds);
         if (enemy.PendingEvents.Count < MaxPendingEvents) {
             enemy.PendingEvents.Add((fsmIndex, eventName, Time.unscaledTime));
         }
@@ -5337,8 +5405,9 @@ internal sealed class EnemySync {
                 break;
             case HealthKind.Died:
                 // Las FSM vuelven para que la muerte siga su curso (cadáver, efectos, botín de este jugador)
+                enemy.DiedElsewhere = true;
                 SetPuppet(enemy, false);
-                health.Die(null, AttackTypes.Nail, true);
+                health.Die(null, hp is >= 0 and <= (int) AttackTypes.NailBeam ? (AttackTypes) hp : AttackTypes.Nail, true);
                 enemy.ReportedDead = true;
                 enemy.DiedAt = Time.unscaledTime;
                 enemy.CorpseFollows = true;
@@ -5454,6 +5523,39 @@ internal sealed class EnemySync {
 
     private const int MaxPendingHits = 16;
 
+    /// <summary>
+    /// Este PC suelta a un jefe que bloquea al caballero con su rugido (`ROAR ENTER` a `Roar Lock`): si estaba a mitad, el
+    /// `ROAR EXIT` lo mandará el PC que lo toma a su propio caballero y este se quedaba congelado. Se suelta aquí.
+    /// </summary>
+    private static void ReleaseRoarLock(Enemy enemy) {
+        var hero = HeroController.instance;
+        var roar = hero != null ? PlayMakerFSM.FindFsmOnGameObject(hero.gameObject, "Roar Lock") : null;
+        if (roar == null || !roar.ActiveStateName.StartsWith("Lock", StringComparison.Ordinal) || !SendsRoar(enemy)) {
+            return;
+        }
+
+        Log.Info($"{enemy.Root.name}: se suelta a mitad de su rugido; el caballero de este PC deja de estar bloqueado");
+        roar.SendEvent("ROAR EXIT");
+    }
+
+    private static bool SendsRoar(Enemy enemy) {
+        foreach (var fsm in enemy.Fsms) {
+            if (fsm == null) {
+                continue;
+            }
+
+            foreach (var state in fsm.FsmStates) {
+                foreach (var action in state.Actions) {
+                    if (action is HutongGames.PlayMaker.Actions.SendEventByName { sendEvent: { Value: "ROAR ENTER" } }) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Los golpes de otros que llegaron mientras este PC esperaba a tomarlo (como mucho de hace 3 s).</summary>
     private void ApplyPendingHits(Enemy enemy) {
         var pending = enemy.PendingHits;
@@ -5470,7 +5572,13 @@ internal sealed class EnemySync {
         }
     }
 
+    private static readonly System.Reflection.FieldInfo EvasionField =
+        typeof(HealthManager).GetField("evasionByHitRemaining", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
     private void ApplyRemoteHit(Enemy enemy, HitInstance hit, ushort from) {
+        // La ventana sin daño de 0,2 s tras un golpe es para un solo atacante: con dos jugadores, el golpe del compañero
+        // que caía en ella se perdía aquí aunque en su PC ya le había dado alma y efectos
+        EvasionField?.SetValue(enemy.Health, 0f);
         hit.Source = _players.TryGetAvatarObject(from, out var avatar) ? avatar : enemy.Root;
         _applyingRemoteHit = true;
         _remoteHitter = from;
@@ -5759,9 +5867,13 @@ internal sealed class EnemySync {
         // avisa de la muerte. Antes moría solo en este PC (geo y diario aquí) y en el otro seguía vivo
         On.HealthManager.Die += (orig, self, direction, attackType, ignoreEvasion) => {
             var sync = _active;
-            if (sync != null && !self.isDead && sync._byHealth.TryGetValue(self, out var enemy) && enemy.Puppet) {
-                sync.SendDamage(enemy, DamageKind.Kill, 0, attackType);
-                return;
+            if (sync != null && !self.isDead && sync._byHealth.TryGetValue(self, out var enemy)) {
+                if (enemy.Puppet) {
+                    sync.SendDamage(enemy, DamageKind.Kill, 0, attackType);
+                    return;
+                }
+
+                enemy.KilledBy = attackType;
             }
 
             orig(self, direction, attackType, ignoreEvasion);
@@ -5787,6 +5899,11 @@ internal sealed class EnemySync {
 
             if (sync?._session != null && toState != null && sync._soundFsms.Count > 0) {
                 sync.OnFsmState(self, toState);
+                // Entrar en ese estado provocó otro cambio dentro (un aviso de otra FSM): el de dentro ya se avisó antes
+                // que este, y el último que recibían los demás era el viejo (con él, sus efectos continuos)
+                if (self.ActiveState != null && self.ActiveState != toState) {
+                    sync.OnFsmState(self, self.ActiveState);
+                }
             }
         };
 
@@ -5816,6 +5933,9 @@ internal sealed class EnemySync {
                 dying.Enemy.ZeroHpAt = Time.unscaledTime;
             }
 
+            // El remitente antes de procesarlo: `Fsm.EventData` es estático y los avisos que se mandan dentro lo cambian.
+            // Con `eventData` se usa ese (si su remitente es null, es que no lo tiene: no se toma el estático)
+            var sentBy = eventData != null ? eventData.SentByFsm : HutongGames.PlayMaker.Fsm.EventData?.SentByFsm;
             orig(self, fsmEvent, eventData);
             var sync = _active;
             if (sync?._session == null || fsmEvent == null || _replaying || _playingFx || _spawningCopy || _settingPuppet ||
@@ -5825,7 +5945,7 @@ internal sealed class EnemySync {
             }
 
             // Los de otro enemigo (o de sí mismo) son de su lógica: ya pasan en el PC que los mueve
-            var sender = eventData?.SentByFsm ?? HutongGames.PlayMaker.Fsm.EventData?.SentByFsm;
+            var sender = sentBy;
             if (sender != null && (sync._enemyFsms.ContainsKey(sender) || FsmStateSync.IsSharedController(sender))) {
                 return;
             }

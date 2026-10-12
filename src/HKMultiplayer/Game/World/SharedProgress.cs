@@ -166,6 +166,19 @@ internal sealed class SharedProgress {
     // =====================================================================================================
 
     /// <summary>Llamar cada frame.</summary>
+    /// <summary>
+    /// Compara ya, sin esperar a los 0,2 s (antes de guardar): al salir al menú el juego llama a `TimePasses`, que cambia
+    /// datos del mundo que solo este PC puede calcular (el Rey Larva gordo, la flor de la tumba, el cadáver del
+    /// Forjaguijones), y la siguiente comparación ya no llegaba.
+    /// </summary>
+    public static void FlushNow() {
+        var progress = _hooked;
+        var playerData = PlayerData.instance;
+        if (progress != null && progress._active && playerData != null && playerData == progress._snapshotOwner) {
+            progress.Diff(playerData);
+        }
+    }
+
     public void Update() {
         _active = IsActive();
         if (!_active) {

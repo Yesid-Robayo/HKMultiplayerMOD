@@ -352,6 +352,15 @@ internal sealed class SharedCutscenes {
     // =====================================================================================================
 
     public void Update() {
+        if (_skipPending) {
+            // Se olvida si la cinemática ya no es esta (se acabó o se salió)
+            if (_current == null) {
+                _skipPending = false;
+            } else {
+                TrySkip();
+            }
+        }
+
         if (_session == null) {
             return;
         }
@@ -517,9 +526,31 @@ internal sealed class SharedCutscenes {
         _voted = false;
         _votes = 0;
         RefreshOverlay();
+        _skipPending = true;
+        TrySkip();
+    }
+
+    /// <summary>
+    /// La orden de saltar llegó: se salta en cuanto la cinemática ha empezado aquí. A quien se llevó a la cinemática se le
+    /// cuenta antes de que empiece (`gameState` aún no es CUTSCENE) y el juego ignora el salto: antes se quedaba puesta
+    /// la marca de "saltando", la veía solo y su entrada no respondía.
+    /// </summary>
+    private bool _skipPending;
+
+    private void TrySkip() {
         var gm = GameManager.instance;
-        if (gm.inputHandler != null) {
-            gm.inputHandler.skippingCutscene = true;
+        if (!_skipPending || gm == null || gm.gameState != GlobalEnums.GameState.CUTSCENE) {
+            return;
+        }
+
+        var input = gm.inputHandler;
+        if (input != null && input.skipMode is GlobalEnums.SkipPromptMode.NOT_SKIPPABLE_DUE_TO_LOADING) {
+            return;
+        }
+
+        _skipPending = false;
+        if (input != null) {
+            input.skippingCutscene = true;
         }
 
         _skipApproved = true;

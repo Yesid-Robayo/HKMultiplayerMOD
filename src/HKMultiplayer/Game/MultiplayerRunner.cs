@@ -19,7 +19,10 @@ namespace HKMultiplayer.Game;
 /// Objeto persistente del mod: abre y cierra la partida, mueve la red cada frame, sigue la sala del jugador local y
 /// sincroniza a los jugadores. Todo en LateUpdate, en este orden: estado local → red (recibir y enviar) → dibujar a los
 /// remotos; así lo que se dibuja es lo más reciente y lo que se envía sale en el mismo frame.
+/// <para>Orden tardío: su LateUpdate va después del de tk2d, que avanza ahí la animación; si no, cuando un cuadro cambiaba
+/// de colección, la skin se ponía sobre la hoja anterior y se veía un frame con la otra.</para>
 /// </summary>
+[DefaultExecutionOrder(10000)]
 internal sealed class MultiplayerRunner : MonoBehaviour {
     public static MultiplayerRunner Instance { get; private set; }
 
@@ -265,20 +268,47 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Log.Error($"Error en la sala: {e}");
         }
 
+        // En bloques: un fallo en una parte no salta las demás (antes uno solo para todo: si fallaba el estado local, ni
+        // siquiera se enviaba ni recibía nada ese frame)
         try {
             Players.SendLocalState(Time.unscaledTimeAsDouble);
+        } catch (Exception e) {
+            ReportFailure("el estado local", e);
+        }
+
+        try {
             session.Update();
+        } catch (Exception e) {
+            ReportFailure("la red", e);
+        }
+
+        try {
             Players.UpdateAvatars();
             Enemies.Update(scene);
+        } catch (Exception e) {
+            ReportFailure("los jugadores y enemigos", e);
+        }
+
+        try {
             Vitals.Update();
             UI.HudCanvas.Sync();
             Revive.Update(scene);
             Shades.Update(scene);
+        } catch (Exception e) {
+            ReportFailure("revivir y las sombras", e);
+        }
+
+        try {
             Hud.Update(scene);
             BossBar.Update(scene);
             EnemyBars.Update(scene);
             Skins.LateUpdate(scene);
             Skins.ApplyToBodies(Revive.Bodies);
+        } catch (Exception e) {
+            ReportFailure("el HUD y las skins", e);
+        }
+
+        try {
             Cutscenes.Update();
             Presentations.Update();
             Dreams.Update(scene);
@@ -293,7 +323,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
                 : Features.PlayerStatus.Standing,
                 GameManager.instance != null && GameManager.instance.isPaused);
         } catch (Exception e) {
-            Log.Error($"Error en la partida: {e}");
+            ReportFailure("las funciones del coop", e);
         }
 
         if (_closing != null) {
@@ -527,36 +557,47 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     /// <summary>Cada capa deja la partida (las funciones del coop primero: usan las demás).</summary>
     private void DetachAll() {
-        PartnerMap.Detach();
-        Skins.Detach();
-        Grimmchild.Detach();
-        Stag.Detach();
-        Scene.DropSeeds.Enabled = false;
-        Scene.ScenePaths.Enabled = false;
-        Scene.ScenePaths.Clear();
-        Dreams.Detach();
-        Presentations.Detach();
-        Cutscenes.Detach();
-        Travel.Detach();
-        Actions.Detach();
-        EnemyBars.Detach();
-        BossBar.Detach();
-        Hud.Detach();
-        Shades.Detach();
-        Revive.Detach();
-        Vitals.Detach();
-        Features.HostSettings.Current.Detach();
-        Party.Detach();
-        Players.Detach();
-        World.Detach();
-        Progress.Detach();
-        SceneObjects.Detach();
-        Enemies.Detach();
-        MovingObjects.Detach();
-        QuestNpcs.Detach();
-        Breakables.Detach();
-        Hazards.Detach();
+        // Cada parte por separado: si una fallaba, las de detrás no se soltaban y session.Dispose() no llegaba (el socket,
+        // su hilo y el puerto se quedaban abiertos)
+        Safely(() => { PartnerMap.Detach(); }, "PartnerMap.Detach");
+        Safely(() => { Skins.Detach(); }, "Skins.Detach");
+        Safely(() => { Grimmchild.Detach(); }, "Grimmchild.Detach");
+        Safely(() => { Stag.Detach(); }, "Stag.Detach");
+        Safely(() => { Scene.DropSeeds.Enabled = false; }, "Scene.DropSeeds.Enabled");
+        Safely(() => { Scene.ScenePaths.Enabled = false; }, "Scene.ScenePaths.Enabled");
+        Safely(() => { Scene.ScenePaths.Clear(); }, "Scene.ScenePaths.Clear");
+        Safely(() => { Dreams.Detach(); }, "Dreams.Detach");
+        Safely(() => { Presentations.Detach(); }, "Presentations.Detach");
+        Safely(() => { Cutscenes.Detach(); }, "Cutscenes.Detach");
+        Safely(() => { Travel.Detach(); }, "Travel.Detach");
+        Safely(() => { Actions.Detach(); }, "Actions.Detach");
+        Safely(() => { EnemyBars.Detach(); }, "EnemyBars.Detach");
+        Safely(() => { BossBar.Detach(); }, "BossBar.Detach");
+        Safely(() => { Hud.Detach(); }, "Hud.Detach");
+        Safely(() => { Shades.Detach(); }, "Shades.Detach");
+        Safely(() => { Revive.Detach(); }, "Revive.Detach");
+        Safely(() => { Vitals.Detach(); }, "Vitals.Detach");
+        Safely(() => { Features.HostSettings.Current.Detach(); }, "Features.HostSettings.Current.Detach");
+        Safely(() => { Party.Detach(); }, "Party.Detach");
+        Safely(() => { Players.Detach(); }, "Players.Detach");
+        Safely(() => { World.Detach(); }, "World.Detach");
+        Safely(() => { Progress.Detach(); }, "Progress.Detach");
+        Safely(() => { SceneObjects.Detach(); }, "SceneObjects.Detach");
+        Safely(() => { Enemies.Detach(); }, "Enemies.Detach");
+        Safely(() => { MovingObjects.Detach(); }, "MovingObjects.Detach");
+        Safely(() => { QuestNpcs.Detach(); }, "QuestNpcs.Detach");
+        Safely(() => { Breakables.Detach(); }, "Breakables.Detach");
+        Safely(() => { Hazards.Detach(); }, "Hazards.Detach");
     }
+
+    private static void Safely(Action action, string what) {
+        try {
+            action();
+        } catch (Exception e) {
+            Log.Error($"Error al cerrar {what}: {e}");
+        }
+    }
+
 
     // =====================================================================================================
     // Reconexión automática
@@ -717,11 +758,25 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             }
         };
         session.PlayerLeft += player => {
+            // Al cerrar la partida propia (la sesión ya no es la actual) no se avisa de cada uno que "sale"
+            if (Session != session) {
+                return;
+            }
+
             Log.Info($"{player.Name} salió de la partida");
             if (Features.HostSettings.Current.ShowNotices) {
                 Notice.Show(Lang.T($"{player.Name} salió de la partida", $"{player.Name} left the game"));
             }
         };
+    }
+
+    private int _failures;
+
+    /// <summary>Un fallo en una parte del frame: al registro (los 20 primeros y luego uno de cada 500).</summary>
+    private void ReportFailure(string part, Exception e) {
+        if (++_failures <= 20 || _failures % 500 == 0) {
+            Log.Error($"Error en {part} (van {_failures}): {e}");
+        }
     }
 
     private void SetStatus(string message) {

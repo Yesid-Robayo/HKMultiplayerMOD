@@ -236,6 +236,7 @@ internal static class CoopSaves {
 
         // Nunca se llama al guardado original durante un mundo coop
         try {
+            SharedProgress.FlushNow();
             self.SaveLevelState();
             var playerData = self.playerData;
             playerData.SetFloat("playTime", self.PlayTime);

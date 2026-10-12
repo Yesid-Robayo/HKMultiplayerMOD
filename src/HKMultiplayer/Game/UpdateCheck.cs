@@ -29,13 +29,23 @@ internal static class UpdateCheck {
     private const float AnnounceDelay = 2f;
 
     /// <summary>La versión publicada más nueva (sin la "v"), o null si no se sabe (sin consultar, sin red...).</summary>
-    public static string Latest { get; private set; }
+    public static string Latest {
+        get => _latest;
+        private set {
+            _latest = value;
+            // Se compara una vez al saberla: comparar versiones crea memoria y Update lo preguntaba cada frame
+            _newerAvailable = value != null && IsNewer(value, HKMultiplayerMod.Version);
+        }
+    }
+
+    private static string _latest;
+    private static bool _newerAvailable;
 
     /// <summary>La página de esa versión.</summary>
     public static string LatestUrl { get; private set; }
 
     /// <summary>Si hay una versión publicada más nueva que la instalada.</summary>
-    public static bool NewerAvailable => Latest != null && IsNewer(Latest, HKMultiplayerMod.Version);
+    public static bool NewerAvailable => _newerAvailable;
 
     /// <summary>Si es la primera vez que se abre esta versión (se acaba de instalar o actualizar).</summary>
     public static bool JustUpdated { get; private set; }

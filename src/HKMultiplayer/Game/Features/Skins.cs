@@ -107,6 +107,12 @@ internal sealed class Skins {
     /// <summary>Texturas originales de cada colección (para volver a ellas y para quien no lleva skin).</summary>
     private static readonly Dictionary<string, Texture> VanillaTextures = new();
 
+    /// <summary>La textura del juego de una colección compartida, si se cambió por la de una skin (si no, null).</summary>
+    public static Texture2D VanillaTextureOf(string collection) =>
+        collection != null && VanillaTextures.TryGetValue(collection, out var texture) && texture != null
+            ? texture as Texture2D
+            : null;
+
     // ---- Una skin cargada en memoria ----
     private sealed class Skin {
         public string Name;
@@ -313,6 +319,29 @@ internal sealed class Skins {
         HKMultiplayerMod.Settings.ShowOthersSkins = show;
         HKMultiplayerMod.SaveSettings();
         Log.Info($"Skins de los demás: {(show ? "se ven" : "no se ven")}");
+        // Las que llevan los demás y se saltaron mientras estaba apagado: antes no se pedían hasta que su dueño cambiara
+        if (show) {
+            _active?.RequestMissing();
+        }
+    }
+
+    private void RequestMissing() {
+        if (_session == null || _session.IsHost) {
+            return;
+        }
+
+        foreach (var pair in _worn) {
+            var hash = pair.Value.Hash;
+            if (pair.Key == _session.LocalId || string.IsNullOrEmpty(hash) || _skins.ContainsKey(hash) || _requested.Contains(hash)) {
+                continue;
+            }
+
+            if (TryLoadCached(hash)) {
+                _requested.Add(hash);
+            } else {
+                Request(hash);
+            }
+        }
     }
 
     public static bool ShowOthers => HKMultiplayerMod.Settings.ShowOthersSkins;
@@ -877,6 +906,13 @@ internal sealed class Skins {
                         file.Delete();
                     }
                 }
+
+                // Los temporales de guardados que no acabaron (el juego se cerró a mitad) no se contaban ni se borraban
+                foreach (var stale in new DirectoryInfo(CacheFolder).GetFiles("*.hksk.tmp")) {
+                    if (DateTime.UtcNow - stale.LastWriteTimeUtc > TimeSpan.FromHours(1)) {
+                        stale.Delete();
+                    }
+                }
             } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
                 Log.Warn($"No se pudo guardar la skin {hash} en la caché: {e.Message}");
             }
@@ -976,7 +1012,21 @@ internal sealed class Skins {
 
         ApplyShared();
         KeepOrbFull();
-        ApplyTo(hero.GetComponent<MeshRenderer>(), hero.GetComponent<tk2dSprite>(), _local);
+        // Sin skin del mod, el cuerpo propio no se toca (si llevaba una, se quita el bloque una vez): antes se le ponía cada
+        // frame la textura del juego tomada al empezar, también jugando solo, y con CustomKnight no se veían sus cambios
+        var heroRenderer = hero.GetComponent<MeshRenderer>();
+        if (_local != null) {
+            ApplyTo(heroRenderer, hero.GetComponent<tk2dSprite>(), _local);
+            _localBlockSet = true;
+        } else if (_localBlockSet) {
+            if (heroRenderer != null) {
+                heroRenderer.SetPropertyBlock(null);
+            }
+
+            _localBlockSet = false;
+        }
+
+        ApplyToDeath(hero);
         if (_session == null || _players == null || scene.Length == 0) {
             return;
         }
@@ -1030,6 +1080,34 @@ internal sealed class Skins {
     /// Pone en el renderer la textura de la skin para la colección que muestra ahora (o la normal). Cada frame: el
     /// sprite cambia de colección según la animación. Se conserva lo demás del bloque (el destello al recibir daño).
     /// </summary>
+    /// <summary>
+    /// La animación de muerte es otro objeto (`heroDeathPrefab`, que el juego enciende al apagar al caballero): salía con
+    /// el dibujo del juego. Mientras está encendido lleva la skin propia, como el cuerpo.
+    /// </summary>
+    private void ApplyToDeath(HeroController hero) {
+        var death = hero.heroDeathPrefab;
+        if (death == null || !death.activeInHierarchy || _local == null) {
+            return;
+        }
+
+        if (_deathRoot != death) {
+            _deathRoot = death;
+            _deathSprites.Clear();
+            death.GetComponentsInChildren(true, _deathSprites);
+        }
+
+        foreach (var sprite in _deathSprites) {
+            if (sprite != null && sprite.gameObject.activeInHierarchy) {
+                ApplyTo(sprite.GetComponent<MeshRenderer>(), sprite, _local);
+            }
+        }
+    }
+
+    private bool _localBlockSet;
+
+    private GameObject _deathRoot;
+    private readonly List<tk2dSprite> _deathSprites = new();
+
     private void ApplyTo(MeshRenderer renderer, tk2dBaseSprite sprite, Skin skin) {
         if (renderer == null || sprite == null || renderer.sharedMaterial == null) {
             return;
@@ -1120,7 +1198,9 @@ internal sealed class Skins {
             }
 
             var name = collection.spriteCollectionName;
-            if (!VanillaTextures.ContainsKey(name) && (CollectionFiles.ContainsKey(name) || SharedCollectionFiles.ContainsKey(name))) {
+            // También si la apuntada ya no existe: la colección se descargó con su sala y se volvió a cargar
+            if ((!VanillaTextures.TryGetValue(name, out var known) || known == null) &&
+                (CollectionFiles.ContainsKey(name) || SharedCollectionFiles.ContainsKey(name))) {
                 VanillaTextures[name] = collection.materials[0].mainTexture;
             }
 
@@ -1150,10 +1230,16 @@ internal sealed class Skins {
         if (complete) {
             _sharedAppliedHash = hash;
             _sharedAppliedScene = scene;
+            _sharedRetryDelay = 0.2f;
         } else {
-            _sharedRetryAt = Time.unscaledTime + 0.2f;
+            // Cada intento busca en todo lo cargado: si las texturas no se pueden crear aún (en una sala de jefe), se espera
+            // cada vez más (hasta 2 s) en vez de repetirlo 5 veces por segundo todo el combate
+            _sharedRetryAt = Time.unscaledTime + _sharedRetryDelay;
+            _sharedRetryDelay = Mathf.Min(_sharedRetryDelay * 2f, 2f);
         }
     }
+
+    private float _sharedRetryDelay = 0.2f;
 
     /// <summary>Antes de olvidar una skin, lo que la llevaba en los materiales compartidos vuelve a lo normal.</summary>
     private void RestoreShared(Skin skin) {
@@ -1247,11 +1333,23 @@ internal sealed class Skins {
             }
 
             var sprite = renderer.sprite;
-            if (IsOrbFullSprite(sprite)) {
+            if (sprite == null) {
+                continue;
+            }
+
+            // Lo decidido de cada sprite se guarda: leer su nombre cada frame creaba una cadena por lectura
+            if (!_orbFullKnown.TryGetValue(sprite, out var full)) {
+                full = IsOrbFullSprite(sprite);
+                _orbFullKnown[sprite] = full;
+            }
+
+            if (full) {
                 renderer.sprite = SkinnedOrb(sprite);
             }
         }
     }
+
+    private readonly Dictionary<Sprite, bool> _orbFullKnown = new();
 
     private static bool IsOrbFullSprite(Sprite sprite) {
         if (sprite == null || sprite.name.EndsWith(OrbSkinSuffix, StringComparison.Ordinal)) {

@@ -70,7 +70,17 @@ internal sealed class BreakableSync {
 
     static BreakableSync() {
         MessageRoutes.Register(Broken, Route.SameScene, reliable: true);
-        AddFieldKind("Breakable", "isBroken", (c, _) => ((Breakable) c).BreakSelf());
+        var breakable = AddFieldKind("Breakable", "isBroken", (c, _) => ((Breakable) c).BreakSelf());
+        if (breakable != null) {
+            var isBroken = typeof(Breakable).GetField("isBroken", BindingFlags.NonPublic | BindingFlags.Instance);
+            var setParts = typeof(Breakable).GetMethod("SetStaticPartsActivation", BindingFlags.NonPublic | BindingFlags.Instance);
+            breakable.SetBroken = c => {
+                // Como al cargar la sala ya rota (su OnSetSaveState): sin sonido, temblor de cámara ni trozos. Antes, al
+                // entrar en una sala con N vasijas rotas, se rompían todas en directo
+                isBroken?.SetValue(c, true);
+                setParts?.Invoke(c, new object[] { true });
+            };
+        }
         AddFieldKind("BreakableObject", "activated", BreakObject);
         AddFieldKind("BreakablePoleSimple", "activated", TriggerBreak);
         AddFieldKind("BreakableInfectedVine", "activated", TriggerBreak);
@@ -256,6 +266,8 @@ internal sealed class BreakableSync {
             var hash = PlayerSnapshot.HashScene(scene);
             _tracked.Clear();
             _byId.Clear();
+            // Una foto pedida en la sala anterior no se envía en esta
+            _sendSnapshot = false;
             if (hash != _sceneHash) {
                 _pending.Clear();
             }

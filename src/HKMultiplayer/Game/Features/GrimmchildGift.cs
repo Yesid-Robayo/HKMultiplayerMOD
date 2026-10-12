@@ -65,6 +65,14 @@ internal sealed class GrimmchildGift {
         }
 
         var has = pd.GetBool(GotCharm) ? 1 : 0;
+        // Al entrar en el mundo: si alguien ya lo recibió (el nivel es del mundo) y este personaje no lo tiene (entró
+        // después o no estaba conectado entonces), se le da. Antes se quedaba sin él con la Compañía ya empezada
+        if (_had == -1 && has == 0 && pd.GetInt("grimmChildLevel") >= 1 && World.CoopSaves.ActiveWorld != null) {
+            Grant(pd);
+            Log.Info("Grimmchild: el mundo ya lo tenía, se da también a este personaje");
+            return;
+        }
+
         if (_had == 0 && has == 1 && _session.CanSend) {
             Log.Info("Grimmchild recibido: se da también a los compañeros");
             var writer = _session.Begin(CharmGift);
@@ -75,13 +83,7 @@ internal sealed class GrimmchildGift {
         _had = has;
     }
 
-    private void OnGift(SessionPlayer from, PacketReader reader) {
-        var charm = reader.ReadByte();
-        var pd = PlayerData.instance;
-        if (charm != GrimmchildCharm || pd == null || pd.GetBool(GotCharm)) {
-            return;
-        }
-
+    private void Grant(PlayerData pd) {
         pd.SetBool(GotCharm, true);
         pd.SetBool("newCharm_40", true);
         if (pd.GetInt("grimmChildLevel") < 1) {
@@ -91,6 +93,17 @@ internal sealed class GrimmchildGift {
         pd.CountCharms();
         // Así este PC no lo vuelve a avisar como recibido por su cuenta
         _had = 1;
+    }
+
+    private void OnGift(SessionPlayer from, PacketReader reader) {
+        var charm = reader.ReadByte();
+        var pd = PlayerData.instance;
+        // Solo en el mundo coop: con una partida propia abierta, el amuleto no es de este mundo
+        if (charm != GrimmchildCharm || pd == null || pd.GetBool(GotCharm) || World.CoopSaves.ActiveWorld == null) {
+            return;
+        }
+
+        Grant(pd);
         Log.Info($"Grimmchild recibido gracias a {from.Name}");
         if (HostSettings.Current.ShowNotices) {
             Notice.Show(Lang.T($"Recibiste a Grimmchild gracias a {from.Name}", $"You received Grimmchild thanks to {from.Name}"));

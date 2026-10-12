@@ -136,6 +136,9 @@ internal sealed class StagTogether {
             : hero.cState.dead || hero.cState.transitioning ? "cambiando de sala"
             : pd.atBench ? "sentado en un banco"
             : GameManager.instance != null && GameManager.instance.isPaused ? "en pausa"
+            // Hablando, mirando el mapa, comprando o reapareciendo tras los pinchos: el viaje le quitaba el control a mitad
+            : hero.cState.hazardRespawning ? "reapareciendo"
+            : hero.controlReqlinquished ? "ocupado"
             : null;
         if (why != null) {
             Log.Info($"{from.Name} viaja en ciervo a {toScene}; este jugador no va ({why})");

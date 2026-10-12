@@ -198,21 +198,40 @@ public static class WorldStore {
     /// <summary>Personaje guardado de un jugador en este mundo (null si es la primera vez).</summary>
     public static Newtonsoft.Json.Linq.JObject LoadCharacter(string worldId, string playerKey) {
         var path = CharacterPath(worldId, playerKey);
-        try {
-            return File.Exists(path) ? Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(path)) : null;
-        } catch (Exception e) when (e is IOException or JsonException) {
-            Log.Warn($"No se pudo leer el personaje {playerKey}: {e.Message}");
-            return null;
+        // El anterior (.bak) si el último no está o no se puede leer: el juego pudo cerrarse justo al guardarlo
+        foreach (var candidate in new[] { path, path + ".bak" }) {
+            try {
+                if (File.Exists(candidate)) {
+                    var character = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(candidate));
+                    if (candidate != path) {
+                        Log.Warn($"El personaje {playerKey} estaba dañado o faltaba: se cargó la copia anterior");
+                    }
+
+                    return character;
+                }
+            } catch (Exception e) when (e is IOException or JsonException) {
+                Log.Warn($"No se pudo leer el personaje {playerKey} ({Path.GetFileName(candidate)}): {e.Message}");
+            }
         }
+
+        return null;
     }
 
+    /// <summary>
+    /// Como el mundo: se escribe aparte y el anterior queda como <c>.bak</c>. Antes se borraba el anterior y luego se
+    /// movía el nuevo: si el juego se cerraba entre medias, el invitado se quedaba sin personaje y empezaba uno nuevo.
+    /// </summary>
     public static void SaveCharacter(string worldId, string playerKey, Newtonsoft.Json.Linq.JObject character) {
         var path = CharacterPath(worldId, playerKey);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temp = path + ".tmp";
         File.WriteAllText(temp, character.ToString(Formatting.None), new UTF8Encoding(false));
         if (File.Exists(path)) {
-            File.Delete(path);
+            if (File.Exists(path + ".bak")) {
+                File.Delete(path + ".bak");
+            }
+
+            File.Move(path, path + ".bak");
         }
 
         File.Move(temp, path);

@@ -8,7 +8,7 @@ public static class NetConstants {
     public const uint Magic = 0x554D4B48;
 
     /// <summary>Versión del protocolo: si no coincide, no se puede conectar.</summary>
-    public const ushort ProtocolVersion = 1;
+    public const ushort ProtocolVersion = 2;
 
     /// <summary>
     /// Tamaño máximo de un datagrama. 1200 bytes caben sin fragmentarse en casi cualquier red (también por VPN).

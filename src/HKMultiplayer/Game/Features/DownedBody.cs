@@ -18,7 +18,7 @@ internal sealed class DownedBody {
 
     private readonly GameObject _root;
 
-    /// <summary>El sprite del cuerpo, para ponerle la skin de su dueño (ver <see cref="Skins.ApplyToBody"/>).</summary>
+    /// <summary>El sprite del cuerpo, para ponerle la skin de su dueño (ver <see cref="Skins.ApplyToBodies"/>).</summary>
     public tk2dSprite Sprite { get; }
 
     public MeshRenderer Renderer { get; }
@@ -28,7 +28,10 @@ internal sealed class DownedBody {
 
     private float _labelLift;
 
-    public DownedBody(string name, Vector3 position, HeroController hero, Font font) {
+    /// <param name="fresh">Acaba de caer: hace su animación de muerte. Si no (se entra en la sala con el cuerpo ya ahí),
+    /// sale tendido; antes repetía la muerte cada vez que se volvía a entrar.</param>
+    /// <param name="facingRight">Hacia dónde miraba al caer (antes miraba siempre a la izquierda).</param>
+    public DownedBody(string name, Vector3 position, HeroController hero, Font font, bool fresh = true, bool facingRight = false) {
         _root = new GameObject($"Cuerpo de {name}");
         Object.DontDestroyOnLoad(_root);
         _root.transform.position = new Vector3(position.x, position.y, hero.transform.position.z + 0.001f);
@@ -40,7 +43,9 @@ internal sealed class DownedBody {
         spriteObject.layer = hero.gameObject.layer;
         spriteObject.transform.SetParent(_root.transform, false);
         var heroScale = hero.transform.localScale;
-        spriteObject.transform.localScale = new Vector3(Mathf.Abs(heroScale.x), Mathf.Abs(heroScale.y), 1f);
+        // El caballero mira a la izquierda con la escala x positiva
+        spriteObject.transform.localScale = new Vector3(facingRight ? -Mathf.Abs(heroScale.x) : Mathf.Abs(heroScale.x),
+            Mathf.Abs(heroScale.y), 1f);
         var sprite = spriteObject.AddComponent<tk2dSprite>();
         sprite.SetSprite(heroSprite.Collection, heroSprite.spriteId);
         var renderer = spriteObject.GetComponent<MeshRenderer>();
@@ -56,7 +61,7 @@ internal sealed class DownedBody {
             animator.Library = heroAnimator.Library;
             var clip = heroAnimator.Library.GetClipByName(DeathClip);
             var lying = heroAnimator.Library.GetClipByName(LyingClip);
-            if (clip != null) {
+            if (clip != null && fresh) {
                 // La animación de muerte acaba de pie, deshaciéndose: al terminar queda tendido
                 animator.Play(clip);
                 if (lying != null) {

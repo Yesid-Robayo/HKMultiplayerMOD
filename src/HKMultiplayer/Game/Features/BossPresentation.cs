@@ -22,6 +22,9 @@ internal sealed class BossPresentation {
     private const float MaxLockSeconds = 30f;
 
     private static BossPresentation _active;
+
+    /// <summary>El caballero local está quieto por la presentación de jefe de otro PC (no está hablando con nadie).</summary>
+    public static bool PartnerLocked => _active != null && _active._locker != 0;
     private static bool _hooked;
 
     /// <summary>Se está quitando o devolviendo el control desde aquí (no es la lógica del juego).</summary>
@@ -209,7 +212,10 @@ internal sealed class BossPresentation {
         _locker = 0;
         var hero = HeroController.instance;
         Log.Info($"Caballero suelto: {reason}");
-        if (hero == null || _localWantsLock || _revive != null && _revive.IsDowned) {
+        // No en medio de una muerte, una reaparición o un cambio de sala: el juego devuelve el control cuando acaba
+        var gm = GameManager.instance;
+        if (hero == null || _localWantsLock || _revive != null && _revive.IsDowned || hero.cState.dead ||
+            hero.cState.hazardRespawning || gm != null && gm.IsInSceneTransition) {
             return;
         }
 
@@ -223,7 +229,23 @@ internal sealed class BossPresentation {
 
     /// <summary>Cada frame: quien lo tenía quieto se fue de la sala o pasó demasiado tiempo.</summary>
     public void Update() {
-        if (_locker == 0 || _session == null) {
+        if (_session == null) {
+            return;
+        }
+
+        // El juego a veces devuelve el control sin RegainControl (al reaparecer tras morir o tras los pinchos): las marcas
+        // se quedaban puestas. Con `_localWantsLock` el siguiente bloqueo de otro no devolvía el control; con `_sentLock`,
+        // quien murió a mitad de la presentación no volvía a quietar a los demás en el siguiente intento
+        var self = HeroController.instance;
+        if ((_localWantsLock || _sentLock) && self != null && !self.controlReqlinquished && self.acceptingInput) {
+            _localWantsLock = false;
+            if (_sentLock) {
+                _sentLock = false;
+                Send(false);
+            }
+        }
+
+        if (_locker == 0) {
             return;
         }
 

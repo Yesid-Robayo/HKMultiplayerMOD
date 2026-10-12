@@ -111,12 +111,14 @@ revisado que está bien, al final). Las descartadas quedan marcadas `[x]` con el
   mitad de ese estado puede repetir el ataque.
   - **Volcado de FSM:** Lo que se repite de verdad es `FlingObjectsFromGlobalPoolVel` (lanza en `OnEnter`): `Spitting Zombie [Spit]` (`Crossroads_04/08/15/40`), `Lesser Mawlek` (`Abyss_17`), `Mushroom Brawler` (`Fungus2_05/29/30`), Nosk (`Deepnest_32`) y el Pale Lurker; al retomarlo se lanza otra vez y `_flinging` envía la segunda ráfaga como copias. Se quitan de la entrada: `FlingObjectsFromGlobalPoolTime` y `SpawnObjectFromGlobalPoolOverTime*` (crean en `OnUpdate`, van en E28), `FlingObject(s)` (solo dan velocidad), `CreateObjectPreInst` (no sale en el juego) y `SpawnRandomObjects` en jefes (solo visual).
   - **Arreglado en 0.26.0:** `MuteSpawns` calla también `FlingObjectsFromGlobalPoolVel`.
-- [ ] **E9 · baja · sin comprobar.** El aviso de muerte no lleva tipo de ataque ni dirección: `ApplyHealth` usa
+- [x] **E9 · baja · sin comprobar.** El aviso de muerte no lleva tipo de ataque ni dirección: `ApplyHealth` usa
   `Die(null, AttackTypes.Nail, true)` ([EnemySync.cs:5131-5138](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L5131)).
   Las muertes por `Splatter` (no sueltan geo) o `RuinsWater` (sin geo), y las de ácido, agua o hechizo (otro cadáver),
   salen distintas en el PC de la marioneta (juego `HealthManager.cs:605-614`, `676-682`).
-- [ ] **E10 · baja · sin comprobar.** El PC que mueve al enemigo aplica su ventana de 0,2 s sin daño tras un golpe
+  - **Arreglado en 0.26.0:** La muerte lleva el tipo de ataque (en el número que iba a 0) y el otro PC muere con él.
+- [x] **E10 · baja · sin comprobar.** El PC que mueve al enemigo aplica su ventana de 0,2 s sin daño tras un golpe
   (juego `HealthManager.cs:334`, `539`): los golpes del compañero que rechaza ya le dieron alma y efectos en su PC.
+  - **Arreglado en 0.26.0:** Antes de aplicar el golpe de otro PC se pone a 0 la ventana sin daño (`evasionByHitRemaining`).
 - [x] **E11 · media · comprobado en código y volcado.** Doble daño de cosas del mundo que pasan en los dos PCs: el gancho de `Hit`
   reenvía cualquier golpe a una marioneta, no solo los del caballero local. Candidatos: la explosión del cadáver del
   Gruzzer volátil (si tiene `damages_enemy`), estalactitas, ácido. Arreglo: reenviar solo los golpes cuyo `Source` es
@@ -132,10 +134,11 @@ revisado que está bien, al final). Las descartadas quedan marcadas `[x]` con el
   `EnemySpawner.cs:46-67`): el enemigo puede existir solo en uno y su control caer en el PC donde no está.
   - **Volcado de FSM:** `EnemySpawner` es el `Buzzer Summon` del Rey Vengamosca (`Summon`: `CreateObject`, en `Fungus1_20_v02` y la oleada 15 de `Room_Colosseum_Bronze`). No es de juego, así que `OnSpawned` no lo sigue y la marioneta lo crea como efecto (`ShouldRunEffect`, [EnemySync.cs:1849](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L1849)): cada PC tira su 75 % y tiene sus propias mosquitas (`NoteEnabled` solo atiende tarros, [:1393](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L1393)). En `GG_Vengefly` salen de `PreSpawnGameObjects` + `GetNextPreSpawnedGameObject`, solo en el PC que mueve al jefe y repetidas si se retoma en `GG Summon`. Igual las crías del cadáver de `Zom Hive` (`SpawnRandomObjects Bee Hatchling`).
   - **Arreglado en 0.26.0:** `EnemySpawner` cuenta como de juego: solo lo crea el PC que mueve al jefe y lo que suelta va a los demás como creado por la misma acción (con el prefab del enemigo). Falta la variante de `GG_Vengefly` (`PreSpawnGameObjects`).
-- [ ] **E14 · baja · decisión pendiente.** Lifeseeds (`ScuttlerControl`): huyen del caballero local, mueren solo en el PC
+- [x] **E14 · baja · decisión pendiente.** Lifeseeds (`ScuttlerControl`): huyen del caballero local, mueren solo en el PC
   de quien los golpea y cada jugador puede cobrar su savia (juego `ScuttlerControl.cs:189-232`). Decidir si es de cada
   uno (como el geo) o se comparte.
   - **Volcado de FSM:** Lifeseeds `Orange Scuttler` en `Abyss_19/20` y `Crossroads_14/43`; `Health Scuttler` de capullo en 8 salas. El capullo ya se rompe en todos y cada PC suelta los suyos: lo coherente es que sean de cada uno, como el geo.
+  - **Revisado en 0.26.0:** Decisión: los Lifeseeds son de cada jugador, como el geo (ya es así). No se cambia nada.
 
 Segunda pasada (lógica interna de `EnemySync`):
 
@@ -180,14 +183,16 @@ Segunda pasada (lógica interna de `EnemySync`):
   que ya no hay. Proyectiles, crías y bichos del Coleccionista pasan a ser objetos de verdad; las crías de la Colmena
   se quedan fuera de su jaula. Arreglo: `RemoveSpawnedCopies()` antes de ese bucle.
   - **Arreglado en 0.26.0:** `Detach` quita las copias creadas por otros antes de devolver la lógica a las marionetas.
-- [ ] **E20 · baja · sin comprobar (3+ jugadores).** Un traspaso viejo se puede usar: B guarda el de A
+- [x] **E20 · baja · sin comprobar (3+ jugadores).** Un traspaso viejo se puede usar: B guarda el de A
   (`HandoverReady`), el dueño toma el enemigo y `ApplyControl` sale antes si no cambia ([:2548](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L2548)),
   así que no se borra; más tarde, un cambio P→B que llega antes que el traspaso de P hace que B lo tome con el estado
   de hace minutos. Arreglo: borrar `Handover`/`HandoverReady` en cada cambio y apuntar de quién y cuándo es.
-- [ ] **E21 · baja · sin comprobar.** `PendingEvents` solo se vacía en `TakeOver`: el reenvío en ping-pong
+  - **Arreglado en 0.26.0:** `ApplyControl` tira el traspaso guardado si el nuevo controlador no es este PC, también cuando el control no cambia según este PC.
+- [x] **E21 · baja · sin comprobar.** `PendingEvents` solo se vacía en `TakeOver`: el reenvío en ping-pong
   ([:4032](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L4032)) puede llenar sus 8 huecos en un PC que nunca lo toma, y
   luego se descartan los nuevos ([:3937](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L3937)). Quitar los viejos antes de
   mirar el límite.
+  - **Arreglado en 0.26.0:** `KeepPendingEvent` quita los viejos antes de mirar el límite.
 - [x] **E22 · media · comprobado.** `ZeroHp` no se pone nunca a falso ([EnemySync.cs:5467-5470](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L5467)).
   Un jefe cuya FSM atiende `ZERO HP` sin morir (cambio de fase con `hasSpecialDeath`, juego `HealthManager.cs:563-576`)
   quedaría como `Dying`: su control queda fijo en ese PC aunque el jugador caiga o pause ([:2340](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L2340)),
@@ -195,23 +200,28 @@ Segunda pasada (lógica interna de `EnemySync`):
   muerto ([:2163](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L2163)).
   - **Volcado de FSM:** Atienden `ZERO HP` y siguen vivos: el Falso Caballero (`[Check Health]` en `Crossroads_10` y `GG_False_Knight`: `Check` → `Stun` con `SetHP {Recover HP}` en cada armadura rota; desde la primera queda `Dying` todo el combate, no cambia de PC y la marioneta repite sus avisos a todos, `FK RAGE COMPLETE` en `Rage End`); Sly (`GG_Sly`: `Death Reset` → `Death Stun` → `SetHP {Rage HP}`); Oro y Mato (`GG_Nailmasters`: `Death Start` → ... → `Reactivate` con `SetHP {P2 HP}`); `Zote Balloon`. El arreglo tiene que respetar la muerte real del Falso Caballero (E32).
   - **Arreglado en 0.26.0:** `ZeroHp` se quita si la vida vuelve a subir de 0 (0,5 s después): era un cambio de fase.
-- [ ] **E23 · media · comprobado.** Los enemigos creados en combate nunca cambian de PC ([:2319](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L2319)):
+- [x] **E23 · media · comprobado.** Los enemigos creados en combate nunca cambian de PC ([:2319](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L2319)):
   si quien los creó cae o pone la pausa, sus crías, las de la Colmena y los bichos de los tarros se quedan quietos o
   persiguiendo al caído, y en los demás PCs son copias que no hacen nada. El doc dice que "pasan enseguida a otro".
   - **Volcado de FSM:** Ejemplos: `Baby Centipede` del `Centipede Hatcher` (`Deepnest_26`/`26b`) y los bichos del Coleccionista (`Ruins2_11_boss`).
-- [ ] **E24 · baja · sin comprobar.** Si el pool recicla un objeto y lo vuelve a sacar en el mismo frame antes de que
+  - **Arreglado en 0.26.0:** Los creados en combate con vida pasan a otro si quien los mueve está caído o en pausa (los proyectiles siguen con quien los creó).
+- [x] **E24 · baja · sin comprobar.** Si el pool recicla un objeto y lo vuelve a sacar en el mismo frame antes de que
   `UpdateReal` lo note, `OnSpawned` lo apunta otra vez ([:3483-3486](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L3483)):
   dos entradas con la misma raíz y dos copias en el otro PC.
-- [ ] **E25 · baja · sin comprobar.** La espera para despertar no tiene tiempo máximo ([:3136-3142](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L3136)):
+  - **Arreglado en 0.26.0:** Si el objeto ya estaba apuntado, la entrada vieja se acaba (con su aviso) antes de apuntarlo otra vez.
+- [x] **E25 · baja · sin comprobar.** La espera para despertar no tiene tiempo máximo ([:3136-3142](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L3136)):
   si falta el avatar de un compañero (`TryGetAvatarObject` falso, [:3183](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L3183))
   o está lejos en pausa, el jefe espera invulnerable sin fin.
-- [ ] **E26 · baja · sin comprobar.** `ApplyHealth(Died)` quita la marioneta al enemigo que muere ([:5133](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L5133)):
+  - **Arreglado en 0.26.0:** La espera para despertar dura como mucho 60 s.
+- [x] **E26 · baja · sin comprobar.** `ApplyHealth(Died)` quita la marioneta al enemigo que muere ([:5133](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L5133)):
   su FSM de muerte avisa de lo que saca del pool (sin la guarda de "preparación") y el PC que lo mató lo vuelve a
   crear (el id 0 vale para un creador que no es marioneta, [:3713](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L3713)):
   efectos de muerte dobles.
-- [ ] **E27 · baja · sin comprobar.** Las copias de las crías de la Colmena vuelven a la jaula sin reponer su vida
+  - **Arreglado en 0.26.0:** Un enemigo que murió en otro PC (`DiedElsewhere`) no envía lo que saca del pool su muerte.
+- [x] **E27 · baja · sin comprobar.** Las copias de las crías de la Colmena vuelven a la jaula sin reponer su vida
   (`ReturnToCage`, [:3635-3654](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L3635)): si después este PC suelta esa cría
   como original, envía a todos su vida vieja (quizá baja).
+  - **Arreglado en 0.26.0:** La jaula guarda su vida al cargar la sala y la cría vuelve con ella.
 
 Del volcado de FSM (`decomp/fsm`):
 
@@ -227,7 +237,7 @@ Del volcado de FSM (`decomp/fsm`):
   `OnUpdate` de esas tres clases poniendo `_flinging` y añadirlas al `switch` de `OnSpawn`
   ([:3726-3748](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L3726)).
   - **Arreglado en 0.26.0:** Ganchos a `OnUpdate` de `FlingObjectsFromGlobalPoolTime` y `SpawnObjectFromGlobalPoolOverTime(V2)` con `_flinging`, y sus casos en `OnSpawn`.
-- [ ] **E29 · media · sin comprobar.** Un traspaso a mitad de un rugido deja al caballero sin control. Hay 53
+- [x] **E29 · media · sin comprobar.** Un traspaso a mitad de un rugido deja al caballero sin control. Hay 53
   `SendEventByName {Hero} ROAR ENTER/EXIT` en jefes (Infected Knight `Roar` → `Roar End` en `Abyss_19`; Rey Vengamosca
   `Roar Left` → `Summon` → `Roar End`). `Roar Lock` del caballero solo sale de `Lock Grounded/Air` con `ROAR EXIT` o al
   salir de un colisionador "Roar". Si el jefe cambia de PC entre los dos estados (caído, pausa, reparto), el `ROAR EXIT`
@@ -235,6 +245,7 @@ Del volcado de FSM (`decomp/fsm`):
   y el del PC que lo soltó se queda congelado. Arreglo: al soltarlo (`SendHandover`, [:2584](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L2584))
   o al llegar a la marioneta un estado con `ROAR EXIT`, mandar `ROAR EXIT` al caballero local si `Roar Lock` está en
   `Lock*`.
+  - **Arreglado en 0.26.0:** Al soltar un jefe que manda `ROAR ENTER`, si `Roar Lock` está en `Lock*`, se manda `ROAR EXIT` al caballero local.
 - [x] **E30 · media · comprobado.** Las púas de Hornet en los Bordes del Reino solo salen en un PC.
   `Hornet Boss 2 [Control] Barb Throw` avisa a todos con `SPAWN3`; `Barb Region [Spawn Barbs]`
   (`Deepnest_East_Hornet`, `GG_Hornet_2`), que no es enemigo ni tiene `DamageHero`, crea `Hornet Barb` (con
@@ -243,11 +254,12 @@ Del volcado de FSM (`decomp/fsm`):
   `_enemyFsms` ([:3461](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L3461)): en el PC que la mueve las púas no se siguen
   y en los demás no hay. Arreglo: en `AddSatellites`, aceptar también lo que escucha el aviso si `SpawnsGameplay(fsm)`.
   - **Arreglado en 0.26.0:** `AddSatellites` acepta lo que escucha un aviso a todos si crea cosas de juego (`SpawnsGameplay`).
-- [ ] **E31 · baja · comprobado.** Radiancia: la reaparición tras pinchos del compañero no sube con la pelea.
+- [x] **E31 · baja · comprobado.** Radiancia: la reaparición tras pinchos del compañero no sube con la pelea.
   `Radiance [Control] Climb Plats1` (`Dream_Final_Boss`, `GG_Radiance`) hace `CallMethodProper {Hero} SetHazardRespawn` en
   `P2A Hazard` y la marioneta no hace `CallMethodProper`. `GG_Radiance` no tiene `HazardRespawnTrigger` de subida
   (`Dream_Final_Boss` sí, `Ascend Respawns`): si el compañero cae antes de tocar uno, reaparece en el punto viejo.
   Arreglo: que la marioneta haga los `SetHazardRespawn` al caballero local, como `FsmStateSync` ([FsmStateSync.cs:1182](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L1182)).
+  - **Arreglado en 0.26.0:** La marioneta hace también `CallMethodProper SetHazardRespawn` sobre el caballero local.
 - [x] **E32 · media · comprobado.** El arreglo de E22 tiene que respetar la muerte del Falso Caballero. Hoy `ZeroHp` se
   pone en la primera armadura rota ([EnemySync.cs:5465-5470](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L5465), `Handles`
   [:3986](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L3986)) y de rebote cubre su `Cough` final, que va por la cabeza.
@@ -304,11 +316,13 @@ Del volcado de FSM (`decomp/fsm`):
   después: si cayó a mitad de Focus, un hechizo o un efecto de amuleto, pueden quedarse pegados. Además se apagan
   `heroLight` y `vignette` (juego `HeroController.cs:708-710`): el caído ve las salas oscuras sin oscuridad. Arreglo:
   ocultar y reponer solo el `MeshRenderer` del caballero y dejar la luz y la viñeta.
-- [ ] **J7 · baja · sin comprobar.** Se puede perder la recuperación de la sombra: `KillOwnShade`
+  - **En parte en 0.26.0:** la luz y la viñeta ya no se esconden (en la 0.26.0, con J1). Lo de los efectos que vuelven a encenderse sigue abierto.
+- [x] **J7 · baja · sin comprobar.** Se puede perder la recuperación de la sombra: `KillOwnShade`
   ([ShadeSync.cs:575-577](../src/HKMultiplayer/Game/Features/ShadeSync.cs#L575)) sale antes si no hay prefab o
   caballero (el dueño está en una cinemática o en el ciervo) y no pone `_ownSent = false` ([:593-594](../src/HKMultiplayer/Game/Features/ShadeSync.cs#L593)).
   El host ya la dio por muerta y el dueño no vuelve a avisar: la sombra desaparece para los demás y no devuelve el geo.
   Arreglo: poner `_ownSent = false` en un `finally` y reintentar más tarde.
+  - **Arreglado en 0.26.0:** `KillOwnShade` espera (hasta un minuto) a tener caballero y sala y siempre vuelve a informar (`finally`).
 - [ ] **J8 · baja · sin comprobar.** Efectos del caballero que no se ven en el compañero (todo lo que es su animación
   sí llega). Del juego (`HeroController.cs`):
   - escudo de Carefree Melody (`carefreeShield`, 2321);
@@ -323,30 +337,37 @@ Del volcado de FSM (`decomp/fsm`):
   - chispas del aguijón contra la pared (`nailTerrainImpactEffectPrefab`, 4959);
   - muerte de verdad (`heroDeathPrefab`, 4261);
   - su luz (`heroLight`, 708): en salas oscuras el compañero se pierde en la oscuridad si no está cerca.
-- [ ] **J9 · baja · sin comprobar.** Caer a mitad de Crystal Heart, Desolate Dive o Cyclone Slash: `OnHeroDie` no corta
+- [x] **J9 · baja · sin comprobar.** Caer a mitad de Crystal Heart, Desolate Dive o Cyclone Slash: `OnHeroDie` no corta
   nada ([Revive.cs:430-455](../src/HKMultiplayer/Game/Features/Revive.cs#L430)) y las FSM `Superdash` y
   `Spell Control` pueden seguir (sonido en bucle, velocidad) y retomarse al revivir. Probar; si pasa, mandar sus avisos
   de cancelar o `hero.ResetState()` al caer.
-- [ ] **J10 · baja · sin comprobar.** `BossPresentation._localWantsLock` ([:106](../src/HKMultiplayer/Game/Features/BossPresentation.cs#L106),
+  - **Arreglado en 0.26.0:** Al caer se manda `FSM CANCEL` (global en las tres) a `Superdash`, `Spell Control` y `Nail Arts`.
+- [x] **J10 · baja · sin comprobar.** `BossPresentation._localWantsLock` ([:106](../src/HKMultiplayer/Game/Features/BossPresentation.cs#L106),
   [:212](../src/HKMultiplayer/Game/Features/BossPresentation.cs#L212)) se queda en verdadero si a un `RelinquishControl`
   no le sigue un `RegainControl` (el juego a veces devuelve el control directamente, `HeroController.cs:3222`,
   `3225`): el siguiente bloqueo por el compañero no devolvería el control. Apuntar aparte "este bloqueo nos lo quitó"
   y limpiarlo al entrar en una sala.
-- [ ] **J11 · baja · sin comprobar.** `StagTogether` pone `Fade` aunque el ciervo de quien recibe no esté en esa
+  - **Arreglado en 0.26.0:** `BossPresentation.Update` quita las marcas si el caballero ya tiene el control (el juego lo devolvió sin `RegainControl`).
+- [x] **J11 · baja · sin comprobar.** `StagTogether` pone `Fade` aunque el ciervo de quien recibe no esté en esa
   estación, o esté en un diálogo o reapareciendo tras pinchos ([StagTogether.cs:146-158](../src/HKMultiplayer/Game/Features/StagTogether.cs#L146));
   la cinemática usa su `stagPosition`.
-- [ ] **J12 · baja · sin comprobar.** La copia de la sombra del compañero solo lee del dueño `GetPlayerDataInt` y
+  - **Arreglado en 0.26.0:** Tampoco se lleva a quien está sin control (diálogo, mapa, tienda) ni reapareciendo.
+- [x] **J12 · baja · sin comprobar.** La copia de la sombra del compañero solo lee del dueño `GetPlayerDataInt` y
   `shadeMapZone`: un `GetPlayerDataBool` (Void Heart, amuletos) o lo que lean FSM hijas usaría los datos del jugador
   local.
-- [ ] **J13 · baja · no se puede comprobar con el volcado.** Salas de sueño que no estén marcadas `DREAM_WORLD` (quizá la Radiancia o la
+  - **Revisado en 0.26.0:** Descartado con el volcado: la sombra solo lee el sí/no `collectorDefeated`, que es del mundo; los números ya se leen del dueño.
+- [x] **J13 · baja · no se puede comprobar con el volcado.** Salas de sueño que no estén marcadas `DREAM_WORLD` (quizá la Radiancia o la
   Pesadilla de Grimm): `CanBeDowned` ([Revive.cs:495](../src/HKMultiplayer/Game/Features/Revive.cs#L495)) las trataría
   como salas normales.
   - **Volcado de FSM:** El volcado no guarda el `mapZone` de cada sala; solo 5 FSM usan `CheckCurrentMapZone DREAM_WORLD`. Mirar `Grimm_Nightmare`, `Dream_Final_Boss` y `GG_*` (o que el volcador escriba `SceneManager.mapZone`).
-- [ ] **J14 · baja · sin comprobar.** Salir de la partida estando caído en Alma de Acero evita la muerte (truco).
+  - **Arreglado en 0.26.0:** La comprobación de sueño mira también el nombre de la sala (`Dream_*`, `Grimm_Nightmare`). Además, "alguien en pie" ya no cuenta a quien está entrando (S2).
+- [x] **J14 · baja · sin comprobar.** Salir de la partida estando caído en Alma de Acero evita la muerte (truco).
+  - **Revisado en 0.26.0:** No aplica: los mundos coop no pueden ser de Alma de Acero (ver W10).
 - [ ] **J15 · baja · sin comprobar.** El avatar no tiene colisión: las salpicaduras al entrar en agua o ácido no salen
   en el compañero.
-- [ ] **J16 · baja · sin comprobar.** `DownedBody` repite la animación "Death" cada vez que se vuelve a entrar en la
+- [x] **J16 · baja · sin comprobar.** `DownedBody` repite la animación "Death" cada vez que se vuelve a entrar en la
   sala y mira siempre a la izquierda.
+  - **Arreglado en 0.26.0:** El cuerpo hace la muerte solo si la caída es de hace menos de 3 s, y mira hacia donde miraba al caer.
 
 ## Datos del mundo y del personaje (W)
 
@@ -391,27 +412,31 @@ Del volcado de FSM (`decomp/fsm`):
   `PersistentIntItem` baje a propósito, p. ej. una palanca de varias posiciones).
   - **Volcado de FSM:** Los `PersistentIntItem` (63 salas) son tótems de alma (`soul_totem`, su `Value` baja de 3 a 0) y ascensores de la Ciudad (`Ruins Lift*`, su `Value` es el piso: sube y baja). "Quedarse con el mayor" rompería los ascensores, y eso ya pasa hoy en la otra dirección: ver W13.
   - **Arreglado en 0.26.0:** Ver W13.
-- [ ] **W7 · baja · sin comprobar.** `ReturnToMainMenu` llama a `TimePasses` justo antes de salir (juego
+- [x] **W7 · baja · sin comprobar.** `ReturnToMainMenu` llama a `TimePasses` justo antes de salir (juego
   `GameManager.cs:3358`, `1021-1083`) y la comparación de cada 0,2 s puede no llegar a enviarlo. Tres dependen de los
   datos de quien sale: `fatGrubKing` (`finalGrubRewardCollected`), `extraFlowerAppear` (`xunFlowerGiven`) y
   `nailsmithCorpseAppeared` (`nailsmithKilled`). `brettaPosition` se tira al azar en cada PC y gana el último.
   Arreglo: forzar la comparación en `CoopSaves.OnSaveGame` antes de `GuestSaving`.
-- [ ] **W8 · baja · sin comprobar.** El guardado y la carga del mundo coop se saltan los ganchos de la Modding API:
+  - **Arreglado en 0.26.0:** `SharedProgress.FlushNow()` al empezar el guardado del mundo coop.
+- [x] **W8 · baja · sin comprobar.** El guardado y la carga del mundo coop se saltan los ganchos de la Modding API:
   `OnLoadLocalSettings`, `OnAfterSaveGameLoad`, `OnSavegameLoad`, `OnBeforeSaveGameSave`, `OnSaveLocalSettings`,
   `OnSavegameSave`, además del volcado de logros y `profileID` (juego `GameManager.cs:2708-2826`, `2921-2964`;
   [CoopSaves.cs:202-257](../src/HKMultiplayer/Game/World/CoopSaves.cs#L202)). Otros mods no guardan ni cargan sus datos
   en un mundo coop y `gm.moddedData` queda el de la última ranura normal.
-- [ ] **W9 · baja · sin comprobar.** `WorldStore.SaveCharacter` borra el archivo y luego mueve el nuevo
+  - **Revisado en 0.26.0:** No aplica a quien instala el paquete: el instalador aparta los demás mods. Si alguien los activa a mano, sus datos por partida no se guardan en un mundo coop (los ganchos son `internal` en la Modding API).
+- [x] **W9 · baja · sin comprobar.** `WorldStore.SaveCharacter` borra el archivo y luego mueve el nuevo
   ([WorldStore.cs:202-206](../src/HKMultiplayer/Game/World/WorldStore.cs#L202)): si el juego se cierra en medio, el
   invitado se queda sin personaje (`LoadCharacter` no mira el `.tmp`) y empieza uno nuevo. Arreglo: `File.Replace` o
   un `.bak` como en `Save`.
+  - **Arreglado en 0.26.0:** El anterior queda como `.bak` y `LoadCharacter` lo usa si el último falta o está dañado.
 - [ ] **W10 · baja · nota.** `permadeathMode` se comparte. Hoy los mundos coop empiezan con `StartNewGame()` y no
   hay Alma de Acero; si algún día se permite, la muerte de un invitado (juego `HeroController.cs:4248-4250`) marcaría
   el mundo del host como perdido.
-- [ ] **W11 · baja · sin comprobar.** Grimmchild para quien entra después: `GrimmchildGift` solo actúa si el jugador
+- [x] **W11 · baja · sin comprobar.** Grimmchild para quien entra después: `GrimmchildGift` solo actúa si el jugador
   recibe el amuleto con el otro conectado ([GrimmchildGift.cs:67-73](../src/HKMultiplayer/Game/Features/GrimmchildGift.cs#L67)).
   Un invitado que entra luego no lo recibe, pero `grimmChildLevel` y la Compañía son del mundo y `metGrimm` es suyo:
   la FSM de la tienda puede comportarse raro. `OnGift` tampoco mira si se juega un mundo coop.
+  - **Arreglado en 0.26.0:** Al entrar en el mundo, si `grimmChildLevel` ya es 1 o más y el personaje no tiene el amuleto, se le da; `OnGift` solo en un mundo coop.
 - [x] **W12 · baja · descartado.** Campos compartidos que parecen de inventario: `bossStatueTargetLevel` (lo que
   se elige en el menú del Salón, `BossChallengeUI.cs:284`), `hasGodfinder` y `hasJournal`. Probablemente da igual.
   - **Volcado de FSM:** `hasJournal` y `hasGodfinder` los da un `Shiny Item`, que es de cada uno, y compartirlos no estorba; ninguna FSM escribe `bossStatueTargetLevel`.
@@ -469,22 +494,25 @@ Del volcado de FSM:
   (el otro PC tendría una copia huérfana) y `PlayerEffects` ([:761](../src/HKMultiplayer/Game/Players/PlayerEffects.cs#L761))
   envía el efecto dos veces. Arreglo: contar la profundidad y avisar solo en la llamada de fuera.
   - **Arreglado en 0.26.0:** Contador de profundidad en los dos ganchos a `ObjectPool.Spawn` (`EnemySync` y `PlayerEffects`): solo cuenta la llamada de fuera.
-- [ ] **H4 · baja · sin comprobar.** Los avisos tras `orig` en `Fsm.SwitchState`
+- [x] **H4 · baja · sin comprobar.** Los avisos tras `orig` en `Fsm.SwitchState`
   ([EnemySync.cs:5442](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L5442), [PlayerEffects.cs:753](../src/HKMultiplayer/Game/Players/PlayerEffects.cs#L753))
   pueden llegar al revés: entrar en un estado puede provocar otro cambio dentro (juego PlayMaker `Fsm.cs:2339-2343`) y
   el último enviado sería el viejo. Arreglo: avisar antes de `orig` (como `FsmStateSync`) o comprobar que
   `ActiveState` sigue siendo ese.
-- [ ] **H5 · baja · sin comprobar.** El gancho de `ProcessEvent` de `EnemySync` (hacia [:5464-5490](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L5464))
+  - **Arreglado en 0.26.0:** En `EnemySync`, si entrar en el estado provocó otro cambio dentro, se vuelve a avisar del estado en que quedó.
+- [x] **H5 · baja · sin comprobar.** El gancho de `ProcessEvent` de `EnemySync` (hacia [:5464-5490](../src/HKMultiplayer/Game/Scene/EnemySync.cs#L5464))
   lee `Fsm.EventData.SentByFsm` (estático) después de `orig`, y los avisos de dentro lo cambian (juego PlayMaker
   `Fsm.cs:2084`). Guardarlo antes de llamar a `orig`.
+  - **Arreglado en 0.26.0:** El remitente se lee antes de `orig`.
 - [x] **H6 · baja · descartado.** `BossPresentation` solo engancha `RelinquishControl`; falta
   `RelinquishControlNotVelocity` (juego `HeroController.cs:3312`), si alguna FSM lo usa.
   - **Volcado de FSM:** `RelinquishControlNotVelocity` solo la usa `Inventory Control [Open]` del caballero (`_persistent`); ninguna FSM de jefe ni código de C# fuera de `HeroController`.
 - [ ] **H7 · baja · nota.** `QuestNpcSync` no trata `DeactivateIfPlayerdataFalseDelayed`.
   - **Volcado de FSM:** Solo existe en `GG_Atrium` (`top2`, el camino oculto).
-- [ ] **H8 · baja · sin comprobar.** Vueltas al menú que no pasan por los ganchos de `ReturnToMainMenu`
+- [x] **H8 · baja · sin comprobar.** Vueltas al menú que no pasan por los ganchos de `ReturnToMainMenu`
   (`CollectGuestsThen`, `CancelDowned`): `QuitToMenu` (juego `GameManager.cs:3419`), `EmergencyReturnToMenu` (`3513`)
   y la muerte en Alma de Acero (va a `PermaDeath`).
+  - **Revisado en 0.26.0:** No aplica en PC: `EmergencyReturnToMenu` solo salta si la plataforma se desconecta (consolas); la muerte de Alma de Acero no existe en los mundos coop.
 - [ ] **H9 · nota.** El gancho de `Die` tiene que seguir antes que el de `TakeDamage` ([Revive.cs:323](../src/HKMultiplayer/Game/Features/Revive.cs#L323)
   y [:333](../src/HKMultiplayer/Game/Features/Revive.cs#L333)): MonoMod compila la copia de `TakeDamage` que usa como
   `orig` al añadir el gancho. Bien hoy, pero frágil: dejar un comentario.
@@ -515,33 +543,40 @@ Del volcado de FSM:
   plataforma puede desaparecer bajo el compañero. Arreglo: alinear solo si el estado es un bucle en los dos y no forzar
   otro estado en una animación que no se repite.
   - **Arreglado en 0.26.0:** Solo se envían y alinean animaciones en bucle, y nunca se fuerza otro estado.
-- [ ] **O4 · baja · sin comprobar.** Al entrar en una sala, los `Breakable` ya rotos se rompen en directo (`Break`,
+- [x] **O4 · baja · sin comprobar.** Al entrar en una sala, los `Breakable` ya rotos se rompen en directo (`Break`,
   no hay `SetBroken` para ese tipo, [BreakableSync.cs:415-418](../src/HKMultiplayer/Game/Scene/BreakableSync.cs#L415)):
   cada uno suena, tiembla la cámara (`EnemyKillShake`, juego `Breakable.cs:420-437`) y saltan los trozos. Lo roto en
   directo por el compañero también mueve la cámara de este PC esté donde esté. Arreglo: `SetBroken` para `Breakable`
   (`isBroken = true`, `SetStaticPartsActivation(true)`, apagar `bodyCollider`).
-- [ ] **O5 · baja · comprobado.** Plataformas que solo activa el caballero local: `FlipPlatform` (Cumbre de
+  - **Arreglado en 0.26.0:** `SetBroken` para `Breakable` (como su `OnSetSaveState`: `isBroken` y `SetStaticPartsActivation(true)`).
+- [x] **O5 · baja · comprobado.** Plataformas que solo activa el caballero local: `FlipPlatform` (Cumbre de
   Cristal, se gira con pinchos 4 s, juego `FlipPlatform.cs:65-78`) y `DropPlatform` (capa 9, `DropPlatform.cs:42-48`).
   El daño es justo en cada PC, pero el compañero parece estar sobre pinchos o en el aire. Arreglo: aviso "activada" con
   su id y arrancar la misma corrutina.
   - **Volcado de FSM:** `FlipPlatform` en `Mines_17`, `Mines_29`, `Mines_31` y `Mines_35` (44); `DropPlatform` en `Fungus1_24` y `Fungus3_04/05/08/10/11/13/21/22/23/34` (~110). Sin FSM y el mod no las nombra.
-- [ ] **O6 · baja · comprobado.** Los huevos de Cañón de Niebla (`JellyEgg`, también el que explota) se rompen solo
+  - **Arreglado en 0.26.0:** Mensaje 110 (`LocalTrigger`): la plataforma empieza su corrutina `Flip` también en el otro PC.
+- [x] **O6 · baja · comprobado.** Los huevos de Cañón de Niebla (`JellyEgg`, también el que explota) se rompen solo
   en un PC (juego `JellyEgg.cs:58-75`): el compañero sigue viendo el huevo y le explota después.
   - **Volcado de FSM:** `JellyEgg` en `Fungus1_11` y `Fungus3_01/02/03/24/25/25b/26/27/28/47`; los que explotan, en `Fungus3_25b`, `Fungus3_26` y `Fungus3_28` (46 en esta).
-- [ ] **O7 · baja · sin comprobar.** La primera pasada de `FsmStateSync.Scan` ([:620-628](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L620))
+  - **Arreglado en 0.26.0:** Mensaje 110: el huevo hace su `Burst` también en el otro PC.
+- [x] **O7 · baja · sin comprobar.** La primera pasada de `FsmStateSync.Scan` ([:620-628](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L620))
   no descarta los objetos de `DontDestroyOnLoad` ni los del caballero (`AddBattleListeners` sí, [:691-693](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L691)):
   una FSM persistente con "Button" o "Switch" en el nombre se seguiría. Añadir `buildIndex < 0` e `IsChildOf(hero)`.
-- [ ] **O8 · baja · sin comprobar.** Ids distintos para objetos clonados en la raíz: los `fsm:` de `SceneObjectSync`
+  - **Arreglado en 0.26.0:** La primera pasada descarta lo persistente y lo del caballero.
+- [x] **O8 · baja · sin comprobar.** Ids distintos para objetos clonados en la raíz: los `fsm:` de `SceneObjectSync`
   ([:362](../src/HKMultiplayer/Game/Scene/SceneObjectSync.cs#L362)) usan `ScenePaths.Hash` y `FsmStateSync.FsmId`
   ([:894-897](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L894)) usa `PlacedId`. Un rompible de FSM clonado en
   partida tendría un id que depende del orden.
-- [ ] **O9 · baja · sin comprobar.** Dos golpes a la vez a la misma roca de geo cuentan uno: se envía el número de
+  - **Arreglado en 0.26.0:** `SceneObjectSync` usa `FsmStateSync.FsmId`.
+- [x] **O9 · baja · sin comprobar.** Dos golpes a la vez a la misma roca de geo cuentan uno: se envía el número de
   golpes absoluto ([SceneObjectSync.cs:309](../src/HKMultiplayer/Game/Scene/SceneObjectSync.cs#L309), [:435](../src/HKMultiplayer/Game/Scene/SceneObjectSync.cs#L435)).
   Enviar la resta.
-- [ ] **O10 · baja · sin comprobar.** `BreakableSync._sendSnapshot` no se pone a cero al cambiar de sala
+  - **Arreglado en 0.26.0:** En directo va también cuántos golpes dio este jugador, y quien lo recibe los resta de los suyos.
+- [x] **O10 · baja · sin comprobar.** `BreakableSync._sendSnapshot` no se pone a cero al cambiar de sala
   ([:255-271](../src/HKMultiplayer/Game/Scene/BreakableSync.cs#L255)), al contrario que `SceneObjectSync.Clear`
   ([:179](../src/HKMultiplayer/Game/Scene/SceneObjectSync.cs#L179)): una petición de foto puede pasar a la sala
   siguiente.
+  - **Arreglado en 0.26.0:** `_sendSnapshot` se pone a falso al cambiar de sala.
 - [x] **O11 · baja · sin comprobar.** `HazardSync.Scan` para en `MaxHazards` y `FindObjectsByType` no ordena
   ([:216-218](../src/HKMultiplayer/Game/Scene/HazardSync.cs#L216)): en una sala con más de 160 animadores cada PC puede
   seguir otros.
@@ -556,10 +591,11 @@ Del volcado de FSM:
   de todo lo que va detrás (rompibles, peligros, FSM, la foto para quien entra). Lo encontrado en la segunda pasada
   (1,5 s) se apunta después de posibles cambios. Arreglo posible: ids por nombre y posición (como `PlacedId`) o sin el
   puesto de la raíz cuando el nombre es único.
-- [ ] **O14 · baja · sin comprobar.** Una `VinePlatform` que cae por un corte llegado de otro PC (o de la foto) cae en
+- [x] **O14 · baja · sin comprobar.** Una `VinePlatform` que cae por un corte llegado de otro PC (o de la foto) cae en
   directo en quien lo recibe, y su `enemyDetector` mata con `Die()` a los enemigos de ese PC que tiene debajo (juego
   `VinePlatform.cs:101-108`): muertes dobles o solo locales.
   - **Volcado de FSM:** `VinePlatform` solo en `Fungus1_06/07/09/13/14/21/22` y `GG_Atrium_Roof`; el volcado no dice si hay enemigos debajo.
+  - **Arreglado en 0.26.0:** Cubierto por E2: una marioneta ya no muere en local, se avisa a quien la mueve (que también tiene la liana cayendo).
 - [x] **O15 · baja · descartado.** Plataformas que se desmoronan y vuelven, llevadas por una FSM sin `Activated`
   ni nombre de palanca: probablemente no se copian y cada PC tiene la suya (como O5).
   - **Volcado de FSM:** Todos los suelos que se desmoronan por FSM llevan `PersistentBoolItem` + `Activated` y ya los siguen `FsmStateSync`/`SceneObjectSync`; ninguno vuelve a aparecer (`collapse small`, `break_floor`, `quake_floor_shake`, `Garden Slide Floor`, `Resting Grounds Slide Floor`, `Chain Platform` de `Ruins1_28`, `Detect Quake` de `Mines_01`/`Mines_35`).
@@ -576,7 +612,7 @@ Del volcado de FSM:
 
 Del volcado de FSM:
 
-- [ ] **O19 · media · sin comprobar.** El tranvía no se sincroniza. En `Room_Tram` y `Room_Tram_RG`, ni
+- [x] **O19 · media · sin comprobar.** El tranvía no se sincroniza. En `Room_Tram` y `Room_Tram_RG`, ni
   `Tram Console L/R` (`Switch Active`) ni `Tram Control` entran en `Targets` ni en `IsSwitchLike`
   ([FsmStateSync.cs:115](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L115), [:797](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L797)):
   quien usa la consola viaja solo. `PlayerDataIntAdd tramLowerPosition ±1` se comparte, pero el `door1 [Door Target]` del
@@ -584,26 +620,31 @@ Del volcado de FSM:
   estaciones (`Abyss_03/03_b/03_c`, `Crossroads_46/46b`) `Tram Main [Tram Control]` solo llega con el `CALL TRAM` local:
   el compañero no lo ve llegar ni puede subir. Arreglo: el tranvía como controlador y viaje juntos como `StagTogether`;
   como mínimo, ante un cambio de otro PC, repetir `Get Station` y mandar `CALL TRAM`.
-- [ ] **O20 · media · sin comprobar.** Las máquinas de peaje copian su diálogo al otro PC: `Toll Machine` (`Fungus1_31`
+  - **Arreglado en 0.26.0:** `Tram Control` es un objeto con controlador (`Targets`). Sin probar en el juego.
+- [x] **O20 · media · sin comprobar.** Las máquinas de peaje copian su diálogo al otro PC: `Toll Machine` (`Fungus1_31`
   ×2, `Mines_33` ×2, `Deepnest_41`) y `Toll Machine Bench` (`Abyss_18`, `Fungus3_50`, `Ruins1_31`) tienen
   `PersistentBoolItem` + `Activated` y se copia su cadena desde el reposo `Out Of Range` ([FsmStateSync.cs:1922](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L1922)),
   con `In Range` (cartel), `Box Up` (`BOX UP YN`) y `Send Text` (`StartConversation TOLLBOOTH_*`); `PrepareCopy` solo
   apaga las llamadas al caballero. Cuando el compañero se acerca, a este jugador le sale el cartel, y cuando pregunta se
   le abre la caja de sí/no con el precio con el control puesto. Arreglo: copiar solo desde `Yes`/`Open Gates`, o saltar
   los estados con diálogo.
-- [ ] **O21 · baja · comprobado.** El ascensor de luz del Palacio Blanco (`White Palace Lift [Control]`; `White_Palace_01`,
+  - **Arreglado en 0.26.0:** Las copias no tocan al caballero local (ninguna acción sobre él), ni abren diálogos (`BOX *`, `StartConversation`), ni el cartel de "Inspeccionar". Sin probar en el juego.
+- [x] **O21 · baja · comprobado.** El ascensor de luz del Palacio Blanco (`White Palace Lift [Control]`; `White_Palace_01`,
   `White_Palace_03_hub`, `White_Palace_09`) sube al pisarlo el caballero local (`Collision2dEvent` con `Player`) y no es
   `Lift Control`, así que no se sigue: el compañero sube flotando y cada uno usa el suyo. Arreglo: a `Targets` con la
   lógica de ascensor (lo mueve quien va encima).
-- [ ] **O22 · baja · comprobado.** Esperas al azar en plataformas de un controlador ya sincronizado:
+  - **Arreglado en 0.26.0:** `White Palace Lift` es un objeto con controlador. Sin probar en el juego.
+- [x] **O22 · baja · comprobado.** Esperas al azar en plataformas de un controlador ya sincronizado:
   `Colosseum Platform [Control]` (Coliseo de Bronce, Plata y Oro: `Expand Pause` y `Slow Rand` con `WaitRandom` de 0 a
   1 s) y `radiant_plat` (`Dream_Final_Boss`, `GG_Radiance`: `Pre Vanish` de 2 a 3 s). `Abyss Pit [Ascend]` sube según la
   Y del caballero local. El compañero parece estar en el aire o caer (cada uno juega limpio en su PC). Arreglo: semilla
   fija por ruta y aviso (como `DropSeeds`), o seguir también los avisos dirigidos a un objeto.
-- [ ] **O23 · baja · comprobado.** Pagar el ascensor no lo baja en el otro PC: `Toll Machine Lift` de `Crossroads_49b`
+  - **Arreglado en 0.26.0:** `Colosseum Platform` y `Radiant Plat` son objetos con controlador. `Abyss Pit` (sube según el caballero local) queda igual.
+- [x] **O23 · baja · comprobado.** Pagar el ascensor no lo baja en el otro PC: `Toll Machine Lift` de `Crossroads_49b`
   pone `cityLift1` (compartido) y manda `TOLL LIFT PAY` solo en su PC, y `elev_main [Lift lower]` solo baja con ese aviso:
   el compañero lo ve arriba hasta volver a entrar. Arreglo: al llegar `cityLift1` de otro PC, mandar `TOLL LIFT PAY` en la
   sala.
+  - **Arreglado en 0.26.0:** Al llegar `cityLift1` de otro PC, se manda `TOLL LIFT PAY` a las FSM de la sala que lo esperan.
 
 ## Rendimiento (P)
 
@@ -691,19 +732,21 @@ Del volcado de FSM:
   cerrar la anterior: puede congelar al host. Arreglo: nunca soltar una conexión autenticada por un `Hello` y limitar
   los `Hello` por dirección.
   - **Arreglado en 0.26.0:** Un `Hello` desde la dirección de un jugador que envió algo en los últimos 3 s se ignora; como mucho 10 saludos nuevos por segundo.
-- [ ] **N6 · baja · sin comprobar.** El código de partida (40 bits, 32^8, [RoomCode.cs](../src/HKMultiplayer/Net/Crypto/RoomCode.cs))
+- [x] **N6 · baja · sin comprobar.** El código de partida (40 bits, 32^8, [RoomCode.cs](../src/HKMultiplayer/Net/Crypto/RoomCode.cs))
   se puede sacar a fuerza bruta sin conexión a partir de la prueba del saludo ([NetServer.cs:117-126](../src/HKMultiplayer/Net/NetServer.cs#L117))
   si alguien llega al puerto. Arreglo: un PAKE (CPace/SPAKE2), o al menos un KDF lento sobre el código y un código
   más largo.
+  - **Arreglado en 0.26.0:** La sal es el código estirado con PBKDF2-HMAC-SHA256 de 100.000 vueltas (una vez por código, en otro hilo). `ProtocolVersion` pasa a 2.
 - [x] **N7 · baja · sin comprobar.** El nombre se lee con `ReadString(64)` ([NetServer.cs:161](../src/HKMultiplayer/Net/NetServer.cs#L161))
   pero `CleanName` deja 24 caracteres (72+ bytes en UTF-8 para chino, japonés...): el saludo falla y el invitado ve un
   "tiempo agotado" que no explica nada.
   - **Arreglado en 0.26.0:** El nombre y la versión se leen con 128 bytes.
-- [ ] **N8 · baja · sin comprobar.** `MultiplayerRunner.LateUpdate` ([:233-260](../src/HKMultiplayer/Game/MultiplayerRunner.cs#L233))
+- [x] **N8 · baja · sin comprobar.** `MultiplayerRunner.LateUpdate` ([:233-260](../src/HKMultiplayer/Game/MultiplayerRunner.cs#L233))
   tiene un solo `try/catch` para unas 20 partes: si una falla, se saltan las de detrás (también `session.Update()` si
   falla `SendLocalState`). Y `DetachAll`/`CloseSession` ([:482-523](../src/HKMultiplayer/Game/MultiplayerRunner.cs#L482))
   no aíslan cada `Detach`: si uno falla, `session.Dispose()` no se llama y quedan el socket, el hilo y el puerto
   ocupados.
+  - **Arreglado en 0.26.0:** `LateUpdate` va en bloques con su propio `catch` (errores con límite) y `DetachAll` aísla cada parte.
 - [x] **N9 · baja · sin comprobar.** El mundo que llega del host se lee con `TypeNameHandling.Auto`
   ([WorldSync.cs:184](../src/HKMultiplayer/Game/World/WorldSync.cs#L184), [WorldStore.cs:55](../src/HKMultiplayer/Game/World/WorldStore.cs#L55)).
   Riesgo bajo (`PlayerData` y `SceneData` no tienen miembros polimórficos), pero con datos de la red mejor `None` o
@@ -721,7 +764,7 @@ Del volcado de FSM:
   (`ABSORB END` del Grimmchild). Arreglo: en la copia, `LocalConvoDone = true` (o "fin de diálogo pendiente") y, al
   pasar a ser controlador, `ReleaseConvo` si estaba puesto; guardar también esos avisos como retenidos.
   - **Arreglado en 0.26.0:** La copia apunta el estado de diálogo que cerró (`ConvoClosedIn`); al pasar a controlar, si sigue en él, espera a los demás y sigue.
-- [ ] **F2 · media · sin comprobar.** Las copias de palancas y objetos golpeados siguen su cadena solas y luego repiten
+- [x] **F2 · media · sin comprobar.** Las copias de palancas y objetos golpeados siguen su cadena solas y luego repiten
   los pasos que llegan. Fuera de `ApplyRemoteState`, `HoldSwitch` deja pasar sus cambios ([FsmStateSync.cs:996](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L996))
   y `OnEvent` todo ([:1208](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L1208)): tras entrar en el estado S que
   llegó, su `Wait` → `FINISHED` la lleva a S2. Cuando llega "S2", `OnTransition` solo lo salta si está justo en S2
@@ -730,11 +773,13 @@ Del volcado de FSM:
   ([:1125-1146](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L1125)), así que sus `SetPlayerData*` y llamadas al
   caballero se hacen en la copia. Es una carrera: el `Update` de PlayMaker va antes que `session.Update`. Arreglo:
   mientras dura `RemoteChainUntil`, retener los cambios de la copia, o saltar un paso por el que ya pasó.
-- [ ] **F3 · media · sin comprobar.** Dos `Claim` cruzados dejan a cada PC creyendo que controla el otro: `OnClaim`
+  - **Arreglado en 0.26.0:** La copia apunta los estados por los que pasa sola (`SelfVisited`) y no repite esos pasos cuando llegan.
+- [x] **F3 · media · sin comprobar.** Dos `Claim` cruzados dejan a cada PC creyendo que controla el otro: `OnClaim`
   ([FsmStateSync.cs:414-422](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L414)) no desempata. Pasa si el `Claim`
   automático del dueño tras `ClaimGrace` ([:515](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L515)) se cruza con un
   `TakeControl` del invitado, o con 3+ jugadores cuando se va el controlador. Los dos retienen y nadie envía: un
   ascensor o una oleada del Coliseo se quedan parados. Arreglo: número de época en el `Claim`, o gana el id menor.
+  - **Arreglado en 0.26.0:** Dos reclamaciones con menos de 1 s entre ellas: gana el número menor en los dos PCs.
 - [x] **F4 · baja · comprobado.** `CloseChallengePrompts` ([FsmStateSync.cs:1085](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L1085))
   recorre la lista viva `PlayMakerFSM.FsmList` mientras manda `DOWN` y cambia estados; si con eso se enciende o apaga
   alguna FSM, la lista cambia (juego PlayMaker `PlayMakerFSM.cs:363-399`) y el bucle falla. Va antes del `try` de
@@ -742,21 +787,24 @@ Del volcado de FSM:
   Señores Mantis con `LastState` ya cambiado. PlayMaker copia la lista antes (`PlayMakerFSM.cs:472`). Arreglo:
   recorrer una copia.
   - **Arreglado en 0.26.0:** Se recorre una copia de `PlayMakerFSM.FsmList`.
-- [ ] **F5 · baja · sin comprobar.** Un estado que se repite (S → S) no llega al otro PC: `OnControllerState`
+- [x] **F5 · baja · sin comprobar.** Un estado que se repite (S → S) no llega al otro PC: `OnControllerState`
   ([:1908](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L1908)) y `OnTransition` ([:1969](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L1969))
   lo ignoran si ya está en ese estado (`OnTransition` lee el `from` y no lo usa, [:1960](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L1960)).
   Un segundo golpe rápido aún en "Hit" no cuenta y los contadores se desvían. Volver a aplicarlo si `from == to`.
-- [ ] **F6 · baja · sin comprobar.** El remitente se adivina con el `Fsm.EventData` estático
+  - **Arreglado en 0.26.0:** `OnTransition` aplica el estado aunque ya esté en él si viene de sí mismo.
+- [x] **F6 · baja · sin comprobar.** El remitente se adivina con el `Fsm.EventData` estático
   (`eventData?.SentByFsm ?? Fsm.EventData?.SentByFsm`, [:1217](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L1217),
   [:1437](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L1437)), que está viejo con `PlayMakerFSM.BroadcastEvent` desde
   C# (`HAZARD RELOAD` del `GameManager`): si apunta a una copia seguida, el aviso se descarta ([:1268-1278](../src/HKMultiplayer/Game/Scene/FsmStateSync.cs#L1268)).
   Con `eventData` no nulo, fiarse de él y no usar el estático.
-- [ ] **F7 · baja · sin comprobar.** `SharedCutscenes.OnSkip` ([:504-526](../src/HKMultiplayer/Game/Features/SharedCutscenes.cs#L504))
+  - **Arreglado en 0.26.0:** Con `eventData`, se usa su remitente aunque sea nulo (en `FsmStateSync` y en `EnemySync`).
+- [x] **F7 · baja · sin comprobar.** `SharedCutscenes.OnSkip` ([:504-526](../src/HKMultiplayer/Game/Features/SharedCutscenes.cs#L504))
   pone `skippingCutscene = true` y llama a `SkipCutscene`, que no hace nada si `gameState != CUTSCENE` y no quita la
   marca. A quien llevaron a la cinemática se le cuenta antes de que empiece: con "saltar con uno", un voto temprano no
   la salta para él, la ve solo y su entrada se ignora (`InputHandler.cs:386`). Tampoco respeta
   `NOT_SKIPPABLE_DUE_TO_LOADING`. Arreglo: aplicar el salto solo con `CUTSCENE` (si no, guardarlo y reintentar) y
   quitar la marca si no se hizo.
+  - **Arreglado en 0.26.0:** El salto se guarda y se hace cuando la cinemática está en marcha (`gameState` CUTSCENE y no cargando).
 - [ ] **F8 · media · descartado en lo grave.** `QuestNpcSync.Recheck` ([:190-216](../src/HKMultiplayer/Game/World/QuestNpcSync.cs#L190))
   vuelve al estado inicial desde cualquier estado; solo mira que el caballero local tenga el control, no que el
   personaje esté en reposo. En las FSM de personaje no se aplica `NotOnRecheck` ([:305](../src/HKMultiplayer/Game/World/QuestNpcSync.cs#L305))
@@ -764,20 +812,23 @@ Del volcado de FSM:
   se repiten. Un personaje que suelta un objeto o geo tras devolver el control podría darlo dos veces. Arreglo: apagar
   esas acciones durante la vuelta y solo reiniciar FSM en reposo (esperando un aviso o `ListenFor`).
   - **Volcado de FSM:** Revisado el camino de inicio de todas las FSM de personaje (o de su padre o hijo) que leen un dato del mundo: ninguna suelta geo ni objetos. Lo que se repite es inofensivo: Cornifer (13 salas, `corn_*Left = true`), el ciervo (depende de `travelling`, de cada PC), `Quirrel … [Set Encounters]`, `Shaman Meeting` (`shaman = 2`), `GG_Boss_Door_Entrance`. La excepción es Millibelle (W14). Queda baja.
-- [ ] **F9 · baja · sin comprobar.** `ApplyRemoteState` y `Recheck` llaman a `SetState` sin mirar `Started` ni si
+- [x] **F9 · baja · sin comprobar.** `ApplyRemoteState` y `Recheck` llaman a `SetState` sin mirar `Started` ni si
   está encendida (el juego ignora una FSM no `Active`, PlayMaker `Fsm.cs:2025`). En una apagada, las acciones corren
   en un objeto inactivo y `OnEnable` la devuelve al inicio (`Fsm.cs:1847-1855`); en una sin empezar, `Start()` vuelve a
   entrar en ese estado y sus acciones van dos veces (`Fsm.cs:1873-1884`). Esperar a `fsm.Started && isActiveAndEnabled`.
-- [ ] **F10 · baja · sin comprobar.** Los ganchos de lectura vieja y "no avanzar dos veces" de `QuestNpcSync`
+  - **Arreglado en 0.26.0:** Con la FSM apagada o sin empezar, el estado se guarda (`PendingRemoteState`) y se pone cuando esté en marcha.
+- [x] **F10 · baja · sin comprobar.** Los ganchos de lectura vieja y "no avanzar dos veces" de `QuestNpcSync`
   ([:651-686](../src/HKMultiplayer/Game/World/QuestNpcSync.cs#L651)) se fían de `controlReqlinquished`, que también
   ponen las presentaciones de jefe (`BossPresentation`, hasta 30 s), el banco y los viajes: en ese rato una FSM puede
   leer el valor viejo o perder una suma de verdad. Contar solo una conversación real.
-- [ ] **F11 · baja · sin comprobar.** `BossPresentation`: `_sentLock` ([:107](../src/HKMultiplayer/Game/Features/BossPresentation.cs#L107),
+  - **Arreglado en 0.26.0:** No cuenta como conversación estar quieto por la presentación de otro PC (`BossPresentation.PartnerLocked`) ni sentado.
+- [x] **F11 · baja · sin comprobar.** `BossPresentation`: `_sentLock` ([:107](../src/HKMultiplayer/Game/Features/BossPresentation.cs#L107),
   [:130](../src/HKMultiplayer/Game/Features/BossPresentation.cs#L130)) solo se quita en `RegainControl`, y al reaparecer el
   juego devuelve el control directamente (`HeroController.cs:3220-3225`): quien presentaba y murió a mitad no vuelve a
   bloquear al compañero en el siguiente intento (de la familia de J10, otra marca; quitarla al cambiar de sala). Su
   `Update` ([:238](../src/HKMultiplayer/Game/Features/BossPresentation.cs#L238)) también suelta al cambiar de sala el
   jugador local, llamando a `RegainControl` durante una muerte o reaparición.
+  - **Arreglado en 0.26.0:** Ver J10; además `Release` no devuelve el control durante una muerte, una reaparición o un cambio de sala.
 - [ ] **F12 · baja · nota.** Dos FSM con el mismo nombre en un objeto chocan en `FsmId` (`_byId` se queda con la
   primera, en orden sin ordenar). Raro.
 
@@ -815,7 +866,7 @@ Del volcado de FSM:
   ([:580](../src/HKMultiplayer/Game/MultiplayerRunner.cs#L580)). Arreglo: apuntar "volver al menú en cuanto haya
   caballero", o que `ContinueGame`/`LoadGame` enganchados fallen si ya no hay sesión de invitado.
   - **Arreglado en 0.26.0:** Si se corta mientras carga o ve la introducción, vuelve al menú en cuanto hay caballero (`_backToMenuWhenReady`).
-- [ ] **S4 · baja · sin comprobar.** Geo regalado que se pierde o pasa a otra partida. `_pendingGeo`
+- [x] **S4 · baja · sin comprobar.** Geo regalado que se pierde o pasa a otra partida. `_pendingGeo`
   ([PartyActions.cs:33](../src/HKMultiplayer/Game/Features/PartyActions.cs#L33), 153-160) no se vacía en `Detach`
   ([:52-61](../src/HKMultiplayer/Game/Features/PartyActions.cs#L52)) y `Update` solo corre con sesión: lo que llega sin
   caballero (menú, carga) se paga en la sesión siguiente, quizá otro mundo. Quien regala paga al momento (`TakeGeo`,
@@ -823,23 +874,27 @@ Del volcado de FSM:
   se fue ([:120-126](../src/HKMultiplayer/Game/Features/PartyActions.cs#L120)). El host no puede comprobar el geo de
   quien regala (un cliente modificado podría crear geo; va con el modelo de confianza actual). "Todo" con 0 geo dice
   "Elige cuánto geo dar".
-- [ ] **S5 · baja · sin comprobar.** El personaje del invitado se puede guardar en mal estado: `OnSaveNow`
+  - **Arreglado en 0.26.0:** Si el destinatario se fue, se devuelve el geo; lo pendiente se olvida al cerrar la sesión; "No tienes geo".
+- [x] **S5 · baja · sin comprobar.** El personaje del invitado se puede guardar en mal estado: `OnSaveNow`
   ([WorldSync.cs:154-163](../src/HKMultiplayer/Game/World/WorldSync.cs#L154)) lo saca directamente, sin el gancho de
   guardado de `Revive` ([Revive.cs:389-408](../src/HKMultiplayer/Game/Features/Revive.cs#L389)). Y ni `SaveNow` ni el
   autoguardado (`IsQuietMoment`, [:313-318](../src/HKMultiplayer/Game/World/WorldSync.cs#L313)) miran
   `BossSequenceController.IsInSequence`: en un Panteón con amuletos atados, `equippedCharms` está vacío (juego
   `BossSequenceController.cs:294-298`). Si el host sale en ese momento, el invitado pierde todos sus amuletos
   equipados. Arreglo: no guardar durante un Panteón, o `RestoreBindings` sobre una copia antes de sacarlo.
-- [ ] **S6 · baja · sin comprobar.** Nada impide que dos conexiones usen la misma clave de personaje: `OnIdentify`
+  - **Arreglado en 0.26.0:** Ni `SaveNow` ni el autoguardado durante un Panteón.
+- [x] **S6 · baja · sin comprobar.** Nada impide que dos conexiones usen la misma clave de personaje: `OnIdentify`
   ([WorldSync.cs:216-232](../src/HKMultiplayer/Game/World/WorldSync.cs#L216)) acepta varios `Identify` por conexión y no
   mira si esa clave ya está en uso. Dos copias del juego con el mismo usuario de Windows comparten la clave (la forma
   de probar) y se pisan el personaje; un invitado con el código puede mandar `Identify` sin parar y el host arma y envía
   el mundo entero cada vez en el hilo principal; con 4 jugadores, una reconexión que llega antes de que el host corte
   la vieja recibe "llena" y deja de reintentar ([:535-540](../src/HKMultiplayer/Game/MultiplayerRunner.cs#L535)).
   Arreglo: un `Identify` por conexión, y si la clave ya está en uso, cortar la vieja.
-- [ ] **S7 · baja · cosmético.** Los manejadores de `PlayerJoined`/`PlayerLeft` de `Wire`
+  - **Arreglado en 0.26.0:** Un `Identify` por conexión; la misma clave en otra conexión: gana la nueva.
+- [x] **S7 · baja · cosmético.** Los manejadores de `PlayerJoined`/`PlayerLeft` de `Wire`
   ([MultiplayerRunner.cs:668-679](../src/HKMultiplayer/Game/MultiplayerRunner.cs#L668)) no se quitan: al cerrar el host
   su partida, `Dispose` → `PlayerLeft` le enseña "X salió de la partida".
+  - **Arreglado en 0.26.0:** Los avisos de `PlayerLeft` miran que la sesión siga siendo la actual.
 - [x] **S8 · baja · sin comprobar.** El aviso de desconexión empieza `ReturnToMainMenu` sin más
   ([:658-661](../src/HKMultiplayer/Game/MultiplayerRunner.cs#L658), [:464-474](../src/HKMultiplayer/Game/MultiplayerRunner.cs#L464)):
   puede caer a mitad de un cambio de sala, o mientras ya hay una vuelta al menú del juego en marcha (el caballero dura
@@ -848,9 +903,10 @@ Del volcado de FSM:
 - [ ] **S9 · baja · sin comprobar.** Dos cargas a la vez: `RunContinueGame` deja el juego en `MAIN_MENU` 2,6 s sin
   caballero (juego `GameManager.cs:3326-3336`), así que `CanStart` es cierto; si el mundo llega mientras el invitado
   carga una partida suya, `StartGuest` empieza otra carga. Ventana pequeña y necesita S1.
-- [ ] **S10 · baja · sin comprobar.** El mundo y los personajes pueden desfasarse: los personajes se guardan en cada
+- [x] **S10 · baja · sin comprobar.** El mundo y los personajes pueden desfasarse: los personajes se guardan en cada
   banco y cada 30 s, el mundo cada 2 min. Si el host se cierra de golpe, los invitados conservan objetos cuyos datos del
   mundo volvieron atrás y los pueden recoger otra vez. Arreglo: `_saveSoon` al recibir un personaje.
+  - **Arreglado en 0.26.0:** Al recibir un personaje, el mundo se guarda pronto si hace más de 30 s que no.
 
 ## Skins (K)
 
@@ -868,48 +924,60 @@ Del volcado de FSM:
   [:629](../src/HKMultiplayer/Game/Features/Skins.cs#L629)): "(recibiéndola...)" toda la sesión. Arreglo: en
   `OnPlayerLeft`, quitar de `_requested` y `_waiting` las huellas que no están en `_skins` (y quizá un tiempo máximo).
   - **Arreglado en 0.26.0:** Al irse un jugador, su skin pedida que no llegó se puede volver a pedir.
-- [ ] **K3 · baja · sin comprobar.** Activar "ver las skins de los demás" a mitad de sesión no pide nada
+- [x] **K3 · baja · sin comprobar.** Activar "ver las skins de los demás" a mitad de sesión no pide nada
   ([Skins.cs:312-316](../src/HKMultiplayer/Game/Features/Skins.cs#L312)): solo se piden en `SetWorn` y con la opción ya
   encendida. En `SetShowOthers(true)`, recorrer `_worn` y cargar de la caché o pedir lo que falte.
-- [ ] **K4 · baja · sin comprobar.** Las máscaras del HUD del compañero se crean una vez desde
+  - **Arreglado en 0.26.0:** `SetShowOthers(true)` pide las que faltan (`RequestMissing`).
+- [x] **K4 · baja · sin comprobar.** Las máscaras del HUD del compañero se crean una vez desde
   `definition.material.mainTexture` ([HudSprites.cs:104](../src/HKMultiplayer/UI/HudSprites.cs#L104)); si ya había un
   `Hud.png` puesto, es la textura de la skin local, y al cambiar o quitar la skin `Forget` la destruye
   ([Skins.cs:911](../src/HKMultiplayer/Game/Features/Skins.cs#L911)): las máscaras del compañero salen en blanco.
   Crearlas desde la textura del juego o rehacerlas al cambiar de skin.
-- [ ] **K5 · baja · sin comprobar.** El cuerpo del caballero local pasa por un bloque de propiedades cada frame
+  - **Arreglado en 0.26.0:** Se crean desde la textura del juego (`Skins.VanillaTextureOf`).
+- [x] **K5 · baja · sin comprobar.** El cuerpo del caballero local pasa por un bloque de propiedades cada frame
   ([Skins.cs:934](../src/HKMultiplayer/Game/Features/Skins.cs#L934), [:1000-1011](../src/HKMultiplayer/Game/Features/Skins.cs#L1000)),
   también jugando solo y sin skin del mod: escribe `VanillaTextures["Knight"]`, tomada una vez ([:1079](../src/HKMultiplayer/Game/Features/Skins.cs#L1079)).
   Con CustomKnight activo, el cuerpo se queda con la primera textura y no se ven sus cambios de skin; si CustomKnight
   destruye esa textura, el bloque apunta a una destruida. Arreglo: sin skin del mod, quitar `_MainTex` del bloque (o
   usar la del material en vivo) y volver a tomar la del juego si es nula.
-- [ ] **K6 · baja · sin comprobar.** `KeepOrbFull` ([Skins.cs:1194-1223](../src/HKMultiplayer/Game/Features/Skins.cs#L1194))
+  - **Arreglado en 0.26.0:** Sin skin del mod, el cuerpo propio no se toca (si llevaba una, se quita el bloque una vez).
+- [x] **K6 · baja · sin comprobar.** `KeepOrbFull` ([Skins.cs:1194-1223](../src/HKMultiplayer/Game/Features/Skins.cs#L1194))
   lee `sprite.name` hasta 3 veces por renderer del orbe y frame con `OrbFull.png` (cada lectura crea una cadena).
   Guardar los `Sprite` del orbe en un conjunto.
-- [ ] **K7 · baja · sin comprobar.** El reintento de cada 0,2 s sale caro ([Skins.cs:1065](../src/HKMultiplayer/Game/Features/Skins.cs#L1065),
+  - **Arreglado en 0.26.0:** Lo decidido de cada sprite se guarda (`_orbFullKnown`).
+- [x] **K7 · baja · sin comprobar.** El reintento de cada 0,2 s sale caro ([Skins.cs:1065](../src/HKMultiplayer/Game/Features/Skins.cs#L1065),
   1109, 1170): si faltan texturas (p. ej. al quitar la pausa en una sala de jefe, con `CanCreateTextureNow` falso),
   `ApplyShared` hace `FindObjectsOfTypeAll<tk2dSpriteCollectionData>` y `<SpriteRenderer>` con LINQ 5 veces por
   segundo todo el combate. Esperar más entre intentos o no buscar el orbe si no cambió nada.
-- [ ] **K8 · media · sin comprobar.** La animación de muerte sale con el caballero del juego: `HeroController` apaga su
+  - **Arreglado en 0.26.0:** Entre intentos se espera cada vez más, hasta 2 s.
+- [x] **K8 · media · sin comprobar.** La animación de muerte sale con el caballero del juego: `HeroController` apaga su
   renderer y enseña `heroDeathPrefab`, otro `tk2dSprite` (juego `HeroController.cs:838-842`, `4245-4261`), y la skin
   solo se pone en el renderer del caballero. Ponerla también en los `tk2dSprite` de `heroDeathPrefab` mientras está
   encendido.
-- [ ] **K9 · baja · sin comprobar.** Un frame con la hoja equivocada: tk2d avanza la animación en
+  - **Arreglado en 0.26.0:** `ApplyToDeath` pone la skin propia a los `tk2dSprite` de `heroDeathPrefab` mientras está encendido.
+- [x] **K9 · baja · sin comprobar.** Un frame con la hoja equivocada: tk2d avanza la animación en
   `tk2dSpriteAnimatorCallbackHooks.LateUpdate`, en orden sin definir respecto a `MultiplayerRunner.LateUpdate` (sin
   `DefaultExecutionOrder`); cuando un cuadro cambia de colección (Knight → Sprint o Unn), puede dibujarse con la textura
   de la anterior. Aplicar en `Camera.onPreCull` o dar al runner un orden tardío.
-- [ ] **K10 · baja · sin comprobar.** `VanillaTextures` se guarda por nombre de colección y nunca se revisa: una
+  - **Arreglado en 0.26.0:** `MultiplayerRunner` con `[DefaultExecutionOrder(10000)]`.
+- [x] **K10 · baja · sin comprobar.** `VanillaTextures` se guarda por nombre de colección y nunca se revisa: una
   colección que se carga con la sala y se vuelve a cargar deja de recibir la skin ([Skins.cs:1097](../src/HKMultiplayer/Game/Features/Skins.cs#L1097)
   compara con la textura vieja), y `RestoreShared` o los efectos del compañero podrían recibir una destruida.
-- [ ] **K11 · baja · sin comprobar.** Efectos del compañero que salen del pool del juego (`prefab.Spawn`,
+  - **Arreglado en 0.26.0:** Se vuelve a tomar si la apuntada ya no existe.
+- [x] **K11 · baja · sin comprobar.** Efectos del compañero que salen del pool del juego (`prefab.Spawn`,
   [RemoteEffects.cs:647](../src/HKMultiplayer/Game/Players/RemoteEffects.cs#L647)) no están en `LooseEffects`: si su
   colección es compartida, salen con la skin de hechizos del jugador local.
-- [ ] **K12 · baja · sin comprobar.** Si `SaveCached` falla o el juego se cierra a mitad, quedan `<huella>.hksk.tmp`
+  - **Revisado en 0.26.0:** Se deja: son objetos del pool del juego; ponerles la skin del compañero haría que, al reciclarse, el jugador local los viera con ella.
+- [x] **K12 · baja · sin comprobar.** Si `SaveCached` falla o el juego se cierra a mitad, quedan `<huella>.hksk.tmp`
   en la caché que `GetFiles("*.hksk")` nunca cuenta ni borra.
-- [ ] **K13 · baja · sin comprobar.** `tk2dSprite.UpdateMaterial` crea copias del material por sprite "(using
+  - **Arreglado en 0.26.0:** Al guardar en la caché se borran los `.hksk.tmp` de hace más de una hora.
+- [x] **K13 · baja · sin comprobar.** `tk2dSprite.UpdateMaterial` crea copias del material por sprite "(using
   keywords)" para los que tienen `materialKeywords`/`materialFloats` (tk2d `tk2dSprite.cs:262-306`); no están en
   `materials` ni `materialInsts`, así que `ApplyShared` y `RestoreShared` no las tocan.
-- [ ] **K14 · baja · nota.** El `cref` de [DownedBody.cs:21](../src/HKMultiplayer/Game/Features/DownedBody.cs#L21) apunta
+  - **Revisado en 0.26.0:** Se deja: copias de material que tk2d crea solo para sprites con palabras clave; no se vio ninguna en las colecciones del caballero.
+- [x] **K14 · baja · nota.** El `cref` de [DownedBody.cs:21](../src/HKMultiplayer/Game/Features/DownedBody.cs#L21) apunta
   a `Skins.ApplyToBody`, que no existe (es `ApplyToBodies`).
+  - **Arreglado en 0.26.0:** Corregido el `cref`.
 
 ## Interfaz y ajustes (U)
 
@@ -928,12 +996,14 @@ Del volcado de FSM:
   mando se queda atascado. Arreglo: foco en el primer botón, un componente con `ICancelHandler` en cada campo, y salir
   del campo con Cancelar/Aceptar del mando.
   - **Arreglado en 0.26.0:** Además, Cancelar sobre un campo de texto sale de él o vuelve atrás (`CancelToBack`).
-- [ ] **U3 · baja · sin comprobar.** `UpdateCheck.Update` crea memoria cada frame toda la partida, también jugando
+- [x] **U3 · baja · sin comprobar.** `UpdateCheck.Update` crea memoria cada frame toda la partida, también jugando
   solo ([UpdateCheck.cs:138](../src/HKMultiplayer/Game/UpdateCheck.cs#L138)): `NewerAvailable` → `IsNewer` → 2
   `Version.TryParse` con `Split` y subcadenas. Calcularlo una vez al cambiar `Latest`. La comparación es correcta.
-- [ ] **U4 · baja · sin comprobar.** Los nombres de zona no cambian de idioma: `Zones.Clear()`
+  - **Arreglado en 0.26.0:** `NewerAvailable` se calcula al saber la versión, no en cada frame.
+- [x] **U4 · baja · sin comprobar.** Los nombres de zona no cambian de idioma: `Zones.Clear()`
   ([Zones.cs:129](../src/HKMultiplayer/Game/Features/Zones.cs#L129)) no lo llama nadie y el HUD ("en <zona>") y
   *Compañeros* se quedan en el primer idioma. Vaciarlo con `GameManager.RefreshLanguageText`.
+  - **Arreglado en 0.26.0:** `Zones.Name` vacía la caché si cambia el idioma.
 - [x] **U5 · baja · sin comprobar.** Un jefe puede cambiar de tipo a mitad del combate: `Difficulty.IsBoss` vacía toda
   su caché al pasar de 1024 entradas ([Difficulty.cs:304-306](../src/HKMultiplayer/Game/Features/Difficulty.cs#L304)) y
   cada `OnEnable` de la sesión añade una. Tras vaciarla, un jefe sin `unlockBossScene` se vuelve a juzgar por su vida
@@ -945,16 +1015,19 @@ Del volcado de FSM:
   y diálogos siguen en `PLAYING`). El juego esconde su HUD con el aviso "OUT". Esconderlo también cuando el HUD del juego
   está fuera, con `isInventoryOpen` o durante `IsInSceneTransition`.
   - **Arreglado en 0.26.0:** `HudCanvas.GameHudHidden` (FSM `Slide Out` del HUD del juego): el HUD del compañero y las barras se esconden con el del juego.
-- [ ] **U7 · baja · sin comprobar.** Iconos del compañero en el mapa sobre negro: la cuenta es correcta (como
+- [x] **U7 · baja · sin comprobar.** Iconos del compañero en el mapa sobre negro: la cuenta es correcta (como
   `GameMap.Update`, juego `GameMap.cs:1158-1176`), pero `TryGetIconPosition` ([PartnerMap.cs:301-318](../src/HKMultiplayer/Game/Features/PartnerMap.cs#L301))
   no mira si la sala o su zona están activas (el mapa rápido apaga las demás zonas, `GameMap.cs:494-520`, y las salas
   sin mapa están apagadas). Pedir `room.activeInHierarchy`.
-- [ ] **U8 · baja · sin comprobar.** El HUD del compañero puede no salir sin avisar: si se encuentra la colección del
+  - **Arreglado en 0.26.0:** Solo si la sala del mapa está activa.
+- [x] **U8 · baja · sin comprobar.** El HUD del compañero puede no salir sin avisar: si se encuentra la colección del
   HUD pero no los nombres de sus sprites (tras un cambio de skin o atlas), `HudSprites.TryLoad`
   ([HudSprites.cs:56-77](../src/HKMultiplayer/UI/HudSprites.cs#L56)) devuelve falso siempre y `PartnerHud` nunca se
   crea (una sola línea en el registro).
-- [ ] **U9 · baja · sin comprobar.** `HostSettings` guarda `settings.json` con `File.WriteAllText`, que no es atómico:
+  - **Arreglado en 0.26.0:** Se vuelve a intentar cada 10 s, con aviso en el registro.
+- [x] **U9 · baja · sin comprobar.** `HostSettings` guarda `settings.json` con `File.WriteAllText`, que no es atómico:
   si el juego se cierra a mitad, ese mundo vuelve a los ajustes por defecto. Escribir a `.tmp` y mover.
+  - **Arreglado en 0.26.0:** Se escribe a `.tmp` y se mueve; si falta el archivo y está el `.tmp`, se lee ese.
 
 ## Instalador y paquete (I)
 

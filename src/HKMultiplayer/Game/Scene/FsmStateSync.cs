@@ -130,7 +130,20 @@ internal sealed class FsmStateSync {
         ("Colosseum Cage Zote", "Control"),
         ("Hornet Outskirts Battle Encounter", "Encounter"),
         // La Radiancia: la desafía uno en su cartel y su presentación (y la Radiancia, que enciende) va en todos
-        ("Boss Control", "Control")
+        ("Boss Control", "Control"),
+        // El tranvía (`Room_Tram`, `Room_Tram_RG`): quien pulsa la consola lo controla y el viaje (sacudida, fondo,
+        // fundido y llegada) va en todos los que están dentro. En la copia la suma de la estación no se hace (llega por el
+        // progreso compartido) y su llegada (`TRAM ARRIVE`) hace que la puerta lea la estación nueva. Antes quien pulsaba
+        // viajaba solo y el otro salía por la puerta a la estación vieja
+        ("Tram Control", "Control"),
+        // El ascensor de luz del Palacio Blanco (`White_Palace_01`, `_03_hub`, `_09`): sube al pisarlo el caballero local y
+        // no es `Lift Control`; cada uno usaba el suyo y el compañero subía flotando
+        ("White Palace Lift", "Control"),
+        // Plataformas con esperas al azar que mueve un controlador ya compartido: las del Coliseo (`Expand Pause`, `Slow
+        // Rand`) y las de la Radiancia (`Pre Vanish`, de 2 a 3 s). Cada PC esperaba distinto y el compañero parecía estar
+        // en el aire o caer
+        ("Colosseum Platform", "Control"),
+        ("Radiant Plat", "radiant_plat")
     };
 
     /// <summary>
@@ -215,6 +228,15 @@ internal sealed class FsmStateSync {
         // Encuentro con diálogo: quién terminó de leer el de ahora (el controlador espera a todos)
         public bool Encounter;
         public bool LocalConvoDone;
+
+        /// <summary>Estado llegado de otro PC con la FSM apagada o sin empezar: se pone en cuanto esté en marcha.</summary>
+        public string PendingRemoteState;
+
+        /// <summary>Estados por los que pasó sola la copia desde el último paso recibido de la cadena de otro PC.</summary>
+        public HashSet<string> SelfVisited;
+
+        /// <summary>Cuándo lo reclamó este PC (para desempatar dos reclamaciones cruzadas).</summary>
+        public float ClaimedAt = -100f;
 
         /// <summary>
         /// En una copia: el estado de diálogo que este jugador ya cerró (su CONVO_FINISH se avisó al controlador y no se
@@ -401,6 +423,9 @@ internal sealed class FsmStateSync {
     }
 
     /// <summary>Este jugador usa el objeto: pasa a controlarlo (su caballero va encima) y se avisa a los demás.</summary>
+    /// <summary>Dos reclamaciones con menos de esto entre ellas se consideran cruzadas.</summary>
+    private const float ClaimCrossSeconds = 1f;
+
     private void TakeControl(Tracked item, string reason) {
         if (item.Controller == _session.LocalId) {
             return;
@@ -408,6 +433,7 @@ internal sealed class FsmStateSync {
 
         Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: lo controla este PC (antes {item.Controller}; {reason})");
         item.Controller = _session.LocalId;
+        item.ClaimedAt = Time.unscaledTime;
         item.Positions.Clear();
         if (_session.CanSend) {
             var writer = _session.Begin(Claim);
@@ -421,6 +447,15 @@ internal sealed class FsmStateSync {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
         if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var item)) {
+            // Dos reclamaciones cruzadas (la automática del dueño de la sala con la de un invitado que lo usó, o dos al
+            // irse el controlador): gana el número menor en los dos PCs. Antes cada uno se quedaba con la del otro, los dos
+            // retenían y nadie enviaba (un ascensor o una oleada del Coliseo se quedaban parados)
+            if (item.Controller == _session.LocalId && Time.unscaledTime - item.ClaimedAt < ClaimCrossSeconds &&
+                _session.LocalId < from.Id) {
+                Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: {from.Id} también lo reclamó; se queda este PC");
+                return;
+            }
+
             Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: lo controla {from.Id}");
             item.Controller = from.Id;
             item.Positions.Clear();
@@ -478,6 +513,12 @@ internal sealed class FsmStateSync {
             var item = _tracked[i];
             if (item.Fsm == null) {
                 continue;
+            }
+
+            if (item.PendingRemoteState != null && item.Fsm.Fsm.Started && item.Fsm.isActiveAndEnabled) {
+                var pending = item.PendingRemoteState;
+                item.PendingRemoteState = null;
+                ApplyRemoteState(item, pending);
             }
 
             var state = item.Fsm.ActiveStateName;
@@ -637,8 +678,14 @@ internal sealed class FsmStateSync {
     }
 
     private void Scan() {
+        var hero = HeroController.instance;
         foreach (var fsm in UnityEngine.Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include,
                      FindObjectsSortMode.None)) {
+            // Solo lo de la sala: no lo persistente (DontDestroyOnLoad) ni lo del caballero, como en AddBattleListeners
+            if (fsm.gameObject.scene.buildIndex < 0 || hero != null && fsm.transform.IsChildOf(hero.transform)) {
+                continue;
+            }
+
             var target = IsTarget(fsm) || IsEncounter(fsm);
             if (!target && !IsSwitchLike(fsm)) {
                 continue;
@@ -910,7 +957,7 @@ internal sealed class FsmStateSync {
     /// Identificador de la FSM igual en todos los PCs: por su ruta en la sala. Los clonados en la raíz (lo que crean las
     /// jaulas del Coliseo) se llaman igual y tienen el mismo puesto entre hermanos: van por su sitio, como los enemigos.
     /// </summary>
-    private static uint FsmId(PlayMakerFSM fsm) {
+    internal static uint FsmId(PlayMakerFSM fsm) {
         var transform = fsm.transform;
         var cloned = transform.parent == null && transform.name.EndsWith("(Clone)", StringComparison.Ordinal);
         return (cloned ? EnemySync.PlacedId(transform) : ScenePaths.StableHash(transform)) ^ (uint) fsm.FsmName.GetHashCode();
@@ -1013,6 +1060,12 @@ internal sealed class FsmStateSync {
                 return false;
             }
         } else if (item.CopyTransitions || !item.Ready || IsController(item)) {
+            // Una copia que sigue la cadena de otro PC avanza también sola entre paso y paso (sus esperas acaban aquí antes
+            // de que llegue el siguiente): se apunta para no repetir ese paso, con sus acciones, cuando llegue
+            if (item.CopyTransitions && _applying != item && Time.unscaledTime < item.RemoteChainUntil) {
+                (item.SelfVisited ??= new HashSet<string>()).Add(toState.Name);
+            }
+
             return false;
         }
 
@@ -1026,6 +1079,14 @@ internal sealed class FsmStateSync {
     /// pidan sus acciones corta las acciones siguientes (igual que en el PC de origen) y se retiene.
     /// </summary>
     private static void ApplyRemoteState(Tracked item, string state) {
+        // Sin empezar o apagada: el juego ignora los avisos a una FSM así. Puesto ya, en una apagada sus acciones corrían en
+        // un objeto inactivo y al encenderse volvía al principio; en una sin empezar, su Start lo repetía (acciones dos
+        // veces). Se pone en cuanto esté en marcha (el último que llegue)
+        if (!item.Fsm.Fsm.Started || !item.Fsm.isActiveAndEnabled) {
+            item.PendingRemoteState = state;
+            return;
+        }
+
         // Solo un controlador de batalla, y en un estado de después del desafío: antes cualquier cadena de otro PC (una
         // palanca de la Aldea Mantis) apagaba el cartel sin que hubiera combate, y también la reja de Deepnest al cerrarse
         // cuando alguien entra en la sala o los tronos al pasar el control: tras morir contra los Señores Mantis, al volver
@@ -1035,6 +1096,7 @@ internal sealed class FsmStateSync {
         }
 
         var fsm = item.Fsm.Fsm;
+        item.SelfVisited?.Clear();
         PrepareCopy(item, state);
         _applying = item;
         _requested = true;
@@ -1213,7 +1275,49 @@ internal sealed class FsmStateSync {
             HutongGames.PlayMaker.Actions.SendMessage message => action.Fsm.GetOwnerDefaultTarget(message.gameObject),
             _ => null
         };
-        return target != null && target == hero.gameObject;
+        if (target != null && target == hero.gameObject) {
+            return true;
+        }
+
+        // Cualquier otra acción sobre el caballero (moverlo, girarlo, animarlo: la máquina de peaje lo lleva delante de
+        // ella con SetVelocity2d, SetScale y Tk2dPlayAnimation sobre {Hero}), el cuadro de diálogo (BOX UP YN,
+        // StartConversation) y el cartel de "Inspeccionar" (Prompt Control): eran para quien la usó. Antes, cuando el
+        // compañero pagaba un peaje, a este jugador se le movía el caballero y le salía la caja de sí/no con el precio
+        return TargetsHeroOrDialogue(action, hero.gameObject);
+    }
+
+    private static bool TargetsHeroOrDialogue(FsmStateAction action, GameObject hero) {
+        if (action is HutongGames.PlayMaker.Actions.CallMethodProper { methodName.Value: "StartConversation" }) {
+            return true;
+        }
+
+        if (action is HutongGames.PlayMaker.Actions.SendEventByName send) {
+            var eventName = send.sendEvent?.Value ?? string.Empty;
+            if (eventName.StartsWith("BOX ", StringComparison.Ordinal)) {
+                return true;
+            }
+
+            var receiver = send.eventTarget.target is FsmEventTarget.EventTarget.GameObject or FsmEventTarget.EventTarget.GameObjectFSM
+                ? action.Fsm.GetOwnerDefaultTarget(send.eventTarget.gameObject)
+                : null;
+            if (receiver != null && (receiver == hero || PlayMakerFSM.FindFsmOnGameObject(receiver, "Prompt Control") != null)) {
+                return true;
+            }
+        }
+
+        foreach (var field in action.GetType().GetFields(System.Reflection.BindingFlags.Public |
+                                                         System.Reflection.BindingFlags.Instance)) {
+            var target = field.GetValue(action) switch {
+                FsmOwnerDefault owner => action.Fsm.GetOwnerDefaultTarget(owner),
+                FsmGameObject gameObject => gameObject.Value,
+                _ => null
+            };
+            if (target != null && target == hero) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -1239,7 +1343,8 @@ internal sealed class FsmStateSync {
             return true;
         }
 
-        var sender = eventData?.SentByFsm ?? Fsm.EventData?.SentByFsm;
+        // Con eventData, su remitente aunque sea nulo: el estático queda viejo con PlayMakerFSM.BroadcastEvent desde C#
+        var sender = eventData != null ? eventData.SentByFsm : Fsm.EventData?.SentByFsm;
 
         // Mientras se aplica aquí la cadena de otro objeto, lo que este manda a los demás ya lo mandó en su PC. Salvo lo
         // que mande un enemigo que mueve este PC (su lógica solo va aquí): la arena del Campeón Fallido, copiada de otro
@@ -1460,7 +1565,8 @@ internal sealed class FsmStateSync {
         }
 
         // El aviso de una zona no lleva remitente; y solo cuenta si empieza algo desde su reposo
-        var sender = eventData?.SentByFsm ?? Fsm.EventData?.SentByFsm;
+        // Con eventData, su remitente aunque sea nulo: el estático queda viejo con PlayMakerFSM.BroadcastEvent desde C#
+        var sender = eventData != null ? eventData.SentByFsm : Fsm.EventData?.SentByFsm;
         if (sender != null && sender != fsm || !Handles(fsm, fsmEvent.Name) || !FromZone(fsm, fsmEvent.Name) ||
             !EnemySync.BossInRoom) {
             return false;
@@ -1983,16 +2089,25 @@ internal sealed class FsmStateSync {
     private void OnTransition(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
-        reader.ReadString(128);
+        var fromState = reader.ReadString(128);
         var state = reader.ReadString(128);
         if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var item) || item.Fsm == null) {
             return;
         }
 
-        // Se sigue la cadena del otro PC paso a paso (también si aquí ya volvió al reposo o va por otro paso)
+        // Se sigue la cadena del otro PC paso a paso (también si aquí ya volvió al reposo o va por otro paso). Un estado
+        // que vuelve a sí mismo (un segundo golpe aún en "Hit") también: antes se saltaba y los contadores se desviaban
         item.RemoteChainUntil = Time.unscaledTime + 3f;
         item.LocalChain = false;
-        if (item.Fsm.ActiveStateName == state) {
+        if (item.Fsm.ActiveStateName == state && fromState != state) {
+            return;
+        }
+
+        // Ya pasó por ahí sola desde el último paso recibido: repetirlo hacía dos veces sus acciones (avisos a puertas,
+        // sonidos, contadores)
+        if (item.SelfVisited != null && item.SelfVisited.Remove(state)) {
+            item.LastState = state;
+            item.LastStateTime = Time.unscaledTime;
             return;
         }
 

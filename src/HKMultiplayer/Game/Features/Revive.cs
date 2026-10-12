@@ -447,10 +447,26 @@ internal sealed class Revive {
         var scene = UnitySceneManager.GetActiveScene().name;
         var position = BodyPosition(hero, _lastHazardType);
         Log.Info($"Caído en {scene} ({position.x:0.0}, {position.y:0.0})");
+        CancelActions(hero);
         EnterDowned(scene, position);
         SendDowned(scene, position);
         return EmptyRoutine();
     }
+
+    /// <summary>
+    /// Corta lo que estuviera haciendo (Crystal Heart, un hechizo, Cyclone Slash...) con el aviso global FSM CANCEL de sus
+    /// FSM: al caer a mitad seguían (el sonido en bucle de la carga, la velocidad) y se retomaban al revivir.
+    /// </summary>
+    private static void CancelActions(HeroController hero) {
+        foreach (var name in ActionFsms) {
+            var fsm = PlayMakerFSM.FindFsmOnGameObject(hero.gameObject, name);
+            if (fsm != null) {
+                fsm.SendEvent("FSM CANCEL");
+            }
+        }
+    }
+
+    private static readonly string[] ActionFsms = { "Superdash", "Spell Control", "Nail Arts" };
 
     private const string NobodyStanding = "no queda nadie en pie";
 
@@ -476,7 +492,9 @@ internal sealed class Revive {
         var standing = false;
         var standingHere = false;
         foreach (var member in _party.Members) {
-            if (member.Id == _session.LocalId || member.Status == PlayerStatus.Downed || member.Player == null) {
+            // Quien está entrando en la partida (cargando, en la introducción) no puede revivir a nadie
+            if (member.Id == _session.LocalId || member.Status is PlayerStatus.Downed or PlayerStatus.Joining ||
+                member.Player == null) {
                 continue;
             }
 
@@ -489,8 +507,11 @@ internal sealed class Revive {
             return false;
         }
 
-        // En un sueño solo se cae si el compañero está en el mismo sueño (si no, nadie podría revivirlo dentro)
-        if (zone == "DREAM_WORLD" && !standingHere) {
+        // En un sueño solo se cae si el compañero está en el mismo sueño (si no, nadie podría revivirlo dentro). También
+        // por el nombre de la sala, por si alguna de sueño no lleva la zona DREAM_WORLD
+        var dream = zone == "DREAM_WORLD" || scene.StartsWith("Dream_", StringComparison.Ordinal) ||
+                    scene.StartsWith("Grimm_Nightmare", StringComparison.Ordinal);
+        if (dream && !standingHere) {
             reason = "en un sueño sin compañero";
             return false;
         }
@@ -628,7 +649,7 @@ internal sealed class Revive {
     private PartyState.Member FindStanding(ushort excluded, string scene) {
         PartyState.Member best = null;
         foreach (var member in _party.Members) {
-            if (member.Id == excluded || member.Status == PlayerStatus.Downed || member.Player == null) {
+            if (member.Id == excluded || member.Status is PlayerStatus.Downed or PlayerStatus.Joining || member.Player == null) {
                 continue;
             }
 
@@ -945,8 +966,51 @@ internal sealed class Revive {
         _wasAtBench = atBench;
     }
 
+    /// <summary>Cuándo vio este PC caer a cada jugador y hacia dónde miraba (para su cuerpo).</summary>
+    private readonly Dictionary<ushort, (float At, bool FacingRight)> _falls = new();
+
+    private const float FreshFallSeconds = 3f;
+
+    private static readonly List<PartyState.Member> EmptyMembers = new();
+
+    private (float At, bool FacingRight) NoteFall(ushort id, HeroController hero) {
+        if (_falls.TryGetValue(id, out var fall)) {
+            return fall;
+        }
+
+        var facingRight = id == _session.LocalId
+            ? hero.cState.facingRight
+            : _players.AvatarOf(id) is { SpriteTransform: { } sprite } && sprite.lossyScale.x < 0f;
+        fall = (Time.unscaledTime, facingRight);
+        _falls[id] = fall;
+        return fall;
+    }
+
     /// <summary>Los cuerpos de los caídos de esta sala (también el propio).</summary>
     private void UpdateBodies(string scene) {
+        // Cada caída se apunta en cuanto se sabe, esté donde esté este jugador (si no, al entrar después en la sala se
+        // tomaría por recién caído); lo de los que ya no están caídos se olvida (la próxima caída es otra)
+        var self = HeroController.instance;
+        foreach (var member in _party?.Members ?? EmptyMembers) {
+            if (member.Id == _session?.LocalId) {
+                continue;
+            }
+
+            if (member.Status == PlayerStatus.Downed) {
+                if (self != null && !_falls.ContainsKey(member.Id)) {
+                    NoteFall(member.Id, self);
+                }
+            } else {
+                _falls.Remove(member.Id);
+            }
+        }
+
+        if (!_downed && _session != null) {
+            _falls.Remove(_session.LocalId);
+        } else if (_downed && _session != null && !_falls.ContainsKey(_session.LocalId) && HeroController.instance != null) {
+            NoteFall(_session.LocalId, HeroController.instance);
+        }
+
         if (scene != _bodiesScene) {
             ClearBodies();
             _bodiesScene = scene;
@@ -969,7 +1033,9 @@ internal sealed class Revive {
                 var position = member.Id == _session.LocalId
                     ? _bodyPosition
                     : new Vector3(member.BodyX, member.BodyY, hero.transform.position.z);
-                _bodies[member.Id] = new DownedBody(member.Name, position, hero, Font);
+                var fall = NoteFall(member.Id, hero);
+                _bodies[member.Id] = new DownedBody(member.Name, position, hero, Font,
+                    fresh: Time.unscaledTime - fall.At < FreshFallSeconds, facingRight: fall.FacingRight);
             } else if (!shown && exists) {
                 body.Destroy();
                 _bodies.Remove(member.Id);

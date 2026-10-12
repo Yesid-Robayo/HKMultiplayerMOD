@@ -48,6 +48,20 @@ internal sealed class SceneObjectSync {
     /// </summary>
     public const MessageType BridgeLeverHit = (MessageType) 109;
 
+    /// <summary>
+    /// Algo de la sala que activa solo el caballero de un PC (su choque o su golpe, en C# sin FSM) se activó: las plataformas
+    /// que se giran con pinchos (`FlipPlatform`, Cumbre de Cristal), las que caen al pisarlas (`DropPlatform`) y los huevos
+    /// de Cañón de Niebla (`JellyEgg`). Antes solo pasaba en ese PC: el compañero parecía estar sobre pinchos o en el aire y
+    /// el huevo seguía entero para él.
+    /// </summary>
+    public const MessageType LocalTrigger = (MessageType) 110;
+
+    private enum TriggerKind : byte {
+        FlipPlatform,
+        DropPlatform,
+        JellyEgg
+    }
+
     private const string HitsVariable = "Hits";
     private const string BrokenState = "Broken";
 
@@ -68,6 +82,20 @@ internal sealed class SceneObjectSync {
     private readonly Dictionary<string, Rock> _rocksById = new();
     private readonly Dictionary<uint, StalactiteControl> _stalactites = new();
     private readonly Dictionary<uint, BridgeLever> _levers = new();
+    private readonly Dictionary<uint, MonoBehaviour> _triggers = new();
+    private readonly MessageHandler _onLocalTrigger;
+    private static bool _applyingTrigger;
+
+    private const System.Reflection.BindingFlags Private =
+        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+
+    private static readonly System.Reflection.FieldInfo FlipRoutineField = typeof(FlipPlatform).GetField("flipRoutine", Private);
+    private static readonly System.Reflection.FieldInfo FlipIdleField = typeof(FlipPlatform).GetField("idleRoutine", Private);
+    private static readonly System.Reflection.MethodInfo FlipMethod = typeof(FlipPlatform).GetMethod("Flip", Private);
+    private static readonly System.Reflection.FieldInfo DropRoutineField = typeof(DropPlatform).GetField("flipRoutine", Private);
+    private static readonly System.Reflection.MethodInfo DropMethod = typeof(DropPlatform).GetMethod("Flip", Private);
+    private static readonly System.Reflection.FieldInfo EggColliderField = typeof(JellyEgg).GetField("circleCollider", Private);
+    private static readonly System.Reflection.MethodInfo EggBurstMethod = typeof(JellyEgg).GetMethod("Burst", Private);
     private readonly MessageHandler _onBridgeLever;
 
     private static readonly System.Reflection.FieldInfo LeverActivatedField =
@@ -142,6 +170,7 @@ internal sealed class SceneObjectSync {
         MessageRoutes.Register(GeoRockHits, Route.SameScene, reliable: true);
         MessageRoutes.Register(StalactiteFall, Route.SameScene, reliable: true);
         MessageRoutes.Register(BridgeLeverHit, Route.SameScene, reliable: true);
+        MessageRoutes.Register(LocalTrigger, Route.SameScene, reliable: true);
     }
 
     public SceneObjectSync() {
@@ -149,6 +178,7 @@ internal sealed class SceneObjectSync {
         _onRockHits = OnRockHits;
         _onStalactite = OnStalactite;
         _onBridgeLever = OnBridgeLever;
+        _onLocalTrigger = OnLocalTrigger;
         _onPlayerScene = OnPlayerScene;
     }
 
@@ -160,6 +190,7 @@ internal sealed class SceneObjectSync {
         session.On(GeoRockHits, _onRockHits);
         session.On(StalactiteFall, _onStalactite);
         session.On(BridgeLeverHit, _onBridgeLever);
+        session.On(LocalTrigger, _onLocalTrigger);
         session.PlayerSceneChanged += _onPlayerScene;
         _active = this;
         InstallHooks();
@@ -172,6 +203,7 @@ internal sealed class SceneObjectSync {
             _session.On(GeoRockHits, null);
             _session.On(StalactiteFall, null);
             _session.On(BridgeLeverHit, null);
+            _session.On(LocalTrigger, null);
             _session.PlayerSceneChanged -= _onPlayerScene;
         }
 
@@ -190,6 +222,7 @@ internal sealed class SceneObjectSync {
         _rocksById.Clear();
         _stalactites.Clear();
         _levers.Clear();
+        _triggers.Clear();
         _pendingActivated.Clear();
         _pendingRocks.Clear();
         _sendSnapshot = false;
@@ -267,9 +300,10 @@ internal sealed class SceneObjectSync {
             }
 
             var lower = hits < rock.LastValue;
+            var struck = rock.LastValue - hits;
             rock.LastValue = hits;
             if (lower && _session.CanSend) {
-                SendRockHits(rock, live: true);
+                SendRockHits(rock, live: true, struck);
             }
         }
 
@@ -290,7 +324,7 @@ internal sealed class SceneObjectSync {
 
             foreach (var rock in _rocks) {
                 if (rock.Fsm != null) {
-                    SendRockHits(rock, live: false);
+                    SendRockHits(rock, live: false, 0);
                 }
             }
 
@@ -318,12 +352,14 @@ internal sealed class SceneObjectSync {
         Activate(item);
     }
 
-    private void SendRockHits(Rock rock, bool live) {
+    /// <param name="struck">Golpes de este jugador desde el último envío (en directo).</param>
+    private void SendRockHits(Rock rock, bool live, int struck) {
         var writer = _session.Begin(GeoRockHits);
         writer.WriteUShort(_sceneHash);
         writer.WriteString(rock.Id);
         writer.WriteInt(rock.Hits.Value);
         writer.WriteBool(live);
+        writer.WriteByte((byte) Mathf.Clamp(struck, 0, 255));
         _session.End();
     }
 
@@ -375,7 +411,9 @@ internal sealed class SceneObjectSync {
                 continue;
             }
 
-            var id = BreakableIdPrefix + (ScenePaths.StableHash(fsm.transform) ^ (uint) fsm.FsmName.GetHashCode()).ToString("x8");
+            // El mismo identificador que FsmStateSync (los clonados en la raíz, por su sitio): con la huella de su ruta, uno
+            // clonado durante la partida tenía un id que dependía del orden de los clonados
+            var id = BreakableIdPrefix + FsmStateSync.FsmId(fsm).ToString("x8");
             if (_byId.ContainsKey(id)) {
                 continue;
             }
@@ -424,6 +462,18 @@ internal sealed class SceneObjectSync {
         foreach (var lever in Object.FindObjectsByType<BridgeLever>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
             _levers[ScenePaths.StableHash(lever.transform)] = lever;
         }
+
+        foreach (var trigger in Object.FindObjectsByType<FlipPlatform>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+            _triggers[ScenePaths.StableHash(trigger.transform)] = trigger;
+        }
+
+        foreach (var trigger in Object.FindObjectsByType<DropPlatform>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+            _triggers[ScenePaths.StableHash(trigger.transform)] = trigger;
+        }
+
+        foreach (var trigger in Object.FindObjectsByType<JellyEgg>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+            _triggers[ScenePaths.StableHash(trigger.transform)] = trigger;
+        }
     }
 
     private void OnRockHits(SessionPlayer from, PacketReader reader) {
@@ -431,11 +481,18 @@ internal sealed class SceneObjectSync {
         var id = reader.ReadString(256);
         var hits = reader.ReadInt();
         var live = reader.ReadBool();
+        var struck = reader.ReadByte();
         if (sceneHash != _sceneHash) {
             return;
         }
 
         if (_rocksById.TryGetValue(id, out var rock)) {
+            // En directo cuentan los golpes, no lo que le queda: si los dos golpeaban a la vez, cada uno enviaba el mismo
+            // número y uno de los golpes se perdía
+            if (live && rock.Hits != null && struck > 0) {
+                hits = Mathf.Min(hits, rock.Hits.Value - struck);
+            }
+
             if (live) {
                 Log.Info($"{from.Name} golpeó {id} (quedan {hits})");
             }
@@ -524,6 +581,26 @@ internal sealed class SceneObjectSync {
             }
         };
 
+        // Plataformas que se giran o caen y huevos de Cañón de Niebla: se avisa si este PC empezó su corrutina o lo rompió
+        On.FlipPlatform.OnCollisionEnter2D += (orig, self, collision) => {
+            var before = FlipRoutineField?.GetValue(self);
+            orig(self, collision);
+            if (before == null && FlipRoutineField?.GetValue(self) != null) {
+                _active?.SendLocalTrigger(TriggerKind.FlipPlatform, self);
+            }
+        };
+        On.DropPlatform.OnCollisionEnter2D += (orig, self, collision) => {
+            var before = DropRoutineField?.GetValue(self);
+            orig(self, collision);
+            if (before == null && DropRoutineField?.GetValue(self) != null) {
+                _active?.SendLocalTrigger(TriggerKind.DropPlatform, self);
+            }
+        };
+        On.JellyEgg.Burst += (orig, self) => {
+            _active?.SendLocalTrigger(TriggerKind.JellyEgg, self);
+            orig(self);
+        };
+
         // La palanca del puente: se avisa si este golpe la activó (su OnTriggerEnter2D pone `activated` y abre el puente)
         On.BridgeLever.OnTriggerEnter2D += (orig, self, collision) => {
             var before = LeverActivatedField != null && (bool) LeverActivatedField.GetValue(self);
@@ -603,6 +680,55 @@ internal sealed class SceneObjectSync {
         }
 
         Log.Info($"Puente {lever.name}: lo abrió {from.Name}");
+    }
+
+    private void SendLocalTrigger(TriggerKind kind, MonoBehaviour component) {
+        if (_applyingTrigger || _session == null || !_session.CanSend || _scene.Length == 0) {
+            return;
+        }
+
+        var writer = _session.Begin(LocalTrigger);
+        writer.WriteUShort(_sceneHash);
+        writer.WriteByte((byte) kind);
+        writer.WriteUInt(ScenePaths.StableHash(component.transform));
+        _session.End();
+    }
+
+    /// <summary>Otro PC activó una de esas cosas: aquí hace lo mismo (su corrutina o su rotura), sin que la toque nadie.</summary>
+    private void OnLocalTrigger(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var kind = (TriggerKind) reader.ReadByte();
+        var id = reader.ReadUInt();
+        if (sceneHash != _sceneHash || !_triggers.TryGetValue(id, out var component) || component == null ||
+            !component.isActiveAndEnabled) {
+            return;
+        }
+
+        _applyingTrigger = true;
+        try {
+            switch (kind) {
+                case TriggerKind.FlipPlatform when component is FlipPlatform flip && FlipRoutineField?.GetValue(flip) == null &&
+                                                   FlipMethod != null:
+                    if (FlipIdleField?.GetValue(flip) is Coroutine idle) {
+                        flip.StopCoroutine(idle);
+                    }
+
+                    FlipRoutineField.SetValue(flip, flip.StartCoroutine((System.Collections.IEnumerator) FlipMethod.Invoke(flip, null)));
+                    break;
+                case TriggerKind.DropPlatform when component is DropPlatform drop && DropRoutineField?.GetValue(drop) == null &&
+                                                   DropMethod != null:
+                    DropRoutineField.SetValue(drop, drop.StartCoroutine((System.Collections.IEnumerator) DropMethod.Invoke(drop, null)));
+                    break;
+                case TriggerKind.JellyEgg when component is JellyEgg egg && EggBurstMethod != null &&
+                                               EggColliderField?.GetValue(egg) is Collider2D { enabled: true }:
+                    EggBurstMethod.Invoke(egg, null);
+                    break;
+            }
+        } catch (System.Exception e) {
+            Log.Warn($"No se pudo activar {component.name} como en el PC de {from.Name}: {e.InnerException?.Message ?? e.Message}");
+        } finally {
+            _applyingTrigger = false;
+        }
     }
 
     private void OnStalactite(SessionPlayer from, PacketReader reader) {

@@ -52,6 +52,8 @@ internal sealed class WorldSync {
     private float _nextAutosave;
     private bool _saveSoon;
 
+    private readonly List<ushort> _staleKeys = new();
+
     /// <summary>Estado para el menú de unirse.</summary>
     public string JoinStatus { get; private set; } = string.Empty;
 
@@ -153,8 +155,10 @@ internal sealed class WorldSync {
     /// <summary>El host va a cerrar: se envía el personaje tal como está ahora (también lo de la sala actual).</summary>
     private void OnSaveNow(SessionPlayer from, PacketReader reader) {
         var gm = GameManager.instance;
+        // En un Panteón con los amuletos atados, `equippedCharms` está vacío hasta que acaba: guardado así, el invitado
+        // perdía todos sus amuletos equipados (se queda el último personaje guardado)
         if (_session == null || _session.IsHost || CoopSaves.ActiveWorld == null || CoopSaves.IsHostWorld ||
-            gm == null || gm.playerData == null || HeroController.instance == null) {
+            gm == null || gm.playerData == null || HeroController.instance == null || BossSequenceController.IsInSequence) {
             return;
         }
 
@@ -229,6 +233,27 @@ internal sealed class WorldSync {
             return;
         }
 
+        // Uno por conexión: cada Identify hacía que el host armara y enviara el mundo entero en el hilo principal
+        if (_keys.ContainsKey(from.Id)) {
+            Log.Warn($"{from.Name} volvió a identificarse: se ignora");
+            return;
+        }
+
+        // La misma clave en otra conexión es el mismo jugador reconectándose antes de que se corte la vieja: gana la
+        // nueva (lo que guarde la vieja ya no cuenta). Si no, las dos guardaban el mismo personaje y se pisaban
+        _staleKeys.Clear();
+        foreach (var pair in _keys) {
+            if (pair.Value == key) {
+                _staleKeys.Add(pair.Key);
+            }
+        }
+
+        foreach (var stale in _staleKeys) {
+            Log.Warn($"La clave de {from.Name} ya la usaba el jugador {stale}: se queda la conexión nueva");
+            _keys.Remove(stale);
+            _awaitingSave.Remove(stale);
+        }
+
         _keys[from.Id] = key;
         var world = CoopSaves.ActiveWorld;
         if (world == null || !CoopSaves.IsHostWorld) {
@@ -271,6 +296,11 @@ internal sealed class WorldSync {
             WorldStore.SaveCharacter(world.Id, key, CharacterData.Sanitize(character));
             _awaitingSave.Remove(from.Id);
             Log.Info($"Personaje de {from.Name} guardado en el mundo");
+            // El mundo se guarda pronto si hace rato que no: los personajes se guardan cada 30 s y el mundo cada 2 min, y
+            // si el host se cerraba de golpe, los invitados conservaban objetos cuyos datos del mundo volvían atrás
+            if (Time.unscaledTime - _lastWorldSave > CharacterWorldGap) {
+                _saveSoon = true;
+            }
         } catch (Exception e) when (e is JsonException or InvalidDataException or IOException) {
             Log.Warn($"No se pudo guardar el personaje de {from.Name}: {e.Message}");
         }
@@ -312,6 +342,7 @@ internal sealed class WorldSync {
         }
 
         _saveSoon = false;
+        _lastWorldSave = now;
         _nextAutosave = now + (_session.IsHost ? HostAutosaveSeconds : GuestAutosaveSeconds);
         if (_session.IsHost || _session.IsActive) {
             Log.Info("Guardado automático");
@@ -319,11 +350,16 @@ internal sealed class WorldSync {
         }
     }
 
+    private float _lastWorldSave;
+
+    /// <summary>Lo que puede ir el mundo por detrás de un personaje recibido.</summary>
+    private const float CharacterWorldGap = 30f;
+
     private static bool IsQuietMoment() {
         var gm = GameManager.instance;
         var hero = HeroController.instance;
         return gm != null && hero != null && gm.gameState == GlobalEnums.GameState.PLAYING &&
-               !gm.IsInSceneTransition && hero.acceptingInput && !hero.cState.dead;
+               !gm.IsInSceneTransition && hero.acceptingInput && !hero.cState.dead && !BossSequenceController.IsInSequence;
     }
 
     private static byte[] Compress(string text) {
