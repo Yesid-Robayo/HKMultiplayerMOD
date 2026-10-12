@@ -78,7 +78,9 @@ function Invoke-Uninstall([string]$game) {
                 $copy = Join-Path (Join-Path $backupDir 'files') ($parts[1] -replace '/', '\')
                 # Un ensamblado que ya no es el de la Modding API lo volvió a poner Steam (actualización o "Verificar
                 # integridad") y es más nuevo que la copia: se deja. Si no, volvía uno de una versión anterior del juego
-                if ((Test-Path -LiteralPath $target) -and (Test-Path -LiteralPath $copy) -and -not (Test-Modded $copy) -and
+                # Solo los archivos del juego: los de Mods (un mod puesto a mano antes de instalar) se devuelven siempre
+                if (-not $parts[1].StartsWith("$ModsRelative/") -and
+                    (Test-Path -LiteralPath $target) -and (Test-Path -LiteralPath $copy) -and -not (Test-Modded $copy) -and
                     -not (Test-Modded $target) -and (Get-Sha256 $target) -ne (Get-Sha256 $copy)) {
                     Write-Note (L "Se deja $($parts[1]): el juego lo cambió después de instalar (es su versión original más nueva)." `
                             "$($parts[1]) is kept: the game changed it after the install (it's its newer original version).")
@@ -119,6 +121,11 @@ function Invoke-Uninstall([string]$game) {
             default { $problems.Add((L "línea desconocida en el manifiesto: $line" "unknown manifest line: $line")) }
         }
     }
+
+    # La caché de skins de los compañeros la crea el mod: se borra también si la carpeta del mod ya existía antes de
+    # instalar (entonces no es una carpeta añadida y Remove-ModFolder no se llama)
+    $skinCache = Join-Path $modDir 'SkinCache'
+    if (Test-Path -LiteralPath $skinCache) { Remove-Item -LiteralPath $skinCache -Recurse -Force }
 
     $clean = $problems.Count -eq 0
     if ($clean) {

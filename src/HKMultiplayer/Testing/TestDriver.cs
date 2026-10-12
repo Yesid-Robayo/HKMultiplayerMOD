@@ -164,6 +164,40 @@ internal sealed class TestDriver : MonoBehaviour {
                 PlayerData.instance.IntAdd(args[1], int.Parse(args[2]));
                 Log.Info($"{Tag}pd {args[1]}={PlayerData.instance.GetInt(args[1])}");
                 break;
+            case "givegeo":
+                // givegeo <id del jugador> <cantidad>: regala geo como desde el panel de compañeros
+                Log.Info($"{Tag}regalo: {runner.Actions.TryGiftGeo(ushort.Parse(args[1]), int.Parse(args[2])) ?? "enviado"}");
+                break;
+            case "uiselect":
+                // uiselect <nombre>: resalta en el menú el primer objeto activo con ese nombre (como llegar a él con el mando)
+                var uiName = string.Join(" ", args.Skip(1));
+                var uiTarget = UnityEngine.Object.FindObjectsByType<UnityEngine.UI.Selectable>(FindObjectsSortMode.None)
+                    .FirstOrDefault(sel => sel.gameObject.activeInHierarchy && sel.name == uiName);
+                if (uiTarget == null) {
+                    Log.Warn($"{Tag}no hay '{uiName}' en el menú");
+                } else {
+                    uiTarget.Select();
+                    Log.Info($"{Tag}resaltado {PathOf(uiTarget.transform)}");
+                }
+
+                break;
+            case "uicancel":
+                // uicancel: Atrás/Cancelar sobre lo resaltado, como el botón del mando
+                var cancelTarget = UnityEngine.EventSystems.EventSystem.current?.currentSelectedGameObject;
+                if (cancelTarget != null) {
+                    UnityEngine.EventSystems.ExecuteEvents.ExecuteHierarchy(cancelTarget,
+                        new UnityEngine.EventSystems.BaseEventData(UnityEngine.EventSystems.EventSystem.current),
+                        UnityEngine.EventSystems.ExecuteEvents.cancelHandler);
+                }
+
+                break;
+            case "selected":
+                // selected: lo resaltado en el menú (como lo movería el mando) y si se puede usar
+                var selectedObject = UnityEngine.EventSystems.EventSystem.current?.currentSelectedGameObject;
+                var selectable = selectedObject != null ? selectedObject.GetComponent<UnityEngine.UI.Selectable>() : null;
+                Log.Info($"{Tag}resaltado {(selectedObject != null ? PathOf(selectedObject.transform) : "nada")} " +
+                         $"tipo={selectable?.GetType().Name ?? "-"} usable={selectable != null && selectable.IsInteractable()}");
+                break;
             case "fsmstates":
                 // fsmstates <texto>: cada objeto de la sala cuyo nombre lo contiene, con su ruta y el estado de cada FSM (sin
                 // límite, ordenados por ruta: para comparar los dos PCs línea a línea)

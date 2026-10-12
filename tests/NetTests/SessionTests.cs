@@ -28,6 +28,8 @@ public static partial class Program {
         Run("Sesión: salida de un jugador avisada a todos", SessionPlayerLeft);
         Run("Sesión: versión distinta rechazada", SessionVersionMismatch);
         Run("Sesión: memoria del reenvío en régimen estable", SessionRelayAllocations);
+        Run("Sesión: un mensaje del invitado del tamaño máximo se reenvía y la conexión sigue", SessionRelayMaxSize);
+        Run("Sesión: nombre de 24 caracteres chinos", SessionLongUnicodeName);
     }
 
     /// <summary>Un host y varios clientes sobre la red simulada, con lo que recibe cada uno.</summary>
@@ -98,6 +100,36 @@ public static partial class Program {
         public readonly List<(ushort From, uint Value)> Everyone = new();
         public readonly List<ushort> Left = new();
         public readonly List<DisconnectReason> Disconnects = new();
+    }
+
+    private static void SessionRelayMaxSize() {
+        var world = new World();
+        var a = world.JoinOrFail("Ana", "Town");
+        var b = world.JoinOrFail("Beto", "Town");
+
+        // Lo más grande que deja escribir el invitado: al reenviarlo el host añade el remitente y tiene que caber igual.
+        // Antes uno de 998-999 bytes no cabía, el envío fallaba a medias y nada más llegaba a ese jugador
+        var writer = a.Begin(EveryoneType);
+        writer.WriteUInt(5);
+        var filler = new byte[writer.Remaining];
+        writer.WriteBytes(filler, 0, filler.Length);
+        a.End();
+        Assert(world.Pump(() => world.Inbox[b].Everyone.Any(m => m.From == a.LocalId && m.Value == 5), 5),
+            "el mensaje grande no llegó a Beto");
+
+        // Y lo que va después también llega
+        Send(a, EveryoneType, 6);
+        Send(world.Host, EveryoneType, 7);
+        Assert(world.Pump(() => world.Inbox[b].Everyone.Any(m => m.Value == 6) && world.Inbox[b].Everyone.Any(m => m.Value == 7), 5),
+            "después del mensaje grande la conexión dejó de entregar");
+    }
+
+    private static void SessionLongUnicodeName() {
+        var world = new World();
+        // 24 caracteres de 3 bytes en UTF-8 (72 bytes): antes el saludo se leía con 64 y fallaba sin explicación
+        var name = new string('漢', 24);
+        var client = world.JoinOrFail(name, "Town");
+        Assert(world.Host.Players.Any(p => p.Id == client.LocalId && p.Name == name), "el host no ve el nombre entero");
     }
 
     private static void Send(GameSession session, MessageType type, uint value) {

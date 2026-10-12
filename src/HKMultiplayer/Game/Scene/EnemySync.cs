@@ -303,8 +303,6 @@ internal sealed class EnemySync {
         /// </summary>
         public bool DiedElsewhere;
 
-        /// <summary>Desde cuándo espera a que estén todos cerca para despertar.</summary>
-        public float WaitingWakeSince;
 
         /// <summary>Si su arena espera a todos (<see cref="ArenaWaits"/>): 0 sin mirar aún, 1 sí, -1 no.</summary>
         public sbyte ArenaWaits;
@@ -3262,7 +3260,6 @@ internal sealed class EnemySync {
         enemy.HeldWake = to;
         if (!enemy.WaitingWake) {
             enemy.WaitingWake = true;
-            enemy.WaitingWakeSince = Time.unscaledTime;
             enemy.WasInvincible = enemy.Health.IsInvincible;
             enemy.Health.IsInvincible = true;
             Log.Info($"{enemy.Root.name}: espera a que estén todos cerca para despertar");
@@ -3292,8 +3289,7 @@ internal sealed class EnemySync {
             enemy.HeldWake = fsm.Fsm.States[data.HeldWake - 1];
             if (!enemy.WaitingWake) {
                 enemy.WaitingWake = true;
-                enemy.WaitingWakeSince = Time.unscaledTime;
-                enemy.WasInvincible = enemy.Health.IsInvincible;
+                    enemy.WasInvincible = enemy.Health.IsInvincible;
                 enemy.Health.IsInvincible = true;
             }
 
@@ -3301,9 +3297,6 @@ internal sealed class EnemySync {
             return;
         }
     }
-
-    /// <summary>Lo que un jefe espera como mucho a que estén todos cerca para despertar.</summary>
-    private const float WakeHoldSeconds = 60f;
 
     private void WakeUp(Enemy enemy) {
         enemy.Awake = true;
@@ -3333,9 +3326,9 @@ internal sealed class EnemySync {
                 continue;
             }
 
-            // Como mucho un minuto: si falta el avatar de alguien o está lejos en pausa, el jefe esperaba invulnerable sin fin
-            if (OthersInScene() && !EveryoneNear(enemy) && !InBattleScene(enemy) &&
-                now - enemy.WaitingWakeSince < WakeHoldSeconds) {
+            // Sin límite de tiempo: no empieza hasta que estén todos (también quien está en pausa). No se espera a quien
+            // está caído, en otra sala o sin avatar en este PC (ver EveryoneNear): nadie podría llegar nunca
+            if (OthersInScene() && !EveryoneNear(enemy) && !InBattleScene(enemy)) {
                 if (now >= enemy.NextWaitNotice) {
                     enemy.NextWaitNotice = now + 4f;
                     HKMultiplayer.UI.Notice.Show(Lang.T($"Esperando a {MissingNear(enemy)} para empezar el combate", $"Waiting for {MissingNear(enemy)} to start the fight"), 3.5f);
@@ -3382,8 +3375,12 @@ internal sealed class EnemySync {
                 continue;
             }
 
-            if (_players == null || !_players.TryGetAvatarObject(player.Id, out var avatar) ||
-                ((Vector2) (avatar.transform.position - position)).sqrMagnitude > WakeRange * WakeRange) {
+            // Sin avatar aquí (no llegó su estado) no se le espera: si no, el jefe esperaba invulnerable para siempre
+            if (_players == null || !_players.TryGetAvatarObject(player.Id, out var avatar)) {
+                continue;
+            }
+
+            if (((Vector2) (avatar.transform.position - position)).sqrMagnitude > WakeRange * WakeRange) {
                 return false;
             }
         }
@@ -3395,9 +3392,9 @@ internal sealed class EnemySync {
         var position = enemy.Transform.position;
         var names = new List<string>();
         foreach (var player in _session.Players) {
-            if (!player.IsLocal && player.Scene == _scene && !Features.PartyState.IsDown(player.Id) &&
-                (_players == null || !_players.TryGetAvatarObject(player.Id, out var avatar) ||
-                 ((Vector2) (avatar.transform.position - position)).sqrMagnitude > WakeRange * WakeRange)) {
+            if (!player.IsLocal && player.Scene == _scene && !Features.PartyState.IsDown(player.Id) && _players != null &&
+                _players.TryGetAvatarObject(player.Id, out var avatar) &&
+                ((Vector2) (avatar.transform.position - position)).sqrMagnitude > WakeRange * WakeRange) {
                 names.Add(player.Name);
             }
         }
