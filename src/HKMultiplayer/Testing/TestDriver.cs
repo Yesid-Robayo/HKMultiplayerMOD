@@ -1170,6 +1170,21 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "fsmdumpall":
+                // fsmdumpall [carpeta]: todas las FSM de las salas cargadas a <carpeta>/<sala>.txt (por defecto
+                // <persistentDataPath>/fsmdump); ver FsmDumper
+                var dumpFolder = args.Length > 1 ? string.Join(" ", args.Skip(1))
+                    : Path.Combine(Application.persistentDataPath, "fsmdump");
+                Log.Info($"{Tag}fsmdumpall {FsmDumper.DumpLoadedScenes(dumpFolder)}");
+                break;
+            case "scenelist":
+                // scenelist: todas las salas del juego, una por línea (para recorrerlas con fsmdumpall)
+                foreach (var sceneName in FsmDumper.BuildSceneNames()) {
+                    Log.Info($"{Tag}scene {sceneName}");
+                }
+
+                Log.Info($"{Tag}scenelist fin");
+                break;
             case "fsmall":
                 // fsmall <ruta del objeto>: acciones de todas las FSM del objeto y sus hijos, también inactivos. Si no
                 // está en la sala, se busca por nombre entre todo lo cargado (prefabs del pool, como "Fireball Top"):
@@ -1583,7 +1598,7 @@ internal sealed class TestDriver : MonoBehaviour {
     private static float ParseFloat(string value) => float.Parse(value, CultureInfo.InvariantCulture);
 
     /// <summary>Ruta del objeto en la sala (padres separados por "/").</summary>
-    private static string PathOf(Transform transform) {
+    internal static string PathOf(Transform transform) {
         var path = transform.name;
         for (var t = transform.parent; t != null; t = t.parent) {
             path = t.name + "/" + path;
@@ -1610,7 +1625,7 @@ internal sealed class TestDriver : MonoBehaviour {
     }
 
     /// <summary>Valor legible de un parámetro de acción: las variables con nombre se muestran por su nombre.</summary>
-    private static string DescribeValue(object value) {
+    internal static string DescribeValue(object value) {
         switch (value) {
             case null:
                 return "null";

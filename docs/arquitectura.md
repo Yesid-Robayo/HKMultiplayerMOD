@@ -767,9 +767,21 @@ y nunca se sube.
   tiempos y valores. Eso son datos guardados en las escenas (`level*`). Dos formas de verlas:
   - **FSMViewAvalonia** (herramienta de la comunidad): abre las escenas del juego y dibuja cada FSM como un diagrama,
     sin abrir el juego. Es la cómoda para mirarlas a ojo.
-  - **Volcarlas a texto desde el mod** (pendiente): una orden del modo de prueba que escriba en `decomp/fsm/` las FSM
-    de la sala actual (estados, transiciones, acciones y sus valores) tal como quedan en el juego, después de lo que
-    cambian el propio juego y la Modding API. Es la útil para revisarlas y buscar en ellas.
+  - **Volcarlas a texto desde el mod**: `bash tools/dump-fsms.sh` recorre todas las salas del juego (483, sin menús ni
+    vídeos) con sus propias copias (`test-instances/l`, `m`, `n`, `o`; 3 a la vez, unos 20-30 minutos) y escribe
+    `decomp/fsm/<sala>.txt` con la orden `fsmdumpall` del modo de prueba (`Testing/FsmDumper`): las FSM de la sala y de
+    las que se cargan con ella (`_boss`), también las apagadas, tal como quedan en el juego después de lo que cambian el
+    propio juego y la Modding API; por cada una, los componentes de su objeto (con la vida si es enemigo), sus variables
+    con su valor, eventos, globales y cada estado con sus transiciones y acciones (campo=valor, `{variable}`). Una FSM
+    idéntica a otra (rompibles, pasto) solo dice de cuál es copia. Al final, las FSM de los prefabs que crean sus
+    acciones (disparos, crías), y al principio los componentes de C# de la sala. `decomp/fsm/_persistent.txt` tiene lo
+    que no es de ninguna sala (el caballero, la cámara, el HUD). Cada copia empieza una partida nueva, se hace
+    invulnerable (`god`) y entra en cada sala con `warp`; si una sala falla, la copia se reinicia y sigue. Lo ya
+    volcado se salta (`--retry` repite las fallidas, `--only "Sala"` solo esas).
+  - **Cruzarlas con el mod**: `python tools/analyze-fsms.py` escribe en `decomp/fsm-analysis/` los jefes con lo que
+    crean, a quién avisan y qué llaman; cada acción que usan los enemigos y si el mod la nombra; lo que crean los
+    enemigos y si `EnemySync` conoce esa acción; en qué salas sale cada componente de C# de la revisión; objetos sólidos
+    que mueve una FSM; métodos que llaman las FSM; y quién atiende `ZERO HP`.
 
 ## Pruebas
 
@@ -827,14 +839,19 @@ y nunca se sube.
   de geo, con su pila de llamadas). `findobj` enseña como mucho 15 objetos y cuenta también los del pool: para el geo
   en el suelo, `findactive`. `bossscene` dice si el juego cree estar en una sala de jefe (el geo se recicla al salir). `effects` dice también
   qué copias de amuletos y cuántos acompañantes del compañero hay encendidos. Ruta: `tests/routes/effects.route`.
+- FSM del juego: `fsmdumpall [carpeta]` vuelca las de las salas cargadas (ver [Código del juego](#código-del-juego)) y
+  `scenelist` da todas las salas del juego.
 - Paquete para jugadores: `tools/manual-tests/installer-test.sh <zip>` (ver [Paquete e instalador](#paquete-e-instalador)).
 
 ### Cómo probar (recordatorio)
 
 - Copias del juego en `test-instances/` (enlaces duros al juego de Steam; `ensure_instance` las crea): B/C para
   pruebas sueltas (puerto 26950), D/E... para las rutas automáticas (27100+), F/G para el Coliseo y los jefes (27300),
-  H/I para la prueba del instalador (`installer-test.sh` las rehace desde cero). Instalar solo en las que se usan
-  (`bash tools/test-cycle.sh --only "f g"`) y cerrar solo esas (`stop_all F G`).
+  H/I para la prueba del instalador (`installer-test.sh` las rehace desde cero), L/M/N/O para volcar las FSM
+  (`dump-fsms.sh`, sin sesión). Instalar solo en las que se usan (`bash tools/test-cycle.sh --only "f g"`) y cerrar solo
+  esas (`stop_all F G`). `ensure_instance` copia los ajustes del juego de la plantilla con `MSYS_NO_PATHCONV=1`: sin
+  eso Git Bash convertía `/s /f` de `reg copy` en rutas, la copia no tenía ajustes y se quedaba en la primera pantalla
+  del juego (idioma y brillo) sin cargar el menú.
 - Órdenes útiles: `hero` (por qué un caballero no responde) y `regain`; `enemies` marca "oculto", "sin-caja" e
   "(inactivo)"; `bosses` da la vida, si es marioneta y el estado de cada FSM del jefe; `tp x y` no fija el punto de
   reaparición (`tp x y respawn` sí); `fsmgo` salta a un estado de un objeto con controlador; `fsmstate

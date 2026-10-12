@@ -71,9 +71,11 @@ ensure_instance() {
     fi
   done
 
-  # Ajustes de pantalla (PlayerPrefs) y de la Modding API como los de la plantilla; la clave de jugador del mod no se
+  # Ajustes de pantalla (PlayerPrefs) y de la Modding API como los de la plantilla (sin MSYS_NO_PATHCONV, Git Bash
+  # convertía /s y /f en rutas y reg copy fallaba sin avisar: la copia nueva se quedaba en la primera pantalla del
+  # juego, la de idioma y brillo); la clave de jugador del mod no se
   # copia: cada copia genera la suya y así es otro personaje
-  reg copy "HKCU\\Software\\Team Cherry\\HollowKnight$HK_TEMPLATE" "HKCU\\Software\\Team Cherry\\HollowKnight$letter" /s /f >/dev/null 2>&1
+  MSYS_NO_PATHCONV=1 reg copy "HKCU\\Software\\Team Cherry\\HollowKnight$HK_TEMPLATE" "HKCU\\Software\\Team Cherry\\HollowKnight$letter" /s /f >/dev/null 2>&1
   mkdir -p "$(_data_dir "$letter")"
   cp -f "$(_data_dir "$HK_TEMPLATE")/ModdingApi.GlobalSettings.json" "$(_data_dir "$letter")/" 2>/dev/null
   return 0
