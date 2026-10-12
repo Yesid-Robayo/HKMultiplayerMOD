@@ -802,6 +802,10 @@ internal sealed class FsmStateSync {
             return false;
         }
 
+        if (IsViewMask(fsm)) {
+            return false;
+        }
+
         var name = fsm.gameObject.name;
         if (IsMimicBottle(fsm) || IsHollowKnightChain(fsm) || IsStagBell(fsm) || IsStruckQuestObject(fsm)) {
             return true;
@@ -898,6 +902,16 @@ internal sealed class FsmStateSync {
     /// objetos que no son componentes rompibles ni guardables: el letrero de Cruces Olvidados, decorados... Se copia su
     /// cadena como la de una palanca. Fuera los enemigos y las piedras de geo (van por su cuenta).
     /// </summary>
+    /// <summary>
+    /// Máscaras negras que tapan o destapan parte de la sala según dónde está el caballero local (`remasker`,
+    /// `remasker_inverse`: cambian al entrar y salir de su zona). Son guardables y tienen "Activated", así que parecían un
+    /// objeto que se golpea: se copiaba su cadena y, cuando el compañero entraba en la zona, en este PC se tapaba la vista
+    /// del caballero (en la caída de `Deepnest_01b` se quedaba todo negro hasta que el compañero volvía). Son de cada PC.
+    /// </summary>
+    internal static bool IsViewMask(PlayMakerFSM fsm) =>
+        fsm.FsmName.IndexOf("masker", StringComparison.OrdinalIgnoreCase) >= 0 ||
+        fsm.gameObject.name.IndexOf("Remasker", StringComparison.OrdinalIgnoreCase) >= 0;
+
     internal static bool IsBreakableTemplate(PlayMakerFSM fsm) {
         if (fsm.FsmVariables.FindFsmBool("Activated") == null || fsm.GetComponent<GeoRock>() != null ||
             EnemySync.IsEnemyObject(fsm.transform)) {

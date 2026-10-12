@@ -331,7 +331,8 @@ internal sealed class SceneObjectSync {
 
             var fsm = FSMUtility.FindFSMWithPersistentBool(persistent.GetComponents<PlayMakerFSM>());
             var activated = fsm != null ? fsm.FsmVariables.FindFsmBool(ActivatedVariable) : null;
-            if (activated == null) {
+            // Las máscaras que siguen al caballero local son de cada PC (ver FsmStateSync.IsViewMask)
+            if (activated == null || FsmStateSync.IsViewMask(fsm)) {
                 continue;
             }
 

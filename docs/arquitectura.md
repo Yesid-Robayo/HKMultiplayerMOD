@@ -334,6 +334,8 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     `PersistentBoolItem.Start` (o si se vieron encendidos en un frame anterior): su campo privado `started` no sirve,
     el juego nunca lo pone a verdadero, y por eso el que recibía la activación no ponía `Activated`. El reposo de una cadena se toma cuando el objeto lleva 1 s quieto: si
     no, el fin de su inicio al cargar la sala (`Pause` → `Idle`) parecía un golpe y se copiaba a los demás.
+  - Las máscaras que tapan o destapan parte de la sala según dónde está el caballero local (`remasker`,
+    `remasker_inverse`) son guardables y tienen `Activated`, pero son de cada PC: no se copian (`FsmStateSync.IsViewMask`).
   - Rompibles con FSM propia (la plantilla genérica del juego: recibe `TAKE DAMAGE`, tiene `Break` y la variable
     `Activated`, sin componente rompible ni guardable, como el letrero de la bajada a Cruces Olvidados): se copia su
     cadena como la de una palanca. Los rompibles con componente (`Breakable`, `BreakableObject`, `BreakablePole`,
@@ -1002,6 +1004,10 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   entre elegir pared y lanzar (`Throw Antic 2`, `Throw 2`) y su `Shot Event` llega del otro PC (antes se quedaba el
   anterior, a veces vacío). Una Incubadora de Excavadores muerta en `Deepnest_26b` sigue muerta en los dos al salir
   y volver (los bichos normales vuelven al volver a entrar, como en el juego sin mod).
+  En `Deepnest_01b` (la caída desde arriba) el invitado entra en la zona de una máscara negra (`Inverse Remasker`,
+  `remasker_inverse`): sus máscaras cambian y las del host se quedan como estaban. Antes la cadena se copiaba al host
+  ("paso de la cadena de Invitado (Fade Out → Fade In)") y a quien estaba lejos se le tapaba la vista hasta que el
+  compañero volvía. Los Cavasuelos (`Baby Centipede`) de `Deepnest_16`, despiertos, van por el mismo sitio en los dos.
 
 ## Pendientes
 
