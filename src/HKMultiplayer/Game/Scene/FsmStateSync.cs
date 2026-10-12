@@ -579,6 +579,22 @@ internal sealed class FsmStateSync {
                     item.ConvoClosedIn = null;
                 }
 
+                // Un caído no lee el diálogo, tampoco el que controla el encuentro: si cayó a mitad, su diálogo se cerró
+                // y el siguiente no lo puede leer. Antes el encuentro se quedaba esperando su CONVO_FINISH para siempre
+                // y el compañero, sin control, delante de un cuadro vacío
+                if (item.Encounter && !item.LocalConvoDone && Features.PartyState.IsDown(_session.LocalId) &&
+                    item.Fsm.Fsm.ActiveState != null && Handles(item.Fsm.Fsm, ConvoFinish)) {
+                    item.LocalConvoDone = true;
+                    if (AllConvoDone(item)) {
+                        Log.Info($"{item.Fsm.gameObject.name}: este jugador está caído; el diálogo sigue sin él");
+                        ReleaseConvo(item);
+                    } else if (!item.WaitingConvo) {
+                        item.WaitingConvo = true;
+                        item.WaitingSince = now;
+                        Log.Info($"{item.Fsm.gameObject.name}: este jugador está caído; se espera solo a los demás");
+                    }
+                }
+
                 anyControlled = true;
                 ReplayHeld(item);
                 SendVarsIfChanged(item);

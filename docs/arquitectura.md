@@ -795,9 +795,14 @@ detalle allí):
 - **Red**: `PacketReader.ReadName` reutiliza las cadenas de nombres de estado, evento y prefab que ya llegaron.
 - **Desinstalar**: la regla de "Steam cambió este archivo, se deja" es solo para los del juego; un mod puesto a mano
   en `Mods` antes de instalar se devuelve. La caché de skins se borra siempre.
+- **Panteones**: dentro de uno (`BossSequenceController.IsInSequence`) el invitado no envía su personaje, ni al
+  guardar el mod ni con el guardado del propio juego (`OnGuestSaving`): los amuletos atados dejan `equippedCharms` vacío.
+- **Encuentros con diálogo** (`FsmStateSync`): si quien controla el encuentro cae a mitad del diálogo, su diálogo cuenta
+  como leído. Antes el encuentro lo esperaba para siempre y el compañero se quedaba sin control ante un cuadro vacío.
 - **Órdenes de prueba nuevas**: `pdadd` (suma como el juego), `towall` (deslizarse por una pared), `fsmstates` (estado
-  de todas las FSM de un nombre, sin límite), `givegeo`, `selected`, `uiselect` y `uicancel` (menús sin mando real), y
-  `transitionState` en `hero`.
+  de todas las FSM de un nombre, sin límite), `givegeo`, `selected`, `uiselect` y `uicancel` (menús sin mando real),
+  `transitionState` en `hero`, `pdget` con listas y estructuras (en JSON), `pdjson` (escribir un dato en JSON),
+  `bossseq si|no` (simular un Panteón) y `hitenemytype` (golpe de un tipo concreto). `sdlist` marca lo semipersistente.
 
 ## Código del juego
 

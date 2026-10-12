@@ -217,6 +217,12 @@ internal sealed class WorldSync {
             return;
         }
 
+        // En un Panteón los amuletos atados dejan `equippedCharms` vacío: guardarlo ahora le quitaría los amuletos
+        if (BossSequenceController.IsInSequence) {
+            Log.Info("Dentro de un Panteón: el personaje no se envía al host");
+            return;
+        }
+
         var json = CharacterData.Extract(playerData, SceneData.instance).ToString(Formatting.None);
         _session.SendLargeToHost(LargeCharacter, Compress(json));
         Log.Info("Personaje enviado al host");

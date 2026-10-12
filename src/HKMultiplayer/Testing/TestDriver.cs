@@ -259,7 +259,38 @@ internal sealed class TestDriver : MonoBehaviour {
 
                 break;
             case "pdget":
-                Log.Info($"{Tag}pd {args[1]}={typeof(PlayerData).GetField(args[1])?.GetValue(PlayerData.instance)}");
+                var pdValue = typeof(PlayerData).GetField(args[1])?.GetValue(PlayerData.instance);
+                if (pdValue is System.Collections.Generic.List<string> pdList) {
+                    // Las listas, con sus elementos (o si tiene uno: pdget <campo> <elemento>)
+                    Log.Info(args.Length > 2
+                        ? $"{Tag}pd {args[1]} tiene {args[2]}={pdList.Contains(args[2])} ({pdList.Count})"
+                        : $"{Tag}pd {args[1]}={pdList.Count}: {string.Join(", ", pdList)}");
+                } else if (pdValue != null && !pdValue.GetType().IsPrimitive && pdValue is not string && pdValue is not Enum &&
+                           pdValue.GetType().Namespace != "UnityEngine") {
+                    Log.Info($"{Tag}pd {args[1]}={Newtonsoft.Json.JsonConvert.SerializeObject(pdValue)}");
+                } else {
+                    Log.Info($"{Tag}pd {args[1]}={pdValue}");
+                }
+
+                break;
+            case "pdjson":
+                // pdjson <campo> <json>: pone un dato de la partida que es una estructura (estatuas, puertas de los Panteones)
+                var jsonField = typeof(PlayerData).GetField(args[1]);
+                jsonField?.SetValue(PlayerData.instance,
+                    Newtonsoft.Json.JsonConvert.DeserializeObject(string.Join(" ", args.Skip(2)), jsonField.FieldType));
+                Log.Info($"{Tag}pd {args[1]}={Newtonsoft.Json.JsonConvert.SerializeObject(jsonField?.GetValue(PlayerData.instance))}");
+                break;
+            case "bossseq":
+                // bossseq si|no: hace como si se estuviera dentro de un Panteón (IsInSequence), para probar lo que no
+                // debe pasar entonces; no carga ningún jefe
+                var seqType = typeof(BossSequenceController);
+                var seqFlags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+                var seqOn = args.Length < 2 || args[1] != "no";
+                seqType.GetField("currentData", seqFlags)?.SetValue(null,
+                    seqOn ? Activator.CreateInstance(seqType.GetNestedType("BossSequenceData", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)) : null);
+                seqType.GetField("currentSequence", seqFlags)?.SetValue(null,
+                    seqOn ? ScriptableObject.CreateInstance<BossSequence>() : null);
+                Log.Info($"{Tag}en un Panteón={BossSequenceController.IsInSequence}");
                 break;
             case "sdset":
                 // sdset <sala> <id>: marca un objeto de sala como activado (como al romper una pared)
@@ -281,7 +312,7 @@ internal sealed class TestDriver : MonoBehaviour {
             case "sdlist":
                 // sdlist <sala>: lo guardado de esa sala (objetos activados, números, piedras)
                 foreach (var item in SceneData.instance.persistentBoolItems.Where(i => i.sceneName == args[1])) {
-                    Log.Info($"{Tag}sd bool {item.id}={item.activated}");
+                    Log.Info($"{Tag}sd bool {item.id}={item.activated}{(item.semiPersistent ? " (semipersistente)" : string.Empty)}");
                 }
 
                 foreach (var item in SceneData.instance.persistentIntItems.Where(i => i.sceneName == args[1])) {
@@ -564,6 +595,14 @@ internal sealed class TestDriver : MonoBehaviour {
                 // parts <enemigo>: piezas que se mueven aparte de ese enemigo
                 foreach (var line in runner.Enemies.DescribeParts(string.Join(" ", args.Skip(1)))) {
                     Log.Info($"{Tag}pieza {line}");
+                }
+
+                break;
+            case "hitenemytype":
+                // hitenemytype <tipo> <daño> <nombre>: golpe de ese tipo (Nail, Spell, Acid, Generic, SharpShadow...)
+                if (!runner.Enemies.TestHit(string.Join(" ", args.Skip(3)), int.Parse(args[2]),
+                        (AttackTypes) Enum.Parse(typeof(AttackTypes), args[1], true))) {
+                    Log.Warn($"{Tag}no hay enemigo vivo '{string.Join(" ", args.Skip(3))}'");
                 }
 
                 break;

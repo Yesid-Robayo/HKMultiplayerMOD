@@ -5464,7 +5464,9 @@ internal sealed class EnemySync {
                 // Las FSM vuelven para que la muerte siga su curso (cadáver, efectos, botín de este jugador)
                 enemy.DiedElsewhere = true;
                 SetPuppet(enemy, false);
-                health.Die(null, hp is >= 0 and <= (int) AttackTypes.NailBeam ? (AttackTypes) hp : AttackTypes.Nail, true);
+                var killedBy = hp is >= 0 and <= (int) AttackTypes.NailBeam ? (AttackTypes) hp : AttackTypes.Nail;
+                Log.Info($"{enemy.Root.name}: murió en el PC que lo movía ({killedBy})");
+                health.Die(null, killedBy, true);
                 enemy.ReportedDead = true;
                 enemy.DiedAt = Time.unscaledTime;
                 enemy.CorpseFollows = true;
@@ -6399,13 +6401,13 @@ internal sealed class EnemySync {
     }
 
     /// <summary>Golpea al enemigo vivo y activo con ese nombre, como un golpe de aguijón del jugador.</summary>
-    public bool TestHit(string namePrefix, int damage) {
+    public bool TestHit(string namePrefix, int damage, AttackTypes type = AttackTypes.Nail) {
         var hero = HeroController.instance;
         foreach (var enemy in _enemies) {
             if (enemy.Root != null && enemy.Root.activeInHierarchy && enemy.Health != null && !enemy.Health.isDead &&
                 string.Equals(enemy.Root.name, namePrefix, StringComparison.OrdinalIgnoreCase)) {
                 enemy.Health.Hit(new HitInstance {
-                    Source = hero.gameObject, AttackType = AttackTypes.Nail, DamageDealt = damage, Multiplier = 1f,
+                    Source = hero.gameObject, AttackType = type, DamageDealt = damage, Multiplier = 1f,
                     MagnitudeMultiplier = 1f, Direction = 0f
                 });
                 return true;
