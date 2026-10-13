@@ -19,8 +19,15 @@ public enum ConnectionState : byte {
 /// grandes. Se usa desde el hilo principal. No crea objetos por paquete: todos los búferes son reservados o de reserva.
 /// </summary>
 public sealed class NetConnection : ReliableReceiver.ISink {
-    /// <summary>Mensajes no fiables pendientes de enviar en este tick como mucho.</summary>
-    private const int MaxUnreliablePerTick = 256;
+    /// <summary>
+    /// Mensajes no fiables pendientes de enviar en este tick como mucho, y los bytes que caben (ver _unreliableData). El
+    /// host reenvía a cada invitado lo de todos los demás: con 4 jugadores, el triple que con 2, y si el juego se paraba
+    /// un momento (cargar una sala) lo de varios ticks llegaba junto y lo que no cabía se perdía sin avisar. Ahora cabe
+    /// el triple que antes (24 KB, de sobra para los 56 paquetes de un tick) y se avisa si aun así se pierde algo.
+    /// </summary>
+    private const int MaxUnreliablePerTick = 768;
+
+    private int _droppedUnreliable;
 
     /// <summary>Transferencia grande más grande que se acepta (protege la memoria).</summary>
     public const int MaxLargeTransfer = 64 * 1024 * 1024;
@@ -47,7 +54,7 @@ public sealed class NetConnection : ReliableReceiver.ISink {
     private readonly uint[] _sentSequence = new uint[1024];
 
     // Mensajes no fiables del tick actual
-    private readonly byte[] _unreliableData = new byte[NetConstants.MaxMessageSize * 8];
+    private readonly byte[] _unreliableData = new byte[NetConstants.MaxMessageSize * 24];
     private readonly int[] _unreliableOffset = new int[MaxUnreliablePerTick];
     private readonly int[] _unreliableLength = new int[MaxUnreliablePerTick];
     private int _unreliableCount;
@@ -193,6 +200,8 @@ public sealed class NetConnection : ReliableReceiver.ISink {
             _unreliableLength[_unreliableCount] = length;
             _unreliableCount++;
             _unreliableUsed += length;
+        } else if (++_droppedUnreliable == 1 || _droppedUnreliable % 500 == 0) {
+            _peer.LogWarning($"No cabe en el tick un mensaje no fiable para {EndPoint}: se descarta (van {_droppedUnreliable})");
         }
     }
 
