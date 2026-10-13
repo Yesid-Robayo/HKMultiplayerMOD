@@ -149,9 +149,9 @@ internal sealed class QuestNpcSync {
 
     /// <summary>
     /// El progreso compartido acaba de poner un dato del mundo con lo que llegó de otro PC (<paramref name="before"/>: el
-    /// valor que tenía; en los sí/no, 0 o 1).
+    /// valor que tenía; en los sí/no, 0 o 1; <paramref name="origin"/>: quién lo cambió).
     /// </summary>
-    public void OnRemoteChange(string field, int before, bool isBool) {
+    public void OnRemoteChange(string field, int before, bool isBool, ushort origin) {
         if (_scene.Length == 0) {
             return;
         }
@@ -161,7 +161,7 @@ internal sealed class QuestNpcSync {
         }
 
         _remoteChangedAt[field] = Time.unscaledTime;
-        if (isBool && PartnerInRoom()) {
+        if (isBool && InRoom(origin)) {
             _changedHere.Add(field);
         } else {
             _changedHere.Remove(field);
@@ -394,15 +394,18 @@ internal sealed class QuestNpcSync {
     private bool KeptInRoom(string field, PlayMakerFSM fsm) =>
         _changedHere.Contains(field) && Array.IndexOf(RecheckAlways, fsm.FsmName) < 0 && IsNpc(fsm);
 
-    /// <summary>Si otro jugador está en la misma sala que este.</summary>
-    private bool PartnerInRoom() {
+    /// <summary>
+    /// Si quien cambió el dato está en la misma sala que este jugador. Antes se miraba si había algún otro: con A y B
+    /// juntos y C cambiándolo en otra sala, el personaje no se volvía a comprobar en A.
+    /// </summary>
+    private bool InRoom(ushort playerId) {
         if (_session == null) {
             return false;
         }
 
         foreach (var player in _session.Players) {
-            if (!player.IsLocal && player.Scene == _scene) {
-                return true;
+            if (!player.IsLocal && player.Id == playerId) {
+                return player.Scene == _scene;
             }
         }
 

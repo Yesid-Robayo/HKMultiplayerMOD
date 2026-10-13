@@ -55,6 +55,12 @@ internal sealed class SharedProgress {
         public int Value;
         public string Scene;
         public string Id;
+
+        /// <summary>
+        /// Quién lo cambió. El host lo pone al reenviarlo: con 3 o más jugadores, quien lo recibe no puede suponer que fue
+        /// el compañero de su sala (<see cref="QuestNpcSync"/>).
+        /// </summary>
+        public ushort Origin;
     }
 
     /// <summary>Campos de la partida que no se comparten aunque no sean del personaje (datos de la sesión).</summary>
@@ -103,7 +109,7 @@ internal sealed class SharedProgress {
     /// antes (los sí/no, 0 o 1) y si es un sí/no: los personajes de misión de la sala que lo miran vuelven a comprobarlo
     /// (<see cref="QuestNpcSync"/>).
     /// </summary>
-    public Action<string, int, bool> RemoteFieldChanged;
+    public Action<string, int, bool, ushort> RemoteFieldChanged;
 
     static SharedProgress() {
         MessageRoutes.Register(WorldChange, Route.Server, reliable: true);
@@ -390,13 +396,15 @@ internal sealed class SharedProgress {
             return;
         }
 
+        var local = change;
+        local.Origin = _session.LocalId;
         if (_session.IsHost) {
-            Broadcast(change, null);
+            Broadcast(local, null);
             return;
         }
 
         var writer = _session.Begin(WorldChange);
-        Write(writer, change);
+        Write(writer, local);
         _session.End();
     }
 
@@ -414,6 +422,7 @@ internal sealed class SharedProgress {
     }
 
     private static void Write(PacketWriter writer, in Change change) {
+        writer.WriteUShort(change.Origin);
         writer.WriteByte((byte) change.Kind);
         switch (change.Kind) {
             case Kind.Bool:
@@ -435,7 +444,8 @@ internal sealed class SharedProgress {
     }
 
     private static bool TryRead(PacketReader reader, out Change change) {
-        change = new Change { Kind = (Kind) reader.ReadByte() };
+        var origin = reader.ReadUShort();
+        change = new Change { Origin = origin, Kind = (Kind) reader.ReadByte() };
         switch (change.Kind) {
             case Kind.Bool:
             case Kind.Int:
@@ -466,11 +476,13 @@ internal sealed class SharedProgress {
         }
 
         if (_session.IsHost) {
-            // Solo se acepta si el host está en su mundo; luego se reenvía a los demás
+            // Solo se acepta si el host está en su mundo; luego se reenvía a los demás. Quién lo cambió lo pone el host
+            // (no lo que diga el mensaje)
             if (!CoopSaves.IsHostWorld || CoopSaves.ActiveWorld == null) {
                 return;
             }
 
+            change.Origin = from.Id;
             Broadcast(change, from);
         }
 
@@ -496,7 +508,7 @@ internal sealed class SharedProgress {
                     }
 
                     if (wasSet != flag) {
-                        RemoteFieldChanged?.Invoke(BoolFields[change.Index].Name, wasSet ? 1 : 0, true);
+                        RemoteFieldChanged?.Invoke(BoolFields[change.Index].Name, wasSet ? 1 : 0, true, change.Origin);
                     }
 
                     break;
@@ -508,7 +520,7 @@ internal sealed class SharedProgress {
                     }
 
                     if (previous != change.Value) {
-                        RemoteFieldChanged?.Invoke(IntFields[change.Index].Name, previous, false);
+                        RemoteFieldChanged?.Invoke(IntFields[change.Index].Name, previous, false, change.Origin);
                     }
 
                     break;
@@ -521,7 +533,7 @@ internal sealed class SharedProgress {
                         _ints[change.Index] += change.Value;
                     }
 
-                    RemoteFieldChanged?.Invoke(IntFields[change.Index].Name, before, false);
+                    RemoteFieldChanged?.Invoke(IntFields[change.Index].Name, before, false, change.Origin);
                     break;
                 }
                 case Kind.ListAdd:
