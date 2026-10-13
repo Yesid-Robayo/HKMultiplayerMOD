@@ -238,7 +238,7 @@ internal sealed class FsmStateSync {
         /// <summary>Estados por los que pasó sola la copia desde el último paso recibido de la cadena de otro PC.</summary>
         public HashSet<string> SelfVisited;
 
-        /// <summary>Cuándo lo reclamó este PC (para desempatar dos reclamaciones cruzadas).</summary>
+        /// <summary>Cuándo lo reclamó su controlador (este PC u otro) por última vez: para desempatar dos cruzadas.</summary>
         public float ClaimedAt = -100f;
 
         /// <summary>
@@ -451,16 +451,21 @@ internal sealed class FsmStateSync {
         var id = reader.ReadUInt();
         if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var item)) {
             // Dos reclamaciones cruzadas (la automática del dueño de la sala con la de un invitado que lo usó, o dos al
-            // irse el controlador): gana el número menor en los dos PCs. Antes cada uno se quedaba con la del otro, los dos
-            // retenían y nadie enviaba (un ascensor o una oleada del Coliseo se quedaban parados)
-            if (item.Controller == _session.LocalId && Time.unscaledTime - item.ClaimedAt < ClaimCrossSeconds &&
-                _session.LocalId < from.Id) {
-                Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: {from.Id} también lo reclamó; se queda este PC");
+            // irse el controlador): gana el número menor en todos los PCs. Antes cada uno se quedaba con la del otro, los
+            // dos retenían y nadie enviaba (un ascensor o una oleada del Coliseo se quedaban parados). Vale también en un
+            // tercero que solo las recibe: antes se quedaba con la última que le llegaba y descartaba los estados del que
+            // de verdad lo controlaba (el ascensor, el Coliseo o los Señores Mantis, parados solo para él)
+            var now = Time.unscaledTime;
+            if (item.Controller != 0 && item.Controller != from.Id && item.Controller < from.Id &&
+                now - item.ClaimedAt < ClaimCrossSeconds) {
+                var keeper = item.Controller == _session.LocalId ? "este PC" : item.Controller.ToString();
+                Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: {from.Id} también lo reclamó; se queda {keeper}");
                 return;
             }
 
             Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: lo controla {from.Id}");
             item.Controller = from.Id;
+            item.ClaimedAt = now;
             item.Positions.Clear();
         }
     }
