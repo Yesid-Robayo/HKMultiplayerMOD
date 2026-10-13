@@ -45,6 +45,12 @@ internal sealed class Revive {
     /// <summary>Cuánto lleva quien revive y a quién (→ sala, no fiable).</summary>
     public const MessageType ReviveProgress = (MessageType) 80;
 
+    /// <summary>
+    /// El host no aceptó una petición de revivir porque otro lo revivió antes (→ quien la pidió): se le devuelve el alma.
+    /// Con dos reviviendo a la vez, el segundo en terminar perdía la suya.
+    /// </summary>
+    public const MessageType ReviveDenied = (MessageType) 111;
+
     /// <summary>Distancia máxima al cuerpo para revivirlo.</summary>
     private const float ReviveRadius = 2f;
 
@@ -124,6 +130,7 @@ internal sealed class Revive {
     private readonly MessageHandler _onWipe;
     private readonly MessageHandler _onBench;
     private readonly MessageHandler _onProgress;
+    private readonly MessageHandler _onDenied;
     private readonly Action<PartyState.Member, PlayerStatus> _onStatus;
     private readonly Action<SessionPlayer> _onLeft;
     private readonly Action<SessionPlayer> _onSceneChanged;
@@ -174,11 +181,23 @@ internal sealed class Revive {
     private float _nextProgressSend;
     private bool _progressAnnounced;
 
-    // Quién revive a quién (lo que llega de la sala)
+    /// <summary>Alma gastada en la última petición de revivir y a quién (se devuelve si el host la rechaza).</summary>
+    private int _requestSoul;
+
+    private ushort _requestTarget;
+    private float _requestAt = -100f;
+
+    // Quién revive a quién (lo que llega de la sala): se muestra el que más lleva
     private ushort _revivedBy;
     private ushort _revivingTarget;
     private float _revivingProgress;
     private float _revivingAt = -100f;
+
+    /// <summary>
+    /// Cada uno que está reviviendo en la sala: a quién, cuánto lleva y cuándo llegó. Con uno solo, dos reviviendo a la
+    /// vez se pisaban 10 veces por segundo y "X te está reviviendo" parpadeaba entre los dos.
+    /// </summary>
+    private readonly Dictionary<ushort, (ushort Target, float Progress, float At)> _revivers = new();
 
     // ---- Cuerpos dibujados en esta sala ----
     private readonly Dictionary<ushort, DownedBody> _bodies = new();
@@ -204,6 +223,7 @@ internal sealed class Revive {
         MessageRoutes.Register(Wipe, Route.Server, reliable: true);
         MessageRoutes.Register(BenchRest, Route.Server, reliable: true);
         MessageRoutes.Register(ReviveProgress, Route.SameScene, reliable: false);
+        MessageRoutes.Register(ReviveDenied, Route.Server, reliable: true);
     }
 
     public Revive() {
@@ -213,6 +233,7 @@ internal sealed class Revive {
         _onWipe = OnWipe;
         _onBench = OnBenchRest;
         _onProgress = OnProgress;
+        _onDenied = OnReviveDenied;
         _onStatus = OnStatusChanged;
         _onLeft = OnPlayerLeft;
         _onSceneChanged = OnPlayerSceneChanged;
@@ -244,6 +265,7 @@ internal sealed class Revive {
         session.On(Wipe, _onWipe);
         session.On(BenchRest, _onBench);
         session.On(ReviveProgress, _onProgress);
+        session.On(ReviveDenied, _onDenied);
         session.PlayerLeft += _onLeft;
         session.PlayerSceneChanged += _onSceneChanged;
         party.StatusChanged += _onStatus;
@@ -258,6 +280,7 @@ internal sealed class Revive {
             _session.On(Wipe, null);
             _session.On(BenchRest, null);
             _session.On(ReviveProgress, null);
+            _session.On(ReviveDenied, null);
             _session.PlayerLeft -= _onLeft;
             _session.PlayerSceneChanged -= _onSceneChanged;
         }
@@ -748,6 +771,13 @@ internal sealed class Revive {
 
         var reviver = _party.Get(from.Id);
         var target = _party.Get(targetId);
+        if (reviver != null && target != null && reviver.Status != PlayerStatus.Downed &&
+            target.Status != PlayerStatus.Downed) {
+            Log.Info($"{from.Name} terminó de revivir a {target.Name}, pero ya estaba en pie");
+            DenyRevive(from, targetId);
+            return;
+        }
+
         if (reviver == null || target == null || reviver.Status == PlayerStatus.Downed ||
             target.Status != PlayerStatus.Downed) {
             return;
@@ -1640,7 +1670,10 @@ internal sealed class Revive {
             return;
         }
 
-        // Completo: el alma reservada queda gastada
+        // Completo: el alma reservada queda gastada (salvo si el host dice que otro lo revivió antes)
+        _requestSoul = _reservedSoul;
+        _requestTarget = _target;
+        _requestAt = Time.unscaledTime;
         _reservedSoul = 0;
         var target = _target;
         Log.Info($"Revivir a {_party.Get(target)?.Name ?? target.ToString()}: terminado, se pide al host");
@@ -1684,10 +1717,62 @@ internal sealed class Revive {
     private void OnProgress(SessionPlayer from, PacketReader reader) {
         var target = reader.ReadUShort();
         var progress = reader.ReadByte() / 255f;
-        _revivedBy = from.Id;
-        _revivingTarget = target;
-        _revivingProgress = progress;
-        _revivingAt = progress > 0f ? Time.unscaledTime : -100f;
+        var now = Time.unscaledTime;
+        if (progress > 0f) {
+            _revivers[from.Id] = (target, progress, now);
+        } else {
+            _revivers.Remove(from.Id);
+        }
+
+        // El que más lleva (si empatan, el de número menor): así no salta de uno a otro
+        _revivedBy = 0;
+        _revivingAt = -100f;
+        foreach (var pair in _revivers) {
+            if (now - pair.Value.At >= BeingRevivedTimeout) {
+                continue;
+            }
+
+            if (_revivedBy == 0 || pair.Value.Progress > _revivingProgress ||
+                pair.Value.Progress == _revivingProgress && pair.Key < _revivedBy) {
+                _revivedBy = pair.Key;
+                _revivingTarget = pair.Value.Target;
+                _revivingProgress = pair.Value.Progress;
+                _revivingAt = pair.Value.At;
+            }
+        }
+    }
+
+    /// <summary>Host: otro revivió antes al que pedía revivir este jugador; se le dice para que recupere el alma.</summary>
+    private void DenyRevive(SessionPlayer requester, ushort target) {
+        if (requester.IsLocal) {
+            RefundRequest(target);
+            return;
+        }
+
+        var writer = _session.BeginTo(requester, ReviveDenied);
+        writer.WriteUShort(target);
+        _session.EndTo();
+    }
+
+    private void OnReviveDenied(SessionPlayer from, PacketReader reader) {
+        var target = reader.ReadUShort();
+        if (_session != null && !_session.IsHost && from.Id == GameSession.HostPlayerId) {
+            RefundRequest(target);
+        }
+    }
+
+    private void RefundRequest(ushort target) {
+        if (_requestSoul == 0 || _requestTarget != target || Time.unscaledTime - _requestAt > 10f) {
+            return;
+        }
+
+        Log.Info($"Otro revivió antes a {_party?.Get(target)?.Name ?? target.ToString()}: se devuelven {_requestSoul} de alma");
+        var hero = HeroController.instance;
+        if (hero != null) {
+            hero.AddMPCharge(_requestSoul);
+        }
+
+        _requestSoul = 0;
     }
 
     private void ResetProgress() {
