@@ -391,8 +391,9 @@ internal sealed class PartnerTravel {
     /// Devuelve dónde quedó.
     /// </summary>
     private Vector3 Place(HeroController hero, Vector3 target, List<Vector3> occupied) {
-        // Cada uno prefiere un lado según su número: dos que van a la vez al mismo compañero no acaban uno encima del otro
-        var side = BesideOffset(hero, target, occupied, _session != null && _session.LocalId % 2 == 0);
+        // Cada uno empieza por un sitio según su número: dos que van a la vez al mismo compañero (aún no se ven el uno al
+        // otro) no acaban uno encima del otro
+        var side = BesideOffset(hero, target, occupied, _session != null ? _session.LocalId : (ushort) 1);
         var position = target + new Vector3(side, 0f, 0f);
         hero.transform.position = position;
         var body = hero.GetComponent<Rigidbody2D>();
@@ -415,7 +416,7 @@ internal sealed class PartnerTravel {
     /// Cuánto apartarse a un lado del compañero: a la izquierda o a la derecha si el caballero cabe (sin pared), hay suelo
     /// a la misma altura que el suyo y nada que haga daño; si no, en su mismo sitio (0).
     /// </summary>
-    private static float BesideOffset(HeroController hero, Vector3 target, List<Vector3> occupied, bool rightFirst) {
+    private static float BesideOffset(HeroController hero, Vector3 target, List<Vector3> occupied, ushort playerId) {
         var collider = hero.GetComponent<Collider2D>();
         if (collider == null) {
             return 0f;
@@ -435,8 +436,9 @@ internal sealed class PartnerTravel {
             return 0f;
         }
 
-        foreach (var step in rightFirst ? SidesRightFirst : SidesLeftFirst) {
-            var side = step * SideStep;
+        var first = (playerId + Sides.Length - 1) % Sides.Length;
+        for (var i = 0; i < Sides.Length; i++) {
+            var side = Sides[(first + i) % Sides.Length] * SideStep;
             if (Taken(occupied, target, side)) {
                 continue;
             }
@@ -458,8 +460,8 @@ internal sealed class PartnerTravel {
         return 0f;
     }
 
-    private static readonly float[] SidesLeftFirst = { -1f, 1f, -2f, 2f };
-    private static readonly float[] SidesRightFirst = { 1f, -1f, 2f, -2f };
+    /// <summary>Sitios junto al compañero (en pasos a un lado); cada número de jugador empieza por uno distinto.</summary>
+    private static readonly float[] Sides = { -1f, 1f, -2f, 2f };
 
     /// <summary>Si ya hay otro jugador en ese sitio junto al compañero.</summary>
     private static bool Taken(List<Vector3> occupied, Vector3 target, float side) {
