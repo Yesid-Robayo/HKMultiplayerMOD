@@ -652,20 +652,64 @@ internal sealed class Revive {
         RetargetFollowers(from.Id);
     }
 
-    /// <summary>Primer jugador en pie que no es <paramref name="excluded"/> (mejor si está en esa sala).</summary>
+    /// <summary>
+    /// Jugador en pie que no es <paramref name="excluded"/>: mejor uno al que se pueda seguir (no en un sueño, una
+    /// cinemática o el viaje en ciervo, salvo que sea la sala del cuerpo) y, entre esos, uno en esa sala. Antes solo se
+    /// descartaban los caídos: con 3 o más, al caído le tocaba a veces alguien en un sueño y se quedaba sin seguir a nadie
+    /// hasta que ese caía o se iba.
+    /// </summary>
     private PartyState.Member FindStanding(ushort excluded, string scene) {
         PartyState.Member best = null;
+        var bestRank = -1;
         foreach (var member in _party.Members) {
             if (member.Id == excluded || member.Status is PlayerStatus.Downed or PlayerStatus.Joining || member.Player == null) {
                 continue;
             }
 
-            if (best == null || member.Player.Scene == scene && best.Player.Scene != scene) {
+            var rank = (CanFollow(member.Player.Scene, scene) ? 2 : 0) + (member.Player.Scene == scene ? 1 : 0);
+            if (rank > bestRank) {
                 best = member;
+                bestRank = rank;
             }
         }
 
         return best;
+    }
+
+    /// <summary>Si un caído con el cuerpo en <paramref name="bodyScene"/> puede seguir a alguien en esa sala.</summary>
+    private static bool CanFollow(string scene, string bodyScene) =>
+        !string.IsNullOrEmpty(scene) && (scene == bodyScene || IsFollowedScene(scene));
+
+    private float _nextFollowCheck;
+
+    /// <summary>
+    /// Host, cada segundo: un caído que sigue a alguien al que no puede seguir (entró en un sueño, una cinemática o el
+    /// ciervo después de asignárselo) pasa a seguir a otro en pie que sí, si lo hay. Si no, se queda con el que tenía.
+    /// </summary>
+    private void RetargetUnfollowable() {
+        var now = Time.unscaledTime;
+        if (now < _nextFollowCheck) {
+            return;
+        }
+
+        _nextFollowCheck = now + 1f;
+        foreach (var member in _party.Members) {
+            if (member.Status != PlayerStatus.Downed) {
+                continue;
+            }
+
+            var current = _party.Get(member.Partner);
+            if (current?.Player != null && current.Status is not (PlayerStatus.Downed or PlayerStatus.Joining) &&
+                CanFollow(current.Player.Scene, member.BodyScene)) {
+                continue;
+            }
+
+            var better = FindStanding(member.Id, member.BodyScene);
+            if (better != null && better.Id != member.Partner && CanFollow(better.Player.Scene, member.BodyScene)) {
+                Log.Info($"{member.Name} no puede seguir a {current?.Name ?? "nadie"}: pasa a seguir a {better.Name}");
+                _party.SetPartner(member.Id, better.Id);
+            }
+        }
     }
 
     private void RetargetFollowers(ushort fallen) {
@@ -939,6 +983,7 @@ internal sealed class Revive {
         UpdateBench();
         if (_session.IsHost && _party != null) {
             ReviveLeftInDreams();
+            RetargetUnfollowable();
         }
 
         UpdateBodies(scene);
