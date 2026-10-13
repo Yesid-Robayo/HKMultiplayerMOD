@@ -121,28 +121,34 @@ internal static class Difficulty {
         }
 
         var settings = HostSettings.Current;
-        if (settings.OnlyWithPartnerInRoom && !PartnerInRoom(session)) {
+        var partners = PartnersInRoom(session);
+        if (settings.OnlyWithPartnerInRoom && partners == 0) {
             return 1f;
         }
 
-        return IsBoss(enemy) ? settings.BossHealth : settings.EnemyHealth;
+        // La opción es la vida con un compañero; cada compañero más en la sala suma lo mismo otra vez (1,5× con dos
+        // jugadores es 2× con tres y 2,5× con cuatro). Antes era igual con 2 que con 4 y con más jugadores el combate se
+        // acababa enseguida. Sin nadie más en la sala cuenta como con uno (la opción tal cual)
+        var chosen = IsBoss(enemy) ? settings.BossHealth : settings.EnemyHealth;
+        return 1f + (chosen - 1f) * Mathf.Max(1, partners);
     }
 
-    /// <summary>Si otro jugador en pie está en la sala del local.</summary>
-    public static bool PartnerInRoom(Session.GameSession session) {
+    /// <summary>Cuántos otros jugadores en pie están en la sala del local.</summary>
+    private static int PartnersInRoom(Session.GameSession session) {
         var party = PartyState.Current;
         var scene = session.LocalPlayer?.Scene;
         if (party == null || string.IsNullOrEmpty(scene)) {
-            return false;
+            return 0;
         }
 
+        var count = 0;
         foreach (var member in party.Members) {
             if (member.Id != session.LocalId && member.Status != PlayerStatus.Downed && member.Player != null &&
                 member.Player.Scene == scene) {
-                return true;
+                count++;
             }
         }
 
-        return false;
+        return count;
     }
 }
