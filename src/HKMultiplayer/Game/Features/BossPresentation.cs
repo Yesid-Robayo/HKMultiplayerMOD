@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using HKMultiplayer.Net;
 using HKMultiplayer.Session;
 using HKMultiplayer.Util;
@@ -24,7 +26,7 @@ internal sealed class BossPresentation {
     private static BossPresentation _active;
 
     /// <summary>El caballero local está quieto por la presentación de jefe de otro PC (no está hablando con nadie).</summary>
-    public static bool PartnerLocked => _active != null && _active._locker != 0;
+    public static bool PartnerLocked => _active != null && _active._lockers.Count != 0;
     private static bool _hooked;
 
     /// <summary>Se está quitando o devolviendo el control desde aquí (no es la lógica del juego).</summary>
@@ -37,10 +39,12 @@ internal sealed class BossPresentation {
     /// <summary>Este PC avisó de que su caballero está quieto por una presentación.</summary>
     private bool _sentLock;
 
-    /// <summary>Quién tiene quieto al caballero local (0 si nadie) y desde cuándo.</summary>
-    private ushort _locker;
-
-    private float _lockedAt;
+    /// <summary>
+    /// Quiénes tienen quieto al caballero local y desde cuándo. Varios a la vez: con 3 o más jugadores puede haber dos
+    /// presentaciones a la vez (en PCs distintos); antes se recordaba uno solo y al soltar el primero el caballero
+    /// recuperaba el control con la otra aún en marcha.
+    /// </summary>
+    private readonly Dictionary<ushort, float> _lockers = new();
 
     /// <summary>La lógica del juego en este PC también quitó el control (y aún no lo devolvió).</summary>
     private bool _localWantsLock;
@@ -58,7 +62,7 @@ internal sealed class BossPresentation {
         _revive = revive;
         _active = this;
         _sentLock = false;
-        _locker = 0;
+        _lockers.Clear();
         _localWantsLock = false;
         session.On(PresentationLock, _onLock);
     }
@@ -136,7 +140,7 @@ internal sealed class BossPresentation {
             Send(false);
         }
 
-        return _locker == 0;
+        return _lockers.Count == 0;
     }
 
     private void Send(bool locked) {
@@ -177,23 +181,23 @@ internal sealed class BossPresentation {
         }
 
         if (!locked) {
-            if (_locker == from.Id) {
-                Release($"{from.Name} terminó la presentación");
+            if (_lockers.Remove(from.Id)) {
+                ReleaseIfFree($"{from.Name} terminó la presentación");
             }
 
             return;
         }
 
         var gm = GameManager.instance;
-        if (_locker != 0 || from.Scene != local.Scene || _revive != null && _revive.IsDowned || gm == null ||
-            gm.IsInSceneTransition || hero.cState.dead) {
+        if (_lockers.ContainsKey(from.Id) || from.Scene != local.Scene || _revive != null && _revive.IsDowned ||
+            gm == null || gm.IsInSceneTransition || hero.cState.dead) {
             return;
         }
 
-        _locker = from.Id;
-        _lockedAt = Time.unscaledTime;
+        var first = _lockers.Count == 0;
+        _lockers[from.Id] = Time.unscaledTime;
         Log.Info($"Presentación de jefe en el PC de {from.Name}: caballero quieto");
-        if (!hero.controlReqlinquished) {
+        if (first && !hero.controlReqlinquished) {
             _applying = true;
             try {
                 hero.RelinquishControl();
@@ -203,13 +207,25 @@ internal sealed class BossPresentation {
         }
     }
 
-    /// <summary>Suelta al caballero local si lo tenía quieto otro (y su propia lógica no lo quiere quieto).</summary>
+    /// <summary>Suelta al caballero local de todas las presentaciones de otros (al dejar la partida).</summary>
     private void Release(string reason) {
-        if (_locker == 0) {
+        if (_lockers.Count == 0) {
             return;
         }
 
-        _locker = 0;
+        _lockers.Clear();
+        ReleaseIfFree(reason);
+    }
+
+    /// <summary>
+    /// Suelta al caballero local si ya nadie lo tiene quieto (y su propia lógica no lo quiere quieto).
+    /// </summary>
+    private void ReleaseIfFree(string reason) {
+        if (_lockers.Count != 0) {
+            Log.Info($"{reason}; sigue quieto por otra presentación ({string.Join(", ", _lockers.Keys)})");
+            return;
+        }
+
         var hero = HeroController.instance;
         Log.Info($"Caballero suelto: {reason}");
         // No en medio de una muerte, una reaparición o un cambio de sala: el juego devuelve el control cuando acaba
@@ -245,25 +261,30 @@ internal sealed class BossPresentation {
             }
         }
 
-        if (_locker == 0) {
+        if (_lockers.Count == 0) {
             return;
         }
 
         var local = _session.LocalPlayer;
-        SessionPlayer locker = null;
-        foreach (var player in _session.Players) {
-            if (player.Id == _locker) {
-                locker = player;
+        var now = Time.unscaledTime;
+        foreach (var pair in _lockers.ToList()) {
+            SessionPlayer locker = null;
+            foreach (var player in _session.Players) {
+                if (player.Id == pair.Key) {
+                    locker = player;
+                }
             }
-        }
 
-        if (locker == null || local == null || locker.Scene != local.Scene) {
-            Release("quien presentaba al jefe ya no está en la sala");
-        } else if (Time.unscaledTime - _lockedAt > MaxLockSeconds) {
-            Release("la presentación duró demasiado");
+            if (locker == null || local == null || locker.Scene != local.Scene) {
+                _lockers.Remove(pair.Key);
+                ReleaseIfFree("quien presentaba al jefe ya no está en la sala");
+            } else if (now - pair.Value > MaxLockSeconds) {
+                _lockers.Remove(pair.Key);
+                ReleaseIfFree("la presentación duró demasiado");
+            }
         }
     }
 
     /// <summary>Resumen para el modo de prueba.</summary>
-    public string Describe() => $"avisó={_sentLock} quieto por={_locker} lógica propia={_localWantsLock}";
+    public string Describe() => $"avisó={_sentLock} quieto por={(_lockers.Count == 0 ? "0" : string.Join(",", _lockers.Keys))} lógica propia={_localWantsLock}";
 }
