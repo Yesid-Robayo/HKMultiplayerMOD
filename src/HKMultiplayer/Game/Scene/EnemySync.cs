@@ -194,6 +194,9 @@ internal sealed class EnemySync {
     /// <summary>Si no llega cómo iba, el nuevo lo mueve igualmente pasado este tiempo (desde el principio de su lógica).</summary>
     private const float HandoverTimeout = 1.5f;
 
+    /// <summary>Un traspaso más viejo que esto no se usa (ver HandoverUsable).</summary>
+    private const float HandoverMaxAge = 5f;
+
     /// <summary>Los objetos creados durante el combate llevan ids con este bit (los de la sala, su ruta).</summary>
     private const uint SpawnedIdFlag = 0x80000000u;
 
@@ -350,6 +353,11 @@ internal sealed class EnemySync {
         public HandoverFsm[] Handover;
 
         public bool HandoverReady;
+
+        /// <summary>Quién envió el traspaso guardado y cuándo llegó su primer mensaje (ver HandoverUsable).</summary>
+        public ushort HandoverFrom;
+
+        public float HandoverAt;
 
         /// <summary>Avisos reenviados a este PC que llegaron cuando aún no lo movía (se atienden al tomarlo).</summary>
         public List<(byte Fsm, string Event, float At)> PendingEvents;
@@ -929,6 +937,11 @@ internal sealed class EnemySync {
                 }
 
                 var local = ControllerOf(enemy, owner) == _session.LocalId;
+                if (local && enemy.HandoverReady && !HandoverUsable(enemy, now, enemy.Puppet)) {
+                    enemy.Handover = null;
+                    enemy.HandoverReady = false;
+                }
+
                 if (local && enemy.Puppet) {
                     // Pasa a moverlo este PC: desde como lo dejó el anterior (si sigue aquí, espera a saberlo)
                     if (enemy.HandoverReady || enemy.PreviousController == _session.LocalId ||
@@ -950,6 +963,28 @@ internal sealed class EnemySync {
         UpdatePuppets();
         UpdateRunningEffects();
         UpdateWakeGates();
+    }
+
+    /// <summary>
+    /// Si el traspaso guardado es el de este cambio. El traspaso va a toda la sala, sin destino: un PC que solo miraba
+    /// lo guardaba y, si mucho después pasaba a moverlo él (el dueño nunca recibe sus propios cambios, así que no se le
+    /// borraba), lo tomaba con aquel estado y el jefe volvía a un ataque o una fase anterior. Vale si es reciente y lo
+    /// envió quien lo movía antes según este PC (o alguien que ya salió de la sala, que lo deja al irse). Un recién
+    /// llegado a la sala (<paramref name="puppet"/> falso) aún no sabe quién lo movía: solo se mira que sea reciente.
+    /// </summary>
+    private bool HandoverUsable(Enemy enemy, float now, bool puppet) {
+        if (now - enemy.HandoverAt > HandoverMaxAge) {
+            Log.Info($"{enemy.Root.name}: traspaso de hace {now - enemy.HandoverAt:0.0} s, se descarta");
+            return false;
+        }
+
+        if (puppet && enemy.HandoverFrom != enemy.PreviousController && InScene(enemy.HandoverFrom)) {
+            Log.Info($"{enemy.Root.name}: traspaso de {enemy.HandoverFrom}, pero lo movía {enemy.PreviousController}: " +
+                     "se descarta");
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>El juego está cambiando de sala (desde que empieza hasta que la nueva está lista).</summary>
@@ -3013,9 +3048,13 @@ internal sealed class EnemySync {
             return;
         }
 
-        enemy.Handover ??= new HandoverFsm[count];
-        if (enemy.Handover.Length != count) {
+        // Uno nuevo (su primer mensaje u otro remitente) empieza de cero: si no, se mezclaba con lo que quedaba del
+        // anterior y valía como completo antes de llegar entero
+        if (enemy.Handover == null || enemy.Handover.Length != count || index == 0 || from.Id != enemy.HandoverFrom) {
             enemy.Handover = new HandoverFsm[count];
+            enemy.HandoverReady = false;
+            enemy.HandoverFrom = from.Id;
+            enemy.HandoverAt = Time.unscaledTime;
         }
 
         enemy.Handover[index] = new HandoverFsm {
