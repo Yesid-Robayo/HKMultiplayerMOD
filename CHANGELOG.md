@@ -7,6 +7,24 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.28.0
+
+Partidas de 3 y 4 jugadores, probadas con cuatro copias del juego a la vez.
+
+- **Jefes**: un PC que solo miraba ya no retoma un jefe con un estado viejo (volvía a un ataque o fase anterior).
+- **Ascensores, Coliseo y Señores Mantis**: cuando dos jugadores los usan a la vez, todos los PCs acaban de acuerdo
+  en quién los mueve (antes se paraban para un tercero).
+- **Presentaciones de jefe**: con dos a la vez, el caballero sigue quieto hasta que acaban las dos.
+- **Personajes de misión**: si el cambio lo hace alguien en otra sala, el personaje se vuelve a comprobar.
+- **Caídos**: un caído ya no se queda siguiendo a alguien que está en un sueño, una cinemática o Godhome.
+- **Bancos**: cuatro en el mismo banco, sin meterse en la pared.
+- **Revivir**: con dos reviviendo a la vez, el aviso ya no parpadea y quien termina segundo recupera el alma.
+- **Mapa**: cada compañero con su color y su nombre.
+- **Dificultad**: la vida extra de enemigos y jefes crece con cada compañero en la sala (1,5× con dos jugadores es 2×
+  con tres y 2,5× con cuatro).
+- **"Ir con"**: varios que van a la vez con el mismo compañero aparecen en sitios distintos.
+- Un jugador nuevo ya no hereda lo que controlaba otro que se fue, y el host ya no pierde datos cuando reenvía mucho.
+
 ## 0.27.0
 
 - **Los jefes ya no cortan su ataque al cambiar de jugador.** Cada jefe lo mueve el PC del jugador más cercano, y

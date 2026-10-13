@@ -579,8 +579,8 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 Decisiones aprobadas en [Decisiones de M5](#decisiones-de-m5). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
-mensajes nuevos van del 73 al 110 (el 98 y el 108 son de `EnemySync`, el 104, el 105 y el 107 de `HazardSync`, el 106
-de `StagTogether` y el 109 y el 110 de `SceneObjectSync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
+mensajes nuevos van del 73 al 111 (el 98 y el 108 son de `EnemySync`, el 104, el 105 y el 107 de `HazardSync`, el 106
+de `StagTogether`, el 109 y el 110 de `SceneObjectSync` y el 111 de `Revive`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
 juego (16:9; con otra proporción el juego deja franjas) y escala con su alto como el HUD del juego; las piezas se crean
 una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
 
@@ -851,6 +851,47 @@ la revisión, con cada fallo, su arreglo y cómo se probó, estaba en `docs/revi
   desde el menú), `toggles` (objetos que el juego enciende o apaga según un dato), `moveenemy` (llevar un enemigo a un
   punto), `moveobj` (llevar un objeto a un punto) y `enemytrace <segundos> <nombre>` (posición, si se ve y estado
   de sus FSM cada 0,1 s con la hora del reloj, para comparar los dos PCs momento a momento). `sdlist` marca lo semipersistente.
+
+### Cambios para 3 y 4 jugadores (0.28.0)
+
+Salieron de una revisión del código pensando en 3 o 4 jugadores (casi todo se había probado con 2) y se probaron con 4
+copias a la vez (`setup_group` en `tools/routes/lib.sh`: el host y hasta tres invitados en la misma partida).
+
+- **Traspaso de enemigo viejo** (`EnemySync.HandoverUsable`): el traspaso va a toda la sala y un PC que solo miraba lo
+  guardaba; si mucho después pasaba a mover el enemigo (el dueño nunca recibe sus propios cambios, así que no se le
+  borraba), lo tomaba con aquel estado y el jefe volvía a un ataque o una fase anterior. Ahora apunta quién lo envió
+  y cuándo: solo vale si tiene menos de 5 s y lo envió quien lo movía antes según este PC (o alguien que ya salió de la
+  sala). Un traspaso nuevo (su primer mensaje u otro remitente) empieza de cero en vez de mezclarse con el anterior.
+- **Reclamaciones de objetos** (`FsmStateSync.OnClaim`): la reclamación lleva quién creía el que la hace que
+  controlaba el objeto. Si ya conocía la anterior, va después y gana ella en todos los PCs; si no, se cruzaron y gana
+  el número menor, también en un tercero que solo las recibe (apunta la hora al aceptar la de otro). Antes el desempate
+  solo valía en los dos que reclamaban: un tercero se quedaba con la última que le llegaba, y quien reclamaba justo
+  después de recibir otra se quedaba con el control solo en su PC.
+- **Presentaciones de jefe** (`BossPresentation`): un conjunto de los PCs que tienen quieto al caballero, no uno solo;
+  se suelta al quedar vacío.
+- **Personajes de misión** (`QuestNpcSync`, `SharedProgress`): el cambio del mundo lleva quién lo hizo (`Origin`, lo
+  pone el host al reenviarlo). El personaje se queda sin volver a comprobarse solo si quien lo cambió está en la sala;
+  antes bastaba con que hubiera cualquier otro.
+- **Caído que sigue a otro** (`Revive.FindStanding`, `RetargetUnfollowable`): prefiere a quien está en una sala que se
+  puede seguir (no un sueño, una cinemática, Godhome ni el ciervo, salvo la sala del cuerpo) y, entre esos, en la sala
+  del cuerpo. El host mira cada segundo si el seguido dejó de poder seguirse y pasa el caído a otro en pie si lo hay.
+- **Banco para 4** (`PlayerSync.BenchSpread`): se mira la pared a cada lado del banco; si no caben con la separación
+  normal (1,1) se juntan (hasta 0,4) y si el banco está en un rincón se corren hacia el lado libre.
+- **Dos reviviendo a la vez** (`Revive.OnProgress`, mensaje 111 `ReviveDenied`): "X te está reviviendo" se queda con el
+  que ya se mostraba mientras siga (antes parpadeaba entre los dos). Si los dos terminan casi a la vez, el host rechaza
+  la segunda petición y se lo dice a ese jugador, que recupera el alma.
+- **Mapa** (`PartnerMap`): cada compañero con su color por número de jugador (azul, verde, amarillo, morado; rojo si
+  está caído) y su nombre encima, con una copia de un texto del propio mapa (un `TextMesh` no se veía).
+- **Dificultad** (`Difficulty.Multiplier`): la vida extra elegida es la de un compañero; cada compañero más en pie en la
+  sala suma lo mismo otra vez (1,5× con dos jugadores es 2× con tres y 2,5× con cuatro).
+- **"Ir con"** (`PartnerTravel`): cuatro sitios junto al compañero (a un paso y a dos de cada lado) y cada número de
+  jugador empieza por uno distinto; se salta un sitio en el que ya hay otro jugador dibujado.
+- **Números reutilizados**: el servidor da el número libre más bajo. Al irse un jugador, lo que controlaba en
+  `FsmStateSync`, los enemigos que movía (y su traspaso guardado) y su bloqueo de presentación se sueltan en todos los
+  PCs; antes uno nuevo con su número los heredaba.
+- **Red** (`NetConnection`): el host reenvía a cada invitado lo de todos los demás. El tope de mensajes no fiables por
+  conexión y tick pasa de 256 mensajes y 8 KB a 768 y 24 KB, y lo que aun así no cabe queda en el registro ("No cabe en
+  el tick un mensaje no fiable").
 
 ## Código del juego
 
@@ -1156,6 +1197,18 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   salir cuando llega alguien: la copia va como mucho 0,7 unidades por detrás y se ve o no igual que el original (salvo
   los 0,1 s del retraso de dibujo al aparecer y al enterrarse); el control pasa a quien se acerca a uno dormido.
 
+- **0.28.0** (13 oct 2026, 4 copias a la vez: J host, K, L y M invitados): Hornet pasa de K a L con J mirando y luego
+  a J: J descarta el traspaso viejo ("traspaso de hace 9,8 s, se descarta") y sigue con el nuevo. Reclamaciones de
+  `Break Floor 1` seguidas (sin retraso) y cruzadas (3 s de retraso): los cuatro con el mismo controlador. Dos
+  presentaciones a la vez (`presentlock`): J quieto por {2,3}, luego por {3}, y suelto al acabar la segunda. Un dato
+  de misión cambiado por L en otra sala se comprueba en J; cambiado por K en la sala de J, se queda. K cae siguiendo a
+  L; L entra en Godhome y el host pasa a K a seguir a J. J y M reviven a K a la vez (M con 1,5 s de retraso): K ve a J
+  todo el rato, a M solo al acabar J, y a M se le devuelven 33 de alma. Mapa en Crossroads_01: tres brújulas de colores
+  con su nombre. Cuatro en el banco de Bocasucia, a 1,1 uno del otro. Vida extra 2× con tres en pie: un golpe de 12 a
+  Hornet quita 4 (3×). Tres van a la vez con el host: quedan en tres sitios distintos. M se va y vuelve con el mismo
+  número: no hereda la reja que controlaba. Ningún mensaje no fiable perdido en el host. Repaso con 2 (J y K): los
+  cambios de Hornet (8 en 90 s, al principio de un movimiento) y revivir.
+
 ## Pendientes
 
 Sin probar:
@@ -1178,44 +1231,14 @@ Sin probar:
   pudo ser el `DISABLE` de los cambios de quién mueve al jefe, arreglado en 0.20.3); la revisita del Núcleo.
 - Solo en una sesión real de dos PCs: instalar desde el zip en un juego sin mods y jugar por internet.
 
-Con 3 o 4 jugadores (revisión del código del 12/10/2026, sin probar en el juego ni arreglar; casi todo se ha probado
-con 2):
-- **Alta.** Un PC que solo mira un traspaso de enemigo lo guarda y puede usarlo mucho después (`EnemySync`
-  `OnHandover`/`ApplyControl`). `EnemyHandover` va a toda la sala sin destino; el dueño de la sala nunca recibe sus
-  propios `EnemyControl`, así que en él no se borra. Si el dueño pasa un jefe de A a B y luego lo toma él, lo toma con
-  el estado del traspaso viejo (el jefe vuelve a un ataque o fase anterior). Arreglo: tomar el traspaso solo si viene
-  de `PreviousController`, o poner el destino en el mensaje.
-- **Media-alta.** Dos reclamaciones cruzadas en `FsmStateSync` (`OnClaim`/`AcceptFrom`): el desempate (gana el número
-  menor) solo vale en los dos que reclaman; un tercero se queda con la última que le llega y descarta los estados del
-  que de verdad lo controla: un ascensor, el Coliseo o los Señores Mantis parados para él. Arreglo: apuntar la hora
-  también al aceptar una de otro y, dentro de `ClaimCrossSeconds`, aceptar solo una de número menor.
-- **Media.**
-  - `BossPresentation` recuerda un solo PC que bloquea (`_locker`): con dos presentaciones a la vez, un tercero
-    recupera el control al soltar la primera. Arreglo: un conjunto de los que bloquean.
-  - `QuestNpcSync` supone que quien cambió el dato es "el compañero de la sala": si A y B están juntos y C lo cambia
-    en otra sala, el personaje no se vuelve a comprobar en A. Arreglo: que el host reenvíe quién hizo el cambio.
-  - A un caído se le puede asignar como seguido alguien en un sueño, una cinemática o el ciervo (`Revive.FindStanding`
-    solo descarta caídos), y no se le cambia hasta que ese cae o se va. Arreglo: preferir a quien está en pie en una
-    sala que se pueda seguir y volver a elegir cuando cambie su estado.
-  - Cuatro en el mismo banco: los de los extremos quedan a 1,65 del centro, sin mirar si hay pared
-    (`PlayerSync.ShareBench`).
-- **Baja.**
-  - **Revivir:** dos jugadores reviviendo a la vez hacen parpadear "X te está reviviendo" (un solo `_revivedBy`). Si
-    acaban casi a la vez, el segundo pierde su alma.
-  - **Mapa:** todos los compañeros salen con la misma brújula y sin nombre.
-  - **Dificultad:** la vida extra de los jefes es la misma con 2 que con 4 jugadores.
-  - **"Ir con":** dos jugadores que van al mismo compañero aparecen uno encima del otro.
-  - **Ids:** un jugador nuevo con el número de otro que se fue puede heredar el control de un objeto de
-    `FsmStateSync` (sin comprobar).
-  - **Red:** con 4 jugadores, el tope de datos no fiables por paquete del host se alcanza antes en salas con muchos
-    enemigos (sin comprobar).
-- Revisado y bien con 3 o 4: el reenvío del host por salas, el reparto de enemigos (el más cercano entre todos), la
-  espera de los jefes y de los diálogos, varios caídos a la vez, los votos de las cinemáticas, "Ir con", el HUD (3
-  compañeros), las skins, los guardados de los invitados y la luz de cada compañero en las salas oscuras.
+Con 3 o 4 jugadores: lo de la revisión del 12/10/2026 está arreglado y probado con 4 copias (ver "Cambios para 3 y 4
+jugadores"). Sin probar: el banco pegado a una pared (no se encontró uno con una puerta segura para el modo de prueba)
+y todo con 3 o 4 PCs reales.
 
 Limitaciones conocidas:
 - El jefe ataca al caballero del PC que lo mueve, y lo mueve el jugador más cercano: cambia como mucho cada 8 s, y
   desde 0.27.0 solo entre dos ataques (ver "Enemigos y objetos de sala"). Es lo que hace que ataque a los dos. Un jefe
-  sin estados de reposo en su lógica, o que no reposa en 4 s, sigue cambiando a mitad de un ataque.
+  sin estados de reposo en su lógica, o que no reposa en 4 s (Hornet a veces encadena esquivas y ataques sin pasar por
+  `Idle`), sigue cambiando a mitad de un ataque.
 - La marioneta se dibuja unas centésimas en el pasado (para moverse suave): en lo que cae rápido se nota un poco.
 - Los nombres fijos de los menús del mod cambian de idioma al reiniciar el juego.

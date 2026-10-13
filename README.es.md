@@ -4,7 +4,7 @@
 
 **Mod cooperativo para Hollow Knight: juega el mundo entero con tus amigos, en red local o por internet.**
 
-![Versión](https://img.shields.io/badge/versión-0.27.0-7fb2ff)
+![Versión](https://img.shields.io/badge/versión-0.28.0-7fb2ff)
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
@@ -221,13 +221,13 @@ automáticas que recorren el mundo comprobando que los dos ven lo mismo.
 - De 0.22.0: el icono del compañero dentro de salas que no salen en el mapa (tiendas).
 - El vapor naranja de la muerte del Falso Caballero (arreglado sin volver a probarlo).
 - Cloth y Menderbug, la entrada a la Radiancia por el camino del juego y la vuelta de las cinemáticas de los Panteones.
-- Jugar 3 o 4: una revisión del código encontró casos que solo pasan con tres o más (un jefe que vuelve a un ataque
-  anterior, un ascensor que se para para un tercero, cuatro en el mismo banco). Están apuntados como pendientes.
+- Jugar 3 o 4: los casos que solo pasan con tres o más se arreglaron en la 0.28.0 y se probaron con cuatro copias del
+  juego en un PC, pero aún no entre PCs reales.
 
 Limitaciones conocidas:
 
-- El jefe ataca al jugador cuyo PC lo mueve, que es el más cercano. Cada cambio de PC (como mucho cada 8 s) corta su
-  ataque, y por eso ataca a los dos.
+- El jefe ataca al jugador cuyo PC lo mueve, que es el más cercano, y por eso ataca a todos. Cambia de PC como mucho
+  cada 8 s y, desde la 0.27.0, solo entre dos ataques (o tras 4 s sin pausa).
 - El compañero y los enemigos que mueve otro PC se dibujan unas centésimas en el pasado, para que se muevan suave. En
   lo que cae muy rápido se nota un poco.
 
@@ -306,6 +306,9 @@ al momento sin poder cambiarlos.
 | Regalar geo · Permitir ir con un compañero | Sí · No | Sí |
 | Saltar cinemáticas | Votación · Cualquiera | Votación |
 | Viajar juntos en ciervo | Sí · No | Sí |
+
+La vida de los jefes y de los enemigos es la vida extra con un compañero: cada compañero más en pie en la sala suma lo
+mismo otra vez (1,5× es 2× con tres jugadores y 2,5× con cuatro).
 
 ---
 

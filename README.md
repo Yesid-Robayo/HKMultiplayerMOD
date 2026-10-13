@@ -4,7 +4,7 @@
 
 **A co-op mod for Hollow Knight: play the whole world with your friends, on your local network or over the internet.**
 
-![Version](https://img.shields.io/badge/version-0.27.0-7fb2ff)
+![Version](https://img.shields.io/badge/version-0.28.0-7fb2ff)
 ![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
@@ -221,14 +221,13 @@ through the world checking that both players see the same thing.
 - From 0.22.0: a partner's map icon inside rooms that are not on the map (shops).
 - The orange steam of the False Knight's death (fixed without retesting).
 - Cloth and Menderbug, entering the Radiance through the game's normal path, and returning from the Godhome cutscenes.
-- Playing with 3 or 4 players: a code review found some cases that only happen with three or more (a boss jumping back
-  to an earlier attack, an elevator that stops for a third player, four people on one bench). They are listed as
-  pending.
+- Playing with 3 or 4 players: the cases that only happen with three or more were fixed in 0.28.0 and tested with four
+  copies of the game on one PC, but not yet between real PCs.
 
 Known limitations:
 
-- A boss attacks the player whose PC runs it, which is the nearest one. Each change of PC (at most every 8 s) cuts its
-  current attack; that's what makes it attack both players.
+- A boss attacks the player whose PC runs it, which is the nearest one; that's what makes it attack everyone. It
+  changes PC at most every 8 s and, since 0.27.0, only between two attacks (or after 4 s without a pause).
 - Your partner and the enemies run by another PC are drawn a few hundredths of a second in the past so they move
   smoothly. Very fast falling objects show it a little.
 
@@ -309,6 +308,9 @@ away without being able to change them.
 | Gift geo · Allow going to a partner | Yes · No | Yes |
 | Skip cutscenes | Vote · Anyone | Vote |
 | Ride the stag together | Yes · No | Yes |
+
+The boss and enemy health is the extra health with one partner: each additional partner standing in the room adds the
+same again (1.5× is 2× with three players and 2.5× with four).
 
 ---
 
