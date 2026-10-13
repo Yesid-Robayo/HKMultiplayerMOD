@@ -824,12 +824,24 @@ la revisión, con cada fallo, su arreglo y cómo se probó, estaba en `docs/revi
   guardar el mod ni con el guardado del propio juego (`OnGuestSaving`): los amuletos atados dejan `equippedCharms` vacío.
 - **Encuentros con diálogo** (`FsmStateSync`): si quien controla el encuentro cae a mitad del diálogo, su diálogo cuenta
   como leído. Antes el encuentro lo esperaba para siempre y el compañero se quedaba sin control ante un cuadro vacío.
+- **Personajes que el juego quita al cargar la sala** (`QuestNpcSync.RemovedAtLoad`): si la FSM de un personaje lo
+  destruye (`DestroySelf`, `DestroyObject`) en los 3 s siguientes a cargar la sala, o al volver a comprobarlo por un
+  cambio de otro PC, y su comprobación lee datos del mundo, se apaga en vez de destruirse. Si uno de esos datos cambia
+  en otro PC, se vuelve a encender y su FSM empieza de nuevo: Mr. Mushroom aparece en el otro PC sin volver a entrar
+  (antes, destruido, no había nada que volver a comprobar) y se va y vuelve las veces que haga falta.
+- **Invocadores creados de antemano** (`EnemySync`): el Rey Vengamosca del Salón de los Dioses crea sus 30
+  invocadores apagados al empezar (`PreSpawnGameObjects`) y los enciende en "GG Summon"
+  (`GetNextPreSpawnedGameObject`): eso se avisa como el `CreateObject` del mismo prefab de su FSM, que el otro PC ya
+  sabe crear. Lo que guarda apagado un invocador (`EnemySpawner.spawnedEnemy`, creado en su `Awake`) no se apunta como
+  enemigo de la sala: se sigue al soltarlo. Antes las mosquitas del Salón solo salían en el PC que movía al jefe, y al
+  arreglarlo salían repetidas (apuntadas dos veces y encendidas también en el otro PC).
 - **Órdenes de prueba nuevas**: `pdadd` (suma como el juego), `towall` (deslizarse por una pared), `fsmstates` (estado
   de todas las FSM de un nombre, sin límite), `givegeo`, `selected`, `uiselect` y `uicancel` (menús sin mando real),
   `transitionState` en `hero`, `pdget` con listas y estructuras (en JSON), `pdjson` (escribir un dato en JSON),
   `bossseq si|no` (simular un Panteón), `hitenemytype` (golpe de un tipo concreto), `langset` (cambiar el idioma como
   desde el menú), `toggles` (objetos que el juego enciende o apaga según un dato), `moveenemy` (llevar un enemigo a un
-  punto) y `moveobj` (llevar un objeto a un punto). `sdlist` marca lo semipersistente.
+  punto), `moveobj` (llevar un objeto a un punto) y `enemytrace <segundos> <nombre>` (posición, si se ve y estado
+  de sus FSM cada 0,1 s con la hora del reloj, para comparar los dos PCs momento a momento). `sdlist` marca lo semipersistente.
 
 ## Código del juego
 
@@ -1130,7 +1142,10 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   En `Deepnest_01b` (la caída desde arriba) el invitado entra en la zona de una máscara negra (`Inverse Remasker`,
   `remasker_inverse`): sus máscaras cambian y las del host se quedan como estaban. Antes la cadena se copiaba al host
   ("paso de la cadena de Invitado (Fade Out → Fade In)") y a quien estaba lejos se le tapaba la vista hasta que el
-  compañero volvía. Los Cavasuelos (`Baby Centipede`) de `Deepnest_16`, despiertos, van por el mismo sitio en los dos.
+  compañero volvía. Los Cavasuelos (`Baby Centipede`) de `Deepnest_16`, despiertos, van por el mismo sitio en los dos. Vuelto a
+  mirar con `enemytrace` en los dos PCs (12/10/2026), luchando, al enterrarse, al elegir su punto nuevo y al volver a
+  salir cuando llega alguien: la copia va como mucho 0,7 unidades por detrás y se ve o no igual que el original (salvo
+  los 0,1 s del retraso de dibujo al aparecer y al enterrarse); el control pasa a quien se acerca a uno dormido.
 
 ## Pendientes
 
@@ -1155,8 +1170,6 @@ Sin probar:
 - Solo en una sesión real de dos PCs: instalar desde el zip en un juego sin mods y jugar por internet.
 
 Limitaciones conocidas:
-- Si un dato cambiado en otro PC hace aparecer a alguien que el juego destruyó al cargar la sala (otro sitio de
-  Mr. Mushroom), no aparece hasta volver a entrar.
 - El jefe ataca al caballero del PC que lo mueve, y lo mueve el jugador más cercano: cada cambio (como mucho cada 8 s)
   corta su ataque. Es lo que hace que ataque a los dos.
 - La marioneta se dibuja unas centésimas en el pasado (para moverse suave): en lo que cae rápido se nota un poco.

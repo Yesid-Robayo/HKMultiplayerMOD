@@ -1330,7 +1330,26 @@ internal sealed class EnemySync {
         _creatorIds = null;
     }
 
+    /// <summary>El enemigo que guarda apagado un invocador hasta soltarlo (campo privado de EnemySpawner).</summary>
+    private static readonly System.Reflection.FieldInfo SpawnerEnemyField =
+        typeof(EnemySpawner).GetField("spawnedEnemy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+    private readonly HashSet<GameObject> _spawnerHeld = new();
+
     private void ScanScenes() {
+        // Lo que guardan los invocadores (EnemySpawner crea su enemigo apagado en Awake; el Rey Vengamosca del Salón de
+        // los Dioses crea 30 al empezar) no es de la sala: se sigue al soltarlo, como lo que crea un enemigo. Si no, al
+        // soltarlo quedaba apuntado dos veces y en el otro PC se encendía también el suyo, en el mismo sitio que la copia
+        _spawnerHeld.Clear();
+        if (SpawnerEnemyField != null) {
+            foreach (var spawner in UnityEngine.Object.FindObjectsByType<EnemySpawner>(FindObjectsInactive.Include,
+                         FindObjectsSortMode.None)) {
+                if (SpawnerEnemyField.GetValue(spawner) is GameObject held && held != null) {
+                    _spawnerHeld.Add(held);
+                }
+            }
+        }
+
         for (var s = 0; s < UnitySceneManager.sceneCount; s++) {
             var unityScene = UnitySceneManager.GetSceneAt(s);
             if (!unityScene.isLoaded) {
@@ -1349,6 +1368,10 @@ internal sealed class EnemySync {
                     // repetido, el segundo invulnerable) es un solo enemigo: el primero. Si no, salían dos enemigos con
                     // el mismo objeto y en la marioneta cada uno lo ponía en su sitio (saltaba entre dos posiciones)
                     if (health.GetComponent<HealthManager>() != health) {
+                        continue;
+                    }
+
+                    if (_spawnerHeld.Contains(health.gameObject)) {
                         continue;
                     }
 
@@ -3622,6 +3645,41 @@ internal sealed class EnemySync {
     }
 
     /// <summary>El prefab que usa una acción de crear (o null).</summary>
+    /// <summary>
+    /// El CreateObject de la misma FSM que crea el mismo prefab que guardó <c>PreSpawnGameObjects</c> en el array que
+    /// usa esta acción; null si no hay.
+    /// </summary>
+    private static HutongGames.PlayMaker.Actions.CreateObject PreSpawnedCreator(GetNextPreSpawnedGameObject action) {
+        var fsm = action.Fsm;
+        var arrayName = action.storedArray?.Name;
+        if (fsm == null || string.IsNullOrEmpty(arrayName)) {
+            return null;
+        }
+
+        GameObject prefab = null;
+        foreach (var state in fsm.States) {
+            foreach (var other in state.Actions) {
+                if (other is PreSpawnGameObjects pre && pre.storeArray?.Name == arrayName) {
+                    prefab = pre.prefab?.Value;
+                }
+            }
+        }
+
+        if (prefab == null) {
+            return null;
+        }
+
+        foreach (var state in fsm.States) {
+            foreach (var other in state.Actions) {
+                if (other is HutongGames.PlayMaker.Actions.CreateObject create && create.gameObject?.Value == prefab) {
+                    return create;
+                }
+            }
+        }
+
+        return null;
+    }
+
     private static GameObject SpawnPrefab(HutongGames.PlayMaker.FsmStateAction action) => action switch {
         HutongGames.PlayMaker.Actions.SpawnObjectFromGlobalPool spawn => spawn.gameObject?.Value,
         HutongGames.PlayMaker.Actions.CreateObject create => create.gameObject?.Value,
@@ -5980,6 +6038,16 @@ internal sealed class EnemySync {
             orig(self);
             _active?.OnSpawned(self, self.storeObject?.Value, pooled: false);
             _active?.OnSceneCreated(self, self.storeObject?.Value);
+        };
+
+        // Los invocadores creados de antemano (el Rey Vengamosca del Salón de los Dioses: "Set GG" los crea apagados y
+        // "GG Summon" los enciende): se avisan como el CreateObject de ese prefab de la misma FSM ("Summon" fuera del
+        // Salón), que el otro PC ya sabe crear. Antes solo salían en el PC que movía al jefe
+        On.GetNextPreSpawnedGameObject.OnEnter += (orig, self) => {
+            orig(self);
+            if (_active != null && self.storeObject?.Value != null && PreSpawnedCreator(self) is { } create) {
+                _active.OnSpawned(create, self.storeObject.Value, pooled: false);
+            }
         };
 
         // Los avisos de fuera a la lógica de una marioneta (parada aquí) van al PC que la mueve

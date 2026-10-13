@@ -614,6 +614,11 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "enemytrace":
+                // enemytrace <segundos> <inicio del nombre>: cada 0,1 s, con la hora del reloj (ms UTC), posición, si se ve,
+                // estado de cada FSM y si es marioneta (para comparar los dos PCs momento a momento)
+                StartCoroutine(TraceEnemy(ParseFloat(args[1]), string.Join(" ", args.Skip(2))));
+                break;
             case "moveobj":
                 // moveobj <ruta del objeto>|<x>|<y>: lleva ese objeto a ese punto (p. ej. un recorte de la oscuridad)
                 var moveObjArgs = string.Join(" ", args.Skip(1)).Split('|');
@@ -1526,6 +1531,27 @@ internal sealed class TestDriver : MonoBehaviour {
     }
 
     /// <summary>Registra la sala activa, si se está cambiando de sala y la posición del caballero cada 0,2 s (orden scenetrace).</summary>
+    private IEnumerator TraceEnemy(float seconds, string name) {
+        var until = Time.unscaledTime + seconds;
+        while (Time.unscaledTime < until) {
+            foreach (var health in FindObjectsByType<HealthManager>(FindObjectsSortMode.None)) {
+                if (!health.name.StartsWith(name, StringComparison.Ordinal)) {
+                    continue;
+                }
+
+                var renderer = health.GetComponent<MeshRenderer>();
+                var states = string.Join(",", health.GetComponents<PlayMakerFSM>().Select(f => $"{f.FsmName}:{f.ActiveStateName}"));
+                var position = health.transform.position;
+                var animator = health.GetComponent<tk2dSpriteAnimator>();
+                Log.Info($"{Tag}traza {DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()} {health.name} " +
+                         $"pos=({position.x:0.00};{position.y:0.00}) ve={(renderer != null && renderer.enabled)} " +
+                         $"anim={animator?.CurrentClip?.name} {states}");
+            }
+
+            yield return new WaitForSecondsRealtime(0.1f);
+        }
+    }
+
     private static IEnumerator TraceScenes(float seconds) {
         var start = Time.unscaledTime;
         var next = 0f;

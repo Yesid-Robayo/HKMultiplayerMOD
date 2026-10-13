@@ -77,6 +77,20 @@ internal sealed class QuestNpcSync {
     /// </summary>
     private static readonly HashSet<MonoBehaviour> TurnedOffAtLoad = new();
 
+    /// <summary>
+    /// Personajes que su FSM destruyó al cargar la sala por un dato del mundo (Mr. Mushroom si no es su sitio): se apagan
+    /// en vez de destruirse, con los datos que leyó al empezar. Si uno cambia en otro PC, se vuelven a encender y su FSM
+    /// empieza de nuevo con el valor nuevo (si sigue sin ser su sitio, se vuelve a apagar). Antes no aparecían hasta volver
+    /// a entrar: destruido, no había nada que volver a comprobar.
+    /// </summary>
+    private static readonly List<(GameObject Object, string[] Fields)> RemovedAtLoad = new();
+
+    /// <summary>Lo que tarda como mucho una FSM en quitar a su personaje al cargar la sala (o al volver a encenderlo).</summary>
+    private const float RemovalWindow = 3f;
+
+    private static float _sceneLoadedAt = -100f;
+    private static readonly Dictionary<GameObject, float> RestoredAt = new();
+
     /// <summary>Campos de texto de cada tipo de acción que lee datos de la partida (se calculan una vez por tipo).</summary>
     private static readonly Dictionary<Type, FieldInfo[]> ReadFields = new();
 
@@ -157,8 +171,75 @@ internal sealed class QuestNpcSync {
             _beforeRemote[field] = before;
         }
 
-        if ((_startReaders.ContainsKey(field) || _toggles.ContainsKey(field)) && !_pending.Contains(field)) {
+        if ((_startReaders.ContainsKey(field) || _toggles.ContainsKey(field) || RemovedReads(field)) &&
+            !_pending.Contains(field)) {
             _pending.Add(field);
+        }
+    }
+
+    private static bool RemovedReads(string field) {
+        foreach (var removed in RemovedAtLoad) {
+            if (removed.Object != null && Array.IndexOf(removed.Fields, field) >= 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// La FSM de un personaje lo va a destruir: si es al cargar la sala (o al volver a encenderlo) y su comprobación lee
+    /// datos del mundo, se apaga en vez de destruirse (ver <see cref="RemovedAtLoad"/>). Devuelve si se apagó.
+    /// </summary>
+    private static bool KeepInsteadOfDestroy(PlayMakerFSM fsm, GameObject target) {
+        if (_active == null || fsm == null || target == null || target != fsm.gameObject || target.scene.buildIndex < 0) {
+            return false;
+        }
+
+        var now = Time.unscaledTime;
+        var justStarted = now - _sceneLoadedAt < RemovalWindow ||
+                          RestoredAt.TryGetValue(target, out var restoredAt) && now - restoredAt < RemovalWindow;
+        if (!justStarted || !IsNpc(fsm)) {
+            return false;
+        }
+
+        var reads = new List<string>();
+        ReadStart(fsm, reads);
+        reads.RemoveAll(CharacterData.IsCharacterField);
+        if (reads.Count == 0) {
+            return false;
+        }
+
+        target.SetActive(false);
+        RemovedAtLoad.Add((target, reads.ToArray()));
+        Log.Info($"{target.name}/{fsm.FsmName}: el juego lo quita al cargar la sala (lee {string.Join(", ", reads)}); " +
+                 "se apaga en vez de destruirse, por si cambia en otro PC");
+        return true;
+    }
+
+    /// <summary>Vuelven los personajes quitados al cargar la sala que leen ese dato: su FSM empieza de nuevo.</summary>
+    private static void RestoreRemoved(string field) {
+        for (var i = RemovedAtLoad.Count - 1; i >= 0; i--) {
+            var (target, fields) = RemovedAtLoad[i];
+            if (target == null) {
+                RemovedAtLoad.RemoveAt(i);
+                continue;
+            }
+
+            if (Array.IndexOf(fields, field) < 0) {
+                continue;
+            }
+
+            RemovedAtLoad.RemoveAt(i);
+            RestoredAt[target] = Time.unscaledTime;
+            Log.Info($"{target.name}: {field} cambió en otro PC, vuelve y se comprueba otra vez como al cargar la sala");
+            target.SetActive(true);
+            foreach (var fsm in target.GetComponents<PlayMakerFSM>()) {
+                // Las que no empiezan de nuevo solas al encenderse
+                if (fsm.Fsm != null && !fsm.Fsm.RestartOnEnable && fsm.Fsm.ActiveStateName != fsm.Fsm.StartState) {
+                    fsm.Fsm.SetState(fsm.Fsm.StartState);
+                }
+            }
         }
     }
 
@@ -167,6 +248,17 @@ internal sealed class QuestNpcSync {
         if (scene != _scene) {
             Clear();
             _scene = scene;
+            RemovedAtLoad.RemoveAll(removed => removed.Object == null);
+            var gone = new List<GameObject>();
+            foreach (var restored in RestoredAt.Keys) {
+                if (restored == null) {
+                    gone.Add(restored);
+                }
+            }
+
+            foreach (var restored in gone) {
+                RestoredAt.Remove(restored);
+            }
             if (scene.Length > 0) {
                 Scan();
             }
@@ -215,6 +307,7 @@ internal sealed class QuestNpcSync {
     /// </summary>
     private void Recheck(string field) {
         RecheckToggles(field);
+        RestoreRemoved(field);
         if (!_startReaders.TryGetValue(field, out var fsms)) {
             return;
         }
@@ -230,6 +323,8 @@ internal sealed class QuestNpcSync {
                 continue;
             }
 
+            // Si con el valor nuevo se quita, se apaga en vez de destruirse: puede volver con otro cambio
+            RestoredAt[fsm.gameObject] = Time.unscaledTime;
             var start = fsm.Fsm.StartState;
             Log.Info($"{fsm.gameObject.name}/{fsm.FsmName}: {field} cambió en otro PC, se comprueba otra vez como al " +
                      $"cargar la sala ({fsm.ActiveStateName} → {start})");
@@ -571,6 +666,27 @@ internal sealed class QuestNpcSync {
         }
 
         _hooked = true;
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded += (_, _) => _sceneLoadedAt = Time.unscaledTime;
+
+        // Un personaje que su FSM destruye al cargar la sala se apaga en vez de destruirse (ver RemovedAtLoad)
+        On.HutongGames.PlayMaker.Actions.DestroySelf.OnEnter += (orig, self) => {
+            if (self.Fsm?.Owner is PlayMakerFSM owner && KeepInsteadOfDestroy(owner, self.Owner)) {
+                self.Finish();
+                return;
+            }
+
+            orig(self);
+        };
+        On.HutongGames.PlayMaker.Actions.DestroyObject.OnEnter += (orig, self) => {
+            if (self.Fsm?.Owner is PlayMakerFSM owner && self.delay.Value <= 0f &&
+                KeepInsteadOfDestroy(owner, self.gameObject.Value)) {
+                self.Finish();
+                return;
+            }
+
+            orig(self);
+        };
+
         // En el registro: un personaje de misión que su comprobación quita, y por qué dato. En la partida real a uno le
         // salía Quirrel y al otro no, y el registro no decía nada
         On.HutongGames.PlayMaker.Actions.PlayerDataBoolTest.OnEnter += (orig, self) => {
