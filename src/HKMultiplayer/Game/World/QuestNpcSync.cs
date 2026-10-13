@@ -167,6 +167,10 @@ internal sealed class QuestNpcSync {
             _changedHere.Remove(field);
         }
 
+        if (TestMode) {
+            Log.Info($"[TEST] {field} lo cambió {origin} ({(_changedHere.Contains(field) ? "en esta sala: se queda" : "fuera: se comprueba")})");
+        }
+
         if (_conversationStart >= 0f && !_beforeRemote.ContainsKey(field)) {
             _beforeRemote[field] = before;
         }
@@ -398,6 +402,8 @@ internal sealed class QuestNpcSync {
     /// Si quien cambió el dato está en la misma sala que este jugador. Antes se miraba si había algún otro: con A y B
     /// juntos y C cambiándolo en otra sala, el personaje no se volvía a comprobar en A.
     /// </summary>
+    private static readonly bool TestMode = HKMultiplayer.Testing.TestDriver.IsEnabled();
+
     private bool InRoom(ushort playerId) {
         if (_session == null) {
             return false;

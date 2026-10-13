@@ -994,7 +994,12 @@ internal sealed class TestDriver : MonoBehaviour {
                 break;
             case "presentation":
                 // Presentación de jefe: si este PC avisó, quién tiene quieto al caballero local
-                Log.Info($"{Tag}presentación {runner.Presentations.Describe()}");
+                Log.Info($"{Tag}presentación {runner.Presentations.Describe()} " +
+                         $"control={(hero.controlReqlinquished ? "quitado" : "suyo")}");
+                break;
+            case "presentlock":
+                // presentlock on|off: avisa a la sala como si un jefe de este PC empezara (o acabara) su presentación
+                runner.Presentations.TestSend(args.Length > 1 && args[1] == "on");
                 break;
             case "cinematic":
                 // Reproductores de vídeo de la escena: si su vídeo va, dónde se dibuja y cómo está el fundido de la cámara

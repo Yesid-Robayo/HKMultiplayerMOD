@@ -294,6 +294,12 @@ internal sealed class BossPresentation {
         }
     }
 
+    /// <summary>Modo de prueba: avisa a la sala como si la lógica de un jefe de este PC empezara (o acabara) su presentación.</summary>
+    public void TestSend(bool locked) {
+        _sentLock = locked;
+        Send(locked);
+    }
+
     /// <summary>Resumen para el modo de prueba.</summary>
     public string Describe() => $"avisó={_sentLock} quieto por={(_lockers.Count == 0 ? "0" : string.Join(",", _lockers.Keys))} lógica propia={_localWantsLock}";
 }
