@@ -453,6 +453,7 @@ internal sealed class FsmStateSync {
         }
 
         Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: lo controla este PC (antes {item.Controller}; {reason})");
+        var previous = item.Controller;
         item.Controller = _session.LocalId;
         item.ClaimedAt = Time.unscaledTime;
         item.Positions.Clear();
@@ -460,6 +461,8 @@ internal sealed class FsmStateSync {
             var writer = _session.Begin(Claim);
             writer.WriteUShort(_sceneHash);
             writer.WriteUInt(item.Id);
+            // Quién creía este PC que lo controlaba: así los demás saben si esta reclamación se cruzó con otra
+            writer.WriteUShort(previous);
             _session.End();
         }
     }
@@ -467,15 +470,18 @@ internal sealed class FsmStateSync {
     private void OnClaim(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
+        var previous = reader.ReadUShort();
         if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var item)) {
             // Dos reclamaciones cruzadas (la automática del dueño de la sala con la de un invitado que lo usó, o dos al
             // irse el controlador): gana el número menor en todos los PCs. Antes cada uno se quedaba con la del otro, los
             // dos retenían y nadie enviaba (un ascensor o una oleada del Coliseo se quedaban parados). Vale también en un
             // tercero que solo las recibe: antes se quedaba con la última que le llegaba y descartaba los estados del que
-            // de verdad lo controlaba (el ascensor, el Coliseo o los Señores Mantis, parados solo para él)
+            // de verdad lo controlaba (el ascensor, el Coliseo o los Señores Mantis, parados solo para él). Solo es cruzada
+            // si quien reclama no sabía de la otra (creía que lo controlaba otro): si ya la conocía, va después y gana
+            // ella. Si no, el que la hizo después de recibir la otra se quedaba con el control solo en su PC
             var now = Time.unscaledTime;
-            if (item.Controller != 0 && item.Controller != from.Id && item.Controller < from.Id &&
-                now - item.ClaimedAt < ClaimCrossSeconds) {
+            if (previous != item.Controller && item.Controller != 0 && item.Controller != from.Id &&
+                item.Controller < from.Id && now - item.ClaimedAt < ClaimCrossSeconds) {
                 var keeper = item.Controller == _session.LocalId ? "este PC" : item.Controller.ToString();
                 Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: {from.Id} también lo reclamó; se queda {keeper}");
                 return;

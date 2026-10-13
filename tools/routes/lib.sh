@@ -200,6 +200,53 @@ setup_pair() {
   return 0
 }
 
+# Prepara un grupo de 3 o 4 jugadores: el host (primera letra) abre el mundo de la ruta y los demás se unen uno a uno.
+# Uso: setup_group <puerto> <host> <invitado>... (p. ej. setup_group 27130 J K L M). Mundo existente, como setup_pair n 0.
+setup_group() {
+  local port="$1" host="$2"; shift 2
+  local guests=("$@") inst since n=0
+  for inst in "$host" "${guests[@]}"; do
+    ensure_instance "$inst" || return 1
+    stop_instance "$inst"
+  done
+  sleep 2
+
+  launch_instance "$host"
+  for inst in "${guests[@]}"; do
+    sleep 4; launch_instance "$inst"
+  done
+
+  for inst in "$host" "${guests[@]}"; do
+    wait_log_since "$inst" 0 "Menú Multijugador añadido" 150 >/dev/null || { echo "grupo: el menú de $inst no cargó" >&2; return 1; }
+  done
+  sleep 3
+
+  if [ -n "$HK_LAG" ]; then
+    for inst in "$host" "${guests[@]}"; do send "$inst" "netsim $HK_LAG"; done
+  fi
+
+  send "$host" "hostworld $HK_ROUTE_WORLD Host $port $HK_ROUTE_CODE"
+  local deadline=$((SECONDS + 150))
+  until log_since "$host" 0 | grep -aq "Progreso compartido activo"; do
+    [ $SECONDS -ge $deadline ] && { echo "grupo: el host no entró en su mundo" >&2; return 1; }
+    send "$host" "skip"; sleep 3
+  done
+  sleep 4
+  wait_playable "$host" 120 || { echo "grupo: el host no llegó a una sala jugable" >&2; return 1; }
+
+  for inst in "${guests[@]}"; do
+    n=$((n + 1))
+    since=$(log_lines "$inst")
+    send "$inst" "join 127.0.0.1 $port $HK_ROUTE_CODE Invitado$n"
+    wait_log_since "$inst" "$since" "Progreso compartido activo" 150 >/dev/null || { echo "grupo: $inst no entró en el mundo" >&2; return 1; }
+    wait_playable "$inst" 90 || { echo "grupo: $inst no llegó a una sala jugable" >&2; return 1; }
+  done
+  sleep 4
+  return 0
+}
+
+stop_group() { local inst; for inst in "$@"; do stop_instance "$inst"; done; }
+
 # Salas que no son de juego (menús, cinemáticas)
 # (sin alternativa vacía: "^(|...)$" deja pasar cualquier sala con la regex de bash en Windows; la sala vacía se mira aparte)
 HK_NOT_PLAYABLE='^(Pre_Menu_Intro|Menu_Title|Quit_To_Menu|BetaEnd|Knight_Pickup|Opening_Sequence|Cinematic_.*|End_.*)$'
