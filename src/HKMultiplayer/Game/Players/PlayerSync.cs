@@ -340,9 +340,8 @@ internal sealed class PlayerSync {
         }
 
         _seatedIds.Sort();
-        var center = _seat.Value.x;
-        var first = -(_seatedIds.Count - 1) * 0.5f;
-        var x = center + (first + _seatedIds.IndexOf(_session.LocalId)) * BenchGap;
+        var (start, gap) = BenchSpread(_seat.Value, _seatedIds.Count);
+        var x = start + _seatedIds.IndexOf(_session.LocalId) * gap;
         if (Mathf.Abs(position.x - x) > 0.01f) {
             _hero.transform.position = new Vector3(x, position.y, position.z);
         }
@@ -353,10 +352,48 @@ internal sealed class PlayerSync {
             var (remote, state) = _sampled[i];
             var index = _seatedIds.IndexOf(remote.Player.Id);
             if (index >= 0) {
-                state.X = center + (first + index) * BenchGap;
+                state.X = start + index * gap;
                 _sampled[i] = (remote, state);
             }
         }
+    }
+
+    /// <summary>Hueco que se deja entre el caballero de un extremo del banco y la pared.</summary>
+    private const float BenchWallMargin = 0.45f;
+
+    /// <summary>Lo más juntos que se sientan si no caben (antes de eso se pisan un poco).</summary>
+    private const float MinBenchGap = 0.4f;
+
+    /// <summary>
+    /// Dónde se sienta el primero (el de número menor) y cuánto separa a cada uno, sin meter a nadie en la pared: con
+    /// cuatro, los de los extremos quedaban a 1,65 del centro aunque hubiera una pared más cerca (hay bancos en rincones).
+    /// Si no caben con la separación normal, se juntan; si el banco está pegado a una pared, se corren hacia el otro lado.
+    /// </summary>
+    private static (float Start, float Gap) BenchSpread(Vector2 seat, int count) {
+        var mask = LayerMask.GetMask("Terrain");
+        if (mask == 0) {
+            mask = 1 << 8;
+        }
+
+        var reach = (count - 1) * BenchGap + 1f;
+        var left = Physics2D.Raycast(seat, Vector2.left, reach, mask);
+        var right = Physics2D.Raycast(seat, Vector2.right, reach, mask);
+        // Una que empieza dentro de un collider (distancia 0) no es una pared al lado
+        var minX = (left.collider != null && left.distance > 0.05f ? left.point.x : seat.x - reach) + BenchWallMargin;
+        var maxX = (right.collider != null && right.distance > 0.05f ? right.point.x : seat.x + reach) - BenchWallMargin;
+        var gap = BenchGap;
+        if (count > 1 && maxX - minX < (count - 1) * gap) {
+            gap = Mathf.Max(MinBenchGap, (maxX - minX) / (count - 1));
+        }
+
+        var span = (count - 1) * gap;
+        var start = seat.x - span * 0.5f;
+        // Corrido hacia el lado libre si un extremo toca la pared (si no caben ni juntos, centrados)
+        if (span <= maxX - minX) {
+            start = Mathf.Clamp(start, minX, maxX - span);
+        }
+
+        return (start, gap);
     }
 
     /// <summary>
