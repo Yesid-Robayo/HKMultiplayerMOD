@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using HKMultiplayer.Game.World;
 using HKMultiplayer.Net;
 using HKMultiplayer.Session;
@@ -58,6 +59,7 @@ internal sealed class PartnerTravel {
     private readonly SceneTravel _travel = new();
 
     private GameSession _session;
+    private Players.PlayerSync _players;
     private PartyState _party;
     private Revive _revive;
     private DreamSync _dreams;
@@ -77,6 +79,9 @@ internal sealed class PartnerTravel {
     private bool _hasDestination;
 
     private string _destinationScene = string.Empty;
+
+    /// <summary>El compañero con el que se va (su sitio es el centro, no cuenta como ocupado).</summary>
+    private ushort _destinationId;
     private Vector3 _destination;
 
     // ---- Último suelo pisado por el caballero local (lo que se responde a quien quiere venir) ----
@@ -98,8 +103,10 @@ internal sealed class PartnerTravel {
         _onArrival = OnArrival;
     }
 
-    public void Attach(GameSession session, PartyState party, Revive revive, DreamSync dreams, SharedCutscenes cutscenes) {
+    public void Attach(GameSession session, PartyState party, Revive revive, DreamSync dreams, SharedCutscenes cutscenes,
+        Players.PlayerSync players) {
         _session = session;
+        _players = players;
         _party = party;
         _revive = revive;
         _dreams = dreams;
@@ -308,6 +315,7 @@ internal sealed class PartnerTravel {
 
     private void HandleResult(Refusal refusal, string scene, float x, float y) {
         var name = _wantedName;
+        _destinationId = _wanted;
         _wanted = 0;
         _sentAt = -1f;
         if (refusal != Refusal.None) {
@@ -346,7 +354,7 @@ internal sealed class PartnerTravel {
         var current = gm.sceneName ?? string.Empty;
         var target = new Vector3(_destination.x, _destination.y, hero.transform.position.z);
         if (current == _destinationScene) {
-            var placed = Place(hero, target);
+            var placed = Place(hero, target, Occupied());
             var cameras = GameCameras.instance;
             if (cameras != null && cameras.cameraController != null) {
                 cameras.cameraController.PositionToHero(true);
@@ -372,7 +380,7 @@ internal sealed class PartnerTravel {
             return target;
         }
 
-        var placed = Place(hero, target);
+        var placed = Place(hero, target, Occupied());
         Log.Info($"Junto a {_wantedName} en {_destinationScene} ({placed.x:0.0}, {placed.y:0.0})");
         Notice.Show(Lang.T($"Estás junto a {_wantedName}", $"You're next to {_wantedName}"), 3f);
         return placed;
@@ -382,8 +390,9 @@ internal sealed class PartnerTravel {
     /// Coloca al caballero junto al punto del compañero, quieto, mirándolo, y fija ahí la reaparición tras pinchos.
     /// Devuelve dónde quedó.
     /// </summary>
-    private static Vector3 Place(HeroController hero, Vector3 target) {
-        var side = BesideOffset(hero, target);
+    private Vector3 Place(HeroController hero, Vector3 target, List<Vector3> occupied) {
+        // Cada uno prefiere un lado según su número: dos que van a la vez al mismo compañero no acaban uno encima del otro
+        var side = BesideOffset(hero, target, occupied, _session != null && _session.LocalId % 2 == 0);
         var position = target + new Vector3(side, 0f, 0f);
         hero.transform.position = position;
         var body = hero.GetComponent<Rigidbody2D>();
@@ -406,7 +415,7 @@ internal sealed class PartnerTravel {
     /// Cuánto apartarse a un lado del compañero: a la izquierda o a la derecha si el caballero cabe (sin pared), hay suelo
     /// a la misma altura que el suyo y nada que haga daño; si no, en su mismo sitio (0).
     /// </summary>
-    private static float BesideOffset(HeroController hero, Vector3 target) {
+    private static float BesideOffset(HeroController hero, Vector3 target, List<Vector3> occupied, bool rightFirst) {
         var collider = hero.GetComponent<Collider2D>();
         if (collider == null) {
             return 0f;
@@ -426,8 +435,12 @@ internal sealed class PartnerTravel {
             return 0f;
         }
 
-        for (var i = 0; i < 2; i++) {
-            var side = i == 0 ? -SideStep : SideStep;
+        foreach (var step in rightFirst ? SidesRightFirst : SidesLeftFirst) {
+            var side = step * SideStep;
+            if (Taken(occupied, target, side)) {
+                continue;
+            }
+
             var center = (Vector2) target + offset + new Vector2(side, 0f);
             if (Physics2D.OverlapBox(center, size, 0f, mask) != null) {
                 continue;
@@ -443,6 +456,39 @@ internal sealed class PartnerTravel {
         }
 
         return 0f;
+    }
+
+    private static readonly float[] SidesLeftFirst = { -1f, 1f, -2f, 2f };
+    private static readonly float[] SidesRightFirst = { 1f, -1f, 2f, -2f };
+
+    /// <summary>Si ya hay otro jugador en ese sitio junto al compañero.</summary>
+    private static bool Taken(List<Vector3> occupied, Vector3 target, float side) {
+        foreach (var other in occupied) {
+            if (Mathf.Abs(other.x - (target.x + side)) < SideStep * 0.6f && Mathf.Abs(other.y - target.y) < 1.5f) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Dónde están los demás jugadores dibujados en la sala (menos el compañero, que ocupa el centro). Con 3 o más, dos
+    /// que iban al mismo compañero aparecían uno encima del otro.
+    /// </summary>
+    private List<Vector3> Occupied() {
+        var list = new List<Vector3>();
+        if (_session == null || _players == null) {
+            return list;
+        }
+
+        foreach (var player in _session.Players) {
+            if (!player.IsLocal && player.Id != _destinationId && _players.TryGetAvatarPosition(player.Id, out var position)) {
+                list.Add(position);
+            }
+        }
+
+        return list;
     }
 
     /// <summary>Si en ese hueco (y justo debajo, donde están los pinchos) hay algo que hace daño.</summary>

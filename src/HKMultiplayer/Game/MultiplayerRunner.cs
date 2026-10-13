@@ -706,7 +706,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Cutscenes.Attach(session, Revive);
         Presentations.Attach(session, Revive);
         Dreams.Attach(session, Revive);
-        Travel.Attach(session, Party, Revive, Dreams, Cutscenes);
+        Travel.Attach(session, Party, Revive, Dreams, Cutscenes, Players);
         Grimmchild.Attach(session);
         Stag.Attach(session);
         Scene.DropSeeds.Enabled = true;
