@@ -14,8 +14,15 @@ namespace HKMultiplayer.Game.Players;
 /// efectos del juego. Se crean una vez por caballero (al cargar otra partida el caballero es otro).
 /// </summary>
 internal sealed class HeroEffectTemplates {
-    /// <summary>Carpetas del caballero que se copian, en este orden.</summary>
-    private static readonly string[] Folders = { "Attacks", "Effects", "Spells", "Focus Effects", "Sounds", "Dream Effects" };
+    /// <summary>
+    /// Carpetas del caballero que se copian, en este orden. Además de las de efectos: el escudo de Carefree Melody
+    /// (<c>carefreeShield</c>), la muerte de verdad (<c>heroDeathPrefab</c>, sin su FSM, que hace la sombra y vacía el alma)
+    /// y el caparazón de Baldur Shell (su FSM se reproduce, ver <see cref="ActionFsmNames"/>).
+    /// </summary>
+    private static readonly string[] Folders = {
+        "Attacks", "Effects", "Spells", "Focus Effects", "Sounds", "Dream Effects", "Brumm_shield", "Hero Death",
+        "Charm Effects/Blocker Shield"
+    };
 
     /// <summary>
     /// FSM del caballero cuyos estados se reproducen en el compañero (el índice viaja en el evento). Con "hijo/FSM", la
@@ -24,7 +31,7 @@ internal sealed class HeroEffectTemplates {
     /// </summary>
     private static readonly string[] ActionFsmNames = {
         "Spell Control", "Nail Arts", "Superdash", "Dream Nail", "Charm Effects/Thorn Counter",
-        "Effects/Damage Effect/Knight Damage"
+        "Effects/Damage Effect/Knight Damage", "Charm Effects/Blocker Shield/Control"
     };
 
     /// <summary>
@@ -40,7 +47,9 @@ internal sealed class HeroEffectTemplates {
     private static readonly HashSet<string> VisualSpawns = new() {
         "White Flash R", "Slash Effect GhostDark1", "Slash Effect GhostDark2",
         // Al perder una máscara azul ("Blue Effects" de Knight Damage): gotas, estallido y destello azules
-        "Spatter Blue", "Splat Explode Blue", "Blue Flash"
+        "Spatter Blue", "Splat Explode Blue", "Blue Flash",
+        // Los trozos del caparazón de Baldur Shell al romperse (estado "Bits" de su FSM)
+        "Blocker Bit 1", "Blocker Bit 2", "Blocker Bit 3", "Blocker Bit 4", "Blocker Bit 5"
     };
 
     /// <summary>Tamaño con el que la FSM de un arte del aguijón pone su efecto (Great Slash y Dash Slash).</summary>
@@ -81,6 +90,9 @@ internal sealed class HeroEffectTemplates {
 
     /// <summary>Partículas del golpe recibido.</summary>
     public readonly GameObject[] HitParticles = new GameObject[2];
+
+    /// <summary>Sonidos de la muerte de verdad (estado "Start" de la FSM de <c>heroDeathPrefab</c>).</summary>
+    public readonly List<AudioClip> DeathSounds = new();
 
     /// <summary>
     /// Sprites de la animación "Wall Slide" del caballero (colección y número): mientras el avatar enseña uno, su copia
@@ -134,6 +146,15 @@ internal sealed class HeroEffectTemplates {
             HeroFsms[i] = owner != null ? FSMUtility.LocateFSM(owner, name.Substring(slash + 1)) : null;
         }
 
+        // El caparazón de Baldur Shell apunta a sus hijos con variables que su FSM rellena en "Init", tras esperar 0,25 s:
+        // si el caballero acaba de cargar, aún están vacías y ningún estado contaría como efecto
+        var blocker = System.Array.IndexOf(ActionFsmNames, "Charm Effects/Blocker Shield/Control");
+        if (HeroFsms[blocker] != null) {
+            FillChild(HeroFsms[blocker], "Shell Anim", "Shell Anim");
+            FillChild(HeroFsms[blocker], "Pusher", "Pusher");
+            FillChild(HeroFsms[blocker], "Crack", "Hit Crack");
+        }
+
         PrepareSlashes(hero);
         PrepareNailArts(heroTransform);
         try {
@@ -164,6 +185,19 @@ internal sealed class HeroEffectTemplates {
                 WallSlideCollection ??= frame.spriteCollection.spriteCollectionName;
                 if (frame.spriteCollection.spriteCollectionName == WallSlideCollection) {
                     WallSlideSprites.Add(frame.spriteId);
+                }
+            }
+        }
+
+        var death = hero.heroDeathPrefab != null ? FSMUtility.LocateFSM(hero.heroDeathPrefab, "Hero Death Anim") : null;
+        foreach (var state in death != null ? death.FsmStates : System.Array.Empty<FsmState>()) {
+            if (state.Name != "Start") {
+                continue;
+            }
+
+            foreach (var action in state.Actions) {
+                if (action is AudioPlayerOneShotSingle { audioClip.Value: AudioClip clip }) {
+                    DeathSounds.Add(clip);
                 }
             }
         }
@@ -200,6 +234,15 @@ internal sealed class HeroEffectTemplates {
 
         folder = node = 0;
         return false;
+    }
+
+    /// <summary>Pone en una variable de la FSM su hijo con ese nombre, si aún está vacía (como su FindChild).</summary>
+    private static void FillChild(PlayMakerFSM fsm, string variableName, string childName) {
+        var variable = fsm.FsmVariables.FindFsmGameObject(variableName);
+        var child = fsm.transform.Find(childName);
+        if (variable != null && variable.Value == null && child != null) {
+            variable.Value = child.gameObject;
+        }
     }
 
     public bool IsVisualSpawn(GameObject prefab) => prefab != null && VisualSpawns.Contains(prefab.name);

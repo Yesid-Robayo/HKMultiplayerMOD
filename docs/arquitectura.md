@@ -801,6 +801,19 @@ detalle allí):
   no va autenticado y su dirección se puede falsificar, y antes cada uno hacía que el host enviara 60 paquetes por
   segundo durante 10 s a esa dirección.
 - **HUD del compañero**: el texto de estado ("en <zona>") se vuelve a escribir al cambiar el idioma del juego.
+- **Efectos del compañero que faltaban** (J8): `HeroEffectTemplates` copia también `Brumm_shield` (escudo de Carefree
+  Melody), `Hero Death` (sin su FSM, que hace la sombra y vacía el alma) y `Charm Effects/Blocker Shield` (su FSM
+  `Control` se reproduce como las de acciones: el caparazón de Baldur Shell al concentrarse, su golpe, su rotura y sus
+  trozos). Sus variables se rellenan si la FSM aún no pasó por `Init`. Avisos nuevos de `PlayerEvent`: `CarefreeShield`
+  y `Death` (se envían al ver encenderse `carefreeShield` o `heroDeathPrefab`: el juego los enciende sin más) y
+  `HazardDeath` (pinchos o ácido: salen del pool y van como los demás objetos del caballero; `HazardDeathEffect` hace lo
+  que su FSM sin su lógica). El dash sombra enciende la copia de `Shadow Recharge` (su FSM espera la recarga). El aviso
+  de golpe lleva el bit 4 si no hubo retroceso (peligro o golpe mortal): sin él, el juego no saca las partículas del golpe.
+- **El compañero en salas oscuras**: la oscuridad es la `Vignette` del caballero local (un sprite negro con un agujero a
+  su alrededor, encima de todo); los recortes de la cámara de oscuridad solo sirven para la franja de las pantallas
+  ultrapanorámicas. Con `darknessLevel` ≥ 1, el avatar, su nombre y una copia de `heroLight` (sprite, color y tamaño
+  de la sala) se dibujan justo encima de la `Vignette`: el compañero se ve con su halo. Fuera de ellas vuelven a su
+  orden (si no, taparían lo que el escenario pone delante del caballero).
 - **Desinstalar**: la regla de "Steam cambió este archivo, se deja" es solo para los del juego; un mod puesto a mano
   en `Mods` antes de instalar se devuelve. La caché de skins se borra siempre.
 - **Panteones**: dentro de uno (`BossSequenceController.IsInSequence`) el invitado no envía su personaje, ni al
@@ -811,8 +824,8 @@ detalle allí):
   de todas las FSM de un nombre, sin límite), `givegeo`, `selected`, `uiselect` y `uicancel` (menús sin mando real),
   `transitionState` en `hero`, `pdget` con listas y estructuras (en JSON), `pdjson` (escribir un dato en JSON),
   `bossseq si|no` (simular un Panteón), `hitenemytype` (golpe de un tipo concreto), `langset` (cambiar el idioma como
-  desde el menú), `toggles` (objetos que el juego enciende o apaga según un dato) y `moveenemy` (llevar un enemigo a un
-  punto). `sdlist` marca lo semipersistente.
+  desde el menú), `toggles` (objetos que el juego enciende o apaga según un dato), `moveenemy` (llevar un enemigo a un
+  punto) y `moveobj` (llevar un objeto a un punto). `sdlist` marca lo semipersistente.
 
 ## Código del juego
 

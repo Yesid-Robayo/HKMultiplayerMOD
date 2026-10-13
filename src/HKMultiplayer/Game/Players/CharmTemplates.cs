@@ -22,8 +22,23 @@ internal sealed class CharmTemplates {
         Fluke = 3,
 
         /// <summary>Un efecto suelto del caballero que sale del pool (ráfagas del dash sombra, aterrizaje fuerte...).</summary>
-        Puff = 4
+        Puff = 4,
+
+        /// <summary>Muerte en pinchos (0) o en ácido (1): el caballero que sale volando o se hunde.</summary>
+        HazardDeath = 5
     }
+
+    /// <summary>
+    /// Muerte en pinchos o en ácido (<c>spikeDeathPrefab</c>, <c>acidDeathPrefab</c>): copia sin su FSM, que solo mueve el
+    /// cuerpo y suena; lo hace <see cref="HazardDeathEffect"/>.
+    /// </summary>
+    internal sealed class HazardDeathInfo {
+        public GameObject Template;
+        public readonly List<AudioClip> Sounds = new();
+    }
+
+    /// <summary>Muertes en pinchos (0) y en ácido (1); pueden faltar.</summary>
+    public readonly HazardDeathInfo[] HazardDeaths = new HazardDeathInfo[2];
 
     /// <summary>Un rayo de Grubberfly's Elegy (normal o de furia, en cada dirección).</summary>
     internal sealed class BeamInfo {
@@ -224,6 +239,33 @@ internal sealed class CharmTemplates {
 
         if (dung != null) {
             DungAura = Copy(dung.gameObject, holder);
+        }
+
+        // Sus sonidos son los de su FSM (el golpe y, en el ácido, la salpicadura)
+        GameObject[] hazards = { hero.spikeDeathPrefab, hero.acidDeathPrefab };
+        string[] hazardStates = { "Stab", "Effects" };
+        for (var i = 0; i < hazards.Length; i++) {
+            var prefab = hazards[i];
+            if (prefab == null || prefab.scene.IsValid() || _spawns.ContainsKey(prefab)) {
+                continue;
+            }
+
+            var info = new HazardDeathInfo { Template = Copy(prefab, holder) };
+            var control = prefab.GetComponent<PlayMakerFSM>();
+            foreach (var state in control != null ? control.FsmStates : System.Array.Empty<FsmState>()) {
+                if (state.Name != hazardStates[i]) {
+                    continue;
+                }
+
+                foreach (var action in state.Actions) {
+                    if (action is AudioPlayerOneShot { audioClips: { Length: > 0 } clips } && clips[0] != null) {
+                        info.Sounds.Add(clips[0]);
+                    }
+                }
+            }
+
+            HazardDeaths[i] = info;
+            _spawns[prefab] = Pack(SpawnKind.HazardDeath, i);
         }
 
         if (hero.runEffectPrefab != null) {

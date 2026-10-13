@@ -14,18 +14,18 @@ juego en `decomp/`, en tres pasadas:
 
 Lo que **no** cubre: cómo se siente cada combate jugando entre dos personas, y lo que solo pasa con dos PCs reales.
 
-**Estado en la 0.26.0:** 171 de 172 cerradas (arregladas o revisadas con su motivo). Queda abierta en parte J8 (efectos
-del caballero que no se ven en el compañero).
+**Estado en la 0.26.0:** las 172 cerradas (arregladas o revisadas con su motivo). J8, la última, se cerró con los efectos
+del caballero que faltaban en el compañero.
 
-**Pruebas (12/10/2026):** 92 entradas probadas con dos copias del juego o del instalador (línea **Probado en el
+**Pruebas (12/10/2026):** 93 entradas probadas con dos copias del juego o del instalador (línea **Probado en el
 juego** o **Probado**) y 18 más comprobadas con las rutas, NetTests o la prueba del instalador (línea **Comprobado**). Al
-probar salieron 15 fallos, ya arreglados: el tranvía de las estaciones, las crías que no pasaban de PC, el despertar
+probar salieron 16 fallos, ya arreglados: el tranvía de las estaciones, las crías que no pasaban de PC, el despertar
 pendiente en el traspaso, la espera de una arena con zona fina, el cuerpo del caído mirando al revés, la barra de vida
 del Falso Caballero, la marca "ya muerto" pegada en la marioneta, los tótems (no se comparten: semipersistentes), el mod
 puesto a mano que el desinstalador no devolvía, la espera de los jefes (ahora sin límite), el guardado del propio juego
 dentro de un Panteón (S5), el encuentro que esperaba el diálogo de un caído (F11), el HUD del compañero que no cambiaba
-de idioma (U4), *Novedades* tras un intento sin internet (I10) y los paquetes que el host enviaba a cualquier dirección
-que saludara (N5). Seis entradas tienen una línea **No se puede reproducir aquí** con el motivo. Lo que queda sin probar
+de idioma (U4), *Novedades* tras un intento sin internet (I10) los paquetes que el host enviaba a cualquier dirección
+que saludara (N5) y las partículas del golpe del compañero en los golpes de peligro y mortales (J8). Seis entradas tienen una línea **No se puede reproducir aquí** con el motivo. Lo que queda sin probar
 es interno (rendimiento, carreras dentro de un frame, protecciones contra fallos), necesita algo que no hay aquí (tres
 jugadores, el juego como administrador, otra versión del juego, una biblioteca de Steam con tildes) o son las entradas
 revisadas sin cambios.
@@ -373,7 +373,7 @@ Del volcado de FSM (`decomp/fsm`):
   Arreglo: poner `_ownSent = false` en un `finally` y reintentar más tarde.
   - **Arreglado en 0.26.0:** `KillOwnShade` espera (hasta un minuto) a tener caballero y sala y siempre vuelve a informar (`finally`).
   - **Probado en el juego (12/10/2026), en parte:** el invitado mata la sombra del host en otra sala y al host le vuelve el geo (777). El caso del dueño sin caballero no se puede preparar a mano.
-- [ ] **J8 · baja · sin comprobar.** Efectos del caballero que no se ven en el compañero (todo lo que es su animación
+- [x] **J8 · baja · sin comprobar.** Efectos del caballero que no se ven en el compañero (todo lo que es su animación
   sí llega). Del juego (`HeroController.cs`):
   - escudo de Carefree Melody (`carefreeShield`, 2321);
   - golpe bloqueado por Baldur Shell (`HeroCtrl-TookBlockerHit`, 2330-2336; la FSM `Blocker Shield` no está en
@@ -389,6 +389,8 @@ Del volcado de FSM (`decomp/fsm`):
   - su luz (`heroLight`, 708): en salas oscuras el compañero se pierde en la oscuridad si no está cerca.
   - **En parte en 0.26.0:** ya salen las chispas del aguijón contra la pared y el efecto del golpe de 2 o más (`Puff`; el doble va como bit 2 del aviso de golpe) y el polvo de la pared (sin red: mientras el avatar enseña un sprite de "Wall Slide"; sin probar, solo sale si el objeto está en las carpetas copiadas). Siguen sin salir: el escudo de Carefree Melody, el golpe parado por Baldur Shell, la recarga del dash sombra, las muertes y la luz (necesitan ver en el juego cómo están montados en el caballero).
   - **Probado en el juego (12/10/2026):** El polvo de la pared: el host detectó el deslizamiento del invitado y lo encendió (sin captura).
+  - **Arreglado en 0.26.0 (el resto):** se copian también `Brumm_shield` (escudo de Carefree Melody), `Hero Death` (sin su FSM) y `Charm Effects/Blocker Shield`, cuya FSM `Control` se reproduce como las de acciones. Avisos nuevos: `CarefreeShield` y `Death` (se envían al ver encenderse el escudo o `heroDeathPrefab`) y `HazardDeath` (pinchos o ácido, por el pool; `HazardDeathEffect` hace lo que su FSM: clavado 0,3 s y despedido hacia arriba, o hundirse frenando). El dash sombra enciende la copia de `Shadow Recharge`. La luz: en salas oscuras (`darknessLevel` ≥ 1) el avatar, su nombre y una copia de `heroLight` se dibujan encima de la `Vignette` del caballero local. Al probarlo salió además que el aviso de golpe sacaba las partículas del golpe también en los de peligro y en los mortales, que en el juego no hacen retroceso: ahora no.
+  - **Probado en el juego (12/10/2026):** con capturas en el host: el escudo de Carefree Melody (llamas rojas, igual que en el PC del invitado); el caparazón de Baldur Shell al concentrarse, su golpe y su rotura con los trozos; la recarga del dash sombra (la copia pasa a `Wait` y se apaga sola); las muertes en pinchos (sale despedido) y en ácido (burbujas y salpicadura), ya sin las partículas del golpe; la muerte de verdad en `GG_Atrium` (animación de muerte con la grieta); y en `Deepnest_01b` sin linterna, el compañero a 12 unidades se ve con su halo azul (antes, negro del todo).
 - [x] **J9 · baja · sin comprobar.** Caer a mitad de Crystal Heart, Desolate Dive o Cyclone Slash: `OnHeroDie` no corta
   nada ([Revive.cs:430-455](../src/HKMultiplayer/Game/Features/Revive.cs#L430)) y las FSM `Superdash` y
   `Spell Control` pueden seguir (sonido en bucle, velocidad) y retomarse al revivir. Probar; si pasa, mandar sus avisos

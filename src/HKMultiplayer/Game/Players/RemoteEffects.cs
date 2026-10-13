@@ -121,6 +121,9 @@ internal sealed class RemoteEffects {
 
     private static readonly string[] RunGrounds = { "Dust", "Grass", "Bone", "Wet" };
 
+    /// <summary>Muertes en pinchos (0) y en ácido (1), sueltas en el mundo; se crean la primera vez.</summary>
+    private readonly HazardDeathEffect[] _hazardDeaths = new HazardDeathEffect[2];
+
     /// <summary>Lo que tarda el polvo al correr en apagarse tras parar (la espera de su FSM antes de reciclarse).</summary>
     private const float RunFade = 2f;
 
@@ -339,6 +342,12 @@ internal sealed class RemoteEffects {
             Object.Destroy(_run);
         }
 
+        foreach (var hazardDeath in _hazardDeaths) {
+            if (hazardDeath != null) {
+                Object.Destroy(hazardDeath.gameObject);
+            }
+        }
+
         if (_root != null) {
             Object.Destroy(_root);
         }
@@ -387,7 +396,16 @@ internal sealed class RemoteEffects {
 
                     break;
                 case EffectKind.Hit:
-                    PlayHit((effect.A & 1) != 0, (effect.A & 2) != 0);
+                    PlayHit((effect.A & 1) != 0, (effect.A & 2) != 0, (effect.A & 4) != 0);
+                    break;
+                case EffectKind.HazardDeath:
+                    PlayHazardDeath(effect.A, new Vector2(effect.X, effect.Y), effect.Scale);
+                    break;
+                case EffectKind.CarefreeShield:
+                    PlayCarefreeShield();
+                    break;
+                case EffectKind.Death:
+                    PlayDeath();
                     break;
                 case EffectKind.Beam:
                     _charms?.SpawnBeam(effect.A, _avatar.Position, effect.Angle, effect.Scale);
@@ -759,6 +777,13 @@ internal sealed class RemoteEffects {
             Restart(Resolve((effect.A & EffectEvent.DashDown) != 0 ? hero.shadowdashDownBurstPrefab : hero.shadowdashBurstPrefab));
             Restart(Resolve(hero.shadowRingPrefab));
             EmitFor(Resolve(hero.shadowdashParticlesPrefab), hero.SHADOW_DASH_TIME);
+
+            // El destello de cuando se puede volver a usar: su FSM espera lo que tarda en recargarse
+            var recharge = Resolve(hero.shadowRechargePrefab);
+            if (recharge != null) {
+                recharge.SetActive(true);
+                SendEventTo(recharge, "RESET");
+            }
         } else {
             // La ráfaga va donde la puso el caballero (delante, o girada al hacer el dash hacia abajo)
             var burst = Resolve(hero.dashBurst != null ? hero.dashBurst.gameObject : null);
@@ -963,9 +988,12 @@ internal sealed class RemoteEffects {
         }
     }
 
-    /// <summary>Golpe recibido: partículas, sonido y destello del avatar (sin las partículas si se llevó una máscara azul).</summary>
-    private void PlayHit(bool blue, bool twoOrMore) {
-        if (!blue) {
+    /// <summary>
+    /// Golpe recibido: partículas, sonido y destello del avatar. Sin las partículas si se llevó una máscara azul o si no
+    /// hubo retroceso (el juego solo las saca ahí): un peligro (muere y reaparece) o un golpe mortal.
+    /// </summary>
+    private void PlayHit(bool blue, bool twoOrMore, bool noRecoil) {
+        if (!blue && !noRecoil) {
             foreach (var particles in _templates.HitParticles) {
                 Component<ParticleSystem>(Resolve(particles))?.Play();
             }
@@ -980,6 +1008,71 @@ internal sealed class RemoteEffects {
 
         PlaySource(_templates.HeroAudio?.takeHit);
         _avatar.FlashHit();
+    }
+
+    /// <summary>Muerte en pinchos o ácido: el cuerpo que sale despedido o se hunde, y sus sonidos.</summary>
+    private void PlayHazardDeath(int index, Vector2 position, float scaleX) {
+        var infos = _templates.Charms?.HazardDeaths;
+        if (infos == null || index >= infos.Length || infos[index] == null) {
+            return;
+        }
+
+        var info = infos[index];
+        var effect = _hazardDeaths[index];
+        if (effect == null) {
+            var copy = Object.Instantiate(info.Template, _loose.transform, false);
+            copy.name = info.Template.name;
+            copy.SetActive(false);
+            effect = _hazardDeaths[index] = copy.AddComponent<HazardDeathEffect>();
+            effect.Spikes = index == 0;
+        }
+
+        effect.Play(new Vector3(position.x, position.y, info.Template.transform.position.z), scaleX);
+        if (Audible()) {
+            foreach (var clip in info.Sounds) {
+                _audio.PlayOneShot(clip);
+            }
+        }
+    }
+
+    /// <summary>El escudo de Carefree Melody (se anima y se apaga solo, como en el caballero).</summary>
+    private void PlayCarefreeShield() {
+        var shield = Resolve(_templates.Hero.carefreeShield);
+        if (shield == null) {
+            return;
+        }
+
+        Restart(shield);
+        if (!Audible()) {
+            Component<AudioSource>(shield)?.Stop();
+        }
+    }
+
+    /// <summary>Muerte de verdad: la animación "Death" de <c>heroDeathPrefab</c> con sus sonidos (el avatar ya no se dibuja).</summary>
+    private void PlayDeath() {
+        var death = Resolve(_templates.Hero.heroDeathPrefab);
+        if (death == null) {
+            return;
+        }
+
+        Restart(death);
+        var renderer = Component<MeshRenderer>(death);
+        if (renderer != null) {
+            renderer.enabled = true;
+        }
+
+        var animator = Component<tk2dSpriteAnimator>(death);
+        var clip = animator != null ? animator.GetClipByName("Death") : null;
+        if (clip != null) {
+            animator.AnimationCompleted = HideWhenDone;
+            animator.Play(clip);
+        }
+
+        if (Audible()) {
+            foreach (var sound in _templates.DeathSounds) {
+                _audio.PlayOneShot(sound);
+            }
+        }
     }
 
     // =====================================================================================================

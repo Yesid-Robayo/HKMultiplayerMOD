@@ -391,6 +391,7 @@ internal sealed class PlayerSync {
             remote.Avatar ??= new RemoteAvatar(remote.Player.Name, _hero, Font);
             remote.Avatar.SetNameVisible(showNames);
             remote.Avatar.Apply(state, _sprites, z);
+            remote.Avatar.UpdateDarkness(_hero);
             _effects.UpdateRemote(remote.Player, remote.Avatar, remote.Buffer.RenderTick);
             if (state.Visible) {
                 _grass.Touch(remote.Player.Id, remote.Avatar.Position);

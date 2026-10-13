@@ -41,7 +41,16 @@ internal enum EffectKind : byte {
     Puff = 11,
 
     /// <summary>Polvo al correr: empieza (1) o para (0).</summary>
-    Run = 12
+    Run = 12,
+
+    /// <summary>Muerte en pinchos (0) o en ácido (1): dónde y hacia dónde miraba.</summary>
+    HazardDeath = 13,
+
+    /// <summary>El escudo de Carefree Melody paró un golpe.</summary>
+    CarefreeShield = 14,
+
+    /// <summary>Muerte de verdad (no caído: en un sueño o en el Panteón, o cuando cae el último).</summary>
+    Death = 15
 }
 
 /// <summary>Amuletos que cambian cómo se ve un efecto (viajan en cada evento, en un byte).</summary>
@@ -130,6 +139,7 @@ internal struct EffectEvent {
                 writer.WriteFloat(Scale);
                 break;
             case EffectKind.Puff:
+            case EffectKind.HazardDeath:
                 writer.WriteByte(A);
                 writer.WriteFloat(X);
                 writer.WriteFloat(Y);
@@ -190,6 +200,7 @@ internal struct EffectEvent {
                 Scale = reader.ReadFloat();
                 break;
             case EffectKind.Puff:
+            case EffectKind.HazardDeath:
                 A = reader.ReadByte();
                 X = reader.ReadFloat();
                 Y = reader.ReadFloat();
@@ -282,6 +293,11 @@ internal sealed class PlayerEffects {
 
     /// <summary>El polvo al correr del caballero local mientras lo lleva pegado (al soltarlo, paró de correr).</summary>
     private GameObject _runEffect;
+
+    /// <summary>Si el escudo de Carefree Melody y la muerte de verdad estaban encendidos el frame anterior.</summary>
+    private bool _shieldShown;
+
+    private bool _deathShown;
 
     private readonly GameObject[] _pendingObjects = new GameObject[PendingSize];
     private readonly CharmTemplates.SpawnKind[] _pendingKinds = new CharmTemplates.SpawnKind[PendingSize];
@@ -432,7 +448,21 @@ internal sealed class PlayerEffects {
             Send(new EffectEvent { Kind = EffectKind.Run, A = 0 });
         }
 
-        var stage =hero.artChargedEffect != null && hero.artChargedEffect.activeSelf ? (byte) 2 :
+        // El juego los enciende sin más (TakeDamage y Die): se envían al verlos encenderse
+        var shield = hero.carefreeShield != null && hero.carefreeShield.activeSelf;
+        if (shield && !_shieldShown) {
+            Send(new EffectEvent { Kind = EffectKind.CarefreeShield });
+        }
+
+        _shieldShown = shield;
+        var death = hero.heroDeathPrefab != null && hero.heroDeathPrefab.activeSelf;
+        if (death && !_deathShown) {
+            Send(new EffectEvent { Kind = EffectKind.Death });
+        }
+
+        _deathShown = death;
+
+        var stage = hero.artChargedEffect != null && hero.artChargedEffect.activeSelf ? (byte) 2 :
             hero.artChargeEffect != null && hero.artChargeEffect.activeSelf ? (byte) 1 : (byte) 0;
         if (stage == _chargeStage) {
             return;
@@ -578,6 +608,13 @@ internal sealed class PlayerEffects {
                     effect.Angle = transform.eulerAngles.z;
                     effect.Scale = transform.localScale.x;
                     break;
+                case CharmTemplates.SpawnKind.HazardDeath:
+                    // Su FSM le pone después la escala del caballero (en pinchos, al salir despedido)
+                    effect.Kind = EffectKind.HazardDeath;
+                    effect.X = position.x;
+                    effect.Y = position.y;
+                    effect.Scale = HeroController.instance != null ? HeroController.instance.transform.localScale.x : 1f;
+                    break;
                 case CharmTemplates.SpawnKind.Fluke:
                     effect.Kind = EffectKind.Fluke;
                     effect.X = position.x;
@@ -711,7 +748,7 @@ internal sealed class PlayerEffects {
             return $"{fsm.FsmName}/{fsm.FsmStates[effect.B].Name}";
         }
 
-        return effect.Kind is EffectKind.Beam or EffectKind.Cloud or EffectKind.Fluke or EffectKind.Puff
+        return effect.Kind is EffectKind.Beam or EffectKind.Cloud or EffectKind.Fluke or EffectKind.Puff or EffectKind.HazardDeath
             ? $"#{effect.A} ({effect.X:0.0},{effect.Y:0.0}) v=({effect.VX:0.0},{effect.VY:0.0}) escala={effect.Scale:0.00}"
             : string.Empty;
     }
@@ -814,8 +851,10 @@ internal sealed class PlayerEffects {
             var after = data != null ? data.health + data.healthBlue : 0;
             if (after < before && self == HeroController.instance) {
                 // Bit 1: se llevó una máscara azul (sin las partículas del golpe normal). Bit 2: fue de 2 o más (el juego
-                // crea además takeHitDoublePrefab; con la azul no, porque no hay efecto de daño)
-                var flags = (data.damagedBlue ? 1 : 0) | (before - after > 1 ? 2 : 0);
+                // crea además takeHitDoublePrefab; con la azul no, porque no hay efecto de daño). Bit 4: sin retroceso,
+                // que es lo que saca las partículas del golpe: de un peligro (pinchos, ácido, foso) o mortal (va a Die)
+                var flags = (data.damagedBlue ? 1 : 0) | (before - after > 1 ? 2 : 0) |
+                            (hazard > 1 || data.health <= 0 ? 4 : 0);
                 _active?.Send(new EffectEvent { Kind = EffectKind.Hit, A = (byte) flags });
             }
         };

@@ -22,6 +22,15 @@ internal sealed class RemoteAvatar {
 
     private bool _nameVisible = true;
 
+    private MeshRenderer _labelRenderer;
+
+    /// <summary>Halo del caballero (copia de su <c>heroLight</c>), solo en salas oscuras; se crea la primera vez.</summary>
+    private SpriteRenderer _light;
+
+    private bool _inDarkness;
+    private int _sortingLayer;
+    private int _sortingOrder;
+
     private tk2dSpriteCollectionData _collection;
     private int _spriteId = -1;
     private bool _facingRight;
@@ -69,6 +78,9 @@ internal sealed class RemoteAvatar {
             _renderer.sortingOrder = heroRenderer.sortingOrder;
         }
 
+        _sortingLayer = _renderer.sortingLayerID;
+        _sortingOrder = _renderer.sortingOrder;
+
         if (font != null) {
             var label = new GameObject("Nombre");
             _label = label;
@@ -83,6 +95,7 @@ internal sealed class RemoteAvatar {
             text.alignment = TextAlignment.Center;
             text.color = new Color(1f, 1f, 1f, 0.85f);
             var labelRenderer = label.GetComponent<MeshRenderer>();
+            _labelRenderer = labelRenderer;
             labelRenderer.sharedMaterial = font.material;
             if (heroRenderer != null) {
                 labelRenderer.sortingLayerID = heroRenderer.sortingLayerID;
@@ -152,6 +165,56 @@ internal sealed class RemoteAvatar {
         }
 
         _sprite.color = Color.Lerp(_normalColor, _invulnerableColor, _pulseTime / _pulseDuration);
+    }
+
+    /// <summary>
+    /// En una sala oscura, la oscuridad es la <c>Vignette</c> del caballero local: un sprite negro con un agujero a su
+    /// alrededor, dibujado encima de todo. Un compañero fuera de ese agujero no se veía. Allí se le dibuja encima de la
+    /// oscuridad con su halo (una copia de <c>heroLight</c>, con su color de la sala), como si llevara su propia luz. Fuera
+    /// de las salas oscuras vuelve a su orden de dibujo (si no, taparía lo que el escenario pone delante del caballero).
+    /// </summary>
+    public void UpdateDarkness(HeroController hero) {
+        var vignette = hero != null ? hero.vignette : null;
+        var scene = GameManager.instance != null ? GameManager.instance.sm : null;
+        var dark = vignette != null && vignette.enabled && vignette.gameObject.activeInHierarchy && scene != null &&
+                   scene.darknessLevel >= 1;
+        if (dark != _inDarkness) {
+            _inDarkness = dark;
+            var layer = dark ? vignette.sortingLayerID : _sortingLayer;
+            var order = dark ? vignette.sortingOrder + 2 : _sortingOrder;
+            _renderer.sortingLayerID = layer;
+            _renderer.sortingOrder = order;
+            if (_labelRenderer != null) {
+                _labelRenderer.sortingLayerID = layer;
+                _labelRenderer.sortingOrder = order + 10;
+            }
+        }
+
+        var heroLight = hero != null ? hero.heroLight : null;
+        if (!dark || heroLight == null) {
+            if (_light != null && _light.enabled) {
+                _light.enabled = false;
+            }
+
+            return;
+        }
+
+        if (_light == null) {
+            var lightObject = new GameObject("Luz");
+            lightObject.transform.SetParent(_root.transform, false);
+            _light = lightObject.AddComponent<SpriteRenderer>();
+        }
+
+        // El juego cambia su sprite, su color y su tamaño (al entrar en la sala, al recibir un golpe): se copian siempre
+        var lightTransform = _light.transform;
+        lightTransform.localPosition = heroLight.transform.localPosition;
+        lightTransform.localScale = heroLight.transform.localScale;
+        _light.sprite = heroLight.sprite;
+        _light.sharedMaterial = heroLight.sharedMaterial;
+        _light.color = heroLight.color;
+        _light.sortingLayerID = vignette.sortingLayerID;
+        _light.sortingOrder = vignette.sortingOrder + 1;
+        _light.enabled = _visible && heroLight.enabled;
     }
 
     /// <summary>Si lleva el aura de Defender's Crest encendida (sus efectos la dibujan).</summary>

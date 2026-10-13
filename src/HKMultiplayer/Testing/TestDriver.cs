@@ -614,6 +614,19 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "moveobj":
+                // moveobj <ruta del objeto>|<x>|<y>: lleva ese objeto a ese punto (p. ej. un recorte de la oscuridad)
+                var moveObjArgs = string.Join(" ", args.Skip(1)).Split('|');
+                var movedObj = GameObject.Find(moveObjArgs[0]);
+                if (movedObj == null) {
+                    Log.Warn($"{Tag}no existe '{moveObjArgs[0]}'");
+                } else {
+                    movedObj.transform.position = new Vector3(ParseFloat(moveObjArgs[1]), ParseFloat(moveObjArgs[2]),
+                        movedObj.transform.position.z);
+                    Log.Info($"{Tag}{movedObj.name} llevado a {movedObj.transform.position}");
+                }
+
+                break;
             case "moveenemy":
                 // moveenemy <inicio del nombre>|<x>|<y>: lleva ese enemigo (vivo y encendido) a ese punto, p. ej. bajo una liana
                 var moveArgs = string.Join(" ", args.Skip(1)).Split('|');
