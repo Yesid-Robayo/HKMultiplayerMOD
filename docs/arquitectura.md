@@ -770,8 +770,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
 
 ### Cambios de la revisión contra el juego (0.26.0)
 
-Lo que cambió al arreglar [review-backlog.md](review-backlog.md) y no está ya contado arriba (cada entrada tiene su
-detalle allí):
+Lo que cambió al revisar el mod contra el juego descompilado (12/10/2026) y no está ya contado arriba. La lista de
+la revisión, con cada fallo, su arreglo y cómo se probó, estaba en `docs/review-backlog.md`: se quitó al cerrarla
+(las 172 entradas) y sigue en el historial (`git show 6ea533d:docs/review-backlog.md`).
 
 - **Ids de sala** (`ScenePaths`): la huella de cada objeto sincronizado se apunta al cargar su sala (`sceneLoaded`,
   antes del `Start` de los objetos) y se usa siempre esa (`StableHash`): un enemigo de la raíz que se destruye o un
@@ -1132,9 +1133,6 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   compañero volvía. Los Cavasuelos (`Baby Centipede`) de `Deepnest_16`, despiertos, van por el mismo sitio en los dos.
 
 ## Pendientes
-
-Fallos y mejoras de la revisión contra el juego descompilado (12/10/2026), para ir arreglando:
-[review-backlog.md](review-backlog.md).
 
 Sin probar:
 - De 0.24.0, sin reproducir en las copias: los caballeros de musgo B y C de las arenas, que se quedaban quietos (no
