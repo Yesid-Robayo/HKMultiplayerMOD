@@ -31,8 +31,22 @@ internal sealed class PartnerMap {
     private const byte StateStanding = 1;
     private const byte StateDowned = 2;
 
-    private static readonly Color StandingColor = new(0.45f, 0.8f, 1f, 1f);
+    /// <summary>
+    /// Color de cada compañero en pie, por su número de jugador (el mismo en todos los PCs). Antes todos salían con la
+    /// misma brújula azul y sin nombre: con 3 o más no se sabía quién era quién.
+    /// </summary>
+    private static readonly Color[] StandingColors = {
+        new(0.45f, 0.8f, 1f, 1f), new(0.5f, 1f, 0.55f, 1f), new(1f, 0.85f, 0.35f, 1f), new(0.85f, 0.6f, 1f, 1f)
+    };
+
     private static readonly Color DownedColor = new(1f, 0.35f, 0.35f, 1f);
+
+    /// <summary>Tamaño y altura del nombre sobre la brújula (en las unidades del mapa).</summary>
+    private const float LabelCharacterSize = 0.035f;
+
+    private const float LabelHeight = 0.45f;
+
+    private Font _font;
 
     private static readonly FieldInfo SceneWidthField = PrivateField("sceneWidth");
     private static readonly FieldInfo SceneHeightField = PrivateField("sceneHeight");
@@ -46,6 +60,7 @@ internal sealed class PartnerMap {
         public float Y;
         public float ReceivedAt;
         public GameObject Icon;
+        public TextMesh Label;
 
         /// <summary>Estado con el que se tiñó el icono (se vuelve a teñir solo si cambia).</summary>
         public byte TintedState;
@@ -264,7 +279,8 @@ internal sealed class PartnerMap {
         var open = map != null && map.compassIcon != null && map.flamePins != null && map.flamePins.activeSelf &&
                    map.gameObject.activeInHierarchy && HostSettings.Current.ShowPartnerOnMap && HasCompass() &&
                    !HiddenZone(gm.GetCurrentMapZone());
-        foreach (var entry in _entries.Values) {
+        foreach (var pair in _entries) {
+            var entry = pair.Value;
             var position = Vector3.zero;
             var visible = open && entry.State != StateHidden && now - entry.ReceivedAt < StaleSeconds &&
                           TryGetIconPosition(map, entry, out position);
@@ -282,13 +298,22 @@ internal sealed class PartnerMap {
                     continue;
                 }
 
+                entry.Label = CreateLabel(entry.Icon);
                 entry.TintedState = StateHidden;
             }
 
             entry.Icon.transform.localPosition = position;
             if (entry.TintedState != entry.State) {
                 entry.TintedState = entry.State;
-                Tint(entry.Icon, entry.State == StateDowned ? DownedColor : StandingColor);
+                var color = entry.State == StateDowned ? DownedColor : StandingColors[(pair.Key - 1) % StandingColors.Length];
+                Tint(entry.Icon, color);
+                if (entry.Label != null) {
+                    entry.Label.color = color;
+                }
+            }
+
+            if (entry.Label != null && _session.TryGetPlayer(pair.Key, out var player) && entry.Label.text != player.Name) {
+                entry.Label.text = player.Name;
             }
 
             if (!entry.Icon.activeSelf) {
@@ -374,6 +399,48 @@ internal sealed class PartnerMap {
         }
     }
 
+    /// <summary>El nombre del compañero sobre su brújula, en la misma capa y por encima de ella.</summary>
+    private TextMesh CreateLabel(GameObject icon) {
+        try {
+            if (_font == null) {
+                _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                if (_font == null) {
+                    _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+                }
+            }
+
+            if (_font == null) {
+                return null;
+            }
+
+            var label = new GameObject("Nombre");
+            label.layer = icon.layer;
+            label.transform.SetParent(icon.transform, false);
+            // El nombre no gira ni escala con la brújula: va en su propio tamaño
+            var scale = icon.transform.lossyScale;
+            label.transform.localScale = new Vector3(scale.x != 0f ? 1f / scale.x : 1f, scale.y != 0f ? 1f / scale.y : 1f, 1f);
+            label.transform.localPosition = new Vector3(0f, scale.y != 0f ? LabelHeight / scale.y : LabelHeight, 0f);
+            var text = label.AddComponent<TextMesh>();
+            text.font = _font;
+            text.fontSize = 48;
+            text.characterSize = LabelCharacterSize;
+            text.anchor = TextAnchor.LowerCenter;
+            text.alignment = TextAlignment.Center;
+            var renderer = label.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = _font.material;
+            var iconRenderer = icon.GetComponentInChildren<Renderer>(true);
+            if (iconRenderer != null) {
+                renderer.sortingLayerID = iconRenderer.sortingLayerID;
+                renderer.sortingOrder = iconRenderer.sortingOrder + 1;
+            }
+
+            return text;
+        } catch (Exception e) {
+            Log.Warn($"No se pudo crear el nombre del compañero en el mapa: {e.Message}");
+            return null;
+        }
+    }
+
     private static void Tint(GameObject icon, Color color) {
         foreach (var renderer in icon.GetComponentsInChildren<SpriteRenderer>(true)) {
             renderer.color = color;
@@ -390,6 +457,7 @@ internal sealed class PartnerMap {
         }
 
         entry.Icon = null;
+        entry.Label = null;
     }
 
     private static FieldInfo PrivateField(string name) =>
