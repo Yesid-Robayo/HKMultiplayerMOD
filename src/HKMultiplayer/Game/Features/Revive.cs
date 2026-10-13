@@ -187,7 +187,7 @@ internal sealed class Revive {
     private ushort _requestTarget;
     private float _requestAt = -100f;
 
-    // Quién revive a quién (lo que llega de la sala): se muestra el que más lleva
+    // Quién revive a quién (lo que llega de la sala): se muestra uno solo (ver OnProgress)
     private ushort _revivedBy;
     private ushort _revivingTarget;
     private float _revivingProgress;
@@ -1724,23 +1724,38 @@ internal sealed class Revive {
             _revivers.Remove(from.Id);
         }
 
-        // El que más lleva (si empatan, el de número menor): así no salta de uno a otro
+        // Se queda el que ya se mostraba mientras siga reviviendo; si no, el que más lleva (si empatan, el de número
+        // menor). Con "el que más lleva" a secas también parpadeaba: los dos avanzan a la vez y se adelantaban por turnos
+        var shown = _revivedBy;
         _revivedBy = 0;
         _revivingAt = -100f;
-        foreach (var pair in _revivers) {
-            if (now - pair.Value.At >= BeingRevivedTimeout) {
-                continue;
-            }
+        if (shown != 0 && _revivers.TryGetValue(shown, out var current) && now - current.At < BeingRevivedTimeout) {
+            _revivedBy = shown;
+            _revivingTarget = current.Target;
+            _revivingProgress = current.Progress;
+            _revivingAt = current.At;
+        } else {
+            foreach (var pair in _revivers) {
+                if (now - pair.Value.At >= BeingRevivedTimeout) {
+                    continue;
+                }
 
-            if (_revivedBy == 0 || pair.Value.Progress > _revivingProgress ||
-                pair.Value.Progress == _revivingProgress && pair.Key < _revivedBy) {
-                _revivedBy = pair.Key;
-                _revivingTarget = pair.Value.Target;
-                _revivingProgress = pair.Value.Progress;
-                _revivingAt = pair.Value.At;
+                if (_revivedBy == 0 || pair.Value.Progress > _revivingProgress ||
+                    pair.Value.Progress == _revivingProgress && pair.Key < _revivedBy) {
+                    _revivedBy = pair.Key;
+                    _revivingTarget = pair.Value.Target;
+                    _revivingProgress = pair.Value.Progress;
+                    _revivingAt = pair.Value.At;
+                }
             }
         }
+
+        if (TestMode && _revivedBy != shown) {
+            Log.Info($"[TEST] revive: se muestra a {_revivedBy} (antes {shown})");
+        }
     }
+
+    private static readonly bool TestMode = HKMultiplayer.Testing.TestDriver.IsEnabled();
 
     /// <summary>Host: otro revivió antes al que pedía revivir este jugador; se le dice para que recupere el alma.</summary>
     private void DenyRevive(SessionPlayer requester, ushort target) {
