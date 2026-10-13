@@ -143,6 +143,26 @@ internal sealed class EnemySync {
     private const float BossSwitchInterval = 8f;
 
     /// <summary>
+    /// Un jefe solo cambia de PC entre dos ataques: en un estado de reposo de su lógica ("Idle", "Move Choice"...). Si
+    /// cambiaba a mitad de un ataque, el nuevo lo retomaba desde el principio de ese estado hacia su caballero y el ataque
+    /// se cortaba. Si no llega a reposar en este tiempo, cambia igualmente.
+    /// </summary>
+    private const float MaxCalmWait = 4f;
+
+    /// <summary>
+    /// Tras salir de un estado de reposo, cuánto sigue contando como en reposo: los de elegir ataque ("Move Choice") duran
+    /// cero fotogramas y si no nunca se verían.
+    /// </summary>
+    private const float CalmGrace = 0.15f;
+
+    /// <summary>Nombres de los estados de reposo entre ataques de los jefes (sacados del volcado de sus FSM).</summary>
+    private static readonly System.Text.RegularExpressions.Regex CalmStateName = new(
+        "idle|choice|choose|decide|select", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>En el mensaje de estados: el enemigo está en reposo entre dos ataques.</summary>
+    private const byte CalmStateFlag = 4;
+
+    /// <summary>
     /// Velocidad (unidades/s, medida entre dos repartos) a partir de la cual no cambia de PC: va embistiendo o lanzándose.
     /// El Moss Charger embiste a 15 y cruzaba de un jugador al otro: pasaba al PC del otro a mitad de la embestida, su
     /// lógica seguía allí con ese caballero y daba la vuelta (se veía derrapar al revés).
@@ -265,6 +285,23 @@ internal sealed class EnemySync {
 
         public ushort PreviousController;
         public float LastSwitch;
+
+        /// <summary>
+        /// Su lógica principal con estados de reposo entre ataques (ver <see cref="CalmFsmOf"/>): -2 sin buscar, -1 ninguna.
+        /// </summary>
+        public int CalmFsm = -2;
+
+        /// <summary>Cuándo salió por última vez de un estado de reposo en este PC (moviéndolo este PC).</summary>
+        public float CalmLeftAt = -1f;
+
+        /// <summary>Si estaba en reposo según lo último que envió el PC que lo mueve.</summary>
+        public bool RemoteCalm;
+
+        /// <summary>Lo último enviado de si estaba en reposo (si cambia, se envía aunque no se haya movido).</summary>
+        public bool LastSentCalm;
+
+        /// <summary>Desde cuándo el dueño quiere pasar el jefe a otro y espera a que acabe su ataque (0: no espera).</summary>
+        public float SwitchWantedSince;
 
         /// <summary>Su zona de alerta (ver AlertZone) y si ya se buscó.</summary>
         public Collider2D AlertZone;
@@ -1050,13 +1087,15 @@ internal sealed class EnemySync {
             }
 
             var state = Capture(enemy, tick);
+            var calm = IsCalmHere(enemy);
             if (state.SameLook(enemy.LastSent) && state.Rotation == enemy.LastSent.Rotation &&
                 state.Extra == enemy.LastSent.Extra && state.Damage == enemy.LastSent.Damage && state.Z == enemy.LastSent.Z &&
-                tick - enemy.LastSentTick < KeepAliveTicks) {
+                calm == enemy.LastSentCalm && tick - enemy.LastSentTick < KeepAliveTicks) {
                 continue;
             }
 
             enemy.LastSent = state;
+            enemy.LastSentCalm = calm;
             enemy.LastSentTick = tick;
             // Cada enemigo ocupa 24 bytes: en salas con muchos (las jaulas del Coliseo) van en varios mensajes
             if (writer == null || count == MaxEntriesPerMessage || writer.Position > StatesMessageLimit) {
@@ -1076,7 +1115,7 @@ internal sealed class EnemySync {
             writer.WriteFloat(state.X);
             writer.WriteFloat(state.Y);
             writer.WriteFloat(state.Z);
-            writer.WriteByte((byte) ((state.FacingRight ? 1 : 0) | (state.Visible ? 2 : 0)));
+            writer.WriteByte((byte) ((state.FacingRight ? 1 : 0) | (state.Visible ? 2 : 0) | (calm ? CalmStateFlag : 0)));
             writer.WriteUShort(state.SpriteId);
             writer.WriteByte(state.Collection);
             writer.WriteUShort(state.Rotation);
@@ -2507,8 +2546,24 @@ internal sealed class EnemySync {
             var margin = zone != null && currentInZone && nearestInZone ? ZoneSwitchMargin : SwitchMargin;
             if (nearest != current && (currentDown || nearestInZone && !currentInZone ||
                                        currentDistance - nearestDistance > margin)) {
+                // Un jefe espera a acabar su ataque (salvo si quien lo mueve ya no juega)
+                if (!currentDown && enemy.Health.hp >= BossHp && !IsCalm(enemy, current)) {
+                    if (enemy.SwitchWantedSince <= 0f) {
+                        enemy.SwitchWantedSince = now;
+                    }
+
+                    if (now - enemy.SwitchWantedSince < MaxCalmWait) {
+                        continue;
+                    }
+
+                    Log.Info($"{enemy.Root.name}: no reposó en {MaxCalmWait} s, pasa a otro PC a mitad de su ataque");
+                }
+
+                enemy.SwitchWantedSince = 0f;
                 _controlOut.Add((enemy.Id, nearest));
                 ApplyControl(enemy, nearest);
+            } else {
+                enemy.SwitchWantedSince = 0f;
             }
         }
 
@@ -2574,6 +2629,69 @@ internal sealed class EnemySync {
         }
 
         return enemy.AlertZone;
+    }
+
+    /// <summary>
+    /// La FSM del enemigo (en su propio objeto) con más estados entre las que tienen alguno de reposo, o -1. Las de los
+    /// hijos no cuentan: el cadáver de un jefe tiene un "Idle" en el que está siempre.
+    /// </summary>
+    private static int CalmFsmOf(Enemy enemy) {
+        if (enemy.CalmFsm != -2) {
+            return enemy.CalmFsm;
+        }
+
+        enemy.CalmFsm = -1;
+        var most = 0;
+        for (var i = 0; enemy.Fsms != null && i < enemy.Fsms.Length; i++) {
+            var fsm = enemy.Fsms[i];
+            if (fsm == null || fsm.gameObject != enemy.Root || fsm.FsmStates.Length <= most ||
+                !Array.Exists(fsm.FsmStates, s => CalmStateName.IsMatch(s.Name))) {
+                continue;
+            }
+
+            most = fsm.FsmStates.Length;
+            enemy.CalmFsm = i;
+        }
+
+        return enemy.CalmFsm;
+    }
+
+    /// <summary>
+    /// Si el enemigo, movido por este PC, está entre dos ataques: en un estado de reposo o recién salido de uno. Uno sin
+    /// estados de reposo nunca lo está (el dueño lo cambia pasado <see cref="MaxCalmWait"/>).
+    /// </summary>
+    private static bool IsCalmHere(Enemy enemy) {
+        var index = CalmFsmOf(enemy);
+        if (index < 0 || enemy.Puppet) {
+            return false;
+        }
+
+        var state = enemy.Fsms[index] != null ? enemy.Fsms[index].Fsm.ActiveState : null;
+        return state != null && CalmStateName.IsMatch(state.Name) ||
+               enemy.CalmLeftAt >= 0f && Time.unscaledTime - enemy.CalmLeftAt < CalmGrace;
+    }
+
+    /// <summary>Si el enemigo está entre dos ataques en el PC que lo mueve (este u otro: lo que envió).</summary>
+    private bool IsCalm(Enemy enemy, ushort controller) =>
+        controller == _session.LocalId ? IsCalmHere(enemy) : enemy.RemoteCalm;
+
+    /// <summary>
+    /// Su lógica principal cambia de estado (moviéndolo este PC): apunta cuándo deja el reposo y, si el dueño (este PC)
+    /// esperaba a que reposara para pasarlo a otro, el reparto se hace ya.
+    /// </summary>
+    private void OnCalmFsmState(Enemy enemy, byte index, HutongGames.PlayMaker.FsmState from,
+        HutongGames.PlayMaker.FsmState to) {
+        if (enemy.Puppet || CalmFsmOf(enemy) != index) {
+            return;
+        }
+
+        if (from != null && from != to && CalmStateName.IsMatch(from.Name)) {
+            enemy.CalmLeftAt = Time.unscaledTime;
+        }
+
+        if (enemy.SwitchWantedSince > 0f && to != null && CalmStateName.IsMatch(to.Name)) {
+            _nextAssign = 0f;
+        }
     }
 
     /// <summary>Si desde el reparto anterior se movió más rápido que <see cref="FastSpeed"/> (y apunta dónde está ahora).</summary>
@@ -5474,6 +5592,13 @@ internal sealed class EnemySync {
             if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var enemy) && enemy.Puppet &&
                 ControllerOf(enemy, _session.OwnerOf(_scene)) == from.Id) {
                 enemy.Buffer.Add(_incoming, time, reliableTiming);
+                // El dueño espera a que repose para pasarlo a otro: lo hace ya, sin esperar al siguiente reparto
+                var calm = (flags & CalmStateFlag) != 0;
+                if (calm && !enemy.RemoteCalm && enemy.SwitchWantedSince > 0f) {
+                    _nextAssign = 0f;
+                }
+
+                enemy.RemoteCalm = calm;
             }
         }
     }
@@ -6007,8 +6132,13 @@ internal sealed class EnemySync {
                 toState = _active.AvoidEmergingOnPartner(self, toState);
             }
 
+            var fromState = self.ActiveState;
             orig(self, toState);
             var sync = _active;
+            if (sync?._session != null && toState != null && sync._enemyFsms.TryGetValue(self, out var switching)) {
+                sync.OnCalmFsmState(switching.Enemy, switching.Index, fromState, toState);
+            }
+
             if (sync?._session != null && toState != null && IsDeathState(toState.Name) &&
                 sync._enemyFsms.TryGetValue(self, out var dying) && !dying.Enemy.Puppet) {
                 dying.Enemy.DeathState = true;

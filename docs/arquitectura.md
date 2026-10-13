@@ -148,6 +148,15 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     (5 s; 8 s en los jefes, cada cambio corta su ataque: con 3 s y los dos cerca, un caballero de musgo podía volver a
     empezar su estado cada pocos segundos sin llegar a atacar). Ese PC lo hace funcionar normal y envía su estado (transform,
     animación, profundidad, activo, vida, daño al tocarlo) con detección de cambios sin crear objetos.
+  - Un jefe (150 de vida o más) solo cambia de PC entre dos ataques (0.27.0): cuando su lógica principal (la FSM de su
+    objeto con más estados que tenga alguno de reposo) está en un estado de reposo, cuyo nombre lleva `Idle`, `Choice`,
+    `Choose`, `Decide` o `Select` (en el volcado de las FSM, casi todos los jefes tienen alguno), o salió de uno hace
+    menos de 0,15 s (los de elegir ataque duran cero fotogramas). El PC que lo mueve lo envía en el mensaje de estados
+    (bit 4 de las banderas) y el dueño, si quería cambiarlo, lo cambia en cuanto llega, sin esperar al siguiente reparto.
+    Si no reposa en 4 s, cambia igualmente; si quien lo mueve está caído o en pausa, enseguida. Antes cambiaba a mitad
+    de un ataque: el nuevo PC lo retomaba desde el principio de ese estado hacia su caballero y el ataque se cortaba.
+    Probado con Hornet en `Fungus1_04`, cambiando de lado cada 6 s (sin retraso y con 100 ms): los 15 cambios se
+    retomaron en `Run Antic`, `Jump Antic` o `Evade Antic`, el principio de su siguiente movimiento.
   - Si quien lo mueve está fuera de su zona de alerta (la variable `Alert Range` de su lógica, o un hijo "Alert
     Range...", ampliada con el tamaño de la caja del caballero) y otro jugador está dentro, pasa a ese: su lógica solo
     ataca a un caballero dentro de la zona. El Rey Vengamosca se iba a esperar a su sitio (`Lurk`) siguiendo al más
@@ -1205,7 +1214,8 @@ con 2):
   compañeros), las skins, los guardados de los invitados y la luz de cada compañero en las salas oscuras.
 
 Limitaciones conocidas:
-- El jefe ataca al caballero del PC que lo mueve, y lo mueve el jugador más cercano: cada cambio (como mucho cada 8 s)
-  corta su ataque. Es lo que hace que ataque a los dos.
+- El jefe ataca al caballero del PC que lo mueve, y lo mueve el jugador más cercano: cambia como mucho cada 8 s, y
+  desde 0.27.0 solo entre dos ataques (ver "Enemigos y objetos de sala"). Es lo que hace que ataque a los dos. Un jefe
+  sin estados de reposo en su lógica, o que no reposa en 4 s, sigue cambiando a mitad de un ataque.
 - La marioneta se dibuja unas centésimas en el pasado (para moverse suave): en lo que cae rápido se nota un poco.
 - Los nombres fijos de los menús del mod cambian de idioma al reiniciar el juego.
