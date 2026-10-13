@@ -342,6 +342,22 @@ internal sealed class FsmStateSync {
         _onOrderMessage = OnOrderMessage;
         _onVars = OnVars;
         _onConvoDone = OnConvoDone;
+        _onLeft = OnPlayerLeft;
+    }
+
+    private readonly Action<SessionPlayer> _onLeft;
+
+    /// <summary>
+    /// Un jugador se fue: lo que controlaba queda sin controlador en todos los PCs. El servidor reutiliza los números: un
+    /// jugador nuevo con el número del que se fue heredaba el control de sus objetos sin saberlo (nadie enviaba).
+    /// </summary>
+    private void OnPlayerLeft(SessionPlayer player) {
+        foreach (var item in _tracked) {
+            if (item.Controller == player.Id) {
+                item.Controller = 0;
+                item.Positions.Clear();
+            }
+        }
     }
 
     public void Attach(GameSession session, PlayerSync players) {
@@ -356,6 +372,7 @@ internal sealed class FsmStateSync {
         session.On(Order, _onOrderMessage);
         session.On(Vars, _onVars);
         session.On(ConvoDone, _onConvoDone);
+        session.PlayerLeft += _onLeft;
         _active = this;
         InstallHooks();
         Clear();
@@ -372,6 +389,7 @@ internal sealed class FsmStateSync {
             _session.On(Order, null);
             _session.On(Vars, null);
             _session.On(ConvoDone, null);
+            _session.PlayerLeft -= _onLeft;
         }
 
         // Las rejas que se dejaban cruzar vuelven a frenar

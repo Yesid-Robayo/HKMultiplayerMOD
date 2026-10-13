@@ -55,7 +55,14 @@ internal sealed class BossPresentation {
 
     public BossPresentation() {
         _onLock = OnLock;
+        _onLeft = player => {
+            if (_lockers.Remove(player.Id)) {
+                ReleaseIfFree($"{player.Name} se fue de la partida");
+            }
+        };
     }
+
+    private readonly System.Action<SessionPlayer> _onLeft;
 
     public void Attach(GameSession session, Revive revive) {
         _session = session;
@@ -65,11 +72,13 @@ internal sealed class BossPresentation {
         _lockers.Clear();
         _localWantsLock = false;
         session.On(PresentationLock, _onLock);
+        session.PlayerLeft += _onLeft;
     }
 
     public void Detach() {
         if (_session != null) {
             _session.On(PresentationLock, null);
+            _session.PlayerLeft -= _onLeft;
             _session = null;
         }
 

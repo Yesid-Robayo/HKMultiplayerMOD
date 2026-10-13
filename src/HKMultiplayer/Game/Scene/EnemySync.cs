@@ -738,6 +738,7 @@ internal sealed class EnemySync {
         _onRelease = OnRelease;
         _onPlayerScene = OnPlayerScene;
         _onKilled = OnKilled;
+        _onLeft = OnPlayerLeft;
         _onRested = (from, _) => {
             Log.Info($"{from.Name} descansó en un banco o murió: los enemigos vuelven a aparecer");
             ClearDead();
@@ -764,6 +765,7 @@ internal sealed class EnemySync {
         session.On(EnemyRelease, _onRelease);
         session.On(EnemyKilled, _onKilled);
         session.On(Rested, _onRested);
+        session.PlayerLeft += _onLeft;
         session.PlayerSceneChanged += _onPlayerScene;
         _deadByScene.Clear();
         _active = this;
@@ -790,6 +792,7 @@ internal sealed class EnemySync {
             _session.On(EnemyRelease, null);
             _session.On(EnemyKilled, null);
             _session.On(Rested, null);
+            _session.PlayerLeft -= _onLeft;
             _session.PlayerSceneChanged -= _onPlayerScene;
         }
 
@@ -2792,6 +2795,30 @@ internal sealed class EnemySync {
             }
 
             _session.End();
+        }
+    }
+
+    private readonly Action<SessionPlayer> _onLeft;
+
+    /// <summary>
+    /// Un jugador se fue: los enemigos que movía vuelven al dueño de la sala (hasta el siguiente reparto) y su traspaso
+    /// guardado no vale. El servidor reutiliza los números: uno nuevo con el número del que se fue los heredaba.
+    /// </summary>
+    private void OnPlayerLeft(SessionPlayer player) {
+        foreach (var enemy in _enemies) {
+            if (enemy.Controller == player.Id) {
+                enemy.Controller = 0;
+            }
+
+            if (enemy.PreviousController == player.Id) {
+                enemy.PreviousController = 0;
+            }
+
+            if (enemy.HandoverFrom == player.Id) {
+                enemy.Handover = null;
+                enemy.HandoverReady = false;
+                enemy.HandoverFrom = 0;
+            }
         }
     }
 
