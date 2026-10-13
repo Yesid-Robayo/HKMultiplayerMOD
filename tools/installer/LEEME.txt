@@ -37,7 +37,8 @@ El instalador:
   - Quita el mod anterior "HollowKnightCoop" si lo tenías: los dos usan la red a la vez y no
     pueden estar juntos.
   - Aparta los demás mods a la carpeta Mods\Disabled (los hechos para otra versión de la Modding
-    API pueden romper el juego). Al desinstalar vuelven a su sitio.
+    API pueden romper el juego); antes de instalar te dice cuáles. Al desinstalar vuelven a su
+    sitio.
 
 Después abre Hollow Knight desde Steam: en el menú principal aparece "Multijugador".
 

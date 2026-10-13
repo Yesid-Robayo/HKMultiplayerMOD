@@ -96,7 +96,12 @@ world, see each other in real time and fight the same enemies and bosses togethe
   - **Movement**: dash and Shade Dash, double jump, wall jump, Crystal Heart, dust when running and jumping.
   - **Healing**, **Dream Nail**, **hits taken** and the invulnerability blink.
   - **Charms and companions**: Grubberfly's Elegy, Flukenest, Defender's Crest (and its aura), Thorns of Agony,
-    Dreamshield, Sharp Shadow, Glowing Womb, Weaversong and Grimmchild.
+    Dreamshield, Sharp Shadow, Glowing Womb, Weaversong and Grimmchild; the Carefree Melody shield and the Baldur
+    Shell (when it goes up, blocks and breaks).
+  - **Deaths**: on spikes and in acid, and a real death (in Godhome, or when everyone falls); the Shade Dash recharge
+    flash.
+  - **In dark rooms** the darkness opens around each partner as it does around you: you see the tunnel around them,
+    not just a black screen.
   - Grass and cloth move as they walk past.
 - Effects are visual only: real damage comes from each player's own hits.
 
@@ -200,6 +205,8 @@ through the world checking that both players see the same thing.
   host settings, cutscenes, skins, go to a partner, NPC quests, vine platforms and automatic reconnection (also
   cancelling it and giving up).
 - Install, update and uninstall.
+- 0.26.0: the whole mod was reviewed against the game's code. The 172 issues found were fixed or reviewed, and most
+  were checked in the game; the testing found and fixed 16 more.
 
 ⚠️ **Partially tested:**
 
@@ -214,6 +221,9 @@ through the world checking that both players see the same thing.
 - From 0.22.0: a partner's map icon inside rooms that are not on the map (shops).
 - The orange steam of the False Knight's death (fixed without retesting).
 - Cloth and Menderbug, entering the Radiance through the game's normal path, and returning from the Godhome cutscenes.
+- Playing with 3 or 4 players: a code review found some cases that only happen with three or more (a boss jumping back
+  to an earlier attack, an elevator that stops for a third player, four people on one bench). They are listed as
+  pending.
 
 Known limitations:
 
@@ -221,8 +231,6 @@ Known limitations:
   current attack; that's what makes it attack both players.
 - Your partner and the enemies run by another PC are drawn a few hundredths of a second in the past so they move
   smoothly. Very fast falling objects show it a little.
-- If a partner changes something that makes an NPC appear that the game removed when your room loaded, it won't appear
-  until you re-enter.
 
 The full list (in Spanish) is in [docs/arquitectura.md](docs/arquitectura.md#pendientes).
 
@@ -249,7 +257,8 @@ installer is a PowerShell script you can read in the package's `scripts` folder.
   and if none is found, you use *Browse…*.
 - Checks that the game is version 1.5.12620 and closed, and that the package is complete (`SHA256SUMS.txt`).
 - Saves a copy of every file it changes in `<game>\HKMultiplayer-backup` and records everything in `manifest.txt`.
-- Removes the old **HollowKnightCoop** mod if present and moves other mods to `Mods\Disabled` (mods built for another
+- Removes the old **HollowKnightCoop** mod if present and moves other mods to `Mods\Disabled`, telling you which ones
+  before installing (mods built for another
   Modding API version can break the game).
 - Copies the Modding API and the mod, and verifies the copy. Installing a new version on top is an update.
 - When it opens it checks GitHub: if there is a newer version than the package, a notice at the top offers to download

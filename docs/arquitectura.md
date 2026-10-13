@@ -1169,6 +1169,41 @@ Sin probar:
   pudo ser el `DISABLE` de los cambios de quién mueve al jefe, arreglado en 0.20.3); la revisita del Núcleo.
 - Solo en una sesión real de dos PCs: instalar desde el zip en un juego sin mods y jugar por internet.
 
+Con 3 o 4 jugadores (revisión del código del 12/10/2026, sin probar en el juego ni arreglar; casi todo se ha probado
+con 2):
+- **Alta.** Un PC que solo mira un traspaso de enemigo lo guarda y puede usarlo mucho después (`EnemySync`
+  `OnHandover`/`ApplyControl`). `EnemyHandover` va a toda la sala sin destino; el dueño de la sala nunca recibe sus
+  propios `EnemyControl`, así que en él no se borra. Si el dueño pasa un jefe de A a B y luego lo toma él, lo toma con
+  el estado del traspaso viejo (el jefe vuelve a un ataque o fase anterior). Arreglo: tomar el traspaso solo si viene
+  de `PreviousController`, o poner el destino en el mensaje.
+- **Media-alta.** Dos reclamaciones cruzadas en `FsmStateSync` (`OnClaim`/`AcceptFrom`): el desempate (gana el número
+  menor) solo vale en los dos que reclaman; un tercero se queda con la última que le llega y descarta los estados del
+  que de verdad lo controla: un ascensor, el Coliseo o los Señores Mantis parados para él. Arreglo: apuntar la hora
+  también al aceptar una de otro y, dentro de `ClaimCrossSeconds`, aceptar solo una de número menor.
+- **Media.**
+  - `BossPresentation` recuerda un solo PC que bloquea (`_locker`): con dos presentaciones a la vez, un tercero
+    recupera el control al soltar la primera. Arreglo: un conjunto de los que bloquean.
+  - `QuestNpcSync` supone que quien cambió el dato es "el compañero de la sala": si A y B están juntos y C lo cambia
+    en otra sala, el personaje no se vuelve a comprobar en A. Arreglo: que el host reenvíe quién hizo el cambio.
+  - A un caído se le puede asignar como seguido alguien en un sueño, una cinemática o el ciervo (`Revive.FindStanding`
+    solo descarta caídos), y no se le cambia hasta que ese cae o se va. Arreglo: preferir a quien está en pie en una
+    sala que se pueda seguir y volver a elegir cuando cambie su estado.
+  - Cuatro en el mismo banco: los de los extremos quedan a 1,65 del centro, sin mirar si hay pared
+    (`PlayerSync.ShareBench`).
+- **Baja.**
+  - **Revivir:** dos jugadores reviviendo a la vez hacen parpadear "X te está reviviendo" (un solo `_revivedBy`). Si
+    acaban casi a la vez, el segundo pierde su alma.
+  - **Mapa:** todos los compañeros salen con la misma brújula y sin nombre.
+  - **Dificultad:** la vida extra de los jefes es la misma con 2 que con 4 jugadores.
+  - **"Ir con":** dos jugadores que van al mismo compañero aparecen uno encima del otro.
+  - **Ids:** un jugador nuevo con el número de otro que se fue puede heredar el control de un objeto de
+    `FsmStateSync` (sin comprobar).
+  - **Red:** con 4 jugadores, el tope de datos no fiables por paquete del host se alcanza antes en salas con muchos
+    enemigos (sin comprobar).
+- Revisado y bien con 3 o 4: el reenvío del host por salas, el reparto de enemigos (el más cercano entre todos), la
+  espera de los jefes y de los diálogos, varios caídos a la vez, los votos de las cinemáticas, "Ir con", el HUD (3
+  compañeros), las skins, los guardados de los invitados y la luz de cada compañero en las salas oscuras.
+
 Limitaciones conocidas:
 - El jefe ataca al caballero del PC que lo mueve, y lo mueve el jugador más cercano: cada cambio (como mucho cada 8 s)
   corta su ataque. Es lo que hace que ataque a los dos.

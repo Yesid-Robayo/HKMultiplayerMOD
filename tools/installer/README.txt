@@ -36,7 +36,7 @@ The installer:
   - Removes the old "HollowKnightCoop" mod if you had it: both use the network at the same time
     and can't be installed together.
   - Moves any other mods to the Mods\Disabled folder (mods built for another Modding API version
-    can break the game). Uninstalling puts them back.
+    can break the game); before installing it tells you which ones. Uninstalling puts them back.
 
 Then open Hollow Knight from Steam: "Multiplayer" appears in the main menu.
 

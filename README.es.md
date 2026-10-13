@@ -96,7 +96,12 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
   - **Movimiento**: dash y Shade Dash, doble salto, salto de pared, Crystal Heart, polvo al correr y saltar.
   - **Curación**, **aguijón onírico**, **golpes recibidos** y parpadeo de invulnerabilidad.
   - **Amuletos y acompañantes**: Grubberfly's Elegy, Flukenest, Defender's Crest (y su aura), Thorns of Agony,
-    Dreamshield, Sharp Shadow, Glowing Womb, Weaversong y Grimmchild.
+    Dreamshield, Sharp Shadow, Glowing Womb, Weaversong y Grimmchild; el escudo de Carefree Melody y el caparazón de
+    Baldur Shell (al salir, al parar un golpe y al romperse).
+  - **Muertes**: en pinchos y en ácido, y la muerte de verdad (en Dios Hogar, o cuando caen todos); el destello de la
+    recarga del Shade Dash.
+  - **En las salas oscuras** la oscuridad se abre alrededor de cada compañero como alrededor de ti: se ve el túnel a su
+    alrededor, no una pantalla negra.
   - El pasto y las telas se mueven a su paso.
 - Los efectos son solo visuales: el daño real va por los golpes de cada uno.
 
@@ -201,6 +206,8 @@ automáticas que recorren el mundo comprobando que los dos ven lo mismo.
   compañeros en el mapa, ajustes del host, cinemáticas, skins, ir con un compañero, misiones de NPC, plataformas de
   liana y la reconexión automática (también cancelarla y rendirse).
 - Instalar, actualizar y desinstalar.
+- 0.26.0: se revisó todo el mod contra el código del juego. Los 172 fallos encontrados se arreglaron o se revisaron, y
+  la mayoría se comprobó en el juego; al probarlos salieron y se arreglaron 16 más.
 
 ⚠️ **Probado en parte:**
 
@@ -214,6 +221,8 @@ automáticas que recorren el mundo comprobando que los dos ven lo mismo.
 - De 0.22.0: el icono del compañero dentro de salas que no salen en el mapa (tiendas).
 - El vapor naranja de la muerte del Falso Caballero (arreglado sin volver a probarlo).
 - Cloth y Menderbug, la entrada a la Radiancia por el camino del juego y la vuelta de las cinemáticas de los Panteones.
+- Jugar 3 o 4: una revisión del código encontró casos que solo pasan con tres o más (un jefe que vuelve a un ataque
+  anterior, un ascensor que se para para un tercero, cuatro en el mismo banco). Están apuntados como pendientes.
 
 Limitaciones conocidas:
 
@@ -221,8 +230,6 @@ Limitaciones conocidas:
   ataque, y por eso ataca a los dos.
 - El compañero y los enemigos que mueve otro PC se dibujan unas centésimas en el pasado, para que se muevan suave. En
   lo que cae muy rápido se nota un poco.
-- Si un compañero cambia algo que hace aparecer a un personaje que el juego quitó al cargar tu sala, no aparece hasta
-  que vuelvas a entrar.
 
 La lista completa está en [docs/arquitectura.md](docs/arquitectura.md#pendientes).
 
@@ -249,7 +256,8 @@ todas formas*). El instalador es un script de PowerShell que puedes leer en la c
   no la encuentra, con *Buscar…*.
 - Comprueba que el juego es la versión 1.5.12620 y que está cerrado, y que el paquete está completo (`SHA256SUMS.txt`).
 - Guarda en `<juego>\HKMultiplayer-backup` una copia de cada archivo que cambia y lo apunta todo en `manifest.txt`.
-- Quita el mod anterior **HollowKnightCoop** si está y aparta los demás mods a `Mods\Disabled` (los hechos para otra
+- Quita el mod anterior **HollowKnightCoop** si está y aparta los demás mods a `Mods\Disabled`, diciéndote cuáles
+  antes de instalar (los hechos para otra
   versión de la Modding API pueden romper el juego).
 - Copia la Modding API y el mod, y comprueba lo copiado. Instalar una versión nueva encima es una actualización.
 - Al abrirse mira en GitHub: si hay una versión más nueva que el paquete, un cartel arriba ofrece descargarla.

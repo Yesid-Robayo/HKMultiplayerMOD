@@ -25,8 +25,11 @@ Only the latest version published in *Releases* receives fixes.
 
 - Only someone who knows the game's **code** can join it (8 characters generated at random with a cryptographic
   generator).
-- Everything sent is **encrypted and authenticated** (X25519, HKDF-SHA256 with the game code and ChaCha20-Poly1305 on
-  every packet); altered or replayed packets are discarded.
+- Everything sent is **encrypted and authenticated** (X25519, HKDF-SHA256 with the game code stretched with
+  PBKDF2-HMAC-SHA256, and ChaCha20-Poly1305 on every packet); altered or replayed packets are discarded.
+- The host answers a connection attempt with a single packet and sends nothing else until it receives an
+  authenticated one (a forged address cannot be used to send traffic to someone else), limits new attempts per
+  second, and never drops a connected player because of a new attempt from their address.
 - The connection goes directly between the PCs: there are no relay servers or accounts.
 - What arrives from other players is checked before it is used: maximum sizes for packets, texts and transfers, names
   without formatting tags or control characters, character files with names that cannot escape the world's folder,
@@ -60,8 +63,11 @@ Solo la última versión publicada en *Releases* recibe arreglos.
 
 - Solo entra en una partida quien conoce su **código** (8 caracteres generados al azar con un generador
   criptográfico).
-- Todo lo que se envía va **cifrado y autenticado** (X25519, HKDF-SHA256 con el código de la partida y
-  ChaCha20-Poly1305 en cada paquete); los paquetes alterados o repetidos se descartan.
+- Todo lo que se envía va **cifrado y autenticado** (X25519, HKDF-SHA256 con el código de la partida estirado con
+  PBKDF2-HMAC-SHA256, y ChaCha20-Poly1305 en cada paquete); los paquetes alterados o repetidos se descartan.
+- El host responde a un intento de conexión con un solo paquete y no envía nada más hasta recibir uno auténtico (con
+  una dirección falsificada no se puede mandar tráfico contra otro), limita los intentos nuevos por segundo y nunca
+  echa a un jugador conectado por un intento nuevo desde su dirección.
 - La conexión es directa entre los PCs: no hay servidores intermedios ni cuentas.
 - Lo que llega de otros jugadores se comprueba antes de usarlo: tamaños máximos de paquetes, textos y transferencias,
   nombres sin etiquetas de formato ni caracteres de control, archivos de personaje con nombres que no pueden salirse
