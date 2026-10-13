@@ -27,6 +27,11 @@ internal sealed class PlayerSync {
 
     /// <summary>El pasto y las telas que se mueven al paso de los avatares (sin red).</summary>
     private readonly PartnerGrass _grass = new();
+
+    /// <summary>En las salas oscuras, un agujero de luz alrededor de cada compañero (como el del caballero local).</summary>
+    private readonly PartnerDarkness _darkness = new();
+
+    private readonly List<Vector3> _darknessPartners = new();
     private GameSession _session;
 
     // Jugador local
@@ -81,6 +86,7 @@ internal sealed class PlayerSync {
         // Antes que los avatares: sus efectos van pegados a ellos
         _effects.Detach();
         _grass.Destroy();
+        _darkness.Destroy();
         foreach (var remote in _remotes.Values) {
             remote.Avatar?.Destroy();
         }
@@ -387,17 +393,21 @@ internal sealed class PlayerSync {
         }
 
         ShareBench();
+        _darknessPartners.Clear();
         foreach (var (remote, state) in _sampled) {
             remote.Avatar ??= new RemoteAvatar(remote.Player.Name, _hero, Font);
             remote.Avatar.SetNameVisible(showNames);
             remote.Avatar.Apply(state, _sprites, z);
-            remote.Avatar.UpdateDarkness(_hero);
+            remote.Avatar.UpdateLight(_hero);
             _effects.UpdateRemote(remote.Player, remote.Avatar, remote.Buffer.RenderTick);
             if (state.Visible) {
                 _grass.Touch(remote.Player.Id, remote.Avatar.Position);
+                _darknessPartners.Add(remote.Avatar.Position);
             }
             visible++;
         }
+
+        _darkness.Update(heroReady ? _hero : null, _darknessPartners);
 
         VisibleCount = visible;
     }

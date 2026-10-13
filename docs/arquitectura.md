@@ -809,11 +809,14 @@ detalle allí):
   `HazardDeath` (pinchos o ácido: salen del pool y van como los demás objetos del caballero; `HazardDeathEffect` hace lo
   que su FSM sin su lógica). El dash sombra enciende la copia de `Shadow Recharge` (su FSM espera la recarga). El aviso
   de golpe lleva el bit 4 si no hubo retroceso (peligro o golpe mortal): sin él, el juego no saca las partículas del golpe.
-- **El compañero en salas oscuras**: la oscuridad es la `Vignette` del caballero local (un sprite negro con un agujero a
-  su alrededor, encima de todo); los recortes de la cámara de oscuridad solo sirven para la franja de las pantallas
-  ultrapanorámicas. Con `darknessLevel` ≥ 1, el avatar, su nombre y una copia de `heroLight` (sprite, color y tamaño
-  de la sala) se dibujan justo encima de la `Vignette`: el compañero se ve con su halo. Fuera de ellas vuelven a su
-  orden (si no, taparían lo que el escenario pone delante del caballero).
+- **El compañero en salas oscuras** (`PartnerDarkness`): la oscuridad es la `Vignette` del caballero local, un sprite
+  negro con un agujero a su alrededor encima de todo (los recortes de la cámara de oscuridad solo sirven para la franja
+  de las pantallas ultrapanorámicas). Con `darknessLevel` ≥ 1 y algún compañero visible en la sala, la `Vignette` y
+  los rectángulos negros de su borde se dejan de dibujar (`forceRenderingOff`) y en su lugar va una malla del tamaño de
+  la vista, en su capa y su orden, con color por vértice: en cada uno, la oscuridad menor entre la `Vignette` centrada
+  en el caballero local y la misma centrada en cada compañero. Su textura no se puede leer desde el código: se copia una
+  vez pasándola por una `RenderTexture`. El avatar lleva una copia de `heroLight` debajo de la oscuridad, como el
+  caballero. Dibujar al compañero y su halo encima de la oscuridad se descartó: parecía una imagen pegada sin el túnel.
 - **Desinstalar**: la regla de "Steam cambió este archivo, se deja" es solo para los del juego; un mod puesto a mano
   en `Mods` antes de instalar se devuelve. La caché de skins se borra siempre.
 - **Panteones**: dentro de uno (`BossSequenceController.IsInSequence`) el invitado no envía su personaje, ni al
