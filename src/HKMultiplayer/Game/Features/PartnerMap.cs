@@ -41,12 +41,11 @@ internal sealed class PartnerMap {
 
     private static readonly Color DownedColor = new(1f, 0.35f, 0.35f, 1f);
 
-    /// <summary>Tamaño y altura del nombre sobre la brújula (en las unidades del mapa).</summary>
-    private const float LabelCharacterSize = 0.035f;
+    /// <summary>Tamaño del nombre respecto a los textos del propio mapa (los nombres de las zonas).</summary>
+    private const float LabelScale = 0.6f;
 
-    private const float LabelHeight = 0.45f;
-
-    private Font _font;
+    /// <summary>Un texto del mapa que se copia para los nombres (misma fuente, capa y escala que los del juego).</summary>
+    private GameObject _textTemplate;
 
     private static readonly FieldInfo SceneWidthField = PrivateField("sceneWidth");
     private static readonly FieldInfo SceneHeightField = PrivateField("sceneHeight");
@@ -60,7 +59,13 @@ internal sealed class PartnerMap {
         public float Y;
         public float ReceivedAt;
         public GameObject Icon;
-        public TextMesh Label;
+
+        /// <summary>El nombre sobre la brújula: su objeto y su TextMeshPro (por reflexión, sin referenciar TMPro).</summary>
+        public GameObject Label;
+
+        public Component LabelText;
+
+        public string LabelName;
 
         /// <summary>Estado con el que se tiñó el icono (se vuelve a teñir solo si cambia).</summary>
         public byte TintedState;
@@ -273,6 +278,7 @@ internal sealed class PartnerMap {
             }
 
             _rooms.Clear();
+            _textTemplate = null;
             _map = map;
         }
 
@@ -298,7 +304,7 @@ internal sealed class PartnerMap {
                     continue;
                 }
 
-                entry.Label = CreateLabel(entry.Icon);
+                CreateLabel(map, entry);
                 entry.TintedState = StateHidden;
             }
 
@@ -307,13 +313,12 @@ internal sealed class PartnerMap {
                 entry.TintedState = entry.State;
                 var color = entry.State == StateDowned ? DownedColor : StandingColors[(pair.Key - 1) % StandingColors.Length];
                 Tint(entry.Icon, color);
-                if (entry.Label != null) {
-                    entry.Label.color = color;
-                }
+                SetLabel(entry, "color", color);
             }
 
-            if (entry.Label != null && _session.TryGetPlayer(pair.Key, out var player) && entry.Label.text != player.Name) {
-                entry.Label.text = player.Name;
+            if (entry.LabelText != null && _session.TryGetPlayer(pair.Key, out var player) && entry.LabelName != player.Name) {
+                entry.LabelName = player.Name;
+                SetLabel(entry, "text", player.Name);
             }
 
             if (!entry.Icon.activeSelf) {
@@ -399,45 +404,70 @@ internal sealed class PartnerMap {
         }
     }
 
-    /// <summary>El nombre del compañero sobre su brújula, en la misma capa y por encima de ella.</summary>
-    private TextMesh CreateLabel(GameObject icon) {
+    /// <summary>
+    /// El nombre del compañero sobre su brújula: una copia de un texto del propio mapa (el nombre de una zona), con su
+    /// fuente, su capa y su tamaño. Un TextMesh con la fuente de Unity no se veía sobre el mapa.
+    /// </summary>
+    private void CreateLabel(GameMap map, Entry entry) {
         try {
-            if (_font == null) {
-                _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                if (_font == null) {
-                    _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            if (_textTemplate == null) {
+                foreach (var component in map.GetComponentsInChildren<Component>(true)) {
+                    if (component != null && component.GetType().Name == "TextMeshPro") {
+                        _textTemplate = component.gameObject;
+                        break;
+                    }
                 }
             }
 
-            if (_font == null) {
-                return null;
+            if (_textTemplate == null) {
+                return;
             }
 
-            var label = new GameObject("Nombre");
-            label.layer = icon.layer;
-            label.transform.SetParent(icon.transform, false);
-            // El nombre no gira ni escala con la brújula: va en su propio tamaño
-            var scale = icon.transform.lossyScale;
-            label.transform.localScale = new Vector3(scale.x != 0f ? 1f / scale.x : 1f, scale.y != 0f ? 1f / scale.y : 1f, 1f);
-            label.transform.localPosition = new Vector3(0f, scale.y != 0f ? LabelHeight / scale.y : LabelHeight, 0f);
-            var text = label.AddComponent<TextMesh>();
-            text.font = _font;
-            text.fontSize = 48;
-            text.characterSize = LabelCharacterSize;
-            text.anchor = TextAnchor.LowerCenter;
-            text.alignment = TextAlignment.Center;
-            var renderer = label.GetComponent<MeshRenderer>();
-            renderer.sharedMaterial = _font.material;
-            var iconRenderer = icon.GetComponentInChildren<Renderer>(true);
-            if (iconRenderer != null) {
-                renderer.sortingLayerID = iconRenderer.sortingLayerID;
-                renderer.sortingOrder = iconRenderer.sortingOrder + 1;
+            var label = UnityEngine.Object.Instantiate(_textTemplate, _textTemplate.transform.parent);
+            label.name = "HKMultiplayer Partner Name";
+            // Fuera lo que no es el texto: el componente de idioma le volvería a poner el nombre de la zona
+            Component text = null;
+            foreach (var component in label.GetComponentsInChildren<Component>(true)) {
+                var type = component.GetType().Name;
+                if (type == "TextMeshPro" && component.gameObject == label) {
+                    text = component;
+                } else if (component is Behaviour && type is not ("TextMeshPro" or "TMP_SubMesh")) {
+                    UnityEngine.Object.Destroy(component);
+                }
             }
 
-            return text;
+            for (var i = label.transform.childCount - 1; i >= 0; i--) {
+                var child = label.transform.GetChild(i).gameObject;
+                if (child.GetComponent("TMP_SubMesh") == null) {
+                    UnityEngine.Object.Destroy(child);
+                }
+            }
+
+            // El mismo tamaño en pantalla que los textos del mapa (algo menor), en el sitio de la brújula: el texto del
+            // mapa se dibuja por encima de su punto, así que queda justo sobre ella
+            label.transform.SetParent(entry.Icon.transform, true);
+            label.transform.localScale *= LabelScale;
+            var iconPosition = entry.Icon.transform.position;
+            label.transform.position = new Vector3(iconPosition.x, iconPosition.y, label.transform.position.z);
+            label.SetActive(true);
+            entry.Label = label;
+            entry.LabelText = text;
+            entry.LabelName = null;
         } catch (Exception e) {
             Log.Warn($"No se pudo crear el nombre del compañero en el mapa: {e.Message}");
-            return null;
+        }
+    }
+
+    private static void SetLabel(Entry entry, string property, object value) {
+        if (entry.LabelText == null) {
+            return;
+        }
+
+        try {
+            entry.LabelText.GetType().GetProperty(property)?.SetValue(entry.LabelText, value, null);
+        } catch (Exception e) {
+            Log.Warn($"No se pudo cambiar el nombre del compañero en el mapa ({property}): {e.Message}");
+            entry.LabelText = null;
         }
     }
 
@@ -458,6 +488,7 @@ internal sealed class PartnerMap {
 
         entry.Icon = null;
         entry.Label = null;
+        entry.LabelText = null;
     }
 
     private static FieldInfo PrivateField(string name) =>
@@ -469,10 +500,20 @@ internal sealed class PartnerMap {
     public string Describe() {
         var text = new System.Text.StringBuilder();
         text.Append($"enviado={_sentState}:{_sentScene}({_sentX:0.00},{_sentY:0.00}) ");
+        var gm = GameManager.instance;
+        var map = gm != null && gm.gameMap != null ? gm.gameMap.GetComponent<GameMap>() : null;
+        text.Append($"mapa={(map == null ? "no" : $"pins={map.flamePins != null && map.flamePins.activeSelf} " +
+                                                      $"activo={map.gameObject.activeInHierarchy}")} brújula={HasCompass()} ");
         foreach (var pair in _entries) {
             var entry = pair.Value;
+            var room = map != null ? FindRoom(map, entry.Scene) : null;
+            var sprite = room != null ? room.GetComponent<SpriteRenderer>() : null;
             text.Append($"{pair.Key}={entry.State}:{entry.Scene}({entry.X:0.00},{entry.Y:0.00}) icono=" +
-                        $"{(entry.Icon != null && entry.Icon.activeSelf ? "visible" : "oculto")} ");
+                        $"{(entry.Icon != null && entry.Icon.activeSelf ? "visible" : "oculto")} " +
+                        $"sala={(room == null ? "no" : $"activa={room.activeInHierarchy} sprite={sprite != null && sprite.sprite != null}")} " +
+                        $"hace={Time.unscaledTime - entry.ReceivedAt:0.0}s nombre=" +
+                        $"{(entry.Label == null ? "no" : $"{entry.LabelName}@{(Vector2) entry.Label.transform.position}")} " +
+                        $"brújula@{(entry.Icon != null ? (Vector2) entry.Icon.transform.position : Vector2.zero)} ");
         }
 
         return text.ToString();
