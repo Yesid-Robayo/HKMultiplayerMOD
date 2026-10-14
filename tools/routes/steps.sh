@@ -410,13 +410,16 @@ _fight_alive() {
   fi
 }
 
-# Objetos de la sala en ese PC (orden sceneshot list), encendidos o no, sin lo que recoge cada jugador por su cuenta (un
+# Objetos encendidos de la sala en ese PC (orden sceneshot list; uno apagado y uno que ya no existe se ven igual), sin lo que recoge cada jugador por su cuenta (un
 # amuleto que suelta un jefe: quien lo coge tiene encendido su destello y el otro no, como en el juego). Sin si su caja
 # está activa: la de los peligros animados (un goteo) se enciende y apaga sola
 _shot_list() {
   local individual="${HK_INDIVIDUAL_PREFIXES#^}"
-  query "$1" "sceneshot list" | grep -a '\[TEST\] so ' | sed -E 's/.*\[TEST\] so //; s/[sn]$//' | grep -avE "[:/]$individual" | sort
+  query "$1" "sceneshot list" | grep -a '\[TEST\] so ' | sed -E 's/.*\[TEST\] so //; s/[sn]$//' | grep -a '=1$' | grep -avE "[:/]$individual" | grep -avE "$HK_LOOSE_DEBRIS" | sort
 }
+
+# Escombros que el juego lanza con física al azar (FlingObjects): cada PC los ve caer distinto y algunos se apagan al salirse
+HK_LOOSE_DEBRIS='[:/ ](Chunk|chunk|Debris|debris|Rubble|rubble|Rock Particle)[^/=]*='
 
 # Huella de la sala en ese PC: cuántos objetos y su suma
 _shot() { _shot_list "$1" | md5sum | cut -c1-8; }
