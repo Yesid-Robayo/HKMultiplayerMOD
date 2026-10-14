@@ -474,7 +474,7 @@ step_fight() {
 
   # Despierto en el PC que lo mueve (el real). Muchos no tienen un estado dormido que el mod reconozca y despiertan con el
   # primer golpe (la Madre Gruz duerme hasta que la golpean): si no despierta, se le pega igualmente
-  for ((i = 0; i < 6; i++)); do
+  for ((i = 0; i < 10; i++)); do
     sleep 2
     # Salto: cierra el diálogo de un encuentro (Hornet en Sendero Verde espera a que todos lo cierren)
     for inst in $(_all); do send "$inst" "press jump 0.15"; done
