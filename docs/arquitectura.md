@@ -579,8 +579,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 Decisiones aprobadas en [Decisiones de M5](#decisiones-de-m5). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
-mensajes nuevos van del 73 al 111 (el 98 y el 108 son de `EnemySync`, el 104, el 105 y el 107 de `HazardSync`, el 106
-de `StagTogether`, el 109 y el 110 de `SceneObjectSync` y el 111 de `Revive`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
+mensajes nuevos van del 73 al 114 (el 98 y el 108 son de `EnemySync`, el 104, el 105 y el 107 de `HazardSync`, el 106
+de `StagTogether`, el 109 y el 110 de `SceneObjectSync`, el 111 de `Revive`, el 112 de `PartyAbilities` y el 113 y el
+114 de `PantheonTogether`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
 juego (16:9; con otra proporción el juego deja franjas) y escala con su alto como el HUD del juego; las piezas se crean
 una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
 
@@ -739,6 +740,15 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   tendidos y se levantan al pulsar); las demás salidas son de cada uno.
 - **Grimmchild** (`GrimmchildGift`, mensaje 95): el amuleto es de cada jugador pero su nivel y la Compañía son del
   mundo; si uno lo recibe, los demás también.
+- **Entrar juntos en un Panteón** (`PantheonTogether`, mensaje 113, fiable, a la sala): al pulsar empezar en el cuadro
+  de una puerta del Atrio (`BossDoorChallengeUI.Begin`), se avisa a la sala con la puerta y las ataduras. Los demás que
+  no estén ocupados (caídos, en un banco, en pausa, hablando o ya en un Panteón) hacen lo mismo que ese botón en su PC
+  (`bossReturnEntryGate`, `BossSequenceController.SetupNewSequence`) y viajan a la primera sala de la secuencia como la
+  puerta (`door_dreamEnter`, `GodsAndGlory`). Antes el viaje no se seguía (no es un sueño) y quien empezaba peleaba
+  solo. Dentro, cada PC lleva su secuencia; cuando la sala acaba en un PC (`BossSceneController.EndBossScene`: el jefe
+  muerto o la estatua de la sala de descanso cruzada) avisa a la sala (mensaje 114) y los demás la acaban también, así
+  que pasan juntos al siguiente jefe. Llamarla dos veces no hace nada (`endedScene`). Antes, en la sala de descanso cada
+  uno salía por su cuenta y el primero seguía solo el resto del Panteón.
 - **Viajar juntos en ciervo** (`StagTogether`, mensaje 106, fiable, a la sala): cuando la FSM `Stag Control` de la
   estación de este jugador entra en `Fade` (ya eligió destino: `To Scene` y `To Position`), se avisa a la sala con
   dónde está. En los demás PCs su propio ciervo recibe el mismo destino y pasa a `Fade` (quitando el control al
@@ -892,6 +902,38 @@ copias a la vez (`setup_group` en `tools/routes/lib.sh`: el host y hasta tres in
 - **Red** (`NetConnection`): el host reenvía a cada invitado lo de todos los demás. El tope de mensajes no fiables por
   conexión y tick pasa de 256 mensajes y 8 KB a 768 y 24 KB, y lo que aun así no cabe queda en el registro ("No cabe en
   el tick un mensaje no fiable").
+
+### Cambios de la historia completa con 4 jugadores (0.29.0)
+
+Salieron de jugar la historia entera con 4 copias (jefes, sueños, soñadores, los dos finales del Hollow Knight, la
+Radiancia, la compañía de Grimm y lo opcional), con el paso `fight` de las rutas (golpes que respetan la
+invulnerabilidad y comparación de la sala en todos los PCs al acabar).
+
+- **Habilidades del grupo** (`World/PartyAbilities`, mensaje 112): cada jugador avisa de sus habilidades. Mientras un
+  `SceneAdditiveLoadConditional` decide si carga, y en las FSM que preparan la sala según una habilidad (pared del
+  Falso Caballero, puerta del Abismo, puente del Pico de Cristal, alud), cuentan las de todo el grupo; luego vuelven
+  las propias. El Señor Traidor exige la Sombra: antes solo existía en el PC de quien la tenía.
+- **Partes de sala cargadas tarde** (`Scene/SceneLoads`): cuenta las partes que el juego carga aparte; enemigos,
+  objetos, rompibles, peligros, FSM compartidas y sueños vuelven a repasar 0,3 s después de cada una.
+- **FSM sin arrancar** (`EnemySync.PrepareUnstarted`): un PC que fue marioneta desde que entró nunca pasó por el estado
+  inicial de las FSM del enemigo, que es donde buscan sus piezas. Al tomarlo se hacen solo esas búsquedas (`FindChild`,
+  `GetOwner`...). El Hollow Knight se quedaba quieto en la escena de Hornet: su hilo era una variable vacía.
+- **Avisos y aguijonazos a la marioneta** (`ForwardBroadcast`, `ForwardNailTriggers`): se reenvían al PC que mueve el
+  enemigo si su FSM los atiende en algún estado, no según el estado de la marioneta (el del último traspaso, o
+  ninguno). La Radiancia esperaba en "Abyss Up" y su golpe final solo valía con el jugador de ese PC.
+- **Una acción que falla en la copia** no corta su muerte: queda como aviso en el registro (Xero seguía vivo).
+- **Cadáveres con lógica propia**: de la copia solo se sigue la posición (el del Maestro de Almas se quedaba parado).
+- **Jefe en la parte de sala del jefe**: lo de 150 de vida o más en una escena `..._boss` cuenta como jefe (barra y
+  dificultad de la primera fase del Maestro de Almas).
+- **Enemigos de jaula**: tienen que colgar de su jaula (Flukemarm no se sincronizaba).
+- **FSM compartidas nuevas** (`FsmStateSync`): el orbe falso y el caballero falso del Maestro de Almas; como
+  encuentros, el fantasma de los guerreros soñadores, la puerta del Huevo Negro y el cuerpo del Hollow Knight. Los dos
+  últimos solo los empieza su zona o el caballero local (`ZoneOnlyEncounters`): el cuerpo mira en cada frame a qué
+  distancia está el caballero. Lo que un encuentro recibe del propio caballero (el foco que absorbe el cuerpo) lo toma
+  ese PC.
+- **Sueños** (`DreamSync`): la salida de un compañero no pisa la propia si el jefe ya murió aquí (se espera la del juego
+  8 s). Una entrada sin estado (apagada) no tiene reposo: la del Hollow Knight se disparaba sola al encenderse. Las
+  entradas que cuelgan de un enemigo no se paran en las marionetas: cada jugador usa su aguijón onírico.
 
 ## Código del juego
 

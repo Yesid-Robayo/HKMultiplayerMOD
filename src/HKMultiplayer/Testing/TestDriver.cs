@@ -280,6 +280,39 @@ internal sealed class TestDriver : MonoBehaviour {
                     Newtonsoft.Json.JsonConvert.DeserializeObject(string.Join(" ", args.Skip(2)), jsonField.FieldType));
                 Log.Info($"{Tag}pd {args[1]}={Newtonsoft.Json.JsonConvert.SerializeObject(jsonField?.GetValue(PlayerData.instance))}");
                 break;
+            case "pantheonbegin":
+                // pantheonbegin: pulsa "empezar" en el cuadro abierto de la puerta de un Panteón (antes, up junto a ella)
+                var challengeUi = FindObjectsByType<BossDoorChallengeUI>(FindObjectsSortMode.None).FirstOrDefault();
+                if (challengeUi == null) {
+                    Log.Warn($"{Tag}no hay cuadro de Panteón abierto");
+                } else {
+                    challengeUi.Begin();
+                    Log.Info($"{Tag}Panteón empezado");
+                }
+
+                break;
+            case "pantheonindex":
+                // pantheonindex <n>: pone el jefe por el que va la secuencia del Panteón (con el último, al vencer al de
+                // ahora se pasa al final)
+                typeof(BossSequenceController).GetField("bossIndex",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)?.SetValue(null, int.Parse(args[1]));
+                Log.Info($"{Tag}Panteón en el jefe {args[1]}");
+                break;
+            case "anykey":
+                // anykey: como pulsar cualquier botón en la pantalla de resultados de un Panteón (lee el mando y el
+                // teclado directamente, no los botones del caballero)
+                var waitingField = typeof(BossDoorChallengeCompleteUI).GetField("waitingForInput",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                foreach (var completeUi in FindObjectsByType<BossDoorChallengeCompleteUI>(FindObjectsSortMode.None)) {
+                    waitingField?.SetValue(completeUi, false);
+                    Log.Info($"{Tag}resultados del Panteón cerrados");
+                }
+
+                break;
+            case "pantheonstart":
+                // pantheonstart <puerta>: empieza el Panteón de esa puerta del Atrio como su botón de empezar (avisa a la sala)
+                Log.Info($"{Tag}Panteón: {(runner.Pantheons.TestStart(string.Join(" ", args.Skip(1))) ? "empezado" : "no hay esa puerta")}");
+                break;
             case "bossseq":
                 // bossseq si|no: hace como si se estuviera dentro de un Panteón (IsInSequence), para probar lo que no
                 // debe pasar entonces; no carga ningún jefe

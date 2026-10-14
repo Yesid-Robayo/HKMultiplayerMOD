@@ -155,9 +155,12 @@ internal sealed class EnemySync {
     /// </summary>
     private const float CalmGrace = 0.15f;
 
-    /// <summary>Nombres de los estados de reposo entre ataques de los jefes (sacados del volcado de sus FSM).</summary>
+    /// <summary>
+    /// Nombres de los estados de reposo entre ataques de los jefes (sacados del volcado de sus FSM), y los de dormido: Grey
+    /// Prince Zote espera en "Dormant" a que empiece su combate y pasaba de PC a la fuerza cada 4 s.
+    /// </summary>
     private static readonly System.Text.RegularExpressions.Regex CalmStateName = new(
-        "idle|choice|choose|decide|select", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        "idle|choice|choose|decide|select|dormant|sleep", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>En el mensaje de estados: el enemigo está en reposo entre dos ataques.</summary>
     private const byte CalmStateFlag = 4;
@@ -2729,8 +2732,9 @@ internal sealed class EnemySync {
             return false;
         }
 
+        // Sin despertar aún no ataca: cambiarlo de PC no corta nada
         var state = enemy.Fsms[index] != null ? enemy.Fsms[index].Fsm.ActiveState : null;
-        return state != null && CalmStateName.IsMatch(state.Name) ||
+        return !enemy.Awake || state != null && CalmStateName.IsMatch(state.Name) ||
                enemy.CalmLeftAt >= 0f && Time.unscaledTime - enemy.CalmLeftAt < CalmGrace;
     }
 

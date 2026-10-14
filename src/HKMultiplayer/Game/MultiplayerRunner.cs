@@ -85,6 +85,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Viajar juntos en ciervo desde la misma estación.</summary>
     public Features.StagTogether Stag { get; } = new();
 
+    /// <summary>Entrar juntos en un Panteón desde su puerta del Atrio.</summary>
+    public Features.PantheonTogether Pantheons { get; } = new();
+
     /// <summary>Skins: la propia y las de los demás.</summary>
     public Features.Skins Skins { get; } = new();
 
@@ -174,6 +177,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Features.SharedCutscenes.InstallHooks();
         Features.BossPresentation.InstallHooks();
         Features.DreamSync.InstallHooks();
+        Features.PantheonTogether.InstallHooks();
         Scene.DropSeeds.InstallHooks();
         Scene.ScenePaths.InstallHooks();
         QuestNpcSync.InstallHooks();
@@ -569,6 +573,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Safely(() => { Skins.Detach(); }, "Skins.Detach");
         Safely(() => { Grimmchild.Detach(); }, "Grimmchild.Detach");
         Safely(() => { Stag.Detach(); }, "Stag.Detach");
+        Safely(() => { Pantheons.Detach(); }, "Pantheons.Detach");
         Safely(() => { Scene.DropSeeds.Enabled = false; }, "Scene.DropSeeds.Enabled");
         Safely(() => { Scene.ScenePaths.Enabled = false; }, "Scene.ScenePaths.Enabled");
         Safely(() => { Scene.ScenePaths.Clear(); }, "Scene.ScenePaths.Clear");
@@ -715,6 +720,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Travel.Attach(session, Party, Revive, Dreams, Cutscenes, Players);
         Grimmchild.Attach(session);
         Stag.Attach(session);
+        Pantheons.Attach(session);
         Scene.DropSeeds.Enabled = true;
         Scene.ScenePaths.Enabled = true;
         Scene.ScenePaths.RememberLoaded();
