@@ -490,14 +490,14 @@ step_fight() {
   if [ $awake = 1 ]; then
     _result OK "fight $flag" "despertó con todos al lado (lo mueve $who)"
   fi
-  # Golpes hasta vencerlo (los de varias fases o varios jefes, como los Señores Mantis, necesitan más de uno). Uno enorme
-  # y luego varios normales: la cabeza del Falso Caballero, muerta de un golpe de 9999, vuelve a tener su vida (el juego
-  # lo toma por un cambio de fase) y solo muere a golpes como los del aguijón. Respetan la invulnerabilidad ("real"):
-  # si no, el jefe moría en mitad de un rugido o de su entrada, cosa que en el juego no pasa
+  # Golpes hasta vencerlo, como los de un aguijón puro (21) y que respetan la invulnerabilidad ("real"). Uno enorme
+  # mataba de un tirón la cabeza del Falso Caballero y del Campeón Fallido, el juego lo tomaba por un cambio de fase y la
+  # devolvía a su vida: el combate no acababa. Tres por tanda (como tres jugadores pegando) y se mira cada 5 tandas
   local j
-  for ((i = 0; i < 20; i++)); do
-    send "$_R_HOST" "hitall 9999 real"; sleep 2
-    for ((j = 0; j < 5; j++)); do send "$_R_HOST" "hitall 30 real"; sleep 1.2; done
+  for ((i = 0; i < 400; i++)); do
+    for ((j = 0; j < 3; j++)); do send "$_R_HOST" "hitall 21 real"; done
+    sleep 1.2
+    ((i % 5 == 4)) || continue
     if [ "$flag" = - ]; then
       [ -z "$(_boss_line "$_R_HOST" "$name")" ] && break
     else
@@ -532,6 +532,13 @@ step_fight() {
     return
   fi
 
+  # En un sueño, al ganar todos despiertan fuera: la vuelta la comprueban expect-room, expect-control y room-same
+  if [[ "$_R_ROOM" == Dream_* ]]; then
+    _result OK "fight $flag" "vencido en todos (sueño: se despierta fuera)"
+    for inst in $(_all); do send "$inst" "god no"; done
+    return
+  fi
+
   # Después: todos en la sala y con control (una presentación o un final que no devuelve el control los dejaría quietos).
   # Antes, salto para cerrar el mensaje de un objeto recogido (el amuleto que suelta Flukemarm, si cae encima)
   sleep 6
@@ -553,6 +560,49 @@ step_fight() {
   fi
   _scene_same "fight $flag"
   for inst in $(_all); do send "$inst" "god no"; done
+}
+
+# expect-room <Sala> [s]: todos llegan a esa sala (un sueño al entrar, la sala de vuelta al despertar) y pasa a ser la de
+# la ruta para lo que sigue
+step_expect_room() {
+  local scene="$1" timeout="${2:-30}" deadline inst where=""
+  deadline=$((SECONDS + timeout))
+  while :; do
+    where=""
+    for inst in $(_all); do
+      [ "$(status_field "$(status_of "$inst")" scene)" = "$scene" ] || where="$where $inst=$(status_field "$(status_of "$inst")" scene)"
+    done
+    [ -z "$where" ] && break
+    [ $SECONDS -ge $deadline ] && break
+    sleep 2
+  done
+  if [ -z "$where" ]; then
+    _R_ROOM="$scene"; _R_ROOM_OK=1
+    _result OK "expect-room $scene" "todos en la sala"
+  else
+    _result FALLO "expect-room $scene" "no llegaron todos en ${timeout}s:$where"
+  fi
+}
+
+# expect-control [s]: todos acaban con control (pulsan salto para levantarse tras un sueño o cerrar un mensaje)
+step_expect_control() {
+  local timeout="${1:-15}" deadline inst stuck=""
+  deadline=$((SECONDS + timeout))
+  while :; do
+    for inst in $(_all); do send "$inst" "press jump 0.2"; done
+    sleep 2
+    stuck=""
+    for inst in $(_all); do
+      query "$inst" "hero" | grep -aq 'acceptingInput=True' || stuck="$stuck $inst($(query "$inst" "hero" | grep -aoE 'anim=[A-Za-z ]+' | head -1))"
+    done
+    [ -z "$stuck" ] && break
+    [ $SECONDS -ge $deadline ] && break
+  done
+  if [ -z "$stuck" ]; then
+    _result OK "expect-control" "todos con control"
+  else
+    _result FALLO "expect-control" "sin control tras ${timeout}s:$stuck"
+  fi
 }
 
 step_expect_log() {
@@ -653,6 +703,9 @@ run_route() {
       rock-sync) step_rock_sync ;;
       scene-data-sync) step_scene_data_sync "${args[1]:-}" ;;
       boss) step_boss "${args[1]:-}" "${args[2]:-}" "${args[3]:-}" ;;
+      expect-room) step_expect_room "${args[1]:-}" "${args[2]:-}" ;;
+      expect-control) step_expect_control "${args[1]:-}" ;;
+      room-same) _scene_same "room-same $_R_ROOM" ;;
       fight) step_fight "${args[1]:-}" "${args[2]:-}" "${args[3]:-}" "$(echo "$line" | cut -d' ' -f5-)" ;;
       expect-log) step_expect_log "${args[1]:-}" "$(echo "$line" | cut -d' ' -f3- | sed -E 's/ [0-9]+$//')" "$(echo "$line" | grep -oE ' [0-9]+$' | tr -d ' ')" ;;
       rejoin) step_rejoin ;;

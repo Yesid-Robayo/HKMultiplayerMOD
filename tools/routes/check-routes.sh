@@ -9,7 +9,7 @@
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 GAME_DATA="${HK_STEAM_GAME:-/c/Program Files (x86)/Steam/steamapps/common/Hollow Knight}/hollow_knight_Data"
-STEPS='title|room|host|guest|both|wait|shared|private|same-pd|expect-pd|partner-moves|breakables-sync|enemies-sync|objects-sync|rock-sync|scene-data-sync|boss|fight|expect-log|rejoin|die'
+STEPS='title|room|host|guest|both|wait|shared|private|same-pd|expect-pd|partner-moves|breakables-sync|enemies-sync|objects-sync|rock-sync|scene-data-sync|boss|fight|expect-room|expect-control|room-same|expect-log|rejoin|die'
 
 files=("$@")
 [ ${#files[@]} -eq 0 ] && files=("$ROOT"/tests/routes/*.route)
