@@ -166,8 +166,27 @@ internal sealed class FsmStateSync {
         // combate encendiendo la carpeta del guerrero (ActivateAllChildren de una variable que se busca al empezar, que
         // HasBattleDialogue no ve). Sin compartirlo, el combate solo empezaba en el PC del que lo golpeó con el aguijón
         // onírico, y si el guerrero lo movía otro PC no aparecía nunca
-        ("Ghost Warrior NPC", "Conversation Control")
+        ("Ghost Warrior NPC", "Conversation Control"),
+        // La puerta del Huevo Negro (`Room_temple`): con los tres soñadores, la abre quien entra en su zona (temblor,
+        // rotura y rugido). En los demás PCs el dato abierta llegaba y la puerta pasaba a abierta de golpe, sin la escena.
+        // Es un encuentro y no un objeto con controlador: así la empieza el PC de quien entra, sea o no el dueño de la sala
+        ("Final Boss Door", "Control"),
+        // El cuerpo del Hollow Knight vencido (`Room_Final_Boss_Core`): el final empieza cuando un jugador lo absorbe con
+        // el foco. Solo lo veía ese jugador; los demás, con el cuerpo quieto, pasaban de golpe a la cinemática del final
+        ("Boss Corpse", "Corpse")
     };
+
+    /// <summary>
+    /// Encuentros que solo empieza su zona (o el caballero de este PC): sus demás avisos propios (esperas, comprobaciones de
+    /// a qué distancia está el caballero) no son usarlos. El cuerpo del Hollow Knight mira en cada frame si el caballero
+    /// se aleja; con la regla general, cada PC con el suyo lejos se habría quedado el control a cada momento.
+    /// </summary>
+    private static readonly string[] ZoneOnlyEncounters = { "Final Boss Door", "Boss Corpse" };
+
+    private static bool IsZoneOnly(Fsm fsm) {
+        var name = fsm.GameObject != null ? fsm.GameObject.name : null;
+        return name != null && Array.Exists(ZoneOnlyEncounters, prefix => name.StartsWith(prefix, StringComparison.Ordinal));
+    }
 
     private sealed class Tracked {
         public uint Id;
@@ -1441,9 +1460,18 @@ internal sealed class FsmStateSync {
                 return OnConvoFinish(item);
             }
 
+            // Lo que le manda el propio caballero de este PC (el foco que absorbe el cuerpo del Hollow Knight): lo usa este
+            // jugador, así que lo lleva este PC
+            var localHero = HeroController.instance;
+            if (sender?.GameObject != null && localHero != null && sender.GameObject.transform.IsChildOf(localHero.transform) &&
+                Handles(fsm, fsmEvent.Name) && !IsController(item)) {
+                TakeControl(item, $"{fsmEvent.Name}: lo usa su caballero");
+                return true;
+            }
+
             // Su caballero entró en la zona del encuentro (el aviso de la zona no lleva remitente): lo empieza este PC
             if ((sender == null || sender == fsm) && fsmEvent.Name != "FINISHED" && Handles(fsm, fsmEvent.Name) &&
-                !IsController(item)) {
+                !IsController(item) && (!IsZoneOnly(fsm) || FromZone(fsm, fsmEvent.Name))) {
                 TakeControl(item, $"{fsmEvent.Name}: su caballero empieza el encuentro");
                 return true;
             }

@@ -244,6 +244,9 @@ internal sealed class EnemySync {
         /// <summary>FSM del enemigo y sus hijos, en el mismo orden en todos los PCs (para los sonidos).</summary>
         public PlayMakerFSM[] Fsms;
 
+        /// <summary>Ya se buscaron aquí las piezas que sus FSM sin arrancar guardan en su estado inicial (ver PrepareUnstarted).</summary>
+        public bool StartPrepared;
+
         /// <summary>Piezas que se mueven aparte (null si no tiene).</summary>
         public Part[] Parts;
 
@@ -2310,6 +2313,9 @@ internal sealed class EnemySync {
                     fsmIndex < enemy.Fsms.Length && enemy.Fsms[fsmIndex] != null &&
                     stateIndex < enemy.Fsms[fsmIndex].FsmStates.Length;
         var variables = valid ? enemy.Fsms[fsmIndex].FsmVariables : null;
+        if (valid) {
+            PrepareUnstarted(enemy);
+        }
 
         // Los números con los que lo hizo el original, antes de hacer sus efectos aquí
         var floatCount = reader.ReadByte();
@@ -3176,6 +3182,7 @@ internal sealed class EnemySync {
             return;
         }
 
+        PrepareUnstarted(enemy);
         for (var i = 0; i < handover.Length && i < enemy.Fsms.Length; i++) {
             var data = handover[i];
             var fsm = enemy.Fsms[i];
@@ -3722,6 +3729,56 @@ internal sealed class EnemySync {
         }
 
         return null;
+    }
+
+    /// <summary>Acciones del estado inicial que solo buscan y guardan objetos (sus piezas, su dueño...).</summary>
+    private static readonly HashSet<string> LookupActions = new() {
+        "FindChild", "FindGameObject", "GetOwner", "GetParent", "GetChild", "GetChildNum", "GetRoot"
+    };
+
+    /// <summary>
+    /// Una FSM que no llegó a arrancar en este PC (el enemigo ya era marioneta al entrar en la sala) no pasó por su estado
+    /// inicial, que es donde suele buscar sus piezas. Al tomarlo se pone en el estado del PC anterior y ese estado inicial
+    /// no se ejecuta nunca; el traspaso trae algunas, pero no todas (hay jefes con más de las que caben). El Hollow Knight
+    /// se quedaba quieto para siempre en la escena de Hornet: su hilo era una variable vacía y la animación que se espera
+    /// no empezaba. Aquí se hacen solo las búsquedas de ese estado inicial, una vez, sin sus demás acciones.
+    /// </summary>
+    private static void PrepareUnstarted(Enemy enemy) {
+        if (enemy.StartPrepared || enemy.Fsms == null) {
+            return;
+        }
+
+        enemy.StartPrepared = true;
+        foreach (var fsm in enemy.Fsms) {
+            if (fsm == null || fsm.Fsm.Started) {
+                continue;
+            }
+
+            var start = fsm.Fsm.GetState(fsm.Fsm.StartState);
+            if (start == null) {
+                continue;
+            }
+
+            var found = 0;
+            foreach (var action in start.Actions) {
+                if (action == null || !action.Enabled || !LookupActions.Contains(action.GetType().Name)) {
+                    continue;
+                }
+
+                try {
+                    action.Init(start);
+                    action.OnEnter();
+                    found++;
+                } catch (Exception e) {
+                    Log.Warn($"{fsm.gameObject.name}/{fsm.FsmName}: no se pudo preparar {action.GetType().Name} de " +
+                             $"{start.Name} ({e.GetType().Name})");
+                }
+            }
+
+            if (found > 0) {
+                Log.Info($"{fsm.gameObject.name}/{fsm.FsmName}: sin arrancar en este PC, se buscan sus {found} piezas de {start.Name}");
+            }
+        }
     }
 
     private static GameObject Resolve(Enemy enemy, ObjectRef reference) {
@@ -4464,7 +4521,9 @@ internal sealed class EnemySync {
     /// Un objeto de la sala de este PC mandó un aviso a todos. La lógica de las marionetas está parada y no lo oye: si
     /// alguna lo esperaba en su estado de ahora, se reenvía al PC que mueve ese enemigo, como los avisos directos. Así
     /// la zona de abajo del Tirano de Almas (PHASE 2) empieza su segunda fase aunque quien la mueve siga arriba; antes la
-    /// fase solo empezaba si caía en ella el caballero del PC que la movía.
+    /// fase solo empezaba si caía en ella el caballero del PC que la movía. Basta con que lo atienda en algún estado: el de
+    /// la marioneta es el del último traspaso (o ninguno, si nunca la movió este PC) y quien decide es el estado del PC que
+    /// la mueve. La Radiancia se quedaba en "Abyss Up" si subía primero un jugador que no era el que la movía.
     /// </summary>
     private void ForwardBroadcast(HutongGames.PlayMaker.Actions.SendEventByName send) {
         if (_session == null || !_session.CanSend || _replaying || _playingFx || _spawningCopy ||
@@ -4487,12 +4546,39 @@ internal sealed class EnemySync {
 
             for (var i = 0; i < enemy.Fsms.Length && i <= byte.MaxValue; i++) {
                 var fsm = enemy.Fsms[i];
-                if (fsm != null && !fsm.enabled && Handles(fsm.Fsm, eventName)) {
+                if (fsm != null && !fsm.enabled && HandlesAnywhere(fsm.Fsm, eventName)) {
                     Log.Info($"{enemy.Root.name}/{fsm.FsmName}: {eventName} de {sender.GameObjectName}, al PC que lo mueve");
                     ForwardEvent(enemy, (byte) i, eventName);
                 }
             }
         }
+    }
+
+    private static readonly Dictionary<(HutongGames.PlayMaker.Fsm, string), bool> HandlesAnywhereCache = new();
+
+    /// <summary>Si el evento cambia el estado de la FSM desde alguno de sus estados (o es global).</summary>
+    private static bool HandlesAnywhere(HutongGames.PlayMaker.Fsm fsm, string eventName) {
+        if (HandlesAnywhereCache.TryGetValue((fsm, eventName), out var cached)) {
+            return cached;
+        }
+
+        var handles = false;
+        foreach (var transition in fsm.GlobalTransitions) {
+            handles |= transition.EventName == eventName;
+        }
+
+        foreach (var state in fsm.States) {
+            foreach (var transition in state.Transitions) {
+                handles |= transition.EventName == eventName;
+            }
+        }
+
+        if (HandlesAnywhereCache.Count > 1024) {
+            HandlesAnywhereCache.Clear();
+        }
+
+        HandlesAnywhereCache[(fsm, eventName)] = handles;
+        return handles;
     }
 
     /// <summary>Si el evento cambia el estado de la FSM desde donde está (transición del estado o global).</summary>
@@ -5308,8 +5394,12 @@ internal sealed class EnemySync {
                 }
             }
 
+            // La entrada a un sueño que lleva el enemigo (el Hollow Knight caído en la escena de Hornet) tampoco se para:
+            // la golpea el aguijón onírico de cada jugador. Parada en las marionetas, solo podía entrar en el sueño el
+            // jugador del PC que movía al jefe
             foreach (var fsm in enemy.Root.GetComponentsInChildren<PlayMakerFSM>(true)) {
-                if (fsm.enabled && fsm.gameObject != enemy.Root && !IsVisualOnly(fsm)) {
+                if (fsm.enabled && fsm.gameObject != enemy.Root && !IsVisualOnly(fsm) &&
+                    !Features.DreamSync.IsDreamEntrance(fsm)) {
                     Pause(enemy, fsm);
                     fsm.enabled = false;
                     enemy.Disabled.Add(fsm);
@@ -6374,23 +6464,17 @@ internal sealed class EnemySync {
                 continue;
             }
 
-            // La copia de algo creado en combate nace parada en su estado inicial, no en el del original (el escupitajo
-            // del Gulka espera el golpe en "Idle"): se mira en todos sus estados. El PC que la mueve solo lo atiende si
-            // en su estado de ahora lo espera
-            var states = enemy.Spawned ? fsm.FsmStates : new[] { fsm.Fsm.ActiveState };
-            var sent = false;
-            foreach (var state in states) {
-                if (state == null || sent) {
-                    continue;
-                }
-
+            // Se mira en todos sus estados: el de la marioneta es el del último traspaso (o ninguno, si este PC nunca la
+            // movió), y la copia de algo creado en combate nace parada en su estado inicial (el escupitajo del Gulka espera
+            // el golpe en "Idle"). El PC que la mueve solo atiende el aviso que espera en su estado de ahora. Antes, con el
+            // estado de la marioneta, el golpe final a la Radiancia solo contaba si lo daba el jugador del PC que la movía
+            HashSet<string> sent = null;
+            foreach (var state in fsm.FsmStates) {
                 foreach (var action in state.Actions) {
                     // (también la variante por capa: el escupitajo del Gulka se devuelve de un aguijonazo con ella)
-                    if (NailTrigger(action, out var eventName, out _)) {
+                    if (NailTrigger(action, out var eventName, out _) && (sent ??= new HashSet<string>()).Add(eventName)) {
                         Log.Info($"{enemy.Root.name}/{fsm.FsmName}: {eventName} por un aguijonazo de este PC, al PC que lo mueve");
                         ForwardEvent(enemy, (byte) i, eventName);
-                        sent = true;
-                        break;
                     }
                 }
             }
@@ -6742,7 +6826,8 @@ internal sealed class EnemySync {
         var hero = HeroController.instance;
         var count = 0;
         foreach (var enemy in _enemies.ToArray()) {
-            if (enemy.Root != null && enemy.Root.activeInHierarchy && enemy.Health != null && !enemy.Health.isDead) {
+            if (enemy.Root != null && enemy.Root.activeInHierarchy && enemy.Health != null && !enemy.Health.isDead &&
+                (ignoreInvulnerable || CanBeStruck(enemy))) {
                 enemy.Health.Hit(new HitInstance {
                     Source = hero.gameObject, AttackType = AttackTypes.Nail, DamageDealt = damage, Multiplier = 1f,
                     MagnitudeMultiplier = 1f, Direction = 0f, IgnoreInvulnerable = ignoreInvulnerable
@@ -6752,6 +6837,25 @@ internal sealed class EnemySync {
         }
 
         return count;
+    }
+
+    /// <summary>
+    /// Modo de prueba: si un aguijonazo de verdad podría alcanzarlo (se ve y tiene algo con lo que chocar). La Radiancia,
+    /// escondida mientras se sube a la segunda arena, seguía perdiendo vida con los golpes de prueba y repetía la subida.
+    /// </summary>
+    private static bool CanBeStruck(Enemy enemy) {
+        var renderer = enemy.Root.GetComponent<Renderer>();
+        if (renderer != null && !renderer.enabled) {
+            return false;
+        }
+
+        foreach (var collider in enemy.Root.GetComponentsInChildren<Collider2D>()) {
+            if (collider.enabled && collider.gameObject.activeInHierarchy) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Modo de prueba: avisa en el registro si alguien apaga el enemigo estando vivo, y desde dónde.</summary>

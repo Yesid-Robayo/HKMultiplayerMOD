@@ -187,7 +187,9 @@ internal sealed class DreamSync {
 
             var state = entry.Fsm.ActiveStateName;
             if (state == entry.LastState) {
-                if (entry.RestState == null && now - entry.LastStateTime >= RestSeconds) {
+                // Sin estado (apagada o sin empezar) no es su reposo: la entrada del Hollow Knight se enciende al caer él
+                // en la escena de Hornet y pasaba de "" a "Init" sin que nadie la golpeara; todos se iban al sueño
+                if (entry.RestState == null && state.Length > 0 && now - entry.LastStateTime >= RestSeconds) {
                     entry.RestState = state;
                 }
 
@@ -239,6 +241,9 @@ internal sealed class DreamSync {
 
         return false;
     }
+
+    /// <summary>Si la FSM es una entrada a un sueño (un cambio de sala de tipo sueño que hace su propio golpe onírico).</summary>
+    public static bool IsDreamEntrance(PlayMakerFSM fsm) => FindDreamTransition(fsm) != null;
 
     private static BeginSceneTransitionAction FindDreamTransition(PlayMakerFSM fsm) {
         foreach (var state in fsm.FsmStates) {
@@ -561,7 +566,9 @@ internal sealed class DreamSync {
     public bool TestDreamHit(bool activate) {
         foreach (var entry in _entries) {
             if (entry.Fsm != null && entry.Fsm.gameObject.activeInHierarchy) {
-                entry.Fsm.SendEvent("DREAM HIT");
+                // El aviso con el que sale de su reposo: "DREAM HIT" en casi todas, "NAIL HIT" en la del Hollow Knight
+                var leave = entry.RestState != null ? LeaveEvent(entry) : string.Empty;
+                entry.Fsm.SendEvent(leave.Length > 0 ? leave : "DREAM HIT");
                 return true;
             }
         }
