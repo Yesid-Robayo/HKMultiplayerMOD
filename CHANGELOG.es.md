@@ -9,6 +9,27 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.29.0
+
+La historia entera jugada con 4 jugadores (cuatro copias del juego a la vez), de los primeros jefes a los dos finales
+del Hollow Knight y la Radiancia, además de la Compañía de Grimm, Grey Prince Zote, el Coliseo y un Panteón entero.
+
+- **Panteones juntos**: cuando un jugador empieza un Panteón, los que están en el Atrio entran con él, con las mismas
+  ataduras, y el grupo pasa junto a cada jefe (también al salir de la sala de descanso). Antes lo peleaba solo.
+- **Hollow Knight**: ya no se queda quieto para siempre en la escena de Hornet. Todos ven la absorción del cuerpo y la
+  apertura del Huevo Negro, la haga quien la haga. Cualquiera entra en la Radiancia con el aguijón onírico, y la
+  entrada ya no se dispara sola.
+- **Radiancia**: pasa de fase y recibe el golpe final de cualquier jugador, no solo del que la mueve en su PC.
+- **Partes de sala que piden una habilidad** (el combate del Señor Traidor, la pared del Falso Caballero, la puerta
+  del Abismo, el puente del Pico de Cristal...): se cargan si alguien del grupo la tiene, así la sala es igual para
+  todos.
+- **Maestro de Almas**: todos ven la secuencia del orbe falso y caen juntos al piso de abajo; su primera fase tiene
+  barra de vida.
+- **Guerreros soñadores**: empiezan para todos, y al salir de los **sueños** ya no se quedan compañeros de pie sin
+  control.
+- **Cloth** pelea contra el Señor Traidor en todos los PCs; Xero, Flukemarm y el cuerpo del Maestro de Almas ya no se
+  traban en algunos PCs; un jefe dormido ya no cambia de PC una y otra vez.
+
 ## 0.28.0
 
 Partidas de 3 y 4 jugadores, probadas con cuatro copias del juego a la vez.

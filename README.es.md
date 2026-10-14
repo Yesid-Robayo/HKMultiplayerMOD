@@ -4,7 +4,7 @@
 
 **Mod cooperativo para Hollow Knight: juega el mundo entero con tus amigos, en red local o por internet.**
 
-![Versión](https://img.shields.io/badge/versión-0.28.0-7fb2ff)
+![Versión](https://img.shields.io/badge/versión-0.29.0-7fb2ff)
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
@@ -208,11 +208,14 @@ automáticas que recorren el mundo comprobando que los dos ven lo mismo.
 - Instalar, actualizar y desinstalar.
 - 0.26.0: se revisó todo el mod contra el código del juego. Los 172 fallos encontrados se arreglaron o se revisaron, y
   la mayoría se comprobó en el juego; al probarlos salieron y se arreglaron 16 más.
+- 0.29.0: la historia entera con 4 jugadores (cuatro copias del juego): todos los jefes con combates de verdad, los
+  sueños y los guerreros soñadores, los tres Soñadores, el Huevo Negro, el Hollow Knight (los dos finales) y la
+  Radiancia, la Compañía de Grimm, Grey Prince Zote, el Coliseo de los Tontos (Bronce, con Zote), Zote y Cloth, y el
+  Panteón del Maestro de principio a fin.
 
 ⚠️ **Probado en parte:**
 
 - Caballero de la Colmena, Flukemarm, Cargador Musgoso y Rey Mosca: mueren en los dos PCs, pero falta verlos atacar.
-- El rescate de Zote: el combate sí, la conversación de después no.
 
 ❓ **Sin probar:**
 
@@ -220,7 +223,7 @@ automáticas que recorren el mundo comprobando que los dos ven lo mismo.
 - La traducción al inglés dentro del juego.
 - De 0.22.0: el icono del compañero dentro de salas que no salen en el mapa (tiendas).
 - El vapor naranja de la muerte del Falso Caballero (arreglado sin volver a probarlo).
-- Cloth y Menderbug, la entrada a la Radiancia por el camino del juego y la vuelta de las cinemáticas de los Panteones.
+- Menderbug y los finales de Panteón que acaban en una cinemática (el 5.º).
 - Jugar 3 o 4: los casos que solo pasan con tres o más se arreglaron en la 0.28.0 y se probaron con cuatro copias del
   juego en un PC, pero aún no entre PCs reales.
 

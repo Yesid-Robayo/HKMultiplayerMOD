@@ -934,6 +934,12 @@ invulnerabilidad y comparación de la sala en todos los PCs al acabar).
 - **Sueños** (`DreamSync`): la salida de un compañero no pisa la propia si el jefe ya murió aquí (se espera la del juego
   8 s). Una entrada sin estado (apagada) no tiene reposo: la del Hollow Knight se disparaba sola al encenderse. Las
   entradas que cuelgan de un enemigo no se paran en las marionetas: cada jugador usa su aguijón onírico.
+- **Panteones** (`PantheonTogether`, mensajes 113 y 114): ver "Entrar juntos en un Panteón".
+- **Cloth** (`FsmStateSync`, "Cloth Fighter"): FSM compartida; lo que golpea la copia de un objeto compartido que mueve
+  otro PC no cuenta en este, ni en un enemigo real ni en una marioneta (`IsRemoteCopy`).
+- **Reposo y muñecos**: un enemigo sin despertar o en un estado de dormido (`dormant`, `sleep`) cuenta como en reposo
+  para cambiar de PC (Grey Prince Zote cambiaba cada 4 s); uno con 9000 de vida o más no es jefe (el maniquí de mantis
+  del combate del Señor Traidor, 999999).
 
 ## Código del juego
 
@@ -1269,16 +1275,19 @@ Sin probar:
 - La traducción al inglés dentro del juego (0.21.0) y el vapor naranja de la muerte del Falso Caballero (0.20.3).
 - De 0.22.0: el icono del compañero en una sala que no sale en el mapa (tiendas) y en otra zona; la reconexión entre
   dos PCs.
-- La conversación con Zote tras el Rey Vengamosca, Zote en el Coliseo y Cloth (no aparecen en el mundo de prueba);
-  Menderbug (por análisis).
-- Volver de una cinemática que acaba en una sala de juego (finales de los Panteones; va por `SceneTravel`).
-- La entrada a la Radiancia por el camino del juego (una vez se trabó la escena de Hornet atando al Hollow Knight;
-  pudo ser el `DISABLE` de los cambios de quién mueve al jefe, arreglado en 0.20.3); la revisita del Núcleo.
+- Menderbug (por análisis).
+- Volver de una cinemática que acaba en una sala de juego (el final del Panteón de Hallownest; va por `SceneTravel`).
+  La vuelta del Panteón del Maestro al Atrio sí está probada (0.29.0). Que su puerta quede completada no se miró
+  directamente: lo apunta el juego en cada PC al acabar su secuencia.
+- La revisita del Núcleo.
 - Solo en una sesión real de dos PCs: instalar desde el zip en un juego sin mods y jugar por internet.
 
 Con 3 o 4 jugadores: lo de la revisión del 12/10/2026 está arreglado y probado con 4 copias (ver "Cambios para 3 y 4
-jugadores"). Sin probar: el banco pegado a una pared (no se encontró uno con una puerta segura para el modo de prueba)
-y todo con 3 o 4 PCs reales.
+jugadores"). En 0.29.0, la historia entera con 4 copias (ver "Cambios de la historia completa con 4 jugadores"): los
+jefes con golpes de verdad, los sueños, los soñadores, los dos finales del Hollow Knight y la Radiancia por el camino
+del juego, la Compañía de Grimm, Grey Prince Zote, el Coliseo de Bronce (con Zote), Zote tras el Rey Vengamosca, Cloth
+y el Panteón del Maestro entero; después, las 16 rutas con un mundo nuevo y 0 FALLO. Sin probar: el banco pegado a una
+pared (no se encontró uno con una puerta segura para el modo de prueba) y todo con 3 o 4 PCs reales.
 
 Limitaciones conocidas:
 - El jefe ataca al caballero del PC que lo mueve, y lo mueve el jugador más cercano: cambia como mucho cada 8 s, y

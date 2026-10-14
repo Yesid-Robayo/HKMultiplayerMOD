@@ -9,6 +9,27 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.29.0
+
+The whole story played with 4 players (four copies of the game at once), from the first bosses to both Hollow Knight
+endings and the Radiance, plus the Grimm Troupe, Grey Prince Zote, the Colosseum and a whole Pantheon.
+
+- **Pantheons together**: when a player starts a Pantheon, everyone in the Atrium goes in with them, with the same
+  bindings, and the group moves on to each boss together (also out of the rest room). They used to fight it alone.
+- **Hollow Knight**: no longer freezes forever in Hornet's scene. Everyone sees the body being absorbed and the Black
+  Egg opening, whoever does it. Anyone can use the dream nail to enter the Radiance, which no longer starts on its
+  own.
+- **Radiance**: it moves on to its next phase, and takes its final hit, from any player, not only the one whose PC runs
+  it.
+- **Room parts that need an ability** (the Traitor Lord fight, the False Knight's wall, the Abyss door, the Crystal
+  Peak bridge...): they load if anyone in the group has the ability, so the room is the same for everyone.
+- **Soul Master**: everyone sees the fake orb sequence and falls to the lower floor together; its first phase has a
+  health bar.
+- **Dream warriors** start for everyone, and **dreams** no longer leave partners standing without control on the way
+  out.
+- **Cloth** fights the Traitor Lord on every PC; Xero, Flukemarm and the Soul Master's body no longer get stuck on some
+  PCs; a sleeping boss no longer keeps changing PC.
+
 ## 0.28.0
 
 Games with 3 and 4 players, tested with four copies of the game running at once.

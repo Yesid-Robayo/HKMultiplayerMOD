@@ -4,7 +4,7 @@
 
 **A co-op mod for Hollow Knight: play the whole world with your friends, on your local network or over the internet.**
 
-![Version](https://img.shields.io/badge/version-0.28.0-7fb2ff)
+![Version](https://img.shields.io/badge/version-0.29.0-7fb2ff)
 ![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
@@ -207,12 +207,15 @@ through the world checking that both players see the same thing.
 - Install, update and uninstall.
 - 0.26.0: the whole mod was reviewed against the game's code. The 172 issues found were fixed or reviewed, and most
   were checked in the game; the testing found and fixed 16 more.
+- 0.29.0: the whole story with 4 players (four copies of the game): every boss with real fights, the dreams and the
+  dream warriors, the three Dreamers, the Black Egg, the Hollow Knight (both endings) and the Radiance, the Grimm
+  Troupe, Grey Prince Zote, the Colosseum of Fools (Bronze, Zote included), Zote and Cloth, and the Pantheon of the
+  Master from start to finish.
 
 ⚠️ **Partially tested:**
 
 - Hive Knight, Flukemarm, Massive Moss Charger and Vengefly King: they die on both PCs, but their attacks still need
   checking.
-- Zote's rescue: the fight yes, the conversation afterwards no.
 
 ❓ **Not tested yet:**
 
@@ -220,7 +223,7 @@ through the world checking that both players see the same thing.
 - The English translation inside the game.
 - From 0.22.0: a partner's map icon inside rooms that are not on the map (shops).
 - The orange steam of the False Knight's death (fixed without retesting).
-- Cloth and Menderbug, entering the Radiance through the game's normal path, and returning from the Godhome cutscenes.
+- Menderbug, and the Pantheon endings that end in a cutscene (the 5th).
 - Playing with 3 or 4 players: the cases that only happen with three or more were fixed in 0.28.0 and tested with four
   copies of the game on one PC, but not yet between real PCs.
 
