@@ -155,7 +155,12 @@ internal sealed class FsmStateSync {
     /// terminan de leer. Si no, el combate empezaba mientras el otro leía y quedaba la Hornet que habla en su PC.
     /// </summary>
     private static readonly (string Name, string Fsm)[] Encounters = {
-        ("Hornet Outskirts Battle Encounter", "Encounter")
+        ("Hornet Outskirts Battle Encounter", "Encounter"),
+        // Los guerreros soñadores (Gorb, Anciano Hu, Galien, Markoth, Marmu, Sin Ojos, Xero): su fantasma empieza el
+        // combate encendiendo la carpeta del guerrero (ActivateAllChildren de una variable que se busca al empezar, que
+        // HasBattleDialogue no ve). Sin compartirlo, el combate solo empezaba en el PC del que lo golpeó con el aguijón
+        // onírico, y si el guerrero lo movía otro PC no aparecía nunca
+        ("Ghost Warrior NPC", "Conversation Control")
     };
 
     private sealed class Tracked {
