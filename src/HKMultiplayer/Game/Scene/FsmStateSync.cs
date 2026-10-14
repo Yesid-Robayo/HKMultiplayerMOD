@@ -281,6 +281,8 @@ internal sealed class FsmStateSync {
     private string _scene = string.Empty;
     private ushort _sceneHash;
     private float _rescanAt;
+    private int _seenLoads;
+    private float _loadRescanAt;
     private float _scannedAt;
 
     private static FsmStateSync _active;
@@ -547,6 +549,11 @@ internal sealed class FsmStateSync {
 
         if (_rescanAt > 0f && Time.unscaledTime >= _rescanAt) {
             _rescanAt = 0f;
+            Scan();
+        }
+
+        // Una parte de la sala cargada aparte después (la del jefe; en un PC lento tarda más que el repaso de arriba)
+        if (SceneLoads.ShouldRescan(ref _seenLoads, ref _loadRescanAt)) {
             Scan();
         }
 

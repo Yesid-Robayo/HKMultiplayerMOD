@@ -61,6 +61,8 @@ internal sealed class DreamSync {
     private string _scene = string.Empty;
     private ushort _sceneHash;
     private float _rescanAt;
+    private int _seenLoads;
+    private float _loadRescanAt;
 
     /// <summary>En este sueño se vio un jefe vivo (solo entonces una salida puede ser por ganar).</summary>
     private bool _bossSeen;
@@ -164,6 +166,11 @@ internal sealed class DreamSync {
 
         if (_rescanAt > 0f && Time.unscaledTime >= _rescanAt) {
             _rescanAt = 0f;
+            Scan();
+        }
+
+        // Una parte de la sala cargada aparte después (la del jefe; en un PC lento tarda más que el repaso de arriba)
+        if (Scene.SceneLoads.ShouldRescan(ref _seenLoads, ref _loadRescanAt)) {
             Scan();
         }
 

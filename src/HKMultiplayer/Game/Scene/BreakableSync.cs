@@ -65,6 +65,8 @@ internal sealed class BreakableSync {
     private string _scene = string.Empty;
     private ushort _sceneHash;
     private float _rescanAt;
+    private int _seenLoads;
+    private float _loadRescanAt;
     private bool _sendSnapshot;
     private readonly Dictionary<string, Collider2D> _fakeAttacks = new();
 
@@ -289,6 +291,11 @@ internal sealed class BreakableSync {
 
         if (_rescanAt > 0f && Time.unscaledTime >= _rescanAt) {
             _rescanAt = 0f;
+            Scan();
+        }
+
+        // Una parte de la sala cargada aparte después (la del jefe; en un PC lento tarda más que el repaso de arriba)
+        if (SceneLoads.ShouldRescan(ref _seenLoads, ref _loadRescanAt)) {
             Scan();
         }
 
