@@ -410,6 +410,39 @@ _fight_alive() {
   fi
 }
 
+# Objetos de la sala en ese PC (orden sceneshot list), encendidos o no, sin lo que recoge cada jugador por su cuenta (un
+# amuleto que suelta un jefe: quien lo coge tiene encendido su destello y el otro no, como en el juego). Sin si su caja
+# está activa: la de los peligros animados (un goteo) se enciende y apaga sola
+_shot_list() {
+  local individual="${HK_INDIVIDUAL_PREFIXES#^}"
+  query "$1" "sceneshot list" | grep -a '\[TEST\] so ' | sed -E 's/.*\[TEST\] so //; s/[sn]$//' | grep -avE "[:/]$individual" | sort
+}
+
+# Huella de la sala en ese PC: cuántos objetos y su suma
+_shot() { _shot_list "$1" | md5sum | cut -c1-8; }
+
+# Lo que ve cada PC de la sala (suelos, paredes, ventanas, rejas encendidos o no) es igual en todos. Si no, FALLO con los
+# objetos que difieren entre el host y el primero distinto (un suelo roto solo en el PC de quien cogió el orbe)
+_scene_same() {
+  local step="$1" h inst g bad=""
+  h="$(_shot "$_R_HOST")"
+  for inst in $(_all_but "$_R_HOST"); do
+    g="$(_shot "$inst")"
+    if [ "$g" != "$h" ]; then
+      local hl gl
+      hl="$(_shot_list "$_R_HOST")"
+      gl="$(_shot_list "$inst")"
+      bad="host≠$inst: solo en el host [$(comm -23 <(echo "$hl") <(echo "$gl") | head -4 | paste -sd,)] solo en $inst [$(comm -13 <(echo "$hl") <(echo "$gl") | head -4 | paste -sd,)]"
+      break
+    fi
+  done
+  if [ -z "$bad" ]; then
+    _result OK "$step" "la sala está igual en todos ($h)"
+  else
+    _result FALLO "$step" "la sala no está igual: $bad"
+  fi
+}
+
 step_fight() {
   local flag="$1" x="${2:-}" y="${3:-}" name="${4:-}" line pos inst i awake=0 who h missing="" offset
   for inst in $(_all); do send "$inst" "god"; done
@@ -496,8 +529,13 @@ step_fight() {
     return
   fi
 
-  # Después: todos en la sala y con control (una presentación o un final que no devuelve el control los dejaría quietos)
-  sleep 8
+  # Después: todos en la sala y con control (una presentación o un final que no devuelve el control los dejaría quietos).
+  # Antes, salto para cerrar el mensaje de un objeto recogido (el amuleto que suelta Flukemarm, si cae encima)
+  sleep 6
+  for ((i = 0; i < 3; i++)); do
+    for inst in $(_all); do send "$inst" "press jump 0.15"; done
+    sleep 1.5
+  done
   local stuck="" hero
   for inst in $(_all); do
     hero="$(query "$inst" "hero" | grep -a '\[TEST\] hero ')"
@@ -510,6 +548,7 @@ step_fight() {
   else
     _result OK "fight $flag" "vencido en todos y todos con control en la sala"
   fi
+  _scene_same "fight $flag"
   for inst in $(_all); do send "$inst" "god no"; done
 }
 

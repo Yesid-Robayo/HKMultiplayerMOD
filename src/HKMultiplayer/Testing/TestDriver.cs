@@ -575,6 +575,31 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "whynot":
+                // whynot <nombre>: por qué el mod sigue o no a ese enemigo (los filtros del repaso de la sala)
+                foreach (var line in runner.Enemies.ExplainTracking(string.Join(" ", args.Skip(1)))) {
+                    Log.Info($"{Tag}seguir {line}");
+                }
+
+                break;
+            case "lastgate":
+                // lastgate <puerta>: como si se acabara de cruzar esa puerta (TransitionPoint.lastEntered). Algunas partes
+                // de sala solo se cargan si se llega por cierta puerta caminando (los Caballeros Vigilantes, desde abajo)
+                TransitionPoint.lastEntered = args[1];
+                break;
+            case "sceneshot":
+                // sceneshot [list]: objetos de la sala que se ven o que chocan (suelos, paredes, ventanas, rejas) y si están
+                // encendidos, para comparar los PCs al acabar un combate (un suelo roto solo en uno). Sin enemigos, sin
+                // copias del pool ni lo del mod. Con "list", también cada uno
+                var shot = SceneShot();
+                Log.Info($"{Tag}sceneshot {shot.Count} hash={HKMultiplayer.Game.Scene.ScenePaths.Fnv(string.Join("|", shot)):x8}");
+                if (args.Length > 1 && args[1] == "list") {
+                    foreach (var line in shot) {
+                        Log.Info($"{Tag}so {line}");
+                    }
+                }
+
+                break;
             case "bossloaders":
                 // bossloaders: las partes de la sala que se cargan con condiciones (la sala de un jefe: Ruins2_03_boss) y
                 // de qué dependen: el dato del jugador, las pruebas extra y la puerta por la que hay que entrar
@@ -588,7 +613,8 @@ internal sealed class TestDriver : MonoBehaviour {
                     Log.Info($"{Tag}cargador {loader.name} carga={loader.sceneNameToLoad} alt={loader.altSceneNameToLoad} " +
                              $"necesita={loader.needsPlayerDataBool}={loader.playerDataBoolValue} " +
                              $"int={loader.needsPlayerDataInt}={loader.playerDataIntValue}({loader.isIntValue}) extra=[{bools}] " +
-                             $"extraInt=[{ints}] puerta={loader.doorTrigger} persistente={loader.usePersistentBoolItem}");
+                             $"extraInt=[{ints}] puerta={loader.doorTrigger} persistente={loader.usePersistentBoolItem}" +
+                             $"({loader.persistentBoolData?.sceneName}/{loader.persistentBoolData?.id})");
                 }
 
                 break;
@@ -1820,6 +1846,45 @@ internal sealed class TestDriver : MonoBehaviour {
                 activates |= parent != null && parent.GetComponentsInChildren<HealthManager>(true).Length > 0;
                 break;
         }
+    }
+
+    /// <summary>
+    /// Objetos de las salas cargadas que se ven o chocan (con Renderer o con Collider2D sólido), con si están encendidos y
+    /// si su caja está activa, ordenados por ruta. Sin enemigos (ni lo que cuelga de ellos), sin copias ("(Clone)") ni
+    /// objetos del mod, del caballero o de los compañeros: lo que es igual en todos los PCs si la sala está igual.
+    /// </summary>
+    private static List<string> SceneShot() {
+        var lines = new List<string>();
+        for (var s = 0; s < UnityEngine.SceneManagement.SceneManager.sceneCount; s++) {
+            var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(s);
+            if (!scene.isLoaded) {
+                continue;
+            }
+
+            foreach (var root in scene.GetRootGameObjects()) {
+                foreach (var t in root.GetComponentsInChildren<Transform>(true)) {
+                    var go = t.gameObject;
+                    var renderer = go.GetComponent<Renderer>();
+                    var collider = go.GetComponent<Collider2D>();
+                    var solid = collider != null && !collider.isTrigger;
+                    if (renderer == null && !solid || go.name.Contains("(Clone)") || go.name.StartsWith("HKMultiplayer") ||
+                        t.GetComponentInParent<HealthManager>(true) != null || t.GetComponentInParent<HeroController>(true) != null ||
+                        renderer is ParticleSystemRenderer) {
+                        continue;
+                    }
+
+                    var path = go.name;
+                    for (var p = t.parent; p != null; p = p.parent) {
+                        path = p.name + "/" + path;
+                    }
+
+                    lines.Add($"{scene.name}:{path}={(go.activeInHierarchy ? 1 : 0)}{(solid ? collider.enabled ? "s" : "n" : "")}");
+                }
+            }
+        }
+
+        lines.Sort(StringComparer.Ordinal);
+        return lines;
     }
 
     private static float ParseFloat(string value) => float.Parse(value, CultureInfo.InvariantCulture);
