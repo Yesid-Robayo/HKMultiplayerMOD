@@ -132,7 +132,7 @@ internal sealed class DreamSync {
 
     public void Update(string scene) {
         if (_pendingExit is { } exit && GameManager.instance is { isPaused: false, IsInSceneTransition: false } &&
-            HeroController.instance != null) {
+            HeroController.instance != null && Time.unscaledTime >= _pendingExitAt) {
             _pendingExit = null;
             if (InDream) {
                 ExitDream("El compañero", exit.Target, exit.Gate, exit.Visualization, exit.Delay, exit.PreventFade,
@@ -462,7 +462,18 @@ internal sealed class DreamSync {
         // Con el menú de pausa abierto, un cambio de sala lo deja colgado: se sale al quitarla
         if (gm.isPaused) {
             _pendingExit = (target, gate, visualization, delay, preventFade, waitFade);
+            _pendingExitAt = 0f;
             Log.Info($"{from.Name} ganó el sueño y sale: se sale con él al quitar la pausa");
+            return;
+        }
+
+        // El jefe del sueño ya murió también aquí: el juego de este PC saca al caballero por su cuenta, con su vuelta de
+        // sueño (tendido y levantándose). Forzarla encima la pisaba: con cuatro jugadores, el aviso de otro llegaba mientras
+        // el juego de este preparaba la suya y el caballero volvía de pie, sin poder moverse. Solo si no sale solo
+        if (!EnemySync.BossInRoom) {
+            _pendingExit = (target, gate, visualization, delay, preventFade, waitFade);
+            _pendingExitAt = Time.unscaledTime + OwnExitWait;
+            Log.Info($"{from.Name} ganó el sueño y sale; aquí el jefe también murió: se espera la salida de este PC");
             return;
         }
 
@@ -471,6 +482,12 @@ internal sealed class DreamSync {
 
     private (string Target, string Gate, GameManager.SceneLoadVisualizations Visualization, float Delay, bool PreventFade,
         bool WaitFade)? _pendingExit;
+
+    /// <summary>Cuándo se hace la salida pendiente (0: en cuanto se pueda).</summary>
+    private float _pendingExitAt;
+
+    /// <summary>Lo que se espera a que el juego de este PC saque al caballero del sueño antes de sacarlo el mod.</summary>
+    private const float OwnExitWait = 8f;
 
     private void ExitDream(string who, string target, string gate, GameManager.SceneLoadVisualizations visualization,
         float delay, bool preventFade, bool waitFade) {
