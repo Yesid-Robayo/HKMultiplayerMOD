@@ -85,6 +85,9 @@ internal static class Difficulty {
     /// <summary>Vida con la que aparece un jefe que no tiene estatua: ningún enemigo normal llega.</summary>
     private const int BossStartHealth = 300;
 
+    /// <summary>Vida a partir de la cual cuenta como jefe lo que está en la parte de la sala del jefe (ver IsBoss).</summary>
+    private const int BossSceneHealth = 150;
+
     /// <summary>Lo decidido para cada enemigo la primera vez que se miró (con la vida del principio).</summary>
     private static readonly Dictionary<HealthManager, bool> BossCache = new();
 
@@ -108,7 +111,10 @@ internal static class Difficulty {
             Prune(BossCache);
         }
 
-        boss = UnlockBossSceneField?.GetValue(health) as Object != null || health.hp >= BossStartHealth;
+        // También lo de mucha vida en la parte de la sala que el juego carga para el jefe ("..._boss"): la primera fase del
+        // Maestro de Almas (275) no tiene estatua (la lleva la segunda) y se quedaba sin barra y sin la vida extra
+        boss = UnlockBossSceneField?.GetValue(health) as Object != null || health.hp >= BossStartHealth ||
+               health.hp >= BossSceneHealth && health.gameObject.scene.name.EndsWith("_boss", System.StringComparison.Ordinal);
         BossCache[health] = boss;
         return boss;
     }
