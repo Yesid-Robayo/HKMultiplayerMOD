@@ -6236,6 +6236,13 @@ internal sealed class EnemySync {
         };
         On.HealthManager.Hit += (orig, self, hit) => {
             var sync = _active;
+            // Lo que golpea la copia de un objeto compartido que mueve otro PC (Cloth) ya lo golpeó el original allí, y
+            // de allí llega reenviado si hace falta: aquí, a un enemigo real o a una marioneta, contaba otra vez
+            if (sync != null && !_playingFx && hit.Source != null && sync._byHealth.ContainsKey(self) &&
+                FsmStateSync.IsRemoteCopy(hit.Source)) {
+                return;
+            }
+
             if (_playingFx || sync == null || !sync._byHealth.TryGetValue(self, out var enemy) || !enemy.Puppet) {
                 orig(self, hit);
                 return;

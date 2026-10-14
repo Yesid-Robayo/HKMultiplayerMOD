@@ -152,7 +152,11 @@ internal sealed class FsmStateSync {
         // el PC de quien lo cogía: los demás no veían nada y se quedaban arriba, sobre un suelo que allí seguía entero,
         // mientras la segunda fase iba abajo
         ("Quake Fake", "FSM"),
-        ("Knight Get Quake Fake", "Get Quake")
+        ("Knight Get Quake Fake", "Get Quake"),
+        // Cloth, que ayuda contra el Señor Traidor (`Fungus3_23_boss`): entra cuando el maniquí de mantis la llama y
+        // persigue y golpea al jefe con su propia lógica. El aviso lo manda el maniquí, que solo tiene lógica en el PC que
+        // lo mueve: en los demás se quedaba quieta en la entrada todo el combate
+        ("Cloth Fighter", "Control")
     };
 
     /// <summary>
@@ -319,6 +323,27 @@ internal sealed class FsmStateSync {
     /// </summary>
     public static bool IsSharedController(Fsm fsm) =>
         _active != null && fsm != null && _active._byFsm.TryGetValue(fsm, out var item) && !item.CopyTransitions;
+
+    /// <summary>
+    /// Si el objeto (o algo de lo que cuelga) es la copia de un objeto compartido que mueve otro PC: lo que golpea ya lo
+    /// golpeó el original allí (Cloth contra el Señor Traidor).
+    /// </summary>
+    public static bool IsRemoteCopy(GameObject source) {
+        var sync = _active;
+        if (sync == null || source == null) {
+            return false;
+        }
+
+        for (var t = source.transform; t != null; t = t.parent) {
+            foreach (var fsm in t.GetComponents<PlayMakerFSM>()) {
+                if (sync._byFsm.TryGetValue(fsm.Fsm, out var item) && !item.CopyTransitions && !sync.IsController(item)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Si el directo de un guardable (su golpe y su animación) lo lleva la copia de su cadena, y si ahora mismo va a
