@@ -10,6 +10,8 @@
 #   bash tools/run-routes.sh --keep                deja los juegos abiertos al terminar
 #   bash tools/run-routes.sh --reuse               no empieza el mundo de cero (más rápido para repetir una ruta)
 #   bash tools/run-routes.sh -v                    muestra cada comprobación según pasa
+#   bash tools/run-routes.sh --players 4           con 4 jugadores: el par J/K y L y M, que entran en cada sala y
+#                                                  cuentan en cada comprobación (un solo grupo; 3 = solo L)
 #
 # Usa las copias test-instances/d..k (las crea si faltan, con hard links: no ocupan disco). No toca b ni c.
 # Si otro proceso ya está usando un par, se usa el siguiente libre.
@@ -18,6 +20,21 @@
 
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Jugadores (antes de cargar steps.sh, que lee los de más de HK_EXTRAS_LIST)
+PLAYERS=2
+for ((a = 1; a <= $#; a++)); do
+  if [ "${!a}" = --players ]; then
+    b=$((a + 1)); PLAYERS="${!b:-2}"
+  fi
+done
+if ! [[ "$PLAYERS" =~ ^[2-4]$ ]]; then
+  echo "--players va de 2 a 4" >&2
+  exit 2
+fi
+EXTRA_LETTERS=(L M)
+export HK_EXTRAS_LIST="${EXTRA_LETTERS[*]:0:$((PLAYERS - 2))}"
+
 # shellcheck source=routes/steps.sh
 source "$ROOT/tools/routes/steps.sh"
 
@@ -30,6 +47,7 @@ ROUTES=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --pairs) PAIRS="$2"; shift ;;
+    --players) shift ;;
     --lag) HK_LAG="$2"; shift ;;
     --keep) KEEP=1 ;;
     --reuse) REUSE=1 ;;
@@ -69,11 +87,15 @@ RUN="$ROOT/out/routes/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$RUN/claims"
 echo "rutas: ${#FILES[@]}  pares: $PAIRS  resultados: $RUN"
 
-# Reserva de pares libres
+# Reserva de pares libres. Con más de 2 jugadores, un solo grupo: el par J/K (el 4) y los de más
 TAKEN=()
-for ((i = 0; i < 4 && ${#TAKEN[@]} < PAIRS; i++)); do
-  lock_pair "$i" && TAKEN+=("$i")
-done
+if [ "$PLAYERS" -gt 2 ]; then
+  lock_pair 3 && TAKEN+=(3)
+else
+  for ((i = 0; i < 4 && ${#TAKEN[@]} < PAIRS; i++)); do
+    lock_pair "$i" && TAKEN+=("$i")
+  done
+fi
 if [ ${#TAKEN[@]} -eq 0 ]; then
   echo "no hay pares libres (otro proceso los está usando: test-instances/.locks)" >&2
   exit 2
@@ -82,9 +104,18 @@ fi
 
 cleanup() {
   for i in "${TAKEN[@]}"; do
-    [ "$KEEP" = 1 ] || stop_pair "$i"
+    [ "$KEEP" = 1 ] || { stop_pair "$i"; stop_group "${HK_EXTRAS[@]}"; }
     unlock_pair "$i"
   done
+}
+
+# Prepara el par (o el grupo, con jugadores de más). <limpio> 1 empieza el mundo de cero
+setup_route_group() {
+  if [ ${#HK_EXTRAS[@]} -eq 0 ]; then
+    setup_pair "$1" "$2"
+  else
+    HK_GROUP_FRESH="$2" setup_group $((HK_ROUTE_BASE_PORT + $1 * 10)) "${HK_PAIR_HOSTS[$1]}" "${HK_PAIR_GUESTS[$1]}" "${HK_EXTRAS[@]}"
+  fi
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
@@ -93,12 +124,12 @@ worker() {
   local pair="$1" label="par $(( $1 + 1 )) (${HK_PAIR_HOSTS[$1]}/${HK_PAIR_GUESTS[$1]})" file name verdict
 
   local ready=0
-  if [ "$REUSE" = 1 ] && pair_healthy "$pair"; then
+  if [ "$REUSE" = 1 ] && group_healthy "$pair"; then
     ready=1
   else
     echo "[$label] preparando..."
     for attempt in 1 2; do
-      setup_pair "$pair" "$([ "$REUSE" = 1 ] && echo 0 || echo 1)" && { ready=1; break; }
+      setup_route_group "$pair" "$([ "$REUSE" = 1 ] && echo 0 || echo 1)" && { ready=1; break; }
       echo "[$label] no se pudo preparar (intento $attempt)"
     done
   fi
@@ -110,9 +141,9 @@ worker() {
     mkdir "$RUN/claims/$name" 2>/dev/null || continue
 
     # Si el par se cayó en la ruta anterior, se vuelve a preparar sin borrar el mundo
-    if ! pair_healthy "$pair"; then
+    if ! group_healthy "$pair"; then
       echo "[$label] el par no responde: se reinicia"
-      setup_pair "$pair" 0 || { echo "[$label] no se pudo reiniciar"; rmdir "$RUN/claims/$name"; return; }
+      setup_route_group "$pair" 0 || { echo "[$label] no se pudo reiniciar"; rmdir "$RUN/claims/$name"; return; }
     fi
 
     echo "[$label] $name..."
@@ -129,7 +160,7 @@ wait
 
 # Resumen
 {
-  echo "Rutas de prueba — $(date '+%Y-%m-%d %H:%M')  pares: ${#TAKEN[@]}${HK_LAG:+  red: $HK_LAG}"
+  echo "Rutas de prueba — $(date '+%Y-%m-%d %H:%M')  pares: ${#TAKEN[@]}  jugadores: $PLAYERS${HK_LAG:+  red: $HK_LAG}"
   echo
   printf '%-8s %-24s %5s %6s %7s\n' RESULTADO RUTA OK FALLO NOCONC
   for file in "${FILES[@]}"; do

@@ -10,7 +10,12 @@ bash tools/run-routes.sh --pairs 3              # todas, repartidas entre 3 pare
 bash tools/run-routes.sh crossroads city        # solo esas rutas
 bash tools/run-routes.sh --reuse -v crossroads  # repetir una ruta sin empezar el mundo de cero, viendo cada paso
 bash tools/run-routes.sh --lag "120 30 2"       # con red mala (retraso ms, variación ms, pérdida %)
+bash tools/run-routes.sh --players 4            # con 4 jugadores: el par J/K más L y M
 ```
+
+- Con `--players 3` o `4`, L (y M) se unen a la partida del par J/K, entran en cada sala con los dos y cuentan en
+  cada comprobación: se tienen que ver todos, el progreso, los rompibles, los enemigos vivos y lo guardado de la sala
+  tienen que ser iguales en todos, y ninguno puede tener errores. Las órdenes `both` van a todos.
 
 - Con **un par** basta para comprobarlo todo. Con más pares solo se reparten las rutas para terminar antes. Cada juego
   ocupa ~1,5 GB de RAM.
@@ -61,7 +66,7 @@ Un paso por línea. `#` empieza un comentario. Los pasos que tocan un PC aceptan
 | `scene-data-sync [Sala]` | Los dos guardan y lo guardado de la sala (objetos activados, contadores) es igual, sin contar lo que recoge cada uno. |
 | `boss <campo> [quién] [intentos]` | Golpea a todo hasta que muera el jefe y comprueba que su campo de derrota (`falseKnightDefeated`...) es `true` en los dos. Si el jefe no muere (la pelea no empezó), da `NOCONC`. |
 | `expect-log <host\|guest> <regex> [s]` | Aparece esa línea en el ModLog de ese PC desde que empezó la ruta. |
-| `die [quién]` | Ese jugador muere y sigue en la partida. |
+| `die [quién]` | Ese jugador muere y sigue en la partida. `die extras` mata a los jugadores de más (con 2 no hace nada): para que caigan todos, antes del último. |
 | `rejoin` | El invitado sale al menú y vuelve a unirse. Conserva su personaje. |
 
 Al final de cada ruta, siempre se comprueba que no haya excepciones ni `[ERROR]` nuevos en el log de ninguno de los dos

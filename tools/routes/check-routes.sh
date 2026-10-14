@@ -59,8 +59,11 @@ for file in "${files[@]}"; do
       expect-pd)
         [[ "${args[1]:-}" =~ ^(host|guest)$ ]] && [ -n "${args[3]:-}" ] || report "$name:$n: uso: expect-pd <host|guest> <campo> <valor> [s]"
         ;;
-      objects-sync|enemies-sync|die)
+      objects-sync|enemies-sync)
         [ -z "${args[1]:-}" ] || [[ "${args[1]}" =~ ^(host|guest)$ ]] || report "$name:$n: '${args[1]}' debe ser host o guest"
+        ;;
+      die)
+        [ -z "${args[1]:-}" ] || [[ "${args[1]}" =~ ^(host|guest|extras)$ ]] || report "$name:$n: '${args[1]}' debe ser host, guest o extras"
         ;;
       boss)
         [ -n "${args[1]:-}" ] || report "$name:$n: uso: boss <campo> [host|guest] [intentos]"

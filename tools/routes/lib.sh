@@ -200,16 +200,22 @@ setup_pair() {
   return 0
 }
 
-# Prepara un grupo de 3 o 4 jugadores: el host (primera letra) abre el mundo de la ruta y los demás se unen uno a uno.
-# Uso: setup_group <puerto> <host> <invitado>... (p. ej. setup_group 27130 J K L M). Mundo existente, como setup_pair n 0.
+# Prepara un grupo de 3 o 4 jugadores: el host (primera letra) abre el mundo de la ruta y los demás se unen uno a uno
+# (el primero se llama "Invitado", como en setup_pair; los demás "Invitado2", "Invitado3").
+# Uso: setup_group <puerto> <host> <invitado>... (p. ej. setup_group 27130 J K L M). Mundo existente, salvo con
+# HK_GROUP_FRESH=1 (se borra antes, partida nueva desde cero).
 setup_group() {
   local port="$1" host="$2"; shift 2
-  local guests=("$@") inst since n=0
+  local guests=("$@") inst since n=0 name
   for inst in "$host" "${guests[@]}"; do
     ensure_instance "$inst" || return 1
     stop_instance "$inst"
   done
   sleep 2
+
+  if [ "${HK_GROUP_FRESH:-0}" = 1 ]; then
+    rm -rf "$(_data_dir "$host")/HKMultiplayer/Mundos/$HK_ROUTE_WORLD"
+  fi
 
   launch_instance "$host"
   for inst in "${guests[@]}"; do
@@ -236,8 +242,9 @@ setup_group() {
 
   for inst in "${guests[@]}"; do
     n=$((n + 1))
+    [ $n = 1 ] && name=Invitado || name="Invitado$n"
     since=$(log_lines "$inst")
-    send "$inst" "join 127.0.0.1 $port $HK_ROUTE_CODE Invitado$n"
+    send "$inst" "join 127.0.0.1 $port $HK_ROUTE_CODE $name"
     wait_log_since "$inst" "$since" "Progreso compartido activo" 150 >/dev/null || { echo "grupo: $inst no entró en el mundo" >&2; return 1; }
     wait_playable "$inst" 90 || { echo "grupo: $inst no llegó a una sala jugable" >&2; return 1; }
   done

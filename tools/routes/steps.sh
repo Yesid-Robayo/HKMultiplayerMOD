@@ -15,6 +15,17 @@ HK_INDIVIDUAL_PREFIXES='^(Shiny|Heart Piece|Vessel Fragment|Dream Plant|Egg Sac|
 _R_HOST=""; _R_GUEST=""; _R_OUT=""; _R_LINE=0; _R_ROOM=""; _R_ROOM_OK=1
 _R_START_HOST=0; _R_START_GUEST=0
 
+# Jugadores de más (3 o 4 jugadores, run-routes.sh --players): copias que se unen a la partida del par, entran en cada
+# sala con los dos y cuentan en cada comprobación (el mismo progreso, los mismos enemigos vivos, sin errores...)
+read -r -a HK_EXTRAS <<< "${HK_EXTRAS_LIST:-}"
+declare -A _R_START_EXTRA=()
+
+# Todas las copias de la ruta: host, invitado y los de más
+_all() { echo "$_R_HOST" "$_R_GUEST" "${HK_EXTRAS[@]}"; }
+
+# Todas menos esa
+_all_but() { local inst; for inst in $(_all); do [ "$inst" != "$1" ] && echo "$inst"; done; return 0; }
+
 _result() {
   # _result <OK|FALLO|NOCONC> <paso> <detalle>
   printf '%-6s | %4s | %s | %s\n' "$1" "$_R_LINE" "$2" "$3" >> "$_R_OUT"
@@ -51,13 +62,13 @@ _wait_pd() {
 step_room() {
   local scene="$1" gate="$2" deadline hs gs
   _R_ROOM="$scene"; _R_ROOM_OK=0
-  send "$_R_HOST" "goscene $scene $gate"
-  send "$_R_GUEST" "goscene $scene $gate"
+  local inst
+  for inst in $(_all); do send "$inst" "goscene $scene $gate"; done
   deadline=$((SECONDS + 50))
   while [ $SECONDS -lt $deadline ]; do
     sleep 3
     hs="$(status_of "$_R_HOST")"; gs="$(status_of "$_R_GUEST")"
-    if [ "$(status_field "$hs" scene)" = "$scene" ] && [ "$(status_field "$gs" scene)" = "$scene" ]; then
+    if [ "$(status_field "$hs" scene)" = "$scene" ] && [ "$(status_field "$gs" scene)" = "$scene" ] && _extras_in "$scene"; then
       _R_ROOM_OK=1
       break
     fi
@@ -70,17 +81,30 @@ step_room() {
 
   # Mucha vida: la ruta deja a los caballeros quietos entre enemigos y uno nuevo tiene 5 máscaras. Si muere, reaparece
   # en su banco y lo que se comprueba después ya no es de esta sala (sus enemigos parecen no haber muerto en el otro)
-  send "$_R_HOST" "pdset maxHealth $HK_ROUTE_HEALTH"; send "$_R_HOST" "pdset health $HK_ROUTE_HEALTH"
-  send "$_R_GUEST" "pdset maxHealth $HK_ROUTE_HEALTH"; send "$_R_GUEST" "pdset health $HK_ROUTE_HEALTH"
+  for inst in $(_all); do send "$inst" "pdset maxHealth $HK_ROUTE_HEALTH"; send "$inst" "pdset health $HK_ROUTE_HEALTH"; done
 
-  # Tiempo para que el dueño de la sala reparta su estado y aparezcan los avatares
+  # Tiempo para que el dueño de la sala reparta su estado y aparezcan los avatares. Cada uno ve a todos los demás
   sleep 5
-  hs="$(status_of "$_R_HOST")"; gs="$(status_of "$_R_GUEST")"
-  if [ "$(status_field "$hs" visibles)" -ge 1 ] 2>/dev/null && [ "$(status_field "$gs" visibles)" -ge 1 ] 2>/dev/null; then
-    _result OK "room $scene" "los dos en la sala y se ven"
+  local others=$(( ${#HK_EXTRAS[@]} + 1 )) seen="" bad=0 v
+  for inst in $(_all); do
+    v="$(status_field "$(status_of "$inst")" visibles)"
+    seen="$seen $inst=$v"
+    [ "$v" -ge "$others" ] 2>/dev/null || bad=1
+  done
+  if [ $bad = 0 ]; then
+    _result OK "room $scene" "todos en la sala y se ven ($others cada uno)"
   else
-    _result FALLO "room $scene" "en la misma sala pero no se ven (visibles host=$(status_field "$hs" visibles), invitado=$(status_field "$gs" visibles))"
+    _result FALLO "room $scene" "en la misma sala pero no se ven todos (visibles:$seen; deberían ser $others)"
   fi
+}
+
+# Los de más están en esa sala (sin extras, siempre)
+_extras_in() {
+  local inst
+  for inst in "${HK_EXTRAS[@]}"; do
+    [ "$(status_field "$(status_of "$inst")" scene)" = "$1" ] || return 1
+  done
+  return 0
 }
 
 step_shared() {
@@ -92,10 +116,14 @@ step_shared() {
     _result NOCONC "shared $from $field $3" "no se pudo poner en el que lo cambia (vale '$got'; ¿existe el campo?)"
     return
   }
-  if got="$(_wait_pd "$dst" "$field" "$value" 8)"; then
-    _result OK "shared $from $field $3" "llegó al otro"
+  local bad=""
+  for dst in $(_all_but "$src"); do
+    got="$(_wait_pd "$dst" "$field" "$value" 8)" || bad="$bad $dst='$got'"
+  done
+  if [ -z "$bad" ]; then
+    _result OK "shared $from $field $3" "llegó a los demás"
   else
-    _result FALLO "shared $from $field $3" "el otro sigue con '$got'"
+    _result FALLO "shared $from $field $3" "siguen con otro valor:$bad"
   fi
 }
 
@@ -116,20 +144,29 @@ step_private() {
   }
   sleep 4
   got="$(pd_value "$dst" "$field")"
-  if [ "$got" = "$before" ]; then
-    _result OK "private $from $field $3" "no pasó al otro (sigue '$before')"
+  local leaked="" inst
+  for inst in "${HK_EXTRAS[@]}"; do
+    [ "$(pd_value "$inst" "$field")" = "$value" ] && leaked="$leaked $inst"
+  done
+  if [ "$got" = "$before" ] && [ -z "$leaked" ]; then
+    _result OK "private $from $field $3" "no pasó a los demás (sigue '$before')"
   else
-    _result FALLO "private $from $field $3" "es del personaje pero pasó al otro ('$before' → '$got')"
+    _result FALLO "private $from $field $3" "es del personaje pero pasó a otro ('$before' → '$got'${leaked:+; también a$leaked})"
   fi
 }
 
 step_same_pd() {
-  local field="$1" h g
-  h="$(pd_value "$_R_HOST" "$field")"; g="$(pd_value "$_R_GUEST" "$field")"
-  if [ "$h" = "$g" ]; then
-    _result OK "same-pd $field" "los dos '$h'"
+  local field="$1" h v inst all="" bad=0
+  h="$(pd_value "$_R_HOST" "$field")"
+  for inst in $(_all); do
+    v="$(pd_value "$inst" "$field")"
+    all="$all $inst='$v'"
+    [ "$v" = "$h" ] || bad=1
+  done
+  if [ $bad = 0 ]; then
+    _result OK "same-pd $field" "todos '$h'"
   else
-    _result FALLO "same-pd $field" "host '$h', invitado '$g'"
+    _result FALLO "same-pd $field" "distinto:$all"
   fi
 }
 
@@ -173,12 +210,17 @@ step_breakables_sync() {
   fi
 
   sleep 3
+  local inst v all="" bad=0
   hb="$(query "$_R_HOST" "breakables" | grep -aoE '[0-9]+ rotos' | grep -oE '^[0-9]+')"
-  gb="$(query "$_R_GUEST" "breakables" | grep -aoE '[0-9]+ rotos' | grep -oE '^[0-9]+')"
-  if [ -n "$hb" ] && [ "$hb" = "$gb" ]; then
-    _result OK "breakables-sync" "el invitado rompió $broke; rotos en los dos: $hb"
+  for inst in $(_all); do
+    v="$(query "$inst" "breakables" | grep -aoE '[0-9]+ rotos' | grep -oE '^[0-9]+')"
+    all="$all $inst=${v:-?}"
+    { [ -n "$v" ] && [ "$v" = "$hb" ]; } || bad=1
+  done
+  if [ $bad = 0 ]; then
+    _result OK "breakables-sync" "el invitado rompió $broke; rotos en todos: $hb"
   else
-    _result FALLO "breakables-sync" "el invitado rompió $broke; rotos host=${hb:-?} invitado=${gb:-?}"
+    _result FALLO "breakables-sync" "el invitado rompió $broke; rotos:$all"
   fi
 }
 
@@ -188,10 +230,10 @@ _alive_enemies() {
     | sed -E 's/.*\[TEST\] enemigo (.*) id=([0-9a-f]+).*/\2 \1/' | sort
 }
 
-# Los dos siguen en la sala de la ruta (si uno murió, reapareció en otra)
+# Todos siguen en la sala de la ruta (si uno murió, reapareció en otra)
 _both_in_room() {
   [ "$(status_field "$(status_of "$_R_HOST")" scene)" = "$_R_ROOM" ] &&
-    [ "$(status_field "$(status_of "$_R_GUEST")" scene)" = "$_R_ROOM" ]
+    [ "$(status_field "$(status_of "$_R_GUEST")" scene)" = "$_R_ROOM" ] && _extras_in "$_R_ROOM"
 }
 
 step_enemies_sync() {
@@ -213,11 +255,16 @@ step_enemies_sync() {
     return
   fi
 
-  h="$(_alive_enemies "$_R_HOST")"; g="$(_alive_enemies "$_R_GUEST")"
-  if [ "$h" = "$g" ]; then
-    _result OK "enemies-sync" "$who golpeó $hit; vivos en los dos: $(echo "$h" | grep -c .)"
+  h="$(_alive_enemies "$_R_HOST")"
+  local inst bad=""
+  for inst in $(_all_but "$_R_HOST"); do
+    g="$(_alive_enemies "$inst")"
+    [ "$h" = "$g" ] || bad="$bad $inst: solo vivos en el host [$(comm -23 <(echo "$h") <(echo "$g") | cut -d' ' -f2- | head -5 | paste -sd,)] solo en $inst [$(comm -13 <(echo "$h") <(echo "$g") | cut -d' ' -f2- | head -5 | paste -sd,)];"
+  done
+  if [ -z "$bad" ]; then
+    _result OK "enemies-sync" "$who golpeó $hit; vivos en todos: $(echo "$h" | grep -c .)"
   else
-    _result FALLO "enemies-sync" "$who golpeó $hit; solo vivos en el host: [$(comm -23 <(echo "$h") <(echo "$g") | cut -d' ' -f2- | head -5 | paste -sd,)] solo en el invitado: [$(comm -13 <(echo "$h") <(echo "$g") | cut -d' ' -f2- | head -5 | paste -sd,)]"
+    _result FALLO "enemies-sync" "$who golpeó $hit;$bad"
   fi
 }
 
@@ -237,8 +284,8 @@ step_objects_sync() {
     sleep 2
     local seen
     seen="$(query "$dst" "objs" | grep -aF "obj $id=")"
-    if echo "$seen" | grep -aqF "obj $id=sí"; then
-      _result OK "objects-sync" "$who activó '$id' y el otro lo ve activado"
+    if echo "$seen" | grep -aqF "obj $id=sí" && _extras_see "$id"; then
+      _result OK "objects-sync" "$who activó '$id' y los demás lo ven activado"
       return
     fi
 
@@ -250,6 +297,16 @@ step_objects_sync() {
   done
 
   _result FALLO "objects-sync" "$who activó '$id' pero el otro no lo tiene activado"
+}
+
+# Los de más ven ese objeto activado (o ya destruido)
+_extras_see() {
+  local inst seen
+  for inst in "${HK_EXTRAS[@]}"; do
+    seen="$(query "$inst" "objs" | grep -aF "obj $1=")"
+    echo "$seen" | grep -aqE "=sí|\(destruido\)" || return 1
+  done
+  return 0
 }
 
 step_rock_sync() {
@@ -282,13 +339,18 @@ _scene_data() {
 }
 
 step_scene_data_sync() {
-  local scene="${1:-$_R_ROOM}" h g
-  send "$_R_HOST" "save"; send "$_R_GUEST" "save"; sleep 4
-  h="$(_scene_data "$_R_HOST" "$scene")"; g="$(_scene_data "$_R_GUEST" "$scene")"
-  if [ "$h" = "$g" ]; then
+  local scene="${1:-$_R_ROOM}" h g inst bad=""
+  for inst in $(_all); do send "$inst" "save"; done
+  sleep 4
+  h="$(_scene_data "$_R_HOST" "$scene")"
+  for inst in $(_all_but "$_R_HOST"); do
+    g="$(_scene_data "$inst" "$scene")"
+    [ "$h" = "$g" ] || bad="$bad $inst: solo en el host [$(comm -23 <(echo "$h") <(echo "$g") | head -5 | paste -sd,)] solo en $inst [$(comm -13 <(echo "$h") <(echo "$g") | head -5 | paste -sd,)];"
+  done
+  if [ -z "$bad" ]; then
     _result OK "scene-data-sync $scene" "$(echo "$h" | grep -c .) objetos guardados iguales"
   else
-    _result FALLO "scene-data-sync $scene" "solo en el host: [$(comm -23 <(echo "$h") <(echo "$g") | head -5 | paste -sd,)] solo en el invitado: [$(comm -13 <(echo "$h") <(echo "$g") | head -5 | paste -sd,)]"
+    _result FALLO "scene-data-sync $scene" "$bad"
   fi
 }
 
@@ -302,8 +364,14 @@ step_boss() {
 
   sleep 4
   h="$(_wait_pd "$_R_HOST" "$flag" true 8)"; g="$(_wait_pd "$_R_GUEST" "$flag" true 8)"
-  if [ "$h" = true ] && [ "$g" = true ]; then
-    _result OK "boss $flag" "derrotado en los dos"
+  local inst missing=""
+  for inst in "${HK_EXTRAS[@]}"; do
+    [ "$(_wait_pd "$inst" "$flag" true 8)" = true ] || missing="$missing $inst"
+  done
+  if [ "$h" = true ] && [ "$g" = true ] && [ -z "$missing" ]; then
+    _result OK "boss $flag" "derrotado en todos"
+  elif [ "$h" = true ] && [ "$g" = true ]; then
+    _result FALLO "boss $flag" "derrotado en el host y el invitado, pero no en:$missing"
   elif [ "$h" != true ] && [ "$g" != true ]; then
     _result NOCONC "boss $flag" "el jefe no murió con hitall (puede que la pelea no haya empezado)"
   else
@@ -343,7 +411,13 @@ step_rejoin() {
 }
 
 step_die() {
-  local who="${1:-guest}" s
+  local who="${1:-guest}" s inst
+  # "extras": mueren los jugadores de más (con 2 jugadores no hace nada). Para que caigan todos, antes del último
+  if [ "$who" = extras ]; then
+    for inst in "${HK_EXTRAS[@]}"; do send "$inst" "die"; done
+    [ ${#HK_EXTRAS[@]} -gt 0 ] && { sleep 15; _result OK "die extras" "murieron ${HK_EXTRAS[*]}"; }
+    return
+  fi
   send "$(_who "$who")" "die"; sleep 15
   s="$(status_of "$(_who "$who")")"
   if [ "$(status_field "$s" activa)" = True ]; then
@@ -367,6 +441,8 @@ run_route() {
   _R_PAIR="$1"; _R_HOST="${HK_PAIR_HOSTS[$1]}"; _R_GUEST="${HK_PAIR_GUESTS[$1]}"; _R_OUT="$3"
   _R_LINE=0; _R_ROOM=""; _R_ROOM_OK=1
   _R_START_HOST=$(log_lines "$_R_HOST"); _R_START_GUEST=$(log_lines "$_R_GUEST")
+  local _x
+  for _x in "${HK_EXTRAS[@]}"; do _R_START_EXTRA[$_x]=$(log_lines "$_x"); done
   : > "$_R_OUT"
 
   local raw line keyword
@@ -388,7 +464,7 @@ run_route() {
       room) step_room "${args[1]:-}" "${args[2]:-}" ;;
       host) send "$_R_HOST" "${line#host }" ;;
       guest) send "$_R_GUEST" "${line#guest }" ;;
-      both) send "$_R_HOST" "${line#both }"; send "$_R_GUEST" "${line#both }" ;;
+      both) for _inst in $(_all); do send "$_inst" "${line#both }"; done ;;
       wait) sleep "${args[1]:-}" ;;
       shared) step_shared "${args[1]:-}" "${args[2]:-}" "${args[3]:-}" ;;
       private) step_private "${args[1]:-}" "${args[2]:-}" "${args[3]:-}" ;;
@@ -416,11 +492,25 @@ run_route() {
   [ -n "$errors" ] && _result FALLO "errores (host)" "$(echo "$errors" | cut -c1-200 | paste -sd'|')"
   errors="$(_new_errors "$_R_GUEST" "$_R_START_GUEST")"
   [ -n "$errors" ] && _result FALLO "errores (invitado)" "$(echo "$errors" | cut -c1-200 | paste -sd'|')"
-  if pair_healthy "$_R_PAIR"; then
-    _result OK "sesión" "los dos siguen conectados"
+  for _x in "${HK_EXTRAS[@]}"; do
+    errors="$(_new_errors "$_x" "${_R_START_EXTRA[$_x]}")"
+    [ -n "$errors" ] && _result FALLO "errores ($_x)" "$(echo "$errors" | cut -c1-200 | paste -sd'|')"
+  done
+  if group_healthy "$_R_PAIR"; then
+    _result OK "sesión" "todos siguen conectados"
   else
     _result FALLO "sesión" "al terminar la ruta la sesión se cayó o se cerró un juego"
   fi
+}
+
+# El par y los de más siguen abiertos y con la sesión activa
+group_healthy() {
+  pair_healthy "$1" || return 1
+  local inst
+  for inst in "${HK_EXTRAS[@]}"; do
+    { instance_running "$inst" && [ "$(status_field "$(status_of "$inst")" activa)" = "True" ]; } || return 1
+  done
+  return 0
 }
 
 # Resultado global de una ruta a partir de su archivo: FALLO > NOCONC > OK. Una ruta que no llegó al final (el

@@ -1208,6 +1208,9 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   Hornet quita 4 (3×). Tres van a la vez con el host: quedan en tres sitios distintos. M se va y vuelve con el mismo
   número: no hereda la reja que controlaba. Ningún mensaje no fiable perdido en el host. Repaso con 2 (J y K): los
   cambios de Hornet (8 en 90 s, al principio de un movimiento) y revivir.
+  Después, las 16 rutas con 4 jugadores (`run-routes.sh --players 4`, mundo nuevo): 0 FALLO, y los mismos NOCONC que
+  con 2 (los jefes que las rutas no despiertan y salas sin objetos ni enemigos). La de sesión necesitaba `die extras`:
+  con 4, al morir el invitado y el host los otros dos seguían en pie y no caían todos.
 
 ## Pendientes
 

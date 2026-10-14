@@ -31,6 +31,7 @@ room Crossroads_01 left1
 partner-moves
 # Si cae el último en pie, muerte normal para todos: los dos siguen en la partida y vuelven a juntarse
 die guest
+die extras
 die host
 expect-log guest Todos caídos 20
 room Crossroads_01 left1
