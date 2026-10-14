@@ -459,6 +459,13 @@ internal sealed class EnemySync {
         /// <summary>Su cadáver (escondido hasta que muere): se sigue unos segundos tras la muerte.</summary>
         public bool IsCorpse;
 
+        /// <summary>
+        /// Cadáver con lógica propia (una FSM): de él se sigue solo la posición, no la animación. Su lógica espera a que
+        /// acabe la animación que ella pone (el del Maestro de Almas, "Stun Start 2"); si se le cambiaba por la del otro PC,
+        /// ese final no llegaba nunca y el cadáver se quedaba parado, sin teletransportes ni el orbe falso de la fase 2.
+        /// </summary>
+        public bool OwnLogic;
+
         /// <summary>Solo las de fuera del enemigo: qué variable de qué FSM la apunta (igual en todos los PCs).</summary>
         public uint Key;
 
@@ -4558,7 +4565,8 @@ internal sealed class EnemySync {
             parts.Add(new Part {
                 Transform = child, Animator = animator, Collider = child.GetComponent<Collider2D>(),
                 Renderer = child.GetComponent<Renderer>(), Damage = child.GetComponent<DamageHero>(),
-                IsCorpse = child.name.StartsWith("Corpse", StringComparison.Ordinal)
+                IsCorpse = child.name.StartsWith("Corpse", StringComparison.Ordinal),
+                OwnLogic = child.name.StartsWith("Corpse", StringComparison.Ordinal) && child.GetComponent<PlayMakerFSM>() != null
             });
             if (parts.Count == MaxParts) {
                 break;
@@ -5057,7 +5065,8 @@ internal sealed class EnemySync {
                     }
                 }
 
-                ApplyPart(enemy.Parts[index], flags, x, y, z, scaleX, scaleY, rotation, clip, frame);
+                ApplyPart(enemy.Parts[index], flags, x, y, z, scaleX, scaleY, rotation,
+                    !alive && enemy.Parts[index].OwnLogic ? ushort.MaxValue : clip, frame);
                 if (enemy.Parts[index].Damage != null) {
                     enemy.Parts[index].Damage.damageDealt = damage;
                 }
@@ -6615,7 +6624,10 @@ internal sealed class EnemySync {
     /// </summary>
     public IEnumerable<string> DescribeBosses() {
         foreach (var enemy in _enemies) {
-            if (enemy.Root == null || enemy.Health == null || enemy.Health.hp < BossHp || enemy.Fsms == null) {
+            // Los de mucha vida y los que el juego tiene por jefes (estatua en el Salón de los Dioses): la Madre Gruz o el
+            // Falso Caballero (65 por fase) tienen menos de BossHp
+            if (enemy.Root == null || enemy.Health == null || enemy.Fsms == null ||
+                enemy.Health.hp < BossHp && !Features.Difficulty.IsBoss(enemy.Health)) {
                 continue;
             }
 
@@ -6623,7 +6635,7 @@ internal sealed class EnemySync {
             var arena = BattleSceneField?.GetValue(enemy.Health) as GameObject;
             yield return $"jefe {enemy.Root.name} hp={enemy.Health.hp} pos=({p.x:0.0},{p.y:0.0}) {(enemy.Puppet ? "marioneta" : "real")}" +
                          $" arena={(arena != null ? arena.name : "-")} dormido={enemy.DormantState ?? "-"} despierto={enemy.Awake}" +
-                         $" esperando={enemy.WaitingWake}";
+                         $" esperando={enemy.WaitingWake}{(enemy.Health.isDead ? " MUERTO" : "")}";
             foreach (var fsm in enemy.Fsms) {
                 if (fsm == null) {
                     continue;
@@ -6682,14 +6694,19 @@ internal sealed class EnemySync {
     }
 
     /// <summary>Golpea a todos los enemigos vivos y activos de la sala (modo de prueba); devuelve cuántos.</summary>
-    public int TestHitAll(int damage) {
+    /// <summary>
+    /// Modo de prueba: golpea a todos los enemigos vivos. Con <paramref name="ignoreInvulnerable"/> falso, como un aguijonazo
+    /// de verdad: no hiere a quien está invulnerable (un jefe rugiendo o entrando), que si no moría en momentos en que un
+    /// jugador no puede herirlo y dejaba estados que el juego no tiene (el rugido del Maestro de Almas sin acabar).
+    /// </summary>
+    public int TestHitAll(int damage, bool ignoreInvulnerable = true) {
         var hero = HeroController.instance;
         var count = 0;
         foreach (var enemy in _enemies.ToArray()) {
             if (enemy.Root != null && enemy.Root.activeInHierarchy && enemy.Health != null && !enemy.Health.isDead) {
                 enemy.Health.Hit(new HitInstance {
                     Source = hero.gameObject, AttackType = AttackTypes.Nail, DamageDealt = damage, Multiplier = 1f,
-                    MagnitudeMultiplier = 1f, Direction = 0f, IgnoreInvulnerable = true
+                    MagnitudeMultiplier = 1f, Direction = 0f, IgnoreInvulnerable = ignoreInvulnerable
                 });
                 count++;
             }
