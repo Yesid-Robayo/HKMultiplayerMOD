@@ -575,6 +575,23 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "bossloaders":
+                // bossloaders: las partes de la sala que se cargan con condiciones (la sala de un jefe: Ruins2_03_boss) y
+                // de qué dependen: el dato del jugador, las pruebas extra y la puerta por la que hay que entrar
+                foreach (var loader in FindObjectsByType<SceneAdditiveLoadConditional>(FindObjectsInactive.Include,
+                             FindObjectsSortMode.None)) {
+                    var bools = loader.extraBoolTests == null ? "-"
+                        : string.Join(",", loader.extraBoolTests.Select(t => $"{t.playerDataBool}={t.value}"));
+                    var ints = loader.extraIntTests == null ? "-"
+                        : string.Join(",", loader.extraIntTests.Select(t =>
+                            $"{t.playerDataInt} {t.testType} {(string.IsNullOrEmpty(t.otherPlayerDataInt) ? t.value.ToString() : t.otherPlayerDataInt)}"));
+                    Log.Info($"{Tag}cargador {loader.name} carga={loader.sceneNameToLoad} alt={loader.altSceneNameToLoad} " +
+                             $"necesita={loader.needsPlayerDataBool}={loader.playerDataBoolValue} " +
+                             $"int={loader.needsPlayerDataInt}={loader.playerDataIntValue}({loader.isIntValue}) extra=[{bools}] " +
+                             $"extraInt=[{ints}] puerta={loader.doorTrigger} persistente={loader.usePersistentBoolItem}");
+                }
+
+                break;
             case "bosses":
                 foreach (var line in runner.Enemies.DescribeBosses()) {
                     Log.Info($"{Tag}{line}");
@@ -588,8 +605,9 @@ internal sealed class TestDriver : MonoBehaviour {
                 HKMultiplayer.Net.Transport.LaggyTransport.NextLoss = ParseFloat(args[3]) / 100f;
                 break;
             case "hitall":
-                // hitall <daño>: golpea a todos los enemigos vivos de la sala, como el caballero
-                Log.Info($"{Tag}golpeados {runner.Enemies.TestHitAll(int.Parse(args[1]))}");
+                // hitall <daño> [real]: golpea a todos los enemigos vivos de la sala, como el caballero. Con "real" no hiere
+                // a los invulnerables (como un aguijonazo de verdad); sin él, sí
+                Log.Info($"{Tag}golpeados {runner.Enemies.TestHitAll(int.Parse(args[1]), !(args.Length > 2 && args[2] == "real"))}");
                 break;
             case "parts":
                 // parts <enemigo>: piezas que se mueven aparte de ese enemigo

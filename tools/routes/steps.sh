@@ -379,6 +379,140 @@ step_boss() {
   fi
 }
 
+# Línea "jefe" de la orden bosses de ese PC (el primero vivo, o el que empieza por <nombre>)
+_boss_line() {
+  local line
+  line="$(query "$1" "bosses" | grep -a '\[TEST\] jefe ' | grep -avE ' hp=(0|-[0-9]+) | MUERTO' | grep -aF "jefe ${2:-}" | head -n1)"
+  # Con nombre, también entre todos los enemigos: el Rey Vengamosca de Sendero Verde tiene 55 de vida y no tiene estatua
+  if [ -z "$line" ] && [ -n "${2:-}" ]; then
+    line="$(query "$1" "enemies" | grep -a '\[TEST\] enemigo ' | grep -aF "enemigo $2 id=" | grep -av 'MUERTO' | head -n1)"
+  fi
+  echo "$line"
+}
+
+# Lo pone a mover en la orden "pos=(x,y)" con coma decimal: imprime "x y" con punto
+_boss_pos() {
+  echo "$1" | grep -oE 'pos=\([-0-9]+,[0-9]+,[-0-9]+,[0-9]+\)' | sed -E 's/pos=\(([-0-9]+),([0-9]+),([-0-9]+),([0-9]+)\)/\1.\2 \3.\4/'
+}
+
+# fight <campo|-> [x y] [nombre del jefe]: un combate de verdad con todos. Con "-" (jefes cuyo campo de derrota el
+# juego no pone, como el Guardián Enfurecido) se comprueba que en ningún PC quede un jefe vivo en la sala. Los pone junto al jefe (o en x y), invulnerables,
+# espera a que despierte (el mod retiene su despertar hasta que estén todos cerca) y le pega hasta vencerlo. Comprueba
+# que el campo de derrota llega a todos, que todos siguen en la sala y que ninguno se quedó sin control.
+# El jefe sigue vivo tras los golpes: si había despertado es un fallo; si no, no se pudo empezar el combate (la ruta
+# tiene que provocarlo: un encuentro, un desafío...)
+_fight_alive() {
+  local detail; detail="$(echo "$2" | sed -E 's/.*\[TEST\] jefe //' | cut -c1-140)"
+  if [ "$3" = 1 ]; then
+    _result FALLO "fight $1" "despertó pero no se pudo vencer: $detail"
+  else
+    _result NOCONC "fight $1" "no empezó el combate (ni despertó ni murió a golpes): $detail"
+  fi
+}
+
+step_fight() {
+  local flag="$1" x="${2:-}" y="${3:-}" name="${4:-}" line pos inst i awake=0 who h missing="" offset
+  for inst in $(_all); do send "$inst" "god"; done
+
+  line="$(_boss_line "$_R_HOST" "$name")"
+  if [ -z "$line" ]; then
+    _result NOCONC "fight $flag" "no hay ningún jefe vivo en la sala"
+    return
+  fi
+
+  # Repartidos a los dos lados del jefe, a 3 y 5 de él; en un punto dado por la ruta (la zona que empieza el combate,
+  # a veces una franja estrecha), el primero justo ahí y los demás a un paso
+  local offsets="0 1 -1 2"
+  if [ -z "$x" ] || [ "$x" = "-" ]; then
+    pos="$(_boss_pos "$line")"; x="${pos% *}"; y="${pos#* }"
+    y="$(awk -v v="$y" 'BEGIN { printf "%.1f", v + 1.5 }')"
+    offsets="-3 3 -5 5"
+  fi
+
+  i=0
+  for inst in $(_all); do
+    offset=$(awk -v i=$i -v o="$offsets" 'BEGIN { split(o, a, " "); print a[i + 1] }')
+    send "$inst" "tp $(awk -v a="$x" -v b="$offset" 'BEGIN { printf "%.1f", a + b }') $y"
+    i=$((i + 1))
+  done
+
+  # Despierto en el PC que lo mueve (el real). Muchos no tienen un estado dormido que el mod reconozca y despiertan con el
+  # primer golpe (la Madre Gruz duerme hasta que la golpean): si no despierta, se le pega igualmente
+  for ((i = 0; i < 6; i++)); do
+    sleep 2
+    # Salto: cierra el diálogo de un encuentro (Hornet en Sendero Verde espera a que todos lo cierren)
+    for inst in $(_all); do send "$inst" "press jump 0.15"; done
+    for inst in $(_all); do
+      line="$(_boss_line "$inst" "$name")"
+      if echo "$line" | grep -aq ' real ' && echo "$line" | grep -aq 'despierto=True'; then
+        awake=1; who="$inst"; break
+      fi
+    done
+    [ $awake = 1 ] && break
+  done
+
+  if [ $awake = 1 ]; then
+    _result OK "fight $flag" "despertó con todos al lado (lo mueve $who)"
+  fi
+  # Golpes hasta vencerlo (los de varias fases o varios jefes, como los Señores Mantis, necesitan más de uno). Uno enorme
+  # y luego varios normales: la cabeza del Falso Caballero, muerta de un golpe de 9999, vuelve a tener su vida (el juego
+  # lo toma por un cambio de fase) y solo muere a golpes como los del aguijón. Respetan la invulnerabilidad ("real"):
+  # si no, el jefe moría en mitad de un rugido o de su entrada, cosa que en el juego no pasa
+  local j
+  for ((i = 0; i < 20; i++)); do
+    send "$_R_HOST" "hitall 9999 real"; sleep 2
+    for ((j = 0; j < 5; j++)); do send "$_R_HOST" "hitall 30 real"; sleep 1.2; done
+    if [ "$flag" = - ]; then
+      [ -z "$(_boss_line "$_R_HOST" "$name")" ] && break
+    else
+      [ "$(pd_value "$_R_HOST" "$flag")" = true ] && break
+    fi
+  done
+
+  sleep 3
+  if [ "$flag" = - ]; then
+    line="$(_boss_line "$_R_HOST" "$name")"
+    if [ -n "$line" ]; then
+      _fight_alive "$flag" "$line" "$awake"
+      return
+    fi
+
+    for inst in $(_all_but "$_R_HOST"); do
+      [ -z "$(_boss_line "$inst" "$name")" ] || missing="$missing $inst"
+    done
+  else
+    h="$(_wait_pd "$_R_HOST" "$flag" true 10)"
+    if [ "$h" != true ]; then
+      _fight_alive "$flag" "$(_boss_line "$_R_HOST" "$name")" "$awake"
+      return
+    fi
+
+    for inst in $(_all_but "$_R_HOST"); do
+      [ "$(_wait_pd "$inst" "$flag" true 10)" = true ] || missing="$missing $inst"
+    done
+  fi
+  if [ -n "$missing" ]; then
+    _result FALLO "fight $flag" "vencido en el host pero no en:$missing"
+    return
+  fi
+
+  # Después: todos en la sala y con control (una presentación o un final que no devuelve el control los dejaría quietos)
+  sleep 8
+  local stuck="" hero
+  for inst in $(_all); do
+    hero="$(query "$inst" "hero" | grep -a '\[TEST\] hero ')"
+    echo "$hero" | grep -aq 'acceptingInput=True' || stuck="$stuck $inst($(echo "$hero" | grep -oE 'gameState=[A-Z_]+|controlReqlinquished=[A-Za-z]+' | paste -sd,))"
+  done
+  if ! _both_in_room; then
+    _result FALLO "fight $flag" "vencido en todos, pero alguno ya no está en $_R_ROOM"
+  elif [ -n "$stuck" ]; then
+    _result FALLO "fight $flag" "vencido en todos, pero sin control:$stuck"
+  else
+    _result OK "fight $flag" "vencido en todos y todos con control en la sala"
+  fi
+  for inst in $(_all); do send "$inst" "god no"; done
+}
+
 step_expect_log() {
   local who="$1" regex="$2" timeout="${3:-15}" inst start
   inst="$(_who "$who")"
@@ -477,6 +611,7 @@ run_route() {
       rock-sync) step_rock_sync ;;
       scene-data-sync) step_scene_data_sync "${args[1]:-}" ;;
       boss) step_boss "${args[1]:-}" "${args[2]:-}" "${args[3]:-}" ;;
+      fight) step_fight "${args[1]:-}" "${args[2]:-}" "${args[3]:-}" "$(echo "$line" | cut -d' ' -f5-)" ;;
       expect-log) step_expect_log "${args[1]:-}" "$(echo "$line" | cut -d' ' -f3- | sed -E 's/ [0-9]+$//')" "$(echo "$line" | grep -oE ' [0-9]+$' | tr -d ' ')" ;;
       rejoin) step_rejoin ;;
       die) step_die "${args[1]:-}" ;;

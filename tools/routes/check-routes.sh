@@ -9,7 +9,7 @@
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 GAME_DATA="${HK_STEAM_GAME:-/c/Program Files (x86)/Steam/steamapps/common/Hollow Knight}/hollow_knight_Data"
-STEPS='title|room|host|guest|both|wait|shared|private|same-pd|expect-pd|partner-moves|breakables-sync|enemies-sync|objects-sync|rock-sync|scene-data-sync|boss|expect-log|rejoin|die'
+STEPS='title|room|host|guest|both|wait|shared|private|same-pd|expect-pd|partner-moves|breakables-sync|enemies-sync|objects-sync|rock-sync|scene-data-sync|boss|fight|expect-log|rejoin|die'
 
 files=("$@")
 [ ${#files[@]} -eq 0 ] && files=("$ROOT"/tests/routes/*.route)
@@ -21,7 +21,7 @@ for i in "${!scenes[@]}"; do scene_index["${scenes[$i]}"]=$i; done
 problems=0
 report() { echo "$1"; problems=$((problems + 1)); }
 
-fields="$(for f in "${files[@]}"; do sed 's/#.*//' "$f" | tr -d '\r' | awk '$1 ~ /^(shared|private|expect-pd)$/ { print $3 } $1 ~ /^(same-pd|boss)$/ { print $2 }'; done | sort -u)"
+fields="$(for f in "${files[@]}"; do sed 's/#.*//' "$f" | tr -d '\r' | awk '$1 ~ /^(shared|private|expect-pd)$/ { print $3 } $1 ~ /^(same-pd|boss|fight)$/ && $2 != "-" { print $2 }'; done | sort -u)"
 if [ -n "$fields" ]; then
   while read -r missing; do
     [ -n "$missing" ] && report "campo que no existe en PlayerData: $missing"
@@ -67,6 +67,9 @@ for file in "${files[@]}"; do
         ;;
       boss)
         [ -n "${args[1]:-}" ] || report "$name:$n: uso: boss <campo> [host|guest] [intentos]"
+        ;;
+      fight)
+        [ -n "${args[1]:-}" ] || report "$name:$n: uso: fight <campo> [x y] [nombre del jefe]"
         ;;
     esac
   done < "$file"
