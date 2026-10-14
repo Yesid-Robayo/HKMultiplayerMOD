@@ -10,7 +10,7 @@
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
 ![Idiomas](https://img.shields.io/badge/idiomas-español%20%7C%20english-7ddc8f)
 
-**Español** · [English](README.md) · [Cambios por versión](CHANGELOG.md)
+**Español** · [English](README.md) · [Cambios por versión](CHANGELOG.es.md)
 
 </div>
 

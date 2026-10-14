@@ -1,132 +1,136 @@
-# Cambios por versión
+# Changelog
 
-Qué trajo y qué arregló cada versión de HKMultiplayer, de la más nueva a la más vieja. Las versiones publicadas
-tienen su zip, sus notas completas en inglés y en español y su SHA256 en
-[Releases](https://github.com/Yesid-Robayo/HKMultiplayerMOD/releases). **Todos los jugadores necesitan la misma
-versión**: dos versiones distintas no pueden jugar juntas.
+**English** · [Español](CHANGELOG.es.md)
 
-Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
+What each HKMultiplayer version added and fixed, newest first. Published versions have their zip, full release notes
+in English and Spanish and their SHA256 on the [Releases](https://github.com/Yesid-Robayo/HKMultiplayerMOD/releases)
+page. **All players need the same version**: two different versions can't play together.
+
+When a new version is published, it is added at the top with the same content as the *What's new* section of its
+release notes.
 
 ## 0.28.0
 
-Partidas de 3 y 4 jugadores, probadas con cuatro copias del juego a la vez.
+Games with 3 and 4 players, tested with four copies of the game running at once.
 
-- **Jefes**: un PC que solo miraba ya no retoma un jefe con un estado viejo (volvía a un ataque o fase anterior).
-- **Ascensores, Coliseo y Señores Mantis**: cuando dos jugadores los usan a la vez, todos los PCs acaban de acuerdo
-  en quién los mueve (antes se paraban para un tercero).
-- **Presentaciones de jefe**: con dos a la vez, el caballero sigue quieto hasta que acaban las dos.
-- **Personajes de misión**: si el cambio lo hace alguien en otra sala, el personaje se vuelve a comprobar.
-- **Caídos**: un caído ya no se queda siguiendo a alguien que está en un sueño, una cinemática o Godhome.
-- **Bancos**: cuatro en el mismo banco, sin meterse en la pared.
-- **Revivir**: con dos reviviendo a la vez, el aviso ya no parpadea y quien termina segundo recupera el alma.
-- **Mapa**: cada compañero con su color y su nombre.
-- **Dificultad**: la vida extra de enemigos y jefes crece con cada compañero en la sala (1,5× con dos jugadores es 2×
-  con tres y 2,5× con cuatro).
-- **"Ir con"**: varios que van a la vez con el mismo compañero aparecen en sitios distintos.
-- Un jugador nuevo ya no hereda lo que controlaba otro que se fue, y el host ya no pierde datos cuando reenvía mucho.
+- **Bosses**: a PC that was only watching no longer resumes a boss from an old state (it used to jump back to an
+  earlier attack or phase).
+- **Elevators, the Colosseum and the Mantis Lords**: when two players use them at the same time, every PC now agrees on
+  who runs them (they used to stop for a third player).
+- **Boss introductions**: with two at once, the knight stays still until both are over.
+- **Quest NPCs**: when someone in another room changes a quest, the NPC is checked again.
+- **Downed players**: a downed player no longer keeps following someone who is in a dream, a cutscene or Godhome.
+- **Benches**: four players on the same bench, without ending up inside the wall.
+- **Reviving**: with two players reviving at once, the notice no longer flickers and the one who finishes second gets
+  their soul back.
+- **Map**: each partner has their own color and their name.
+- **Difficulty**: the extra health of enemies and bosses grows with each partner in the room (1.5× with two players is
+  2× with three and 2.5× with four).
+- **"Go to"**: several players going to the same partner at once appear in different spots.
+- A new player no longer inherits what a player who left was controlling, and the host no longer loses data when it
+  relays a lot.
 
 ## 0.27.0
 
-- **Los jefes ya no cortan su ataque al cambiar de jugador.** Cada jefe lo mueve el PC del jugador más cercano, y
-  cuando el otro se acercaba el jefe cambiaba de PC a mitad de un ataque: lo empezaba otra vez hacia el otro
-  caballero. Ahora espera a terminar el ataque y cambia entre uno y otro (como mucho 4 s después).
+- **Bosses no longer cut their attack when they switch player.** Each boss is run by the PC of the nearest player, and
+  when the other player came closer the boss switched PC in the middle of an attack and started it again towards the
+  other knight. Now it finishes the attack and switches between one attack and the next (at most 4 seconds later).
 
 ## 0.26.0
 
-Revisión completa del mod contra el código del juego: 172 fallos encontrados, todos arreglados o revisados, y la
-mayoría comprobados en el juego, donde salieron 16 más.
+A full review of the mod against the game's code: 172 problems found, all of them fixed or reviewed, and most checked
+in the game, which turned up 16 more.
 
-- **El compañero**: la oscuridad de las salas oscuras se abre a su alrededor; se ven su escudo de Carefree Melody, su
-  Baldur Shell, la recarga del Shade Dash y sus muertes en pinchos, en ácido y de verdad.
-- **Enemigos y jefes**: el daño que no es un aguijonazo (Flukenest, Spore Shroom, Defender's Crest) cuenta para
-  todos; los jefes esperan a todos sin límite de tiempo; un jefe que cambia de PC sigue peleando; el Falso Caballero
-  cuenta cada armadura rota como una fase; las invocaciones y disparos "con el tiempo" (Rey Vengamosca, Hornet en los
-  Bordes del Reino, Nosk, Hollow Knight) salen en todos los PCs.
-- **Mundo compartido**: el puente de la Ciudad de las Lágrimas, los tranvías, las máquinas de peaje, el ascensor del
-  Palacio Blanco, las plataformas del Coliseo y de la Radiancia y los huevos del Cañón de Niebla, iguales para todos.
-  Las estatuas de Dios Hogar, el alma máxima y el robo de Millibelle, de cada jugador.
-- **Revivir y sesión**: un caído ya no lanza hechizos ni hace dash; un invitado que sale al menú sale de la partida; en
-  un Panteón el personaje del invitado nunca se guarda sin amuletos; un encuentro con un jefe ya no se traba si quien
-  lo lleva cae en el diálogo.
-- **Interfaz e instalador**: el HUD del compañero se esconde con el inventario y cambia de idioma; los menús se usan
-  con mando; el instalador soporta una actualización del juego en Steam y carpetas con `[ ]`.
-- **Red y seguridad**: el código de la partida se estira con PBKDF2 y el host no responde a quien no lo conoce; los
-  paquetes falsos ya no pueden agotar la memoria ni echar a un jugador.
+- **Your partner**: the darkness of dark rooms opens around them; their Carefree Melody shield, Baldur Shell, Shade Dash
+  recharge and their deaths on spikes, in acid and for real are now shown.
+- **Enemies and bosses**: damage that isn't a nail hit (Flukenest, Spore Shroom, Defender's Crest) counts for everyone;
+  bosses wait for everyone with no time limit; a boss that changes PC keeps fighting; each broken False Knight armor
+  counts as a phase; summons and shots "over time" (Vengefly King, Hornet in Kingdom's Edge, Nosk, the Hollow Knight)
+  happen on every PC.
+- **Shared world**: the City of Tears bridge, the trams, toll machines, the White Palace elevator, the Colosseum and
+  Radiance platforms and the Fog Canyon eggs work the same for everyone. Godhome statues, maximum soul and Millibelle's
+  "theft" belong to each player.
+- **Revive and session**: a downed player can no longer cast spells or dash; a guest who leaves to the main menu leaves
+  the game; inside a Pantheon a guest's character is never saved without its charms; a boss encounter no longer freezes
+  if the player running it goes down during the dialogue.
+- **Interface and installer**: the partner HUD hides with the inventory and changes language; menus work with a
+  controller; the installer handles a Steam update of the game and folders with `[ ]`.
+- **Network and security**: the game code is stretched with PBKDF2 and the host doesn't answer anyone who doesn't know
+  it; fake packets can no longer exhaust memory or kick a player.
 
 ## 0.25.0
 
-Arreglos de la tercera partida real entre dos PCs.
+Fixes from the third real game between two PCs.
 
-- **Garpedes** (Nido Profundo): van por el mismo sitio y a la vez para los dos.
-- **Señores Mantis, segunda fase**: la guadaña ya no sale primero hacia fuera de la arena.
-- **Oscuridad en Nido Profundo**: la vista de un jugador ya no se queda negra cuando su compañero se aleja.
+- **Garpedes** (Deepnest): they move along the same path at the same time for both players.
+- **Mantis Lords, second phase**: the scythe no longer flies out of the arena first.
+- **Darkness in Deepnest**: a player's view no longer goes black when their partner moves away.
 
 ## 0.24.1
 
-Arreglos de la segunda partida real entre dos PCs.
+Fixes from the second real game between two PCs.
 
-- **Señores Mantis**: al repetir el desafío sale siempre la primera mantis; el cartel ya no se apaga antes de tiempo;
-  su estela ya no se queda congelada.
-- **Bretta y otros personajes de misión** ya no desaparecen delante del compañero que está en la sala.
-- **Ascensores** de Bocasucia y de la estación del ciervo: se mueven para los dos.
-- **Los enemigos vuelven** al descansar en un banco y al morir, como en el juego normal.
-- La música de la sombra se quita al matar la sombra del compañero, y el cuerpo de un caído lleva su skin.
+- **Mantis Lords**: when retrying the challenge the first Mantis Lord always appears; the challenge prompt no longer
+  turns off too early; their trail no longer stays frozen.
+- **Bretta and other quest NPCs** no longer disappear in front of a partner who is in the room.
+- **Elevators** in Dirtmouth and the stag station: they move for both players.
+- **Enemies come back** when resting at a bench and when dying, as in the normal game.
+- The shade music stops when the partner's shade is killed, and a downed player's body wears their skin.
 
 ## 0.24.0
 
-- **Nuevo**: habilidades de cada jugador; viajar juntos en ciervo; bancos para dos; los invitados nuevos ven la
-  cinemática del principio; el botín cae en el mismo sitio para todos; compañeros en el mapa solo con la Brújula
-  Caprichosa; "en pausa" en el HUD; avisos de versión nueva en el juego; instalador `HKMultiplayer Setup.exe` con
-  *Novedades*.
-- **Arreglos de la primera partida real**: el Falso Caballero muere entero y abre las rejas; disparos del Elder
-  Baldur, escupitajo del Gulka y vómito de los Ogros Hongo en el otro PC; sin ataques dobles al cambiar de PC; el Rey
-  Vengamosca ya no se queda en el aire; efectos que se quedaban en pantalla; pasto, capullo de savia y campana del
-  ciervo del Sendero Verde.
+- **New**: abilities belong to each player; ride the stag together; benches for two; new guests see the opening
+  cutscene; loot lands in the same place for everyone; partners on the map only with the Wayward Compass; "paused" in
+  the HUD; new version notices in the game; `HKMultiplayer Setup.exe` installer with *What's new*.
+- **Fixes from the first real game**: the False Knight dies completely and opens the gates; Elder Baldur shots, Gulka
+  spit and Shrumal Ogre vomit on the other PC; no double attacks when an enemy changes PC; the Vengefly King no longer
+  stays in the air; effects that stayed on screen; Greenpath grass, lifeblood cocoon and stag bell.
 
 ## 0.23.0
 
-Arreglos de la primera partida real entre dos PCs.
+Fixes from the first real game between two PCs.
 
-- Un error al procesar un mensaje ya no corta la conexión el resto de la partida.
-- El Falso Caballero vuelve a salir tras *Recargar sala*.
-- Tiktik y Reptantes ya no van a saltos; los Goam salen y se esconden a la vez para todos.
-- El orbe de alma de una skin ya no parpadea.
+- An error while handling a message no longer cuts the connection for the rest of the game.
+- The False Knight appears again after *Reload room*.
+- Tiktiks and Crawlids no longer jump around; Goams come out and hide at the same time for everyone.
+- A skin's soul orb no longer flickers.
 
 ## 0.22.1
 
-- Instalador: el texto de los botones desactivados se lee (en blanco).
+- Installer: the text of disabled buttons is readable (white).
 
 ## 0.22.0
 
-- **Compañeros en el mapa**, en rojo si están caídos (opción del host).
-- **Reconexión automática** del invitado, hasta 12 intentos (*Esc* la cancela).
-- **Cuerpos siempre alcanzables**: quien muere sobre un pozo, pinchos o ácido queda en el último suelo seguro.
+- **Partners on the map**, red when they are down (host option).
+- **Automatic reconnection** for guests, up to 12 attempts (*Esc* cancels it).
+- **Bodies always reachable**: a player who dies over a pit, spikes or acid stays on the last safe ground.
 
 ## 0.21.2
 
-- Las piedras de geo sueltan geo para todos.
-- Skins más rápidas y guardadas en caché (hasta 256 MB).
+- Geo rocks drop geo for everyone.
+- Faster skins, saved in a cache (up to 256 MB).
 
 ## 0.21.1
 
-- Primera versión pública.
+- First public version.
 
-## Antes de publicarse (0.2.0 a 0.21.0)
+## Before release (0.2.0 to 0.21.0)
 
-Versiones de desarrollo, sin release.
+Development versions, without a release.
 
-- **0.21.0**: el mod en español o en inglés según el juego, e instalador con ventana.
-- **0.20.x**: misiones de NPC sin desincronizar ni avanzar dos veces; jefes que cambian de dueño, cabeza del Falso
-  Caballero y barras de los sueños.
-- **0.19.0**: ir con un compañero y ajustes del host.
-- **0.18.x**: efectos de amuletos y acompañantes del compañero; Grimm, Tirano de Almas, Hollow Knight, Radiancia,
-  Campeón Fallido, Falso Caballero y crías de la Colmena.
-- **0.16.0 a 0.17.0**: progreso compartido (M5) y el Coliseo de Oro sin atascos.
-- **0.15.x**: efectos del otro jugador (M4); Coliseo de Plata entero.
-- **0.14.x**: rompibles y guardables compartidos; rutas de prueba automáticas; el Coliseo ya no se atasca entre oleadas.
-- **0.12.0 a 0.13.0**: diálogos de jefe compartidos y combates que esperan a todos.
-- **0.9.0 a 0.11.0**: cofres, peligros animados al mismo ritmo y el Coleccionista con sus tarros.
-- **0.7.0 a 0.8.0**: Señores Mantis, traspaso de enemigos entre PCs, entrar a mitad de un combate y el Coliseo.
-- **0.4.0 a 0.6.x**: jefes iguales en los dos PCs (daño, arena, efectos) y el Guardián de Cristal con sus rayos.
-- **0.3.0**: los enemigos atacan a los dos jugadores.
-- **0.2.0**: golpes y sonidos de enemigos en todos los PCs.
+- **0.21.0**: the mod in Spanish or English depending on the game, and a windowed installer.
+- **0.20.x**: quest NPCs no longer desync or advance twice; bosses that change owner, the False Knight's head and dream
+  bars.
+- **0.19.0**: go to a partner and host settings.
+- **0.18.x**: partner charm and companion effects; Grimm, Soul Tyrant, Hollow Knight, Radiance, Failed Champion, False
+  Knight and Hive children.
+- **0.16.0 to 0.17.0**: shared progress (M5) and the Golden Colosseum without getting stuck.
+- **0.15.x**: the other player's effects (M4); the whole Silver Colosseum.
+- **0.14.x**: shared breakables and saved objects; automatic test routes; the Colosseum no longer gets stuck between
+  waves.
+- **0.12.0 to 0.13.0**: shared boss dialogues and fights that wait for everyone.
+- **0.9.0 to 0.11.0**: chests, animated hazards in sync and the Collector with his jars.
+- **0.7.0 to 0.8.0**: Mantis Lords, enemy handover between PCs, joining in the middle of a fight and the Colosseum.
+- **0.4.0 to 0.6.x**: bosses identical on both PCs (damage, arena, effects) and the Crystal Guardian with its beams.
+- **0.3.0**: enemies attack both players.
+- **0.2.0**: enemy hits and sounds on every PC.
