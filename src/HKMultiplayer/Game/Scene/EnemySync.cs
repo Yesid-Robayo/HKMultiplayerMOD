@@ -691,6 +691,8 @@ internal sealed class EnemySync {
     private string _scene = string.Empty;
     private ushort _sceneHash;
     private float _rescanAt;
+    private int _seenLoads;
+    private float _loadRescanAt;
     private uint _lastTick;
     private bool _sendSnapshot;
     private PlayerSnapshot _incoming;
@@ -895,6 +897,11 @@ internal sealed class EnemySync {
         FlushSpawns();
         if (_rescanAt > 0f && Time.unscaledTime >= _rescanAt) {
             _rescanAt = 0f;
+            Scan();
+        }
+
+        // Una parte de la sala cargada aparte después (la del jefe; en un PC lento tarda más que el repaso de arriba)
+        if (SceneLoads.ShouldRescan(ref _seenLoads, ref _loadRescanAt)) {
             Scan();
         }
 
@@ -1701,7 +1708,12 @@ internal sealed class EnemySync {
         }
 
         foreach (var fsm in health.GetComponents<PlayMakerFSM>()) {
-            if (fsm.FsmVariables.FindFsmGameObject(CageVariable) == null) {
+            // Cuelga de su jaula (la variable, si ya apunta a algo, es ella): Flukemarm también tiene "Cage" (la jaula de
+            // la que saca sus moscas) y el aviso SPAWN, pero está en la raíz de su sala; tomada por enemigo de jaula, no
+            // se sincronizaba y cada PC tenía la suya
+            var cage = fsm.FsmVariables.FindFsmGameObject(CageVariable);
+            if (cage == null || health.transform.parent == null ||
+                cage.Value != null && cage.Value.transform != health.transform.parent) {
                 continue;
             }
 
@@ -6699,6 +6711,22 @@ internal sealed class EnemySync {
     /// de verdad: no hiere a quien está invulnerable (un jefe rugiendo o entrando), que si no moría en momentos en que un
     /// jugador no puede herirlo y dejaba estados que el juego no tiene (el rugido del Maestro de Almas sin acabar).
     /// </summary>
+    /// <summary>Modo de prueba: por qué un HealthManager con ese nombre se sigue o no (los filtros del repaso).</summary>
+    public IEnumerable<string> ExplainTracking(string name) {
+        foreach (var health in Resources.FindObjectsOfTypeAll<HealthManager>()) {
+            if (health == null || !health.gameObject.scene.isLoaded || !health.name.StartsWith(name, StringComparison.Ordinal)) {
+                continue;
+            }
+
+            var tracked = _byHealth.TryGetValue(health, out var enemy);
+            yield return $"{health.name} escena={health.gameObject.scene.name} activo={health.gameObject.activeInHierarchy} " +
+                         $"seguido={tracked}{(tracked ? $"(id={enemy.Id:x8})" : "")} primero={health.GetComponent<HealthManager>() == health} " +
+                         $"invocador={_spawnerHeld.Contains(health.gameObject)} jaula={_caged.ContainsKey(health)} " +
+                         $"id={ScenePaths.StableHash(health.transform):x8} ocupado={_byId.ContainsKey(ScenePaths.StableHash(health.transform))} " +
+                         $"sala={_scene} enemigos={_enemies.Count}";
+        }
+    }
+
     public int TestHitAll(int damage, bool ignoreInvulnerable = true) {
         var hero = HeroController.instance;
         var count = 0;
