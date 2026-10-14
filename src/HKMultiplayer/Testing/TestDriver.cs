@@ -575,6 +575,10 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "abilities":
+                // abilities: las habilidades propias y las de cada compañero (bits) que cuentan para cargar partes de sala
+                Log.Info($"{Tag}habilidades {runner.PartyAbilities.Describe()}");
+                break;
             case "whynot":
                 // whynot <nombre>: por qué el mod sigue o no a ese enemigo (los filtros del repaso de la sala)
                 foreach (var line in runner.Enemies.ExplainTracking(string.Join(" ", args.Skip(1)))) {

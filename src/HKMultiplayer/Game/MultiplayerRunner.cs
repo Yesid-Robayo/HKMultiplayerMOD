@@ -91,6 +91,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Compañeros en el mapa abierto.</summary>
     public Features.PartnerMap PartnerMap { get; } = new();
 
+    public PartyAbilities PartyAbilities { get; } = new();
+
     /// <summary>El jugador salió de un mundo ajeno: al llegar al menú se deja la partida.</summary>
     private bool _leaveOnMenu;
 
@@ -168,6 +170,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Features.EnemyBars.InstallHooks();
         Features.Difficulty.Install();
         Scene.SceneLoads.Install();
+        HKMultiplayer.Game.World.PartyAbilities.InstallHooks();
         Features.SharedCutscenes.InstallHooks();
         Features.BossPresentation.InstallHooks();
         Features.DreamSync.InstallHooks();
@@ -316,6 +319,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Grimmchild.Update(scene);
             Stag.Update(scene);
             PartnerMap.Update(scene);
+            PartyAbilities.Update();
             Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene
                 : Dreams.InDream ? Features.PlayerStatus.Dream
                 : InStagTravel() ? Features.PlayerStatus.StagTravel
@@ -561,6 +565,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         // Cada parte por separado: si una fallaba, las de detrás no se soltaban y session.Dispose() no llegaba (el socket,
         // su hilo y el puerto se quedaban abiertos)
         Safely(() => { PartnerMap.Detach(); }, "PartnerMap.Detach");
+        Safely(() => { PartyAbilities.Detach(); }, "PartyAbilities.Detach");
         Safely(() => { Skins.Detach(); }, "Skins.Detach");
         Safely(() => { Grimmchild.Detach(); }, "Grimmchild.Detach");
         Safely(() => { Stag.Detach(); }, "Stag.Detach");
@@ -715,6 +720,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Scene.ScenePaths.RememberLoaded();
         Skins.Attach(session, Players);
         PartnerMap.Attach(session, Revive);
+        PartyAbilities.Attach(session);
         var connected = false;
         session.Connected += () => {
             connected = true;
