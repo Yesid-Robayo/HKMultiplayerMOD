@@ -146,7 +146,13 @@ internal sealed class FsmStateSync {
         // Rand`) y las de la Radiancia (`Pre Vanish`, de 2 a 3 s). Cada PC esperaba distinto y el compañero parecía estar
         // en el aire o caer
         ("Colosseum Platform", "Control"),
-        ("Radiant Plat", "radiant_plat")
+        ("Radiant Plat", "radiant_plat"),
+        // El orbe falso del Maestro de Almas (`Ruins1_24`): al cogerlo, un caballero falso lo levanta, el jefe vuelve,
+        // rompe la ventana y el suelo (`MAGE WINDOW BREAK`, `break_ground`) y empieza la segunda fase. Todo eso iba solo en
+        // el PC de quien lo cogía: los demás no veían nada y se quedaban arriba, sobre un suelo que allí seguía entero,
+        // mientras la segunda fase iba abajo
+        ("Quake Fake", "FSM"),
+        ("Knight Get Quake Fake", "Get Quake")
     };
 
     /// <summary>
