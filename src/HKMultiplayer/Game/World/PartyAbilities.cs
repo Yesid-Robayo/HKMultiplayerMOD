@@ -23,11 +23,23 @@ internal sealed class PartyAbilities {
     /// <summary>Habilidades que el juego mira para cargar partes de sala (sí/no; las de nivel cuentan si son más que 0).</summary>
     private static readonly string[] Fields = {
         "hasDash", "hasShadowDash", "hasWalljump", "hasDoubleJump", "hasSuperDash", "hasAcidArmour", "hasKingsBrand",
-        "hasDreamNail", "dreamNailUpgraded", "hasDreamGate"
+        "hasDreamNail", "dreamNailUpgraded", "hasDreamGate", "hasSpell"
     };
 
     private static readonly FieldInfo[] FieldInfos = Array.ConvertAll(Fields,
         name => typeof(PlayerData).GetField(name, BindingFlags.Public | BindingFlags.Instance));
+
+    /// <summary>
+    /// Objetos de sala cuya FSM mira una habilidad para preparar la sala misma (y su FSM): con las del grupo, la sala queda
+    /// igual en todos los PCs. La pared del Falso Caballero se ve reparada si se tiene el primer hechizo (y si no, sigue la
+    /// pared de antes: en un PC sólida y en otro no), la puerta del Abismo y el alud del Borde del Reino miran la Marca del
+    /// Rey y el puente del Pico de Cristal, el Corazón de Cristal. Las demás lecturas de habilidades (el ácido, los
+    /// diálogos, lo que da la habilidad) siguen siendo de cada uno.
+    /// </summary>
+    private static readonly (string Name, string Fsm)[] RoomFsms = {
+        ("Fk Break Wall", "Control"), ("abyss_door", "Control"), ("mine_break_bridge", "Bridge Control"),
+        ("Avalanche", "Activate")
+    };
 
     /// <summary>Cada cuánto se mira si cambiaron las propias (se envían solo al cambiar o al entrar alguien).</summary>
     private const float CheckInterval = 1f;
@@ -84,6 +96,21 @@ internal sealed class PartyAbilities {
         }
 
         _hooked = true;
+        On.HutongGames.PlayMaker.Actions.PlayerDataBoolTest.OnEnter += (orig, self) => {
+            var active = _active;
+            if (active?._session == null || PlayerData.instance == null || !IsRoomFsm(self.Fsm)) {
+                orig(self);
+                return;
+            }
+
+            var saved = active.ApplyParty(PlayerData.instance);
+            try {
+                orig(self);
+            } finally {
+                Restore(PlayerData.instance, saved);
+            }
+        };
+
         On.SceneAdditiveLoadConditional.OnEnable += (orig, self) => {
             var active = _active;
             if (active?._session == null || PlayerData.instance == null) {
@@ -99,6 +126,21 @@ internal sealed class PartyAbilities {
                 Restore(PlayerData.instance, saved);
             }
         };
+    }
+
+    private static bool IsRoomFsm(HutongGames.PlayMaker.Fsm fsm) {
+        var owner = fsm?.GameObject;
+        if (owner == null) {
+            return false;
+        }
+
+        foreach (var (name, fsmName) in RoomFsms) {
+            if (fsm.Name == fsmName && owner.name.StartsWith(name, StringComparison.Ordinal)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Cada frame: envía las propias si cambiaron (o si entró alguien).</summary>
