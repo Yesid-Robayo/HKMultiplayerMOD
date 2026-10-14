@@ -6220,7 +6220,18 @@ internal sealed class EnemySync {
             }
 
             var fromState = self.ActiveState;
-            orig(self, toState);
+            try {
+                orig(self, toState);
+            } catch (Exception e) when (_active != null && _active._enemyFsms.TryGetValue(self, out var copy) &&
+                                        (copy.Enemy.Puppet || copy.Enemy.DiedElsewhere)) {
+                // Una copia (o una muerte que llegó de otro PC) con una acción que falla: sus variables no las preparó su
+                // lógica aquí. Las espadas de Xero persiguen a un objetivo que en la copia nunca se puso, y la excepción
+                // cortaba su muerte antes de marcarlo muerto: Xero seguía vivo en todos menos en el PC que lo movía
+                // Sin "Exception" en el texto: es un caso previsto, no un error del mod
+                Log.Warn($"{self.GameObjectName}/{self.Name}: {toState?.Name} falló en la copia " +
+                         $"({e.GetType().Name.Replace("Exception", "")}); sigue");
+            }
+
             var sync = _active;
             if (sync?._session != null && toState != null && sync._enemyFsms.TryGetValue(self, out var switching)) {
                 sync.OnCalmFsmState(switching.Enemy, switching.Index, fromState, toState);
