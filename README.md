@@ -12,6 +12,11 @@
 
 **English** · [Español](README.es.md) · [Changelog](CHANGELOG.md)
 
+<img src="docs/media/coop-hornet.gif" alt="Two PCs in the same game fighting Hornet" width="966">
+
+<sub>Two PCs in the same game against Hornet: both see the same thing at the same time, each knight with their name and
+the partner HUD at the top right. Hollow Knight belongs to Team Cherry.</sub>
+
 </div>
 
 > [!WARNING]
