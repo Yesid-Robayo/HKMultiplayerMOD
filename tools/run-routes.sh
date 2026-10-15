@@ -12,6 +12,8 @@
 #   bash tools/run-routes.sh -v                    muestra cada comprobación según pasa
 #   bash tools/run-routes.sh --players 4           con 4 jugadores: el par J/K y L y M, que entran en cada sala y
 #                                                  cuentan en cada comprobación (un solo grupo; 3 = solo L)
+#   bash tools/run-routes.sh --steam               los invitados entran por Steam (simulado: cada copia hace de una
+#                                                  cuenta); con 4 jugadores, M entra por IP a la vez. Solo con 1 par
 #
 # Usa las copias test-instances/d..k (las crea si faltan, con hard links: no ocupan disco). No toca b ni c.
 # Si otro proceso ya está usando un par, se usa el siguiente libre.
@@ -42,6 +44,7 @@ PAIRS=1
 KEEP=0
 REUSE=0
 HK_LAG=""
+HK_VIA=ip
 HK_VERBOSE=""
 ROUTES=()
 while [ $# -gt 0 ]; do
@@ -49,15 +52,22 @@ while [ $# -gt 0 ]; do
     --pairs) PAIRS="$2"; shift ;;
     --players) shift ;;
     --lag) HK_LAG="$2"; shift ;;
+    --steam) HK_VIA=steam ;;
     --keep) KEEP=1 ;;
     --reuse) REUSE=1 ;;
     -v) HK_VERBOSE=1 ;;
-    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,21p' "$0"; exit 0 ;;
     *) ROUTES+=("$1") ;;
   esac
   shift
 done
-export HK_LAG HK_VERBOSE
+export HK_LAG HK_VERBOSE HK_VIA
+
+# El Steam simulado usa puertos y salas fijos por cuenta: dos pares a la vez se pisarían
+if [ "$HK_VIA" = steam ] && [ "$PAIRS" != 1 ]; then
+  echo "--steam va con un solo par" >&2
+  exit 2
+fi
 
 if ! [[ "$PAIRS" =~ ^[1-4]$ ]]; then
   echo "--pairs va de 1 a 4" >&2
@@ -160,7 +170,7 @@ wait
 
 # Resumen
 {
-  echo "Rutas de prueba — $(date '+%Y-%m-%d %H:%M')  pares: ${#TAKEN[@]}  jugadores: $PLAYERS${HK_LAG:+  red: $HK_LAG}"
+  echo "Rutas de prueba — $(date '+%Y-%m-%d %H:%M')  pares: ${#TAKEN[@]}  jugadores: $PLAYERS${HK_LAG:+  red: $HK_LAG}  vía: $HK_VIA"
   echo
   printf '%-8s %-24s %5s %6s %7s\n' RESULTADO RUTA OK FALLO NOCONC
   for file in "${FILES[@]}"; do

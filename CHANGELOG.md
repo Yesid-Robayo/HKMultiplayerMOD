@@ -9,6 +9,23 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.31.0
+
+**Play through Steam, no port forwarding.**
+
+- **Steam lobby**: hosting opens a Steam lobby. Your friends see *Join Game* in their Steam friends list, or your game
+  in *Multiplayer › Join a world* with a button to join, without typing an address or a code.
+- **Invites**: *Pause › Multiplayer › Invite Steam friends* opens the Steam overlay to invite anyone (also from the
+  Steam friends list). On accepting, the mod joins the game on its own; if the game was closed, Steam opens it, and if
+  your friend is playing their normal game, they join when they go back to the main menu.
+- **Who joins through Steam**: in *Multiplayer*, *Steam games*: **Friends** (any Steam friend), **Invited only**
+  (private lobby: only people who get an invite can join) or **Nobody** (IP only).
+- **Steam and IP at the same time**: in the same game some players join through Steam and others by IP. If the port
+  can't be opened, the game still opens through Steam. Anyone without Steam keeps joining the host by IP.
+- **Security**: the Steam connection is encrypted with the game code, just like by IP (Steam only carries the
+  packets), and connections are only accepted from friends, lobby members or the host you're joining.
+- Automatic reconnection also works through Steam, and the host checks the version before letting anyone in.
+
 ## 0.30.0
 
 Every boss fight played again with 4 players, one at a time, and the Pantheon of Hallownest played to its ending.

@@ -4,7 +4,7 @@
 
 **Mod cooperativo para Hollow Knight: juega el mundo entero con tus amigos, en red local o por internet.**
 
-![Versión](https://img.shields.io/badge/versión-0.30.0-7fb2ff)
+![Versión](https://img.shields.io/badge/versión-0.31.0-7fb2ff)
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
@@ -20,7 +20,8 @@
 > [Estado de las pruebas](#-estado-de-las-pruebas)). **Puede tener errores.** Haz una copia de tus partidas antes de
 > jugar y, si algo falla, cuéntalo en un *issue* con una captura y tu `ModLog.txt`.
 
-Un jugador **hostea** un mundo coop y sus compañeros **se unen** con la dirección del host y el código de la partida:
+Un jugador **hostea** un mundo coop y sus compañeros **se unen** por **Steam** (con una invitación o con *Unirse a la
+partida*, sin abrir puertos) o con la dirección del host y el código de la partida:
 comparten el mundo, se ven en tiempo real y pelean juntos contra los mismos enemigos y jefes. Hasta 4 jugadores,
 escrito desde cero sobre la Modding API de Hollow Knight.
 
@@ -72,8 +73,14 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - **Hostear y unirse** desde el menú principal (*Multijugador*): el host abre su mundo y comparte su **dirección**, el
   **puerto** (26950 por defecto) y el **código de la partida** (formato `ABCD-EFGH`). Botones para copiar el código y
   mostrar u ocultar la IP.
-- Funciona en **red local y por internet** (en internet el host abre el puerto UDP en su router o usáis una VPN de red
-  local como Radmin VPN, ZeroTier o Tailscale).
+- **Por Steam, sin abrir puertos**: al hostear se abre una sala de Steam. Tus amigos ven *Unirse a la partida* en su
+  lista de amigos de Steam o tu partida en *Multijugador › Unirse a un mundo*, y desde *Pausa › Multijugador › Invitar
+  amigos de Steam* invitas a quien quieras. Si el juego del amigo está cerrado, Steam lo abre y el mod entra solo. En
+  *Multijugador* eliges quién puede entrar por Steam: **amigos**, **solo invitados** o **nadie**.
+- **Steam e IP a la vez**: en la misma partida unos pueden entrar por Steam y otros por IP. Quien no tenga Steam
+  entra al host por IP, en la misma red o por internet.
+- Funciona en **red local y por internet** (por Steam no hace falta abrir nada; por IP, en internet el host abre el
+  puerto UDP en su router o usáis una VPN de red local como Radmin VPN, ZeroTier o Tailscale).
 - **Personaje de cada invitado** guardado en el mundo del host: se envía en los bancos, cada 30 segundos y al salir.
   Al volver a unirte, recuperas tu personaje. Si el host cierra la partida, primero recoge los de los invitados.
 - **Reconexión automática**: si un invitado pierde la conexión con el host (no si el host cierra la partida), vuelve
@@ -244,16 +251,20 @@ automáticas que recorren el mundo comprobando que todos ven lo mismo.
   Radiancia, la Compañía de Grimm, Grey Prince Zote, el Coliseo de los Tontos (Bronce, con Zote), Zote y Cloth, y el
   Panteón del Maestro de principio a fin.
 - 0.30.0: todos los combates de jefes otra vez con 4 jugadores, uno a uno, y el Panteón de Hallownest hasta su final,
-  que cada jugador acaba en su propio PC.
+  que cada jugador acaba en su propio PC. Después, las 16 rutas automáticas con 4 jugadores y un mundo nuevo.
+- 0.31.0: la conexión por Steam con un Steam simulado, en el que cada copia del juego hace de una cuenta distinta:
+  unirse por la sala y por invitación, las salas privadas, invitados por Steam y por IP en la misma partida, y las
+  rutas de prueba con dos jugadores entrando por Steam y uno por IP.
 
 ⚠️ **Probado en parte:**
 
 - Caballero de la Colmena y Cargador Musgoso: mueren en todos los PCs, pero falta verlos atacar.
-- 0.30.0: las 16 rutas automáticas no se han vuelto a pasar con esta versión.
 
 ❓ **Sin probar:**
 
 - Una partida entre PCs reales por internet.
+- Steam de verdad entre dos cuentas: la parte que habla con Steam (crear la sala, invitar, unirse y la conexión por sus
+  relés) solo se ha probado con el Steam simulado.
 - Jugar 3 o 4: los casos que solo pasan con tres o más se arreglaron en la 0.28.0 y se probaron con cuatro copias del
   juego en un PC, pero aún no entre PCs reales.
 
@@ -310,11 +321,15 @@ Si prefieres no usarlo, instálalo a mano (más abajo).
 ## 🎮 Cómo jugar
 
 1. **Host**: menú principal › *Multijugador* › *Hostear un mundo* › *Nuevo mundo* (o elige uno) › *Crear y hostear*.
-   Pasa a tus compañeros tu **IP**, el **puerto** (26950) y el **código** que sale en pantalla (también en
+   Con Steam, tus amigos ya pueden unirse; para invitar a alguien: *Pausa › Multijugador › Invitar amigos de Steam*.
+   Por IP, pasa tu **IP**, el **puerto** (26950) y el **código** que sale en pantalla (también en
    *Pausa › Multijugador*).
-2. **Invitado**: menú principal › *Multijugador* › *Unirse a un mundo*, con la dirección, el puerto y el código.
-3. **Por internet**: el host abre el puerto **UDP 26950** en su router (o usáis Radmin VPN, ZeroTier o Tailscale). En
-   la misma casa no hace falta abrir nada.
+2. **Invitado por Steam**: acepta la invitación o pulsa *Unirse a la partida* en la lista de amigos de Steam (también
+   *Multijugador › Unirse a un mundo › Unirse a…*). Si estás jugando tu partida normal, sal al menú principal y entras
+   solo.
+3. **Invitado por IP**: menú principal › *Multijugador* › *Unirse a un mundo*, con la dirección, el puerto y el código.
+4. **Por internet por IP**: el host abre el puerto **UDP 26950** en su router (o usáis Radmin VPN, ZeroTier o
+   Tailscale). Por Steam o en la misma casa no hace falta abrir nada.
 
 ---
 
@@ -354,12 +369,15 @@ mismo otra vez (1,5× es 2× con tres jugadores y 2,5× con cuatro).
 | **MonoMod** | Ganchos sobre el código del juego (`MMHOOK_*.dll`, `MonoMod.RuntimeDetour`). |
 | **PlayMaker** | Lectura y control de las máquinas de estados del juego: enemigos, jefes, ascensores, rejas, arenas, diálogos. |
 | **BouncyCastle** | Cifrado: X25519, HKDF-SHA256 con el código de la partida y ChaCha20-Poly1305 en cada paquete. |
+| **Steamworks.NET** (el que trae el juego) | Salas de Steam, invitaciones y conexión entre cuentas (SteamNetworkingMessages, directa o por los relés de Valve) para jugar sin abrir puertos. |
 | **Unity UI** | Menús con el estilo del juego, avisos y HUD del compañero (con los sprites del HUD del juego). |
 
-- **Red propia sobre UDP**: canales fiable y no fiable, transferencias grandes troceadas (el mundo al unirse), latido y
+- **Red propia sobre UDP o Steam**: canales fiable y no fiable, transferencias grandes troceadas (el mundo al unirse), latido y
   desconexión limpia, sin memoria nueva por paquete para no provocar tirones.
-- **Seguridad**: solo entra quien conoce el código de la partida; todo viaja cifrado y autenticado.
-- **Sin servicios externos**: la conexión es directa entre los PCs.
+- **Seguridad**: solo entra quien conoce el código de la partida; todo viaja cifrado y autenticado, también por Steam
+  (Steam solo lleva los paquetes). Por Steam solo se aceptan conexiones de amigos, de los de la sala o del host al que
+  te unes.
+- **Sin servidores propios**: por IP la conexión es directa entre los PCs; por Steam la lleva Steam.
 
 ---
 
@@ -421,7 +439,8 @@ Las FSM de PlayMaker no salen ahí; ver [Código del juego](docs/arquitectura.md
   moverse, golpear, capturas de todas a la vez, estado de enemigos y objetos, mala conexión simulada (`netsim`)... Órdenes en
   [docs/arquitectura.md](docs/arquitectura.md#pruebas).
 - **Rutas automáticas**: `bash tools/run-routes.sh` recorre el juego por zonas con un host e invitados y comprueba en
-  cada sala que todos ven lo mismo (`--players 4` las juega con cuatro, `--pairs 3` reparte las zonas entre 3 pares). Formato:
+  cada sala que todos ven lo mismo (`--players 4` las juega con cuatro, `--pairs 3` reparte las zonas entre 3 pares y `--steam` hace entrar a
+  los invitados por un Steam simulado, en el que cada copia es una cuenta). Formato:
   [tests/routes/README.md](tests/routes/README.md).
 - **Instalador**: `bash tools/manual-tests/installer-test.sh <zip>` instala, arranca, desinstala y compara en copias
   limpias, sin tocar el juego de Steam.

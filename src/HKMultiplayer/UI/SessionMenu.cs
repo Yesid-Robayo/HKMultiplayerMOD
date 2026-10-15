@@ -52,6 +52,7 @@ internal sealed class SessionMenu : GameStyledMenu {
     private Text _address;
     private Text _players;
     private MenuButton _showAddress;
+    private MenuButton _invite;
     private MenuButton _leave;
     private Text _leaveQuestion;
     private Text _leaveDetail;
@@ -203,6 +204,9 @@ internal sealed class SessionMenu : GameStyledMenu {
         var row = AddRow(main, "Acciones", 84, 10);
         AddButton(row, Lang.T("Copiar código", "Copy code"), CopyCode, 36, 520);
         _showAddress = AddButton(row, Lang.T("Mostrar mi IP", "Show my IP"), ToggleAddress, 36, 520);
+        // Con Steam: invitar a amigos a la sala de la partida (los invitados también pueden)
+        _invite = AddButton(main, Lang.T("Invitar amigos de Steam", "Invite Steam friends"),
+            () => Steam.SteamLink.Platform?.OpenInviteDialog(), 36);
         AddSpace(main, 10);
         AddText(main, Lang.T("Jugadores", "Players"), 40, title: true);
         _players = AddText(main, string.Empty, 36);
@@ -434,12 +438,16 @@ internal sealed class SessionMenu : GameStyledMenu {
             ? world != null ? Lang.T($"Mundo «{world.Name}»", $"World \"{world.Name}\"") : Lang.T("Partida abierta", "Game open")
             : session.IsActive ? Lang.T("Conectado a la partida", "Connected to the game") : Lang.T("Conectando...", "Connecting...");
         _code.text = Lang.T($"Código de la partida: {MultiplayerRunner.FormatCode(session.RoomCode)}", $"Game code: {MultiplayerRunner.FormatCode(session.RoomCode)}");
-        _address.text = session.IsHost
-            ? _addressVisible
-                ? Lang.T($"Tu IP: {MultiplayerRunner.LocalAddresses()}   ·   puerto {session.Port}", $"Your IP: {MultiplayerRunner.LocalAddresses()}   ·   port {session.Port}")
-                : Lang.T("Tu IP está oculta", "Your IP is hidden")
-            : string.Empty;
-        _showAddress.gameObject.SetActive(session.IsHost);
+        var byIp = session.IsHost && session.Port is > 0;
+        _address.text = !session.IsHost
+            ? string.Empty
+            : !byIp
+                ? Lang.T("Partida solo por Steam (no se pudo abrir el puerto)", "Steam-only game (the port couldn't be opened)")
+                : _addressVisible
+                    ? Lang.T($"Tu IP: {MultiplayerRunner.LocalAddresses()}   ·   puerto {session.Port}", $"Your IP: {MultiplayerRunner.LocalAddresses()}   ·   port {session.Port}")
+                    : Lang.T("Tu IP está oculta", "Your IP is hidden");
+        _showAddress.gameObject.SetActive(byIp);
+        _invite.gameObject.SetActive(Steam.SteamLink.Platform is { Lobby: not 0 });
         SetButtonText(_showAddress, _addressVisible ? Lang.T("Ocultar mi IP", "Hide my IP") : Lang.T("Mostrar mi IP", "Show my IP"));
 
         var text = new StringBuilder();

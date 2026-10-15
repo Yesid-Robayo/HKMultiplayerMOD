@@ -11,7 +11,12 @@ bash tools/run-routes.sh crossroads city        # solo esas rutas
 bash tools/run-routes.sh --reuse -v crossroads  # repetir una ruta sin empezar el mundo de cero, viendo cada paso
 bash tools/run-routes.sh --lag "120 30 2"       # con red mala (retraso ms, variación ms, pérdida %)
 bash tools/run-routes.sh --players 4            # con 4 jugadores: el par J/K más L y M
+bash tools/run-routes.sh --steam --players 4    # los invitados entran por Steam (simulado) y M por IP
 ```
+
+- Con `--steam` cada copia hace de una cuenta de Steam distinta (Steam simulado, solo en el modo de prueba) y los
+  invitados entran por la sala de Steam del host en vez de por IP; con 4 jugadores, el tercero entra por IP, así la
+  misma partida usa las dos vías. Solo con un par.
 
 - Con `--players 3` o `4`, L (y M) se unen a la partida del par J/K, entran en cada sala con los dos y cuentan en
   cada comprobación: se tienen que ver todos, el progreso, los rompibles, los enemigos vivos y lo guardado de la sala

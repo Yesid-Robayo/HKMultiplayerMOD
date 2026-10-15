@@ -15,7 +15,7 @@ public sealed class UdpTransport : ITransport {
     private const int MaxQueued = 4096;
 
     private readonly Socket _socket;
-    private readonly BufferPool _pool = new(NetConstants.MaxDatagramSize);
+    private readonly BufferPool _pool;
     private readonly Queue<Datagram> _queue = new();
     private readonly object _queueLock = new();
     private readonly Thread _thread;
@@ -27,7 +27,12 @@ public sealed class UdpTransport : ITransport {
     public event Action<string> Error;
 
     /// <param name="port">Puerto en el que escuchar (0 = cualquiera libre, para el cliente).</param>
-    public UdpTransport(int port) {
+    /// <param name="pool">
+    /// Reserva de búferes; una compartida con otro transporte (<see cref="CompositeTransport"/>) deja devolver a
+    /// cualquiera de los dos lo que recibió el otro.
+    /// </param>
+    public UdpTransport(int port, BufferPool pool = null) {
+        _pool = pool ?? new BufferPool(NetConstants.MaxDatagramSize);
         _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         // Windows: sin esto, un ICMP "puerto inalcanzable" cierra la recepción del socket
         try {

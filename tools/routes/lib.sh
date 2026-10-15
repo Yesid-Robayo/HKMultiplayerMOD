@@ -175,6 +175,10 @@ setup_pair() {
   if [ -n "$HK_LAG" ]; then
     send "$host" "netsim $HK_LAG"; send "$guest" "netsim $HK_LAG"
   fi
+  # Con HK_VIA=steam cada copia hace de una cuenta de Steam (simulado) y el invitado entra por la sala del host
+  if [ "${HK_VIA:-ip}" = steam ]; then
+    send "$host" "steamsim 1"; send "$guest" "steamsim 2"
+  fi
 
   # El host abre el mundo; si es nuevo empieza la partida desde la cinemática, que se salta
   send "$host" "hostworld $HK_ROUTE_WORLD Host $port $HK_ROUTE_CODE"
@@ -193,7 +197,11 @@ setup_pair() {
   wait_playable "$host" 120 || { echo "par $n: el host no llegó a una sala jugable" >&2; return 1; }
 
   local since; since=$(log_lines "$guest")
-  send "$guest" "join 127.0.0.1 $port $HK_ROUTE_CODE Invitado"
+  if [ "${HK_VIA:-ip}" = steam ]; then
+    send "$guest" "steamjoin 1 Invitado"
+  else
+    send "$guest" "join 127.0.0.1 $port $HK_ROUTE_CODE Invitado"
+  fi
   wait_log_since "$guest" "$since" "Progreso compartido activo" 120 >/dev/null || { echo "par $n: el invitado no entró en el mundo" >&2; return 1; }
   wait_playable "$guest" 60 || { echo "par $n: el invitado no llegó a una sala jugable" >&2; return 1; }
   sleep 4
@@ -237,6 +245,11 @@ setup_group() {
   if [ -n "$HK_LAG" ]; then
     for inst in "$host" "${guests[@]}"; do send "$inst" "netsim $HK_LAG"; done
   fi
+  # Con HK_VIA=steam cada copia hace de una cuenta de Steam (simulado): el host la 1, los invitados las siguientes
+  if [ "${HK_VIA:-ip}" = steam ]; then
+    local account=0
+    for inst in "$host" "${guests[@]}"; do account=$((account + 1)); send "$inst" "steamsim $account"; done
+  fi
 
   # Mientras se prepara, las cinemáticas se saltan solas (y los invitados nuevos no ven la introducción)
   for inst in "$host" "${guests[@]}"; do send "$inst" "autoskip"; done
@@ -254,7 +267,13 @@ setup_group() {
     n=$((n + 1))
     [ $n = 1 ] && name=Invitado || name="Invitado$n"
     since=$(log_lines "$inst")
-    send "$inst" "join 127.0.0.1 $port $HK_ROUTE_CODE $name"
+    # Con HK_VIA=steam los dos primeros entran por la sala de Steam del host y el tercero por IP: la misma partida
+    # con las dos vías a la vez
+    if [ "${HK_VIA:-ip}" = steam ] && [ $n -le 2 ]; then
+      send "$inst" "steamjoin 1 $name"
+    else
+      send "$inst" "join 127.0.0.1 $port $HK_ROUTE_CODE $name"
+    fi
     wait_log_since "$inst" "$since" "Progreso compartido activo" 150 >/dev/null || { echo "grupo: $inst no entró en el mundo" >&2; return 1; }
     wait_playable "$inst" 90 || { echo "grupo: $inst no llegó a una sala jugable" >&2; return 1; }
   done

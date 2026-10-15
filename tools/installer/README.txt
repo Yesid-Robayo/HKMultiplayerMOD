@@ -99,6 +99,10 @@ of game files).
        - the game code shown on screen (like ABCD-EFGH).
      The code and the IP are also in Pause > Multiplayer, with a button to copy the code.
 
+With Steam you don't need any of that: your Steam friends can join directly (section 4). To
+invite someone: Pause > Multiplayer > "Invite Steam friends". Choose who can join through Steam
+in Multiplayer > "Steam games": Friends, Invited only or Nobody.
+
 Which address to give:
   - Same home (same network or wifi): the IP shown in Pause > Multiplayer (usually 192.168.x.x).
   - Over the internet: your public IP. Search "what is my IP" in your browser. You also need to
@@ -108,15 +112,27 @@ Which address to give:
 4. JOIN A WORLD (the guest)
 ---------------------------
 
+Through Steam (no port forwarding):
+  - Accept the host's invite or click "Join Game" in your Steam friends list. Also in
+    Multiplayer > "Join a world" > "Join <friend's name>".
+  - If the game is closed, Steam opens it and you join on your own. If you're playing your normal
+    game, go back to the main menu and you join on your own.
+
+By IP:
   1. Main menu > Multiplayer. Type your name and the same port as the host (26950).
   2. "Join a world": type the host's address and the game code > "Join".
+
+In the same game some players can join through Steam and others by IP. Anyone without Steam
+joins the host by IP (on the same network or over the internet).
 
 Your character is saved in the host's world, on their PC. If you join that world again, you get
 it back.
 
 
-5. PLAYING OVER THE INTERNET: OPEN THE UDP PORT (host only)
------------------------------------------------------------
+5. PLAYING OVER THE INTERNET BY IP: OPEN THE UDP PORT (host only)
+-----------------------------------------------------------------
+
+Through Steam you don't need this: this section is only for players joining by IP.
 
 The game uses UDP port 26950 (or the one you set in Multiplayer > Port).
 

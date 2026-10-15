@@ -37,4 +37,15 @@ public sealed class GlobalSettings {
 
     /// <summary>La versión del mod de la última vez que se abrió el juego (para avisar de que se actualizó).</summary>
     public string LastRunVersion { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Quién puede entrar por Steam en las partidas que hosteas: <see cref="SteamAccessFriends"/> (cualquier amigo de
+    /// Steam, con "Unirse" en su lista de amigos o en el menú Multijugador), <see cref="SteamAccessInvited"/> (solo a
+    /// quien invites desde la pausa) o <see cref="SteamAccessNobody"/> (la partida no se abre por Steam, solo por IP).
+    /// </summary>
+    public int SteamAccess { get; set; } = SteamAccessFriends;
+
+    public const int SteamAccessFriends = 0;
+    public const int SteamAccessInvited = 1;
+    public const int SteamAccessNobody = 2;
 }

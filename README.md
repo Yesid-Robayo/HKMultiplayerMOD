@@ -4,7 +4,7 @@
 
 **A co-op mod for Hollow Knight: play the whole world with your friends, on your local network or over the internet.**
 
-![Version](https://img.shields.io/badge/version-0.30.0-7fb2ff)
+![Version](https://img.shields.io/badge/version-0.31.0-7fb2ff)
 ![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
@@ -20,9 +20,10 @@
 > [Testing status](#-testing-status)). **It may have bugs.** Back up your saves before playing and, if something goes
 > wrong, open an *issue* with a screenshot and your `ModLog.txt`.
 
-One player **hosts** a coop world and their friends **join** with the host's address and the game code: you share the
-world, see each other in real time and fight the same enemies and bosses together. Up to 4 players, written from
-scratch on top of the Hollow Knight Modding API.
+One player **hosts** a coop world and their friends **join** through **Steam** (with an invite or *Join Game*, no
+port forwarding) or with the host's address and the game code: you share the world, see each other in real time and
+fight the same enemies and bosses together. Up to 4 players, written from scratch on top of the Hollow Knight Modding
+API.
 
 ## Contents
 
@@ -71,8 +72,14 @@ scratch on top of the Hollow Knight Modding API.
 - **Host and join** from the main menu (*Multiplayer*): the host opens a world and shares their **address**, the
   **port** (26950 by default) and the **game code** (`ABCD-EFGH` format). Buttons to copy the code and show or hide the
   IP.
-- Works on a **local network and over the internet** (over the internet the host opens the UDP port on their router,
-  or you use a virtual LAN such as Radmin VPN, ZeroTier or Tailscale).
+- **Through Steam, no port forwarding**: hosting opens a Steam lobby. Your friends see *Join Game* in their Steam
+  friends list or your game in *Multiplayer › Join a world*, and from *Pause › Multiplayer › Invite Steam friends* you
+  can invite anyone. If your friend's game is closed, Steam opens it and the mod joins on its own. In *Multiplayer* you
+  choose who can join through Steam: **friends**, **invited only** or **nobody**.
+- **Steam and IP at the same time**: in the same game some players can join through Steam and others by IP. Anyone
+  without Steam joins the host by IP, on the same network or over the internet.
+- Works on a **local network and over the internet** (through Steam you don't open anything; by IP, over the internet
+  the host opens the UDP port on their router, or you use a virtual LAN such as Radmin VPN, ZeroTier or Tailscale).
 - **Each guest's character** is saved in the host's world: it is sent at benches, every 30 seconds and when leaving.
   When you join again you get your character back. If the host closes the game, guests' characters are collected
   first.
@@ -240,16 +247,20 @@ through the world checking that every player sees the same thing.
   Troupe, Grey Prince Zote, the Colosseum of Fools (Bronze, Zote included), Zote and Cloth, and the Pantheon of the
   Master from start to finish.
 - 0.30.0: every boss fight again with 4 players, one at a time, and the Pantheon of Hallownest to its ending, which
-  each player finishes on their own PC.
+  each player finishes on their own PC. Then the 16 automated routes with 4 players and a fresh world.
+- 0.31.0: the Steam connection with a simulated Steam, where each copy of the game acts as a different account:
+  joining through the lobby and by invite, private lobbies, Steam and IP guests in the same game, and the test routes
+  with two players joining through Steam and one by IP.
 
 ⚠️ **Partially tested:**
 
 - Hive Knight and Massive Moss Charger: they die on every PC, but their attacks still need checking.
-- 0.30.0: the 16 automated routes were not run again with this version.
 
 ❓ **Not tested yet:**
 
 - A session between real PCs over the internet.
+- Real Steam between two accounts: the part that talks to Steam (creating the lobby, inviting, joining and connecting
+  through its relays) has only been tested with the simulated Steam.
 - Playing with 3 or 4 players: the cases that only happen with three or more were fixed in 0.28.0 and tested with four
   copies of the game on one PC, but not yet between real PCs.
 
@@ -308,11 +319,14 @@ installation**, how to open the port and what to do if something fails.
 
 ## 🎮 How to play
 
-1. **Host**: main menu › *Multiplayer* › *Host a world* › *New world* (or pick one) › *Create and host*. Give your
+1. **Host**: main menu › *Multiplayer* › *Host a world* › *New world* (or pick one) › *Create and host*. With Steam,
+   your friends can already join; to invite someone: *Pause › Multiplayer › Invite Steam friends*. By IP, give your
    friends your **IP**, the **port** (26950) and the **code** shown on screen (also in *Pause › Multiplayer*).
-2. **Guest**: main menu › *Multiplayer* › *Join a world*, with the address, the port and the code.
-3. **Over the internet**: the host opens **UDP port 26950** on their router (or you use Radmin VPN, ZeroTier or
-   Tailscale). On the same home network you don't need to open anything.
+2. **Guest through Steam**: accept the invite or click *Join Game* in your Steam friends list (also *Multiplayer ›
+   Join a world › Join…*). If you're playing your normal game, go back to the main menu and you'll join on your own.
+3. **Guest by IP**: main menu › *Multiplayer* › *Join a world*, with the address, the port and the code.
+4. **Over the internet by IP**: the host opens **UDP port 26950** on their router (or you use Radmin VPN, ZeroTier or
+   Tailscale). Through Steam or on the same home network you don't need to open anything.
 
 ---
 
@@ -352,12 +366,15 @@ same again (1.5× is 2× with three players and 2.5× with four).
 | **MonoMod** | Hooks into the game's code (`MMHOOK_*.dll`, `MonoMod.RuntimeDetour`). |
 | **PlayMaker** | Reading and driving the game's state machines: enemies, bosses, elevators, gates, arenas, dialogues. |
 | **BouncyCastle** | Encryption: X25519, HKDF-SHA256 with the game code and ChaCha20-Poly1305 on every packet. |
+| **Steamworks.NET** (the one the game ships) | Steam lobbies, invites and account-to-account connections (SteamNetworkingMessages, direct or through Valve's relays) to play without port forwarding. |
 | **Unity UI** | Menus in the game's style, notices and the partner HUD (with the game's own HUD sprites). |
 
-- **Custom networking over UDP**: reliable and unreliable channels, chunked large transfers (the world when joining),
+- **Custom networking over UDP or Steam**: reliable and unreliable channels, chunked large transfers (the world when joining),
   heartbeat and clean disconnects, with no per-packet allocations to avoid stutters.
-- **Security**: only people who know the game code can join; everything is encrypted and authenticated.
-- **No external services**: players connect directly to each other.
+- **Security**: only people who know the game code can join; everything is encrypted and authenticated, also through
+  Steam (Steam only carries the packets). Through Steam, connections are only accepted from friends, lobby members or
+  the host you're joining.
+- **No servers of our own**: by IP players connect directly to each other; through Steam, Steam carries the traffic.
 
 ---
 
@@ -419,7 +436,7 @@ PlayMaker FSMs are not in there; see [Código del juego](docs/arquitectura.md#c�
   [docs/arquitectura.md](docs/arquitectura.md#pruebas).
 - **Automated routes**: `bash tools/run-routes.sh` walks through the game area by area with a host and guests and
   checks in every room that everyone sees the same thing (`--players 4` plays them with four, `--pairs 3` splits the
-  areas between 3 pairs). Format:
+  areas between 3 pairs and `--steam` has the guests join through a simulated Steam, where each copy is an account). Format:
   [tests/routes/README.md](tests/routes/README.md).
 - **Installer**: `bash tools/manual-tests/installer-test.sh <zip>` installs, launches, uninstalls and compares on clean
   copies, without touching the Steam game.

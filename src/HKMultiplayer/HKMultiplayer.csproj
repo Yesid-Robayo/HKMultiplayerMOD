@@ -6,7 +6,7 @@
     <PropertyGroup>
         <AssemblyName>HKMultiplayer</AssemblyName>
         <RootNamespace>HKMultiplayer</RootNamespace>
-        <AssemblyVersion>0.30.0.0</AssemblyVersion>
+        <AssemblyVersion>0.31.0.0</AssemblyVersion>
         <TargetFramework>net472</TargetFramework>
         <LangVersion>latest</LangVersion>
         <Nullable>disable</Nullable>
@@ -20,6 +20,9 @@
 
     <ItemGroup>
         <Reference Include="$(References)\Assembly-CSharp.dll" Private="False" />
+        <!-- El Steamworks.NET del juego (Steam: salas y conexión sin abrir puertos). La versión de GOG no lo trae:
+             SteamLink lo carga aparte y, si falta, la conexión es solo por IP -->
+        <Reference Include="$(References)\com.rlabrecque.steamworks.net.dll" Private="False" />
         <Reference Include="$(References)\MMHOOK_Assembly-CSharp.dll" Private="False" />
         <Reference Include="$(References)\MMHOOK_PlayMaker.dll" Private="False" />
         <Reference Include="$(References)\MonoMod.RuntimeDetour.dll" Private="False" />

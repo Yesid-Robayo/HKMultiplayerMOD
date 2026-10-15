@@ -9,6 +9,24 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.31.0
+
+**Jugar por Steam, sin abrir puertos.**
+
+- **Sala de Steam**: al hostear se abre una sala de Steam. Tus amigos ven *Unirse a la partida* en su lista de amigos
+  de Steam, o tu partida en *Multijugador › Unirse a un mundo* con un botón para entrar, sin escribir dirección ni
+  código.
+- **Invitar**: *Pausa › Multijugador › Invitar amigos de Steam* abre el panel de Steam para invitar a quien quieras
+  (también desde la lista de amigos de Steam). Al aceptar, el mod entra solo en la partida; si el juego estaba
+  cerrado, Steam lo abre, y si el amigo está jugando su partida normal, entra al volver al menú principal.
+- **Quién entra por Steam**: en *Multijugador*, *Partidas por Steam*: **Amigos** (cualquier amigo de Steam),
+  **Solo invitados** (sala privada: solo entra quien recibe la invitación) o **Nadie** (solo por IP).
+- **Steam e IP a la vez**: en la misma partida unos entran por Steam y otros por IP. Si no se puede abrir el puerto,
+  la partida se abre igual por Steam. Quien no tenga Steam sigue entrando al host por IP.
+- **Seguridad**: la conexión por Steam va cifrada con el código de la partida, como por IP (Steam solo lleva los
+  paquetes), y solo se aceptan conexiones de amigos, de los de la sala o del host al que te unes.
+- La reconexión automática también funciona por Steam, y el host comprueba la versión antes de dejar entrar.
+
 ## 0.30.0
 
 Todos los combates de jefes jugados otra vez con 4 jugadores, uno a uno, y el Panteón de Hallownest hasta su final.

@@ -836,6 +836,31 @@ internal sealed class TestDriver : MonoBehaviour {
                 // join <dirección> <puerto> <código> <nombre>
                 runner.Join(args[1], int.Parse(args[2]), args[3], args[4]);
                 break;
+            case "steamsim":
+                // steamsim <n>: esta copia hace de la cuenta de Steam n (Steam simulado; las salas las ven las demás copias)
+                Steam.SteamLink.UseSimulated(int.Parse(args[1]));
+                break;
+            case "steamjoin":
+                // steamjoin <n> <nombre>: se une por Steam a la sala de la cuenta n, como desde la lista de amigos
+                runner.JoinSteamLobby(Steam.SimulatedSteamPlatform.LobbyOf(int.Parse(args[1])), args.Length > 2 ? args[2] : "Invitado");
+                break;
+            case "steamaccess":
+                // steamaccess <0|1|2>: quién entra por Steam en las partidas que hostea (amigos, solo invitados, nadie)
+                HKMultiplayerMod.Settings.SteamAccess = int.Parse(args[1]);
+                break;
+            case "steaminvite":
+                // steaminvite <n>: invita a la cuenta n a la sala de esta, y la otra la acepta
+                (Steam.SteamLink.Platform as Steam.SimulatedSteamPlatform)?.Invite(int.Parse(args[1]));
+                break;
+            case "steamfriends": {
+                // Amigos de Steam con partida abierta, como los enseña el menú Multijugador
+                var steam = Steam.SteamLink.Platform;
+                Log.Info(Tag + (steam == null
+                    ? "steam no"
+                    : $"steam cuenta={steam.LocalId % 100} sala={(steam.Lobby == 0 ? "-" : (steam.Lobby % 100).ToString())} amigos=[" +
+                      string.Join(", ", steam.FriendGames().Select(game => $"{game.Name}:{game.Lobby % 100}")) + "]"));
+                break;
+            }
             case "leave":
                 runner.Leave();
                 break;

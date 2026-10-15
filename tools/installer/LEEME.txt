@@ -102,6 +102,10 @@ instalados > Verificar integridad de los archivos del juego).
        - el código de la partida que sale en pantalla (como ABCD-EFGH).
      El código y la IP también salen en Pausa > Multijugador, con un botón para copiar el código.
 
+Con Steam no hace falta nada de eso: tus amigos de Steam pueden unirse directamente (punto 4).
+Para invitar a alguien: Pausa > Multijugador > "Invitar amigos de Steam". Quién puede entrar por
+Steam lo eliges en Multijugador > "Partidas por Steam": Amigos, Solo invitados o Nadie.
+
 Qué dirección dar:
   - Misma casa (misma red o wifi): la IP que sale en Pausa > Multijugador (suele ser 192.168.x.x).
   - Por internet: tu IP pública. La ves buscando "cuál es mi IP" en el navegador. Además tienes que
@@ -111,15 +115,27 @@ Qué dirección dar:
 4. UNIRSE A UN MUNDO (el invitado)
 ----------------------------------
 
+Por Steam (sin abrir puertos):
+  - Acepta la invitación del host o pulsa "Unirse a la partida" en tu lista de amigos de Steam.
+    También en Multijugador > "Unirse a un mundo" > "Unirse a <nombre del amigo>".
+  - Si el juego está cerrado, Steam lo abre y entras solo. Si estás jugando tu partida normal,
+    sal al menú principal y entras solo.
+
+Por IP:
   1. Menú principal > Multijugador. Escribe tu nombre y el mismo puerto que el host (26950).
   2. "Unirse a un mundo": escribe la dirección del host y el código de la partida > "Unirse".
+
+En una misma partida unos pueden entrar por Steam y otros por IP. Quien no tenga Steam entra
+al host por IP (en la misma red o por internet).
 
 Tu personaje se guarda en el mundo del host, en su PC. Si vuelves a unirte a ese mundo, lo
 recuperas.
 
 
-5. JUGAR POR INTERNET: ABRIR EL PUERTO UDP (solo el host)
----------------------------------------------------------
+5. JUGAR POR INTERNET POR IP: ABRIR EL PUERTO UDP (solo el host)
+----------------------------------------------------------------
+
+Por Steam no hace falta: este punto es solo para los que entran por IP.
 
 El juego usa el puerto 26950 por UDP (o el que pongas en Multijugador > Puerto).
 

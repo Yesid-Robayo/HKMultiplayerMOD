@@ -8,6 +8,7 @@ using HKMultiplayer.Net;
 using HKMultiplayer.Net.Crypto;
 using HKMultiplayer.Net.Transport;
 using HKMultiplayer.Session;
+using HKMultiplayer.Steam;
 using HKMultiplayer.Testing;
 using HKMultiplayer.UI;
 using HKMultiplayer.Util;
@@ -133,7 +134,25 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         public int Port;
         public string RoomCode;
         public string Name;
+
+        /// <summary>Por Steam: la cuenta del host (0: por IP) y su sala.</summary>
+        public ulong SteamHost;
+
+        public ulong Lobby;
     }
+
+    // Datos de la sala de Steam del host: con ellos el que entra sabe a quién conectarse y con qué código
+    private const string LobbyKeyMod = "hkmp";
+    private const string LobbyKeyVersion = "version";
+    private const string LobbyKeyCode = "code";
+    private const string LobbyKeyHost = "host";
+    private const string LobbyKeyName = "name";
+
+    /// <summary>Sala de Steam a la que pidió unirse estando en otra partida o en el juego: se entra al volver al menú.</summary>
+    private ulong _pendingLobby;
+
+    private ISteamPlatform _steamWatched;
+    private bool _commandLineChecked;
 
     private JoinTarget _lastJoin;
 
@@ -230,6 +249,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         }
 
         UpdateReconnect();
+        UpdateSteam();
         CoopSaves.Update();
         MultiplayerMenu.EnsureInstalled();
         SessionMenu.UpdateInstalled(Session != null);
@@ -346,6 +366,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
                 Session = null;
                 DetachAll();
                 closing.Dispose();
+                // Fuera también de la sala de Steam del host (la reconexión, si la hay, vuelve a entrar)
+                Safely(() => SteamLink.Platform?.LeaveLobby(), "Steam LeaveLobby");
             }
         }
     }
@@ -375,22 +397,72 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     public bool Host(string name, int port, string roomCode = null) {
         CancelReconnect();
         CloseSession();
-        UdpTransport transport;
+        // Por IP y, con Steam, también por Steam: cada invitado entra por la que pueda. Los dos comparten los búferes
+        var pool = new BufferPool(NetConstants.MaxDatagramSize);
+        // Con "Nadie" en "Partidas por Steam" no se escucha por Steam ni se abre sala
+        var access = HKMultiplayerMod.Settings.SteamAccess;
+        var steam = access == Settings.GlobalSettings.SteamAccessNobody ? null : SteamLink.Platform;
+        UdpTransport udp = null;
         try {
-            transport = new UdpTransport(port);
+            udp = new UdpTransport(port, pool);
+            udp.Error += message => Log.Warn($"Red: {message}");
         } catch (SocketException e) {
-            SetStatus(Lang.T($"No se pudo abrir el puerto {port}: {e.Message}", $"Couldn't open port {port}: {e.Message}"));
-            return false;
+            if (steam == null) {
+                SetStatus(Lang.T($"No se pudo abrir el puerto {port}: {e.Message}", $"Couldn't open port {port}: {e.Message}"));
+                return false;
+            }
+
+            // Por Steam se puede hostear igual: solo que nadie entrará por IP
+            Log.Warn($"No se pudo abrir el puerto {port} ({e.Message}): la partida se abre solo por Steam");
         }
 
-        transport.Error += message => Log.Warn($"Red: {message}");
+        ITransport transport = udp;
+        if (steam != null) {
+            var peers = new PeerTransport(steam, pool);
+            transport = udp != null ? new CompositeTransport(udp, peers) : peers;
+        }
+
         var code = roomCode != null ? RoomCode.Normalize(roomCode) : RoomCode.Generate();
         Session = GameSession.Host(WithTestNetwork(transport), code, SanitizeName(name), CurrentScene(), HKMultiplayerMod.Version,
             Log.Info);
         Wire(Session);
         _announceCode = true;
-        SetStatus(Lang.T($"Partida abierta en el puerto {port}. Código: {FormatCode(code)}", $"Game open on port {port}. Code: {FormatCode(code)}"));
+        if (steam != null) {
+            OpenSteamLobby(steam, code, name, access == Settings.GlobalSettings.SteamAccessFriends);
+        }
+
+        SetStatus(udp != null
+            ? Lang.T($"Partida abierta en el puerto {port}. Código: {FormatCode(code)}", $"Game open on port {port}. Code: {FormatCode(code)}")
+            : Lang.T($"Partida abierta solo por Steam. Código: {FormatCode(code)}", $"Game open on Steam only. Code: {FormatCode(code)}"));
         return true;
+    }
+
+    /// <summary>
+    /// Sala de Steam solo para amigos con los datos para entrar: los amigos ven "Unirse" en Steam y la partida en el menú
+    /// Multijugador, y el host puede invitarlos desde la pausa.
+    /// </summary>
+    private void OpenSteamLobby(ISteamPlatform steam, string code, string name, bool friendsCanJoin) {
+        var session = Session;
+        steam.CreateLobby(friendsCanJoin, lobby => {
+            if (lobby == 0) {
+                return;
+            }
+
+            // La partida se cerró antes de que Steam creara la sala
+            if (Session != session) {
+                steam.LeaveLobby();
+                return;
+            }
+
+            steam.SetLobbyData(LobbyKeyMod, "1");
+            steam.SetLobbyData(LobbyKeyVersion, HKMultiplayerMod.Version);
+            steam.SetLobbyData(LobbyKeyCode, code);
+            steam.SetLobbyData(LobbyKeyHost, steam.LocalId.ToString());
+            steam.SetLobbyData(LobbyKeyName, SanitizeName(name));
+            Log.Info(friendsCanJoin
+                ? "Sala de Steam abierta: los amigos pueden unirse desde Steam o desde el menú Multijugador"
+                : "Sala de Steam privada abierta: solo entra quien reciba una invitación");
+        });
     }
 
     /// <summary>Hostea un mundo coop: abre la partida y carga el mundo (desde el menú principal).</summary>
@@ -472,6 +544,124 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Wire(Session);
         SetStatus(Lang.T($"Conectando con {ip}:{port}...", $"Connecting to {ip}:{port}..."));
         return true;
+    }
+
+    /// <summary>Se une a la partida de esa sala de Steam (la de un amigo, desde el menú, una invitación o "Unirse").</summary>
+    public void JoinSteamLobby(ulong lobby, string name) {
+        CancelReconnect();
+        var steam = SteamLink.Platform;
+        if (steam == null) {
+            SetStatus(Lang.T("Steam no está disponible", "Steam isn't available"));
+            return;
+        }
+
+        CloseSession();
+        SetStatus(Lang.T("Entrando en la partida de Steam...", "Joining the Steam game..."));
+        steam.JoinLobby(lobby, ok => {
+            if (Session != null) {
+                return;
+            }
+
+            if (!ok) {
+                SetStatus(Lang.T("No se pudo entrar en la partida de Steam (puede que se haya cerrado)",
+                    "Couldn't join the Steam game (it may have closed)"));
+                return;
+            }
+
+            var version = steam.GetLobbyData(LobbyKeyVersion);
+            if (steam.GetLobbyData(LobbyKeyMod) != "1" || !ulong.TryParse(steam.GetLobbyData(LobbyKeyHost), out var host)) {
+                steam.LeaveLobby();
+                SetStatus(Lang.T("Esa partida de Steam no es de HKMultiplayer", "That Steam game isn't an HKMultiplayer game"));
+                return;
+            }
+
+            if (version != HKMultiplayerMod.Version) {
+                steam.LeaveLobby();
+                SetStatus(Lang.T($"El host tiene la versión {version} y tú la {HKMultiplayerMod.Version}: todos necesitan la misma",
+                    $"The host has version {version} and you have {HKMultiplayerMod.Version}: everyone needs the same one"));
+                return;
+            }
+
+            StartJoinSteam(host, steam.GetLobbyData(LobbyKeyCode), name, lobby);
+        });
+    }
+
+    /// <summary>Se conecta por Steam a la cuenta del host. La sala, si la hay, es para que el invitado pueda invitar a otros.</summary>
+    private bool StartJoinSteam(ulong host, string roomCode, string name, ulong lobby) {
+        var steam = SteamLink.Platform;
+        if (steam == null) {
+            SetStatus(Lang.T("Steam no está disponible", "Steam isn't available"));
+            return false;
+        }
+
+        var code = RoomCode.Normalize(roomCode ?? string.Empty);
+        if (!RoomCode.IsValid(code)) {
+            steam.LeaveLobby();
+            SetStatus(Lang.T("La partida de Steam no tiene un código válido", "The Steam game doesn't have a valid code"));
+            return false;
+        }
+
+        steam.Expect(host);
+        var transport = new PeerTransport(steam);
+        _lastJoin = new JoinTarget { RoomCode = code, Name = name, SteamHost = host, Lobby = lobby };
+        Session = GameSession.Join(WithTestNetwork(transport), transport.EndPointOf(host), code, SanitizeName(name),
+            HKMultiplayerMod.Version, Log.Info);
+        Wire(Session);
+        SetStatus(Lang.T("Conectando por Steam...", "Connecting through Steam..."));
+        return true;
+    }
+
+    /// <summary>
+    /// Steam una vez por frame: sus avisos, la petición de unirse (invitación o "Unirse" de la lista de amigos) y la sala
+    /// con la que se abrió el juego desde Steam (+connect_lobby).
+    /// </summary>
+    private void UpdateSteam() {
+        var steam = SteamLink.Platform;
+        if (steam == null) {
+            return;
+        }
+
+        if (_steamWatched != steam) {
+            _steamWatched = steam;
+            steam.JoinRequested += OnSteamJoinRequested;
+        }
+
+        steam.Update();
+        if (!CoopSaves.CanStart) {
+            return;
+        }
+
+        if (!_commandLineChecked) {
+            _commandLineChecked = true;
+            var args = Environment.GetCommandLineArgs();
+            var at = Array.IndexOf(args, "+connect_lobby");
+            if (at >= 0 && at + 1 < args.Length && ulong.TryParse(args[at + 1], out var lobby)) {
+                Log.Info("El juego se abrió desde Steam para unirse a la partida de un amigo");
+                _pendingLobby = lobby;
+            }
+        }
+
+        if (_pendingLobby != 0 && Session == null && _reconnectAttempts == 0) {
+            var lobby = _pendingLobby;
+            _pendingLobby = 0;
+            JoinSteamLobby(lobby, HKMultiplayerMod.Settings.PlayerName);
+        }
+    }
+
+    private void OnSteamJoinRequested(ulong lobby) {
+        if (Session != null && SteamLink.Platform?.Lobby == lobby) {
+            return;
+        }
+
+        if (Session != null || !CoopSaves.CanStart) {
+            _pendingLobby = lobby;
+            Notice.Show(Lang.T("Para unirte a la partida de tu amigo, sal al menú principal: entrarás solo",
+                "To join your friend's game, go back to the main menu: you'll join automatically"), 8f);
+            return;
+        }
+
+        CancelReconnect();
+        _pendingLobby = lobby;
     }
 
     /// <summary>
@@ -565,6 +755,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Session = null;
         DetachAll();
         session.Dispose();
+        Safely(() => SteamLink.Platform?.LeaveLobby(), "Steam LeaveLobby");
         SetStatus(session.IsHost ? Lang.T("Partida cerrada", "Game closed") : Lang.T("Desconectado", "Disconnected"));
     }
 
@@ -679,8 +870,14 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Log.Info($"Reconectando con el host (intento {_reconnectAttempts} de {MaxReconnectAttempts})");
         Notice.Show(Lang.T($"Reconectando con el host (intento {_reconnectAttempts} de {MaxReconnectAttempts})...\nEsc para cancelar",
             $"Reconnecting to the host (attempt {_reconnectAttempts} of {MaxReconnectAttempts})...\nEsc to cancel"), 12f);
-        if (!StartJoin(target.Address, target.Port, target.RoomCode, target.Name)) {
+        var started = target.SteamHost != 0
+            ? StartJoinSteam(target.SteamHost, target.RoomCode, target.Name, target.Lobby)
+            : StartJoin(target.Address, target.Port, target.RoomCode, target.Name);
+        if (!started) {
             GiveUpReconnect(StatusMessage);
+        } else if (target.Lobby != 0 && SteamLink.Platform is { Lobby: 0 } steam) {
+            // De vuelta en la sala del host (para poder invitar); la conexión no depende de ella
+            steam.JoinLobby(target.Lobby, _ => { });
         }
     }
 

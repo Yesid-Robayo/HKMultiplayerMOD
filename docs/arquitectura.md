@@ -1139,6 +1139,59 @@ Decisiones aprobadas por el usuario para M5 (las marcadas "elegido" las escogió
   ajustes del host (`HostOption`) guardan los dos idiomas y eligen al mostrarse. Los nombres de jefes y zonas salen de
   los textos del propio juego. Los registros (`ModLog.txt`) siguen en español.
 
+
+## Steam (0.31.0)
+
+Jugar por Steam sin abrir puertos, además de por IP. La red del mod no cambia: el saludo, el cifrado con el código, la
+fiabilidad y la sesión son los mismos; Steam solo sustituye el transporte entre cada invitado y el host.
+
+- **Transporte** (`Net/Transport/PeerTransport.cs`, sin Unity ni Steam, en las NetTests): `IPeerNetwork` envía y recibe
+  datagramas sin garantía de entrega a un par identificado por 64 bits (el SteamID). `PeerTransport` lo convierte en un
+  `ITransport`: a cada par le da una dirección IPv6 local inventada (`fd48:4b4d:5053:544d::<n>`, "HKMPSTM" y un número de
+  orden), así el resto de la red, que identifica a cada par por su `IPEndPoint`, no cambia. En la dirección va el número
+  de orden y no el SteamID, para que el registro no lleve nada que identifique al jugador. `CompositeTransport` junta UDP
+  y Steam en el host: recibe de los dos (alternando cuál mira primero) y envía por el del destino; los dos comparten la
+  misma `BufferPool` (por eso `UdpTransport` acepta una), porque un búfer se devuelve al primero venga de cuál venga.
+- **Steam** (`Steam/`): `ISteamPlatform` es lo que el mod usa de Steam: mensajes entre cuentas, salas, datos de la sala,
+  invitar, amigos con partida abierta y el aviso de "unirse". `SteamworksPlatform` lo hace con el Steamworks.NET 2024.8
+  que trae el juego (`com.rlabrecque.steamworks.net.dll`, referenciado con `Private=False`: no va en el paquete). El
+  juego ya inicia Steam (`SteamOnlineSubsystem`) y llama a `SteamAPI.RunCallbacks` en cada frame, que es lo que entrega
+  los `Callback`/`CallResult` del mod. Mensajes: `SteamNetworkingMessages` en el canal 0, sin agrupar
+  (`UnreliableNoNagle`) y reabriendo la sesión si se rompe (`AutoRestartBrokenSession`); se copian a un búfer nativo fijo
+  para no crear nada por paquete. Al iniciar se llama a `SteamNetworkingUtils.InitRelayNetworkAccess` para que la primera
+  conexión no espere a los relés. `SteamLink` decide qué plataforma hay: la real si el juego inició Steam; ninguna si el juego
+  no trae Steam (sin el ensamblado, `CreateReal` falla al compilarse y se atrapa: por eso va aparte y sin inlining) y
+  ninguna en el modo de prueba, donde se simula.
+- **Sala de Steam del host** (`MultiplayerRunner.OpenSteamLobby`): al hostear, si hay Steam y el ajuste
+  `SteamAccess` no es "Nadie", se crea una sala de hasta 4, solo para amigos (`k_ELobbyTypeFriendsOnly`) o privada con
+  "Solo invitados" (`k_ELobbyTypePrivate`). Guarda `hkmp=1`, `version`, `code` (el código de la partida), `host` (el
+  SteamID del host) y `name`. El host escucha por UDP y por Steam a la vez; si el puerto no se puede abrir, la partida se
+  abre igual solo por Steam (la pausa lo dice en vez de la IP).
+- **Unirse** (`JoinSteamLobby`): entra en la sala, comprueba `hkmp` y la versión (si no coincide, lo dice antes de
+  conectar) y se conecta a la cuenta del host con el código de la sala (`StartJoinSteam`). Se llega desde la lista
+  "Amigos de Steam" de *Unirse a un mundo* (amigos que juegan a Hollow Knight con una sala, `GetFriendGamePlayed`), desde
+  el aviso de Steam al aceptar una invitación o pulsar "Unirse a la partida" (`GameLobbyJoinRequested_t`; si está en
+  otra partida o en el juego, se apunta y entra al volver al menú principal) y desde `+connect_lobby <id>` cuando Steam
+  abre el juego para unirse. El invitado se queda en la sala para poder invitar a otros. La reconexión vuelve a la
+  cuenta del host directamente (sin la sala) y vuelve a entrar en la sala aparte.
+- **Seguridad**: una petición de conexión de Steam solo se acepta si viene de un amigo, de alguien de la sala o del host
+  al que se une (`Expect`); a cualquier otro se le ignora antes del saludo. El código de la sala lo leen los que pueden
+  entrar en ella (con "Amigos", cualquier amigo: es lo que hace funcionar "Unirse"; con "Solo invitados", quien recibe la
+  invitación). La conexión va cifrada con ese código igual que por IP.
+- **Interfaz**: *Multijugador* tiene la opción "Partidas por Steam" (Amigos / Solo invitados / Nadie, en los ajustes del
+  jugador: solo cuenta para sus partidas como host; sale solo si hay Steam) y, en *Unirse a un mundo*, la lista de amigos
+  con partida abierta. La pausa tiene "Invitar amigos de Steam" (el panel de Steam con la sala) mientras se está en una.
+- **Pruebas sin Steam**: todas las copias del juego son la misma cuenta, y en ellas el juego ni siquiera inicia Steam
+  ("Steam failed to initialize" en su `Player.log`). `SimulatedSteamPlatform`, solo en el modo de prueba (orden `steamsim
+  <n>`), hace que cada copia sea una cuenta distinta: mensajes por UDP en `127.0.0.1:27600+n`, salas e invitaciones como
+  archivos en `%TEMP%\hkmp-steamsim` (una sala privada solo deja entrar a la cuenta invitada). No sustituye nada del
+  juego ni de Steam: imita solo la interfaz del mod. Órdenes: `steamjoin <n> <nombre>`, `steaminvite <n>`,
+  `steamaccess <0|1|2>` y `steamfriends`. `run-routes.sh --steam` (un solo par) pasa las rutas con los invitados
+  entrando por la sala de Steam del host; con 4 jugadores, el tercero entra por IP, así la misma partida usa las dos
+  vías. Las NetTests prueban el transporte con una red de pares en memoria (invitados por Steam y por IP a la vez,
+  código incorrecto, pérdida del 20 %).
+- **Sin probar todavía**: `SteamworksPlatform` contra Steam de verdad (dos cuentas que tengan el juego).
+
 ## Paquete e instalador
 
 - `tools/package.sh` compila en Release y arma `out/package/HKMultiplayer-<versión>.zip` con una carpeta

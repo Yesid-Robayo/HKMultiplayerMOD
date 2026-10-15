@@ -43,6 +43,7 @@ public static partial class Program {
         Run("Saludo falso desde la dirección de un jugador conectado: no lo echa", SpoofedHelloIgnored);
         Run("Avalancha de saludos: pocos se atienden y el jugador sigue conectado", HelloFloodBounded);
         RunSessionTests();
+        RunPeerTransportTests();
         RunInterpolationTests();
 
         Console.WriteLine(_failures == 0 ? "\nTODAS LAS PRUEBAS PASARON" : $"\n{_failures} PRUEBA(S) FALLARON");

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Linq;
 using GlobalEnums;
 using HKMultiplayer.Game;
 using HKMultiplayer.Game.World;
@@ -28,6 +29,9 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
     private InputField _address;
     private InputField _code;
     private Text _joinStatus;
+    private GameObject _steamList;
+    private MenuOptionHorizontal _steamAccess;
+    private Text _steamTitle;
     private Text _hostStatus;
     private GameObject _worldList;
     private MenuButton _newWorldButton;
@@ -110,6 +114,13 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
             });
         UpdateCheck.Changed += RefreshUpdate;
         RefreshUpdate();
+        // Quién entra por Steam en las partidas que hosteas (sin Steam, la opción no sale: ver OnPageShowing)
+        _steamAccess = AddOption(start, Lang.T("Partidas por Steam", "Steam games"),
+            Lang.Spanish ? new[] { "Amigos", "Solo invitados", "Nadie" } : new[] { "Friends", "Invited only", "Nobody" },
+            Mathf.Clamp(settings.SteamAccess, 0, 2), index => {
+                HKMultiplayerMod.Settings.SteamAccess = index;
+                HKMultiplayerMod.SaveSettings();
+            });
 
         var host = NewPage(HostPage);
         AddText(host, Lang.T($"Elige un mundo coop (hasta {WorldStore.MaxWorlds}). Tus partidas normales no se tocan.", $"Pick a coop world (up to {WorldStore.MaxWorlds}). Your normal saves are not touched."), 36);
@@ -147,7 +158,16 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         });
 
         var join = NewPage(JoinPage);
-        AddText(join, Lang.T("Pide al host su dirección y el código de la partida.", "Ask the host for their address and the game code."), 38);
+        // Amigos de Steam con una partida abierta: un botón para cada uno (se rellena al abrir la página)
+        _steamTitle = AddText(join, Lang.T("Amigos de Steam", "Steam friends"), 40, title: true);
+        _steamList = new GameObject("SteamFriends", typeof(RectTransform), typeof(VerticalLayoutGroup));
+        _steamList.transform.SetParent(join.transform, false);
+        var steamLayout = _steamList.GetComponent<VerticalLayoutGroup>();
+        steamLayout.childControlHeight = true;
+        steamLayout.childControlWidth = true;
+        steamLayout.childForceExpandHeight = false;
+        AddSpace(join, 16);
+        AddText(join, Lang.T("Por IP: pide al host su dirección y el código de la partida.", "By IP: ask the host for their address and the game code."), 38);
         AddSpace(join, 20);
         _address = AddInput(join, Lang.T("Dirección del host", "Host address"), settings.LastAddress, 64, InputField.ContentType.Standard);
         _code = AddInput(join, Lang.T("Código", "Code"), string.Empty, 9, InputField.ContentType.Custom);
@@ -282,9 +302,58 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
     }
 
     protected override void OnPageShowing(int page) {
-        if (page == HostPage) {
+        if (page == StartPage) {
+            _steamAccess.gameObject.SetActive(Steam.SteamLink.Available);
+        } else if (page == HostPage) {
             RefreshWorlds();
+        } else if (page == JoinPage) {
+            RefreshSteamFriends();
         }
+    }
+
+    /// <summary>Amigos de Steam que tienen una partida de HKMultiplayer abierta (sin Steam, la sección no sale).</summary>
+    private void RefreshSteamFriends() {
+        foreach (Transform child in _steamList.transform) {
+            child.gameObject.SetActive(false);
+            Destroy(child.gameObject);
+        }
+
+        var steam = Steam.SteamLink.Platform;
+        _steamTitle.gameObject.SetActive(steam != null);
+        _steamList.SetActive(steam != null);
+        if (steam == null) {
+            return;
+        }
+
+        System.Collections.Generic.List<Steam.SteamFriendGame> games;
+        try {
+            games = steam.FriendGames();
+        } catch (Exception e) {
+            Log.Warn($"No se pudo leer la lista de amigos de Steam: {e.Message}");
+            games = new System.Collections.Generic.List<Steam.SteamFriendGame>();
+        }
+
+        foreach (var game in games.Take(4)) {
+            var lobby = game.Lobby;
+            AddButton(_steamList, Lang.T($"Unirse a {game.Name}", $"Join {game.Name}"), () => JoinSteam(lobby), 40);
+        }
+
+        if (games.Count == 0) {
+            AddText(_steamList, Lang.T("Ningún amigo tiene una partida abierta. También pueden invitarte desde Steam.",
+                "No friend has a game open. They can also invite you from Steam."), 30);
+        }
+
+        SetFirst(JoinPage, null);
+    }
+
+    private void JoinSteam(ulong lobby) {
+        SaveFields();
+        if (!CoopSaves.CanStart) {
+            _joinStatus.text = Lang.T("Únete desde el menú principal", "Join from the main menu");
+            return;
+        }
+
+        MultiplayerRunner.Instance.JoinSteamLobby(lobby, _name.text);
     }
 
     private void RefreshWorlds() {
