@@ -15,7 +15,7 @@
 <img src="docs/media/coop-hornet.gif" alt="Two PCs in the same game fighting Hornet" width="966">
 
 <sub>Two PCs in the same game against Hornet: both see the same thing at the same time, each knight with their name and
-the partner HUD at the top right. Hollow Knight belongs to Team Cherry.</sub>
+the partner HUD at the top right. PC 1 wears the Rick Knight skin (with its HUD). Hollow Knight belongs to Team Cherry.</sub>
 
 </div>
 
