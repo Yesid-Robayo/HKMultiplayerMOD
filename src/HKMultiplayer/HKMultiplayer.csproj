@@ -16,6 +16,10 @@
         <!-- Unity 6: compilar contra el mscorlib/System del juego -->
         <FrameworkPathOverride>$(References)</FrameworkPathOverride>
         <PathMap Condition="'$(Configuration)' == 'Release'">$(MSBuildProjectDirectory)=source</PathMap>
+        <!-- Sin el mapa de SourceLink en el .pdb: guardaba la ruta de la carpeta del repositorio en este PC (con el usuario
+             de Windows). Los números de línea de los errores no dependen de él -->
+        <EnableSourceLink>false</EnableSourceLink>
+        <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
     </PropertyGroup>
 
     <ItemGroup>

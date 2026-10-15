@@ -72,6 +72,10 @@ done
 sed 's/$/\r/' "$ROOT/LICENSE" > "$STAGE/LICENSE.txt"
 sed 's/$/\r/' "$ROOT/THIRD_PARTY_NOTICES.txt" > "$STAGE/THIRD_PARTY_NOTICES.txt"
 
+# Sin rutas de este PC dentro de las DLL (el compilador guarda la del .pdb, con el usuario de Windows, y la Modding API
+# compilada aquí la llevaba)
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$ROOT/tools/strip-pdb-paths.ps1")" "$(cygpath -w "$STAGE")"
+
 # Inventario con hashes
 (cd "$STAGE" && find ./files -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)
 
