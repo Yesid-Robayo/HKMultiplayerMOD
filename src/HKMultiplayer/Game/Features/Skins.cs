@@ -1185,7 +1185,11 @@ internal sealed class Skins {
     private void ApplyShared() {
         var hash = _local?.Hash ?? string.Empty;
         var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle;
-        if (hash == _sharedAppliedHash && scene == _sharedAppliedScene || Time.unscaledTime < _sharedRetryAt) {
+        // Mientras carga una sala o está en pausa se reintenta en cada cuadro, sin la espera: es cuando se pueden crear las
+        // texturas sin tirones. Con la espera (hasta 2 s) se perdía la carga y, al entrar directo en la sala de un jefe,
+        // el HUD de la skin no se creaba en todo el combate (Hornet con el marco normal en vez del de la skin)
+        if (hash == _sharedAppliedHash && scene == _sharedAppliedScene ||
+            Time.unscaledTime < _sharedRetryAt && !QuietMoment()) {
             return;
         }
 
@@ -1445,6 +1449,13 @@ internal sealed class Skins {
     /// se hace cuando no se está jugando (cargando una sala, en pausa o sin caballero), así no da tirones. Mientras, ese
     /// caballero se ve normal. Si en unos segundos no hay ese momento, se crea igualmente fuera de un combate de jefe.
     /// </summary>
+    /// <summary>Si ahora no se está jugando: cargando una sala, en pausa o sin caballero (cuando no se notan los tirones).</summary>
+    private static bool QuietMoment() {
+        var gm = GameManager.instance;
+        return gm == null || HeroController.instance == null || gm.IsInSceneTransition || gm.isPaused ||
+               gm.gameState != GlobalEnums.GameState.PLAYING;
+    }
+
     private bool CanCreateTextureNow() {
         var gm = GameManager.instance;
         if (gm == null || HeroController.instance == null || gm.IsInSceneTransition || gm.isPaused ||

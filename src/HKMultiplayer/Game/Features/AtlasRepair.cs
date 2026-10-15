@@ -106,6 +106,7 @@ internal static class AtlasRepair {
         var rects = SpriteRects(data, w, h);
         var moved = 0;
         var kept = 0;
+        var keptNames = new List<string>();
         var placed = new Dictionary<string, Placed>();
 
         // 1. Sprites que se movieron entre versiones: se traen de su sitio antiguo si ahí la skin se parece más (una
@@ -141,13 +142,14 @@ internal static class AtlasRepair {
             } else {
                 CopyBlock(original, pixels, w, rect.X, rect.Y, rect.X, rect.Y, rect.W, rect.H);
                 kept++;
+                keptNames.Add(rect.Name);
             }
         }
 
         if (moved + kept > 0) {
             skin.SetPixels32(pixels);
             Log.Info($"Hoja {data.spriteCollectionName} de la skin ajustada a esta versión: {moved} sprites recolocados, " +
-                        $"{kept} con el dibujo original");
+                        $"{kept} con el dibujo original{(keptNames.Count > 0 ? " (" + string.Join(", ", keptNames) + ")" : string.Empty)}");
         }
 
         return (moved, kept);

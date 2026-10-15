@@ -1331,6 +1331,29 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "spritesusing": {
+                // spritesusing <texto>: objetos de la sala que dibujan ahora un sprite de tk2d cuyo nombre o colección
+                // contiene el texto (p. ej. "frame" o "Soulorb": qué colección pinta cada parte del HUD)
+                var text = string.Join(" ", args.Skip(1));
+                foreach (var drawn in Resources.FindObjectsOfTypeAll<tk2dSprite>().Where(t => t.gameObject.scene.IsValid())) {
+                    var definition = drawn.CurrentSprite;
+                    var collectionName = drawn.Collection != null ? drawn.Collection.name : "-";
+                    if (definition == null || definition.name.IndexOf(text, StringComparison.OrdinalIgnoreCase) < 0 &&
+                        collectionName.IndexOf(text, StringComparison.OrdinalIgnoreCase) < 0) {
+                        continue;
+                    }
+
+                    var tex = definition.material != null ? definition.material.mainTexture : null;
+                    // El material con el que se dibuja de verdad (puede ser una copia propia del objeto, no el de la colección)
+                    var shared = drawn.GetComponent<Renderer>()?.sharedMaterial;
+                    Log.Info($"{Tag}dibuja {drawn.transform.parent?.name}/{drawn.name}: {collectionName}/{definition.name} " +
+                             $"activo={drawn.gameObject.activeInHierarchy} textura={(tex != null ? tex.name : "-")} " +
+                             $"material={(shared != null ? shared.name : "-")} con={(shared?.mainTexture != null ? shared.mainTexture.name : "-")} " +
+                             $"es_de_la_coleccion={(shared != null && drawn.Collection != null && (drawn.Collection.materials.Contains(shared) || (drawn.Collection.materialInsts?.Contains(shared) ?? false)))}");
+                }
+
+                break;
+            }
             case "collections":
                 // collections <texto>: colecciones de sprites cargadas cuyo nombre lo contiene
                 foreach (var collection in Resources.FindObjectsOfTypeAll<tk2dSpriteCollectionData>()
