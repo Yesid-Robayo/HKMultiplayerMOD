@@ -9,6 +9,17 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.31.3
+
+- **Jefes aturdidos menos seguido con varios jugadores**: los jefes que se aturden tras unos golpes (Hornet, Vasija
+  Rota, Hermano Perdido, Maestro y Tirano de Almas, Defensor del Estiércol, Coleccionista, Caballero de la Colmena, Grimm,
+  Príncipe Gris Zote, Sly, Sheo y el Hollow Knight) necesitan tantas veces más golpes como jugadores haya en la sala. Con
+  dos, Hornet pide 20 golpes en vez de 10; como pegan el doble de rápido, se aturde más o menos tan a menudo como jugando
+  solo. El daño y la vida no cambian.
+- **El HUD de la skin también en las salas de jefe**: al entrar directo en la sala de un jefe, el HUD de la skin (como el
+  frasco de Rick Knight) no se ponía en todo el combate y se veía el normal. Ahora se prepara mientras carga la sala.
+- El README tiene un GIF de dos PCs peleando juntos contra Hornet y un enlace a Ko-fi para apoyar el proyecto.
+
 ## 0.31.2
 
 - **Desinstalar devuelve el juego entero como estaba**: se quedaba el `TeamCherry.Localization.dll` de la Modding API en

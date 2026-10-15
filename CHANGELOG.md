@@ -9,6 +9,17 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.31.3
+
+- **Bosses stunned less often with several players**: bosses that get stunned after a number of hits (Hornet, Broken
+  Vessel, Lost Kin, Soul Master and Soul Tyrant, Dung Defender, The Collector, Hive Knight, Grimm, Grey Prince Zote, Sly,
+  Sheo and the Hollow Knight) need as many times more hits as there are players in the room. With two, Hornet needs 20
+  hits instead of 10; since they hit twice as fast, she gets stunned about as often as when playing alone. Damage and
+  health don't change.
+- **The skin's HUD in boss rooms too**: when going straight into a boss room, the skin's HUD (like Rick Knight's jar)
+  wasn't applied for the whole fight and the default one showed. Now it's prepared while the room loads.
+- The README has a GIF of two PCs fighting Hornet together and a Ko-fi link to support the project.
+
 ## 0.31.2
 
 - **Uninstalling puts the whole game back as it was**: the Modding API's `TeamCherry.Localization.dll` stayed instead of
