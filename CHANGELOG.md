@@ -9,6 +9,18 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.31.1
+
+Fixes to the Steam connection, found with real Steam.
+
+- **"Invite to Game" in the Steam friends list**: outside the game only "Invite to Watch" used to show up; now "Invite
+  to Game" shows up while you host, and your friends see "Join Game". Also with "Invited only": there, Steam won't let
+  in anyone who clicks "Join Game" without an invite. With "Invited only", the safe way to invite is *Pause ›
+  Multiplayer › Invite Steam friends*.
+- **Why you can't join**: if you can't join a Steam game, the reason is shown (invite-only, full or already closed)
+  instead of a general error.
+- When the host closes the game, the guest also leaves their Steam lobby.
+
 ## 0.31.0
 
 **Play through Steam, no port forwarding.**

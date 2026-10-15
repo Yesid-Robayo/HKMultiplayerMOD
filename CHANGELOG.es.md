@@ -9,6 +9,18 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.31.1
+
+Arreglos de la conexión por Steam, vistos con Steam de verdad.
+
+- **"Invitar a jugar" en la lista de amigos de Steam**: antes, fuera del juego solo salía "Invitar a ver"; ahora sale
+  "Invitar a jugar" mientras hosteas, y tus amigos ven "Unirse a la partida". También con "Solo invitados": ahí, a quien
+  pulse "Unirse" sin invitación no lo deja entrar. Lo seguro con "Solo invitados" es invitar desde *Pausa › Multijugador
+  › Invitar amigos de Steam*.
+- **Por qué no puedes entrar**: si no se puede entrar en una partida de Steam, se dice el motivo (solo con invitación,
+  llena o ya cerrada) en vez de un error general.
+- Cuando el host cierra la partida, el invitado sale también de su sala de Steam.
+
 ## 0.31.0
 
 **Jugar por Steam, sin abrir puertos.**
