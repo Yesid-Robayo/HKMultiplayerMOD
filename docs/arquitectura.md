@@ -1265,7 +1265,7 @@ fiabilidad y la sesión son los mismos; Steam solo sustituye el transporte entre
 | M3 | Enemigos y objetos de sala | Pelear juntos en salas normales y con jefes probados |
 | M4 | Efectos del otro jugador | Se ven sus ataques, hechizos y movimientos especiales |
 | M5 | Funciones del coop (revivir, sombras, skins, panel...) | Igual o mejor que la 0.7.3 |
-| M6 | Instalador y paquete | Tu amigo lo instala y jugáis |
+| M6 | Instalador y paquete | Tu amigo lo instala y juegan juntos |
 
 ## Comprobado en vivo
 

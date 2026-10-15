@@ -149,7 +149,7 @@ El juego usa el puerto 26950 por UDP (o el que pongas en Multijugador > Puerto).
        - IP del equipo: la IP local de tu PC (la de Pausa > Multijugador, 192.168.x.x)
      Guarda los cambios.
 
-Si no puedes tocar el router (o tu proveedor no lo permite), usad un programa de red local virtual
+Si no puedes tocar el router (o tu proveedor no lo permite), usen un programa de red local virtual
 como Radmin VPN, ZeroTier o Tailscale: el invitado se une con la IP que el programa da al host.
 
 En la misma red (misma casa) no hace falta abrir nada.
@@ -200,7 +200,7 @@ Archivos instalados > Verificar integridad de los archivos del juego.
   - No aparece "Multijugador" en el menú: vuelve a instalar. Si sigue sin salir, mira el registro
     de la Modding API:
       C:\Users\<tu usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt
-  - El invitado no conecta: comprobad la dirección, el puerto y el código; que los dos tenéis la
+  - El invitado no conecta: comprueben la dirección, el puerto y el código; que los dos tienen la
     misma versión del mod; y, por internet, que el host abrió el puerto UDP (punto 5).
   - Si Steam actualiza Hollow Knight a otra versión, el mod puede dejar de cargar hasta que salga
     una versión del mod para la nueva. Para volver al juego sin mods: punto 8.

@@ -50,11 +50,11 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - 👥 **Jugadores**: los compañeros se ven en tiempo real con su nombre, animaciones, ataques, hechizos y amuletos, y
   también en el mapa.
 - ⚔️ **Enemigos y jefes**: los mismos en todos los PCs (misma vida, mismos golpes, misma muerte); los jefes esperan a
-  que estéis todos.
+  que estén todos.
 - 🗺️ **Mundo compartido**: progreso, palancas, puertas, paredes rotas, ascensores, rejas, cofres y misiones de NPC, a la
   vez.
 - ❤️ **Revivir**: si caes con un compañero en pie, quedas tendido y te revive manteniendo Focus junto a tu cuerpo.
-- 🌙 **Sueños y cinemáticas**: entráis juntos a los sueños; los finales y los créditos se ven a la vez y se saltan por
+- 🌙 **Sueños y cinemáticas**: se entra juntos a los sueños; los finales y los créditos se ven a la vez y se saltan por
   votación.
 - 🗣️ **Personajes de cada jugador**: cada uno oye cada conversación desde el principio, y el personaje que se va tras
   hablar solo se va para quien habló con él.
@@ -81,7 +81,7 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - **Steam e IP a la vez**: en la misma partida unos pueden entrar por Steam y otros por IP. Quien no tenga Steam
   entra al host por IP, en la misma red o por internet.
 - Funciona en **red local y por internet** (por Steam no hace falta abrir nada; por IP, en internet el host abre el
-  puerto UDP en su router o usáis una VPN de red local como Radmin VPN, ZeroTier o Tailscale).
+  puerto UDP en su router o se usa una VPN de red local como Radmin VPN, ZeroTier o Tailscale).
 - **Personaje de cada invitado** guardado en el mundo del host: se envía en los bancos, cada 30 segundos y al salir.
   Al volver a unirte, recuperas tu personaje. Si el host cierra la partida, primero recoge los de los invitados.
 - **Reconexión automática**: si un invitado pierde la conexión con el host (no si el host cierra la partida), vuelve
@@ -207,7 +207,7 @@ escrito desde cero sobre la Modding API de Hollow Knight.
   donde está, también dentro de las tiendas (si los dos llevan el Wayward Compass equipado), y en rojo en su cuerpo si
   está caído.
 - **Barras de enemigos** opcionales sobre cada enemigo herido.
-- **Cinemáticas compartidas**: los finales, los créditos y Mr. Mushroom se ven a la vez aunque estéis en salas
+- **Cinemáticas compartidas**: los finales, los créditos y Mr. Mushroom se ven a la vez aunque estén en salas
   distintas; se saltan cuando todos votan ("Esperando a X para saltar 1/2"). La excepción es el final del Panteón de
   Hallownest: cada uno lo ve al acabar el suyo.
 - **Sueños compartidos**: si uno entra en un sueño con el aguijón onírico, los compañeros de la misma sala entran con
@@ -329,7 +329,7 @@ Si prefieres no usarlo, instálalo a mano (más abajo).
    *Multijugador › Unirse a un mundo › Unirse a…*). Si estás jugando tu partida normal, sal al menú principal y entras
    solo.
 3. **Invitado por IP**: menú principal › *Multijugador* › *Unirse a un mundo*, con la dirección, el puerto y el código.
-4. **Por internet por IP**: el host abre el puerto **UDP 26950** en su router (o usáis Radmin VPN, ZeroTier o
+4. **Por internet por IP**: el host abre el puerto **UDP 26950** en su router (o se usa Radmin VPN, ZeroTier o
    Tailscale). Por Steam o en la misma casa no hace falta abrir nada.
 
 ---
