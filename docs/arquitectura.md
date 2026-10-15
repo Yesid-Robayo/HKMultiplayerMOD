@@ -1143,48 +1143,53 @@ Decisiones aprobadas por el usuario para M5 (las marcadas "elegido" las escogió
 
 - `tools/package.sh` compila en Release y arma `out/package/HKMultiplayer-<versión>.zip` con una carpeta
   `HKMultiplayer-<versión>`: `HKMultiplayer Setup.exe`, `LEEME.txt` y `README.txt` (instrucciones para jugadores en
-  español y en inglés, con la instalación a mano) en la raíz, los scripts de PowerShell en `scripts/` (con `version.txt`), lo que se copia al juego en `files/` (la Modding API de
-  `vendor/modding-api/OutputFinal` sin su README, y `Mods/HKMultiplayer` con el mod, su `.pdb` y BouncyCastle) y
-  `SHA256SUMS.txt`. Del juego solo van los dos ensamblados que parchea la Modding API (`Assembly-CSharp.dll` y
-  `TeamCherry.Localization.dll`). Fuentes del instalador en `tools/installer/`.
-- `HKMultiplayer Setup.exe` (`tools/installer/launcher`, .NET Framework 4.7.2, que viene con Windows; → `scripts/setup.ps1`):
-  solo abre el instalador de PowerShell, sin lógica propia (hasta la 0.23.0 era un `.bat`). Sin argumentos (o con la
-  carpeta del juego arrastrada encima) abre una ventana de WinForms con el aspecto de los
+  español y en inglés, con la instalación a mano), `LICENSE.txt` y `THIRD_PARTY_NOTICES.txt` en la raíz, lo que se
+  copia al juego en `files/` (la Modding API de `vendor/modding-api/OutputFinal` sin su README, y `Mods/HKMultiplayer`
+  con el mod, su `.pdb` y BouncyCastle) y `SHA256SUMS.txt`. Del juego solo van los dos ensamblados que parchea la
+  Modding API (`Assembly-CSharp.dll` y `TeamCherry.Localization.dll`). Fuentes del instalador en
+  `tools/installer/launcher` (C#, .NET Framework 4.7.2, que viene con Windows 10 y 11).
+- **Desde la 0.30.0 todo el instalador es el .exe**, sin PowerShell. Hasta entonces el .exe solo abría
+  `scripts/setup.ps1` escondido con `-ExecutionPolicy Bypass`, el patrón que más vigilan los antivirus. El .exe es
+  además **el mismo archivo en todas las versiones del mod** mientras no cambie su código: no lleva la versión del mod
+  (la lee del `HKMultiplayer.dll` del paquete, `Installer.PackageVersion`) y se compila de forma determinista, sin
+  ruta de depuración ni el commit (`SetupLauncher.csproj`). SmartScreen guarda la reputación de un programa sin firmar
+  por archivo exacto: así la va sumando de versión en versión. Su propia versión (`Version`, 1.0.0) solo sube cuando
+  cambia el instalador. Lleva autor, copyright y descripción. El aviso de SmartScreen solo desaparece del todo con una
+  firma digital (p. ej. SignPath Foundation, gratis para código abierto) o con reputación suficiente.
+- Partes: `Program.cs` (arranque, consola), `SetupForm.cs` (la ventana), `Installer.cs` (instalar y desinstalar),
+  `Common.cs` (textos `L("español", "inglés")` en el idioma de Windows, búsqueda del juego, comprobaciones),
+  `Releases.cs` (versiones de GitHub) y `setup.ico` (lo dibuja `make-icon.py`: una sombra con cuernos, ojos blancos y
+  la capa deshecha en humo, sin nada del juego).
+- Sin argumentos (o con la carpeta del juego arrastrada encima) abre una ventana de WinForms con el aspecto de los
   menús del juego (carpeta del juego con lista y *Buscar…*, estado de la instalación, *Instalar*/*Actualizar*,
-  *Desinstalar*, *Instrucciones*, el registro de lo que hace y *Novedades* abajo a la derecha). Al abrirse pide a la
-  API de GitHub la lista de versiones sin parar la ventana (`WebClient.DownloadStringAsync`; se publican como
-  pre-release, así que no sirve `latest`). Si hay una más nueva que el paquete, sale un cartel arriba a la derecha con
-  un enlace para descargarla. *Novedades* enseña en una ventana el apartado "Novedades de la X" (o "What's new in X")
-  de las notas de esa versión, o de la del paquete si no hay otra más nueva, pasado de Markdown a texto. Si la lista
-  aún no llegó, la pide en ese momento esperando como mucho 10 s sin parar la ventana; solo cuenta la respuesta de esa
-  consulta (la cancelada de un intento anterior sin internet daba por acabado el siguiente). En
-  PowerShell 5.1 `ConvertFrom-Json` da la lista como un solo objeto: hay que guardarla en una variable antes de
-  filtrarla. La ventana tiene su propio programa para la barra de tareas (`SetCurrentProcessExplicitAppUserModelID`):
-  si no, Windows la agrupaba con PowerShell y enseñaba su icono. Con `/install` o `/uninstall` y la ruta trabaja en la
-  consola (lo usa `installer-test.sh`). Un botón desactivado (*Desinstalar* sin nada instalado, *Instalar* sin carpeta
-  del juego) se vuelve a dibujar con el texto en blanco: Windows lo pinta en un gris oscuro que no se leía sobre el
-  fondo, y `ForeColor` no cuenta en un botón desactivado. Los textos van en el idioma de Windows (`common.ps1`: `L "español" "inglés"`).
-  El .exe abre PowerShell sin consola desde el propio proceso (`CreateNoWindow`), no con `-WindowStyle Hidden` en la
-  orden (combinación que algunos antivirus vigilan); `setup.ps1` sigue escondiendo su consola si la tiene. Con
-  `/install` o `/uninstall` se une a la consola desde la que se llamó (o abre una y espera Intro al final), recoge la
-  salida del instalador en UTF-8 y devuelve su código de salida. En un `.bat` o con `start /wait` se espera a que acabe
-  (una consola interactiva no espera a un programa de ventana). Sin `scripts\setup.ps1` al lado (abierto desde dentro
-  del `.zip`) avisa con un cuadro de mensaje. Tiene su icono (`setup.ico`: dos círculos, sin nada del juego).
-  `install.ps1` y `uninstall.ps1` solo definen `Invoke-Install` e `Invoke-Uninstall`, que escriben por `Write-Out` en la
-  ventana o en la consola. Carpeta del juego pasada (también arrastrada sobre el .bat) o buscada (registro de Steam,
-  `libraryfolders.vdf`, desinstalación de Steam, rutas típicas en los discos locales, GOG). Exige Unity 6 (`UnityPlayer.dll` 6000.x) y `TeamCherry.TK2D.dll`:
-  con otra versión del juego la Modding API lo dejaría sin arrancar. Además, el `Assembly-CSharp.dll` del juego tiene
-  que llevar `1.5.12620` (`Test-GameVersion`). Solo bloquea si hay un `hollow_knight.exe` abierto desde esa carpeta
-  (otras copias no molestan) o uno cuya ruta no se puede leer (abierto como administrador). Antes de instalar, la
-  ventana pregunta con la lista de los otros mods que va a apartar.
+  *Desinstalar*, *Instrucciones*, el registro de lo que hace y *Novedades* abajo a la derecha). La instalación va en
+  otro hilo y escribe en el registro de la ventana. Al abrirse pide a la API de GitHub la lista de versiones sin parar
+  la ventana (se publican como pre-release, así que no sirve `latest`; el JSON con `JavaScriptSerializer`). Si hay una
+  más nueva que el paquete, sale un cartel arriba a la derecha con un enlace para descargarla. *Novedades* enseña en
+  una ventana el apartado "Novedades de la X" (o "What's new in X") de las notas de esa versión, o de la del paquete si
+  no hay otra más nueva, pasado de Markdown a texto; si la lista aún no llegó, la pide esperando como mucho 10 s. Un
+  botón desactivado se vuelve a dibujar con el texto en blanco: Windows lo pinta en un gris oscuro que no se leía sobre
+  el fondo, y `ForeColor` no cuenta en un botón desactivado.
+- Con `/install` o `/uninstall` y la ruta trabaja en la consola (lo usa `installer-test.sh`): se une a la consola
+  desde la que se llamó (o abre una y espera Intro al final), escribe en UTF-8 (en el archivo si la salida va a uno) y
+  devuelve 0, 1 (error) o 2 (desinstalado con algo sin devolver). En un `.bat` o con `start /wait` se espera a que
+  acabe. Sin `SHA256SUMS.txt` y `files\` al lado (abierto desde dentro del `.zip`) avisa con un cuadro de mensaje.
+- Carpeta del juego pasada o buscada (registro de Steam en la vista de 64 bits, `libraryfolders.vdf`, desinstalación
+  de Steam, rutas típicas en los discos locales, GOG). Exige Unity 6 (`UnityPlayer.dll` 6000.x) y
+  `TeamCherry.TK2D.dll`: con otra versión del juego la Modding API lo dejaría sin arrancar. Además, el
+  `Assembly-CSharp.dll` del juego tiene que llevar `1.5.12620` en UTF-16 (`IsGameVersion`). Solo bloquea si hay un
+  `hollow_knight.exe` abierto desde esa carpeta (otras copias no molestan) o uno cuya ruta no se puede leer (abierto
+  como administrador; por eso el proceso es de 64 bits, `Prefer32Bit` falso). Antes de instalar, la ventana pregunta
+  con la lista de los otros mods que va a apartar.
 - Cada cambio se apunta en `<juego>\HKMultiplayer-backup\manifest.txt` antes de hacerlo: `added-dir`, `added`,
   `replaced` (el original en `HKMultiplayer-backup\files\`), `old-mod` (el mod anterior `HollowKnightCoop`, movido a
   la copia porque también abre la red) y `moved` (otros mods apartados a `Mods\Disabled`). Volver a instalar es una
   actualización: lo ya apuntado no se vuelve a copiar, así que la copia sigue siendo la del juego antes de la primera
-  instalación.
-- La desinstalación (`uninstall.ps1`) recorre el manifiesto al revés. De `Mods\HKMultiplayer` borra lo que puso el
+  instalación. El formato es el mismo que el del instalador de PowerShell, así que una instalación hecha con él se
+  actualiza y se desinstala con el .exe nuevo.
+- La desinstalación (`Installer.Uninstall`) recorre el manifiesto al revés. De `Mods\HKMultiplayer` borra lo que puso el
   instalador y la caché `SkinCache`; lo demás (las skins y lo que haya puesto el jugador) se queda y se dice qué. Las
-  carpetas añadidas se borran si quedan vacías. Un ensamblado que ya no es el de la Modding API (`Test-Modded`: los
+  carpetas añadidas se borran si quedan vacías. Un ensamblado que ya no es el de la Modding API (`IsModded`: los
   parcheados nombran `ModHooks`) lo volvió a poner Steam: se deja si es distinto de la copia. Si algo no se pudo devolver, conserva la
   copia y remite a "Verificar integridad" de Steam. Sin manifiesto (mod puesto a mano) quita solo el mod.
 

@@ -44,9 +44,9 @@ Después abre Hollow Knight desde Steam: en el menú principal aparece "Multijug
 
 Windows puede avisar al abrir "HKMultiplayer Setup.exe" ("¿Quieres ejecutar este archivo?" o
 "Windows protegió tu PC"): pasa con cualquier archivo descargado de internet que no esté firmado.
-Pulsa "Ejecutar" (o "Más información" > "Ejecutar de todas formas"). El .exe solo abre el instalador,
-un script de PowerShell que puedes leer en la carpeta "scripts"; si prefieres no usarlo, instala a
-mano (punto 2).
+Pulsa "Ejecutar" (o "Más información" > "Ejecutar de todas formas"). El instalador es de código
+abierto: su código está en GitHub (tools/installer/launcher). Si prefieres no usarlo, instala a mano
+(punto 2).
 
 Si Windows no deja escribir en la carpeta del juego, haz clic derecho en "HKMultiplayer Setup.exe"
 y elige "Ejecutar como administrador".

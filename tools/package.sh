@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Arma el paquete para jugadores: out/package/HKMultiplayer-<versión>.zip, con una carpeta HKMultiplayer-<versión>:
-#   HKMultiplayer Setup.exe                    el instalador (ventana para instalar, actualizar o desinstalar);
-#                                              solo abre scripts/setup.ps1 sin consola (tools/installer/launcher)
+#   HKMultiplayer Setup.exe                    el instalador (ventana para instalar, actualizar o desinstalar;
+#                                              tools/installer/launcher). Es el mismo archivo en todas las versiones
+#                                              mientras no cambie su código: lee la versión del mod de su .dll
 #   LEEME.txt, README.txt                      instrucciones en español y en inglés (con la instalación a mano)
 #   LICENSE.txt, THIRD_PARTY_NOTICES.txt       licencia del mod y avisos de los componentes de terceros
-#   scripts/                                   el instalador en PowerShell y la versión del paquete
 #   files/hollow_knight_Data/Managed/          la Modding API compilada (vendor/modding-api/OutputFinal) y
 #                                              Mods/HKMultiplayer (el mod y su cifrado, BouncyCastle)
 #   SHA256SUMS.txt                             hashes de files/: el instalador comprueba el paquete y lo copiado
@@ -45,16 +45,17 @@ for file in "${MOD_FILES[@]}"; do
 done
 
 echo "compilando el instalador..."
+# Sin la versión del mod (-p:Version): con ella el .exe cambiaba en cada versión y SmartScreen le quitaba la reputación
 SETUP_OUT="$ROOT/out/setup"
 setup_log="$(dotnet build "$ROOT/tools/installer/launcher/SetupLauncher.csproj" -c Release -nologo -v:q \
-  -p:Version="$VERSION" -o "$SETUP_OUT" 2>&1)" || {
+  -o "$SETUP_OUT" 2>&1)" || {
   echo "$setup_log" | grep -E " error " | sed -E 's/ \[.*//' >&2
   fail "el instalador no compila"
 }
 [ -f "$SETUP_OUT/HKMultiplayer Setup.exe" ] || fail "falta out/setup/HKMultiplayer Setup.exe tras compilar"
 
 rm -rf "$STAGE" "$ZIP"
-mkdir -p "$MANAGED/Mods/$MOD_NAME" "$STAGE/scripts"
+mkdir -p "$MANAGED/Mods/$MOD_NAME"
 
 # Modding API: todo OutputFinal salvo su README (en inglés, con otras instrucciones de instalación)
 find "$API_DIR" -maxdepth 1 -type f ! -name "README.md" -exec cp {} "$MANAGED/" \;
@@ -64,10 +65,6 @@ done
 
 # Instalador e instrucciones (en español y en inglés)
 cp "$SETUP_OUT/HKMultiplayer Setup.exe" "$STAGE/HKMultiplayer Setup.exe"
-cp "$ROOT/tools/installer/"*.ps1 "$STAGE/scripts/"
-# Su icono con todos los tamaños (la ventana lo pone en el título y en la barra de tareas)
-cp "$ROOT/tools/installer/launcher/setup.ico" "$STAGE/scripts/setup.ico"
-printf '%s\r\n' "$VERSION" > "$STAGE/scripts/version.txt"
 for readme in LEEME.txt README.txt; do
   sed "s/@VERSION@/$VERSION/g" "$ROOT/tools/installer/$readme" > "$STAGE/$readme"
 done

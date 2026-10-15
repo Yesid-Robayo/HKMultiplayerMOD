@@ -42,8 +42,8 @@ Then open Hollow Knight from Steam: "Multiplayer" appears in the main menu.
 
 Windows may warn you when opening "HKMultiplayer Setup.exe" ("Do you want to run this file?" or
 "Windows protected your PC"): it happens with any unsigned file downloaded from the internet. Click
-"Run" (or "More info" > "Run anyway"). The .exe only opens the installer, a PowerShell
-script you can read in the "scripts" folder; if you'd rather not use it, install by hand (section 2).
+"Run" (or "More info" > "Run anyway"). The installer is open source: its code is on GitHub
+(tools/installer/launcher). If you'd rather not use it, install by hand (section 2).
 
 If Windows won't let the installer write to the game folder, right-click "HKMultiplayer Setup.exe"
 and choose "Run as administrator".

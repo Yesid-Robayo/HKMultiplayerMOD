@@ -276,7 +276,8 @@ The full list (in Spanish) is in [docs/arquitectura.md](docs/arquitectura.md#pen
 4. Open Hollow Knight from Steam: **Multiplayer** appears in the main menu.
 
 Windows may warn you when opening a file downloaded from the internet: click *Run* (or *More info › Run anyway*). The
-installer is a PowerShell script you can read in the package's `scripts` folder.
+installer is open source: its code is in [`tools/installer/launcher`](tools/installer/launcher). If you'd rather not use
+it, install by hand (below).
 
 <details>
 <summary><b>What the installer does</b></summary>

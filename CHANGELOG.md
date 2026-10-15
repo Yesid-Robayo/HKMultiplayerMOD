@@ -34,6 +34,9 @@ Every boss fight played again with 4 players, one at a time, and the Pantheon of
 - **Enemies that only some PCs have** (a part of the room that didn't load on the room owner's PC) are run by one of
   those players instead of standing still until someone hits them. The **Menderbug** shows up for everyone if it
   shows up for anyone.
+- **Installer**: it's now a single program, with no PowerShell underneath, and it has a new icon (a shade). It's the
+  same file in every version, so Windows should warn less often over time when opening it. An install made with the
+  previous installer is updated and uninstalled the same way.
 
 ## 0.29.0
 

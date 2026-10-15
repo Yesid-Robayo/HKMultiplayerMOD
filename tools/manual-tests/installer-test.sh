@@ -136,7 +136,8 @@ rm -rf "$WORK/package"
 mkdir -p "$WORK/package"
 /c/Windows/System32/tar.exe -xf "$(cygpath -w "$ZIP")" -C "$(cygpath -w "$WORK/package")" || { echo "no se pudo descomprimir $ZIP"; exit 1; }
 PKG="$(find "$WORK/package" -mindepth 1 -maxdepth 1 -type d | head -n1)"
-VERSION="$(tr -d '\r\n' < "$PKG/scripts/version.txt")"
+# La carpeta del paquete se llama HKMultiplayer-<versión>
+VERSION="${PKG##*/HKMultiplayer-}"
 echo "paquete: $PKG (versión $VERSION)"
 
 for letter in $LETTERS; do

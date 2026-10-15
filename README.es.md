@@ -280,7 +280,8 @@ La lista completa está en [docs/arquitectura.md](docs/arquitectura.md#pendiente
 4. Abre Hollow Knight desde Steam: en el menú principal aparece **Multijugador**.
 
 Windows puede avisar al abrir un archivo descargado de internet: pulsa *Ejecutar* (o *Más información › Ejecutar de
-todas formas*). El instalador es un script de PowerShell que puedes leer en la carpeta `scripts` del paquete.
+todas formas*). El instalador es de código abierto: su código está en [`tools/installer/launcher`](tools/installer/launcher).
+Si prefieres no usarlo, instálalo a mano (más abajo).
 
 <details>
 <summary><b>Qué hace el instalador</b></summary>

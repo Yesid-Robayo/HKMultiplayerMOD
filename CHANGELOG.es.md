@@ -34,6 +34,9 @@ Todos los combates de jefes jugados otra vez con 4 jugadores, uno a uno, y el Pa
 - **Enemigos que solo tienen algunos PCs** (una parte de la sala que no se cargó en el PC del dueño de la sala): los
   mueve uno de esos jugadores en vez de quedarse quietos hasta que alguien los golpea. El **Menderbug** sale para
   todos si le sale a cualquiera.
+- **Instalador**: ahora es un solo programa, sin PowerShell por debajo, y con un icono nuevo (una sombra). Es el
+  mismo archivo en todas las versiones, así que Windows debería avisar menos al abrirlo con el tiempo. Una
+  instalación hecha con el instalador anterior se actualiza y se desinstala igual.
 
 ## 0.29.0
 

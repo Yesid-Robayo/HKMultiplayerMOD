@@ -1,8 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <!--
-      "HKMultiplayer Setup.exe": abre el instalador del paquete (scripts\setup.ps1) sin ventana de consola, como hacía
-      "HKMultiplayer Setup.bat". Todo el trabajo sigue en PowerShell; esto solo lo lanza. .NET Framework 4.7.2 viene con
-      Windows 10 y 11, así que no hace falta instalar nada. tools/package.sh lo compila y lo pone en el paquete.
+      "HKMultiplayer Setup.exe": el instalador del paquete (ventana para instalar, actualizar o desinstalar, y /install o
+      /uninstall en la consola). Todo el trabajo lo hace este programa: hasta la 0.30.0 abría un instalador de PowerShell
+      escondido, que los antivirus miran con lupa. .NET Framework 4.7.2 viene con Windows 10 y 11, así que no hace falta
+      instalar nada. tools/package.sh lo compila y lo pone en el paquete.
+
+      El .exe es el mismo archivo en todas las versiones del mod mientras no cambie su código: no lleva la versión del mod
+      (la lee del HKMultiplayer.dll del paquete) y se compila de forma determinista, sin ruta de depuración ni el commit.
+      SmartScreen guarda la reputación de un programa sin firmar por archivo exacto: así la va sumando de versión en
+      versión en vez de empezar de cero en cada una. Su propia versión (Version) solo sube cuando cambia el instalador.
     -->
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
@@ -11,18 +17,32 @@
         <Nullable>disable</Nullable>
         <AssemblyName>HKMultiplayer Setup</AssemblyName>
         <RootNamespace>HKMultiplayer.Setup</RootNamespace>
-        <!-- package.sh pone la versión del mod (-p:Version=...) -->
-        <Version>0.0.0</Version>
+        <Version>1.0.0</Version>
         <Product>HKMultiplayer</Product>
         <AssemblyTitle>HKMultiplayer Setup</AssemblyTitle>
         <Description>Instalador de HKMultiplayer, mod cooperativo para Hollow Knight</Description>
+        <Company>Yesid Robayo</Company>
+        <Authors>Yesid Robayo</Authors>
+        <Copyright>Copyright (c) 2026 Yesid Robayo. MIT License.</Copyright>
         <ApplicationIcon>setup.ico</ApplicationIcon>
         <ApplicationManifest>app.manifest</ApplicationManifest>
         <GenerateDocumentationFile>false</GenerateDocumentationFile>
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <!-- Proceso de 64 bits en Windows de 64 bits: lee el registro sin redirecciones y la ruta del juego abierto -->
+        <PlatformTarget>AnyCPU</PlatformTarget>
+        <Prefer32Bit>false</Prefer32Bit>
+        <!-- El mismo .exe con el mismo código -->
+        <Deterministic>true</Deterministic>
+        <DebugType>none</DebugType>
+        <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+        <EnableSourceLink>false</EnableSourceLink>
+        <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+        <GenerateRuntimeConfigurationFiles>false</GenerateRuntimeConfigurationFiles>
     </PropertyGroup>
 
     <ItemGroup>
         <Reference Include="System.Windows.Forms" />
+        <Reference Include="System.Web.Extensions" />
+        <EmbeddedResource Include="setup.ico" LogicalName="HKMultiplayer.Setup.setup.ico" />
     </ItemGroup>
 </Project>
