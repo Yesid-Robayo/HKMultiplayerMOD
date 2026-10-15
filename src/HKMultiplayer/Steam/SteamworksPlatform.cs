@@ -72,11 +72,41 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
             Log.Info("Steam disponible: salas e invitaciones de Steam activas");
             // Prepara ya los relés de Steam: si no, la primera conexión espera a que se preparen
             SteamNetworkingUtils.InitRelayNetworkAccess();
+            AllowLargeTransfers();
             return new SteamworksPlatform(id.m_SteamID);
         } catch (InvalidOperationException) {
             // El juego no inició Steam (p. ej. abierto sin Steam)
             Log.Info("Steam no se inició en el juego: solo conexión por IP");
             return null;
+        }
+    }
+
+    /// <summary>Ritmo de envío más alto que deja Steam por conexión (por defecto, 1 MB/s).</summary>
+    private const int MaxSendRate = 4 * 1024 * 1024;
+
+    /// <summary>Lo que Steam guarda para enviar antes de descartar (por defecto, 512 KB).</summary>
+    private const int SendBuffer = 2 * 1024 * 1024;
+
+    /// <summary>
+    /// Deja que Steam envíe tan rápido como la red del mod: el mundo al unirse y las skins salen a unos 2-2,6 MB/s, y
+    /// con el tope de Steam por defecto se quedaban en 1 MB/s y, con su búfer lleno, Steam descartaba paquetes que luego
+    /// había que repetir. Steam sigue bajando el ritmo solo si la conexión no da para más.
+    /// </summary>
+    private static void AllowLargeTransfers() {
+        SetGlobal(ESteamNetworkingConfigValue.k_ESteamNetworkingConfig_SendRateMax, MaxSendRate);
+        SetGlobal(ESteamNetworkingConfigValue.k_ESteamNetworkingConfig_SendBufferSize, SendBuffer);
+    }
+
+    private static void SetGlobal(ESteamNetworkingConfigValue setting, int value) {
+        var argument = Marshal.AllocHGlobal(sizeof(int));
+        try {
+            Marshal.WriteInt32(argument, value);
+            if (!SteamNetworkingUtils.SetConfigValue(setting, ESteamNetworkingConfigScope.k_ESteamNetworkingConfig_Global,
+                    IntPtr.Zero, ESteamNetworkingConfigDataType.k_ESteamNetworkingConfig_Int32, argument)) {
+                Log.Warn($"Steam no aceptó el ajuste de red {setting} = {value}");
+            }
+        } finally {
+            Marshal.FreeHGlobal(argument);
         }
     }
 

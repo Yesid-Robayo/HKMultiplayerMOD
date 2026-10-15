@@ -1159,7 +1159,10 @@ fiabilidad y la sesión son los mismos; Steam solo sustituye el transporte entre
   los `Callback`/`CallResult` del mod. Mensajes: `SteamNetworkingMessages` en el canal 0, sin agrupar
   (`UnreliableNoNagle`) y reabriendo la sesión si se rompe (`AutoRestartBrokenSession`); se copian a un búfer nativo fijo
   para no crear nada por paquete. Al iniciar se llama a `SteamNetworkingUtils.InitRelayNetworkAccess` para que la primera
-  conexión no espere a los relés. `SteamLink` decide qué plataforma hay: la real si el juego inició Steam; ninguna si el juego
+  conexión no espere a los relés, y se suben el ritmo máximo de envío de Steam (de 1 a 4 MB/s) y su búfer (de 512 KB a
+  2 MB): el mundo al unirse y las skins salen a 2-2,6 MB/s, y con los valores por defecto Steam los frenaba y descartaba
+  paquetes con el búfer lleno (Steam sigue bajando el ritmo solo si la conexión no da). Los datagramas del mod (1200
+  bytes como mucho) quedan muy por debajo del límite de un mensaje de Steam (512 KB). `SteamLink` decide qué plataforma hay: la real si el juego inició Steam; ninguna si el juego
   no trae Steam (sin el ensamblado, `CreateReal` falla al compilarse y se atrapa: por eso va aparte y sin inlining) y
   ninguna en el modo de prueba, donde se simula.
 - **Sala de Steam del host** (`MultiplayerRunner.OpenSteamLobby`): al hostear, si hay Steam y el ajuste
