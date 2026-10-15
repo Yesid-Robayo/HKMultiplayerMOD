@@ -4,7 +4,7 @@
 
 **A co-op mod for Hollow Knight: play the whole world with your friends, on your local network or over the internet.**
 
-![Version](https://img.shields.io/badge/version-0.29.0-7fb2ff)
+![Version](https://img.shields.io/badge/version-0.30.0-7fb2ff)
 ![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
@@ -15,14 +15,14 @@
 </div>
 
 > [!WARNING]
-> **Beta.** Almost everything has been tested by playing with two copies of the game on the same PC, but no long
-> session between two PCs over the internet has been played yet, and some parts are not fully tested (see
+> **Beta.** Almost everything has been tested by playing with up to four copies of the game on the same PC, but no
+> long session between real PCs over the internet has been played yet, and some parts are not fully tested (see
 > [Testing status](#-testing-status)). **It may have bugs.** Back up your saves before playing and, if something goes
 > wrong, open an *issue* with a screenshot and your `ModLog.txt`.
 
 One player **hosts** a coop world and their friends **join** with the host's address and the game code: you share the
-world, see each other in real time and fight the same enemies and bosses together. It is designed for two players
-(more can join) and written from scratch on top of the Hollow Knight Modding API.
+world, see each other in real time and fight the same enemies and bosses together. Up to 4 players, written from
+scratch on top of the Hollow Knight Modding API.
 
 ## Contents
 
@@ -40,18 +40,22 @@ world, see each other in real time and fight the same enemies and bosses togethe
 
 ## ✨ Features
 
+- 🎮 **The whole game and its DLCs, with up to 4 players**: the story to every ending, Hidden Dreams, The Grimm Troupe,
+  Lifeblood and Godmaster, with its Pantheons played together up to the Pantheon of Hallownest.
 - 🌍 **Coop worlds**: up to 4 worlds of your own, saved on the host's PC, separate from your normal saves.
 - 🔒 **Connection**: local network or internet, with a game code and everything encrypted, no Steam or relay servers;
   a guest who loses the connection gets back in on their own.
-- 👥 **Players**: you see your partner in real time with their name, animations, attacks, spells and charms, and on the
-  map.
-- ⚔️ **Enemies and bosses**: the same on every PC (same health, same hits, same death); bosses wait until you are both
+- 👥 **Players**: you see your partners in real time with their name, animations, attacks, spells and charms, and on
+  the map.
+- ⚔️ **Enemies and bosses**: the same on every PC (same health, same hits, same death); bosses wait until everyone is
   there.
 - 🗺️ **Shared world**: progress, levers, doors, broken walls, elevators, gates, chests and NPC quests, all at once.
 - ❤️ **Revive**: if you fall while a partner is still standing, you lie down and they revive you by holding Focus next
   to your body.
 - 🌙 **Dreams and cutscenes**: you enter dreams together; endings and credits play at the same time and are skipped by
   vote.
+- 🗣️ **NPCs for each player**: everyone hears every conversation from the start, and a character who leaves after
+  talking only leaves for whoever talked to them.
 - 🎨 **Skins**: CustomKnight-compatible; others see yours even if they don't have it.
 - 🛠️ **Pause panel**: host settings, your partners' health, give geo, go to a partner, unstuck and reload the room.
 - 🌐 **Languages**: the mod follows the game's language (Spanish, or English for any other language).
@@ -82,9 +86,26 @@ world, see each other in real time and fight the same enemies and bosses togethe
 </details>
 
 <details>
+<summary><b>🏛️ DLCs and Godhome</b></summary>
+
+- **Hidden Dreams**: the White Defender and Grey Prince Zote, entered together with the Dream Nail.
+- **The Grimm Troupe**: the Troupe's quest, Grimm and the Nightmare King, and Grimmchild for everyone.
+- **Lifeblood**: the Hive and its knight, and lifeblood like in the game.
+- **Godmaster**: each player enters Godhome on their own with the Dream Nail next to the Godseeker.
+  - **Pantheons together**: when a player starts a Pantheon at its door, everyone in the Atrium goes in with the same
+    bindings, and the group moves on to each boss together (also out of the rest room). A player who falls is revived
+    next to the group in the next boss's room.
+  - **The Pantheon of Hallownest ending is each player's own**: every player strikes the final blows with their own
+    attack button and sees the ending cutscene when they finish theirs, without partners' knights or names on screen.
+  - The Radiance's climb: the abyss rises for everyone when anyone climbs, and everyone respawns on the last platform
+    passed.
+
+</details>
+
+<details>
 <summary><b>👥 Players and partner effects</b></summary>
 
-- You see your partner in real time, with their **name above them**, their animations and facing, with smooth movement
+- You see your partners in real time, with their **name above them**, their animations and facing, with smooth movement
   (interpolation that adapts to the connection).
 - **Each player has their own inventory**: health, soul, geo, masks and vessels, nail and nail arts, charms and
   notches, keys, relics, maps, essence, purchases, bench and shade.
@@ -119,9 +140,10 @@ world, see each other in real time and fight the same enemies and bosses togethe
 - **Boss parts and traps** match on every PC: the Crystal Guardian's laser and ceiling turrets, Hornet's needle, the
   False Knight's head...
 - **Wave arenas**: Mantis Lords, the Colosseum of Fools (Bronze, Silver and Gold), Watcher Knights...
-- **Boss fights wait until you are both there**, with a notice saying who is missing; meanwhile the boss is
-  invulnerable. **Dialogues before a fight** are shown to both players, and each waits for the other to finish reading.
-- **Boss introductions** keep both knights still and give control back at the same time.
+- **Boss fights wait until everyone in the room is there**, with a notice saying who is missing; meanwhile the boss
+  is invulnerable. **Dialogues before a fight** are shown to everyone, and each waits for the others to finish reading.
+- **Boss introductions** keep every knight still and give control back at the same time.
+- **Boss health bars** only for the boss that is fighting; the Vengefly King and Gruz Mother count as bosses.
 - If a boss moves to another PC mid-fight (because the other player got closer), it carries on where it was.
 - Dead enemies stay dead when you come back to the room, until you rest at a bench (as in the game).
 
@@ -133,10 +155,10 @@ world, see each other in real time and fight the same enemies and bosses togethe
 - **Live shared progress**: defeated bosses, doors, levers, broken walls, visited rooms and maps.
 - **Abilities are per player** (movement abilities, spells, Dream Nail): each player gets their own and sees the
   pickup scene. Characters saved with an earlier version keep the abilities they already had.
-- **Loot lands in the same place** on both PCs: geo from enemies, geo rocks and chests.
+- **Loot lands in the same place** on every PC: geo from enemies, geo rocks and chests.
 - **Stag travel together** (host option): when one player picks a destination, partners standing near them at that
   station ride along.
-- **Benches for two**: sitting on the same bench, each player takes one half.
+- **Shared benches**: up to 4 players sit side by side on the same bench, never inside a wall.
 - **Version notices**: the main menu tells you when a new version is out (and *Multiplayer* offers to download it)
   or when the mod was just updated (with what's new). It is one request to GitHub's public release list when the game
   starts; turn it off in *Multiplayer › Check for updates*.
@@ -148,8 +170,11 @@ world, see each other in real time and fight the same enemies and bosses togethe
 - **Chests**: if one player opens one, the other sees it open; what drops is for each player.
 - **Individual items** (shiny items, mask shards, vessel fragments, dream orbs): what one player picks up doesn't
   disappear for the other.
-- **NPC quests**: Mr. Mushroom, Quirrel, Bretta, Zote, Tiso, Myla, Hornet, the Nailsmith, the Grimm Troupe... The NPC
-  moves on or leaves on both PCs and the quest never advances twice.
+- **NPC quests**: Mr. Mushroom, Quirrel, Bretta, Zote, Tiso, Myla, Hornet, the Nailsmith, the Grimm Troupe... The quest
+  never advances twice.
+- **Conversations for each player**: what a character already told one player isn't skipped for the next (Zote no
+  longer asks the second one why they keep bothering him), and a character who leaves or moves after talking (Zote,
+  Quirrel, Cloth, Tiso...) only does it for whoever talked to them.
 - **Animated hazards in sync** (the White Palace and Path of Pain saws and spikes).
 - Whoever enters a room finds it as it is: what's activated, what's broken, dead enemies and fights in progress.
 
@@ -168,13 +193,15 @@ world, see each other in real time and fight the same enemies and bosses togethe
   in another room.
 - **Partner HUD** at the top right (name, masks, soul and where they are), their masks above their head when their
   health changes, and **arrows** at the edge of the screen pointing to partners and bodies.
-- **Partners on the map**: with the map open, each partner shows up as a blue compass where they are (when both of
-  you wear the Wayward Compass), and red on their body if they are down.
+- **Partners on the map**: with the map open, each partner shows up as a compass in their own color with their name
+  where they are, also inside shops (when both of you wear the Wayward Compass), and red on their body if they are
+  down.
 - Optional **enemy health bars** above each damaged enemy.
 - **Shared cutscenes**: endings, credits and Mr. Mushroom play at the same time even in different rooms; they are
-  skipped when everyone votes ("Waiting for X to skip 1/2").
-- **Shared dreams**: if one player enters a dream with the Dream Nail, a partner in the same room enters too. When you
-  win, both leave; whoever falls or dies leaves alone. Dream bosses, the Nightmare King and the Radiance.
+  skipped when everyone votes ("Waiting for X to skip 1/2"). The Pantheon of Hallownest ending is the exception: each
+  player sees it when they finish theirs.
+- **Shared dreams**: if one player enters a dream with the Dream Nail, partners in the same room enter too. When you
+  win, everyone leaves; whoever falls or dies leaves alone. Dream bosses, the Nightmare King and the Radiance.
 - **Grimmchild**: if one player gets it, the other does too.
 - **Skins** compatible with CustomKnight (*Pause › Multiplayer › Skin*): body, spells and effects; sent through the
   mod's own network in the background without delaying hits (the first time; then they're kept in a cache and load
@@ -189,21 +216,22 @@ world, see each other in real time and fight the same enemies and bosses togethe
 
 ## 🧪 Testing status
 
-Testing uses two (or three) copies of the game on the same PC, with the mod's test mode and automated routes that walk
-through the world checking that both players see the same thing.
+Testing uses up to four copies of the game on the same PC, with the mod's test mode and automated routes that walk
+through the world checking that every player sees the same thing.
 
 ✅ **Tested by playing:**
 
 - Connection, coop worlds and guests' characters.
 - Enemies in every area.
 - Bosses: Gruz Mother, False Knight (also on a bad connection), Hornet, Brooding Mawlek, Soul Master, Dung Defender,
-  Nosk, Broken Vessel, Crystal Guardian, Mantis Lords, Uumuu, The Collector, Traitor Lord, Watcher Knights, Grimm, Soul
-  Tyrant, Hollow Knight and the Radiance.
+  Nosk, Broken Vessel, Crystal Guardian and Enraged Guardian, Mantis Lords, Uumuu, The Collector, Traitor Lord,
+  Watcher Knights, Flukemarm, Vengefly King, Grimm, Soul Tyrant, Hollow Knight, Pure Vessel, the Radiance and the
+  Absolute Radiance.
 - Colosseum of Fools: Bronze, Silver and Gold.
 - Dreams: Failed Champion, Lost Kin, Soul Tyrant, White Defender, Grey Prince Zote and the Nightmare King.
-- Revive (also the body on the last safe ground, over spikes and acid), shades, partner HUD, partners on the map,
-  host settings, cutscenes, skins, go to a partner, NPC quests, vine platforms and automatic reconnection (also
-  cancelling it and giving up).
+- Revive (also the body on the last safe ground, over spikes and acid), shades, partner HUD, partners on the map
+  (also inside shops), host settings, cutscenes, skins, go to a partner, NPC quests and conversations, vine platforms,
+  the Menderbug, the mod in English and automatic reconnection (also cancelling it and giving up).
 - Install, update and uninstall.
 - 0.26.0: the whole mod was reviewed against the game's code. The 172 issues found were fixed or reviewed, and most
   were checked in the game; the testing found and fixed 16 more.
@@ -211,19 +239,17 @@ through the world checking that both players see the same thing.
   dream warriors, the three Dreamers, the Black Egg, the Hollow Knight (both endings) and the Radiance, the Grimm
   Troupe, Grey Prince Zote, the Colosseum of Fools (Bronze, Zote included), Zote and Cloth, and the Pantheon of the
   Master from start to finish.
+- 0.30.0: every boss fight again with 4 players, one at a time, and the Pantheon of Hallownest to its ending, which
+  each player finishes on their own PC.
 
 ⚠️ **Partially tested:**
 
-- Hive Knight, Flukemarm, Massive Moss Charger and Vengefly King: they die on both PCs, but their attacks still need
-  checking.
+- Hive Knight and Massive Moss Charger: they die on every PC, but their attacks still need checking.
+- 0.30.0: the 16 automated routes were not run again with this version.
 
 ❓ **Not tested yet:**
 
-- A session between two PCs over the internet.
-- The English translation inside the game.
-- From 0.22.0: a partner's map icon inside rooms that are not on the map (shops).
-- The orange steam of the False Knight's death (fixed without retesting).
-- Menderbug, and the Pantheon endings that end in a cutscene (the 5th).
+- A session between real PCs over the internet.
 - Playing with 3 or 4 players: the cases that only happen with three or more were fixed in 0.28.0 and tested with four
   copies of the game on one PC, but not yet between real PCs.
 
@@ -386,12 +412,13 @@ PlayMaker FSMs are not in there; see [Código del juego](docs/arquitectura.md#c�
 
 ### Testing
 
-- **Two players on one PC**: `tools/mp-test-lib.sh` opens two copies of the game (`test-instances/b` and `c`) in test
-  mode and sends them commands through a file: host and join, go to a room, move, attack, screenshots from both at
-  once, enemy and object state, simulated bad connection (`netsim`)... Commands are listed in
+- **Up to four players on one PC**: `tools/mp-test-lib.sh` and `tools/routes/lib.sh` (`setup_group`) open copies of
+  the game (`test-instances/`) in test mode and send them commands through a file: host and join, go to a room, move, attack, screenshots from all of
+  them at once, enemy and object state, simulated bad connection (`netsim`)... Commands are listed in
   [docs/arquitectura.md](docs/arquitectura.md#pruebas).
-- **Automated routes**: `bash tools/run-routes.sh` walks through the game area by area with a host and a guest and
-  checks in every room that both see the same thing (`--pairs 3` splits the areas between 3 pairs). Format:
+- **Automated routes**: `bash tools/run-routes.sh` walks through the game area by area with a host and guests and
+  checks in every room that everyone sees the same thing (`--players 4` plays them with four, `--pairs 3` splits the
+  areas between 3 pairs). Format:
   [tests/routes/README.md](tests/routes/README.md).
 - **Installer**: `bash tools/manual-tests/installer-test.sh <zip>` installs, launches, uninstalls and compares on clean
   copies, without touching the Steam game.

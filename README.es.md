@@ -4,7 +4,7 @@
 
 **Mod cooperativo para Hollow Knight: juega el mundo entero con tus amigos, en red local o por internet.**
 
-![Versión](https://img.shields.io/badge/versión-0.29.0-7fb2ff)
+![Versión](https://img.shields.io/badge/versión-0.30.0-7fb2ff)
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
@@ -15,14 +15,14 @@
 </div>
 
 > [!WARNING]
-> **Versión beta.** Casi todo se ha probado jugando con dos copias del juego en el mismo PC, pero todavía no se ha
-> jugado una partida larga entre dos PCs por internet, y algunas partes no se han probado del todo (ver
+> **Versión beta.** Casi todo se ha probado jugando con hasta cuatro copias del juego en el mismo PC, pero todavía no
+> se ha jugado una partida larga entre PCs reales por internet, y algunas partes no se han probado del todo (ver
 > [Estado de las pruebas](#-estado-de-las-pruebas)). **Puede tener errores.** Haz una copia de tus partidas antes de
 > jugar y, si algo falla, cuéntalo en un *issue* con una captura y tu `ModLog.txt`.
 
 Un jugador **hostea** un mundo coop y sus compañeros **se unen** con la dirección del host y el código de la partida:
-comparten el mundo, se ven en tiempo real y pelean juntos contra los mismos enemigos y jefes. Está pensado para dos
-jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hollow Knight.
+comparten el mundo, se ven en tiempo real y pelean juntos contra los mismos enemigos y jefes. Hasta 4 jugadores,
+escrito desde cero sobre la Modding API de Hollow Knight.
 
 ## Índice
 
@@ -40,18 +40,22 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 
 ## ✨ Funciones
 
+- 🎮 **El juego entero y sus DLC, con hasta 4 jugadores**: la historia hasta todos sus finales, Hidden Dreams, The Grimm
+  Troupe, Lifeblood y Godmaster, con sus Panteones jugados juntos hasta el Panteón de Hallownest.
 - 🌍 **Mundos coop**: hasta 4 mundos propios, guardados en el PC del host, aparte de tus partidas normales.
 - 🔒 **Conexión**: red local o internet, con código de partida y todo cifrado, sin Steam ni servidores intermedios;
   el invitado que pierde la conexión vuelve a entrar solo.
-- 👥 **Jugadores**: el compañero se ve en tiempo real con su nombre, animaciones, ataques, hechizos y amuletos, y
+- 👥 **Jugadores**: los compañeros se ven en tiempo real con su nombre, animaciones, ataques, hechizos y amuletos, y
   también en el mapa.
 - ⚔️ **Enemigos y jefes**: los mismos en todos los PCs (misma vida, mismos golpes, misma muerte); los jefes esperan a
-  que estéis los dos.
+  que estéis todos.
 - 🗺️ **Mundo compartido**: progreso, palancas, puertas, paredes rotas, ascensores, rejas, cofres y misiones de NPC, a la
   vez.
 - ❤️ **Revivir**: si caes con un compañero en pie, quedas tendido y te revive manteniendo Focus junto a tu cuerpo.
 - 🌙 **Sueños y cinemáticas**: entráis juntos a los sueños; los finales y los créditos se ven a la vez y se saltan por
   votación.
+- 🗣️ **Personajes de cada jugador**: cada uno oye cada conversación desde el principio, y el personaje que se va tras
+  hablar solo se va para quien habló con él.
 - 🎨 **Skins**: compatibles con CustomKnight; los demás ven la tuya aunque no la tengan.
 - 🛠️ **Panel en pausa**: ajustes del host, vida de los compañeros, dar geo, ir con un compañero, desatascarse y recargar
   la sala.
@@ -78,6 +82,23 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 - **Avisos** en pantalla: código de la partida, quién entra y sale, desconexiones y esperas de combate.
 - **Panel en pausa** (*Pausa › Multijugador*): jugadores conectados con su ping, código, IP y cerrar o salir de la
   partida; *Ajustes de la partida*, *Compañeros* y *Skin*.
+
+</details>
+
+<details>
+<summary><b>🏛️ DLC y Dios Hogar</b></summary>
+
+- **Hidden Dreams**: el Defensor Blanco y el Príncipe Gris Zote, entrando juntos con el aguijón onírico.
+- **The Grimm Troupe**: la misión de la Compañía, Grimm y el Rey de las Pesadillas, y el Grimmchild para todos.
+- **Lifeblood**: la Colmena y su caballero, y la sangre vital como en el juego.
+- **Godmaster**: cada jugador entra en Dios Hogar por su cuenta con el aguijón onírico junto a la Buscadora de Dioses.
+  - **Panteones juntos**: cuando un jugador empieza un Panteón en su puerta, los que están en el Atrio entran con él,
+    con las mismas ataduras, y el grupo pasa junto a cada jefe (también al salir de la sala de descanso). El que cae
+    revive junto al grupo en la sala del siguiente jefe.
+  - **El final del Panteón de Hallownest es de cada jugador**: cada uno da los golpes finales con su propio botón de
+    atacar y ve la cinemática del final al acabar el suyo, sin los caballeros ni los nombres de los compañeros.
+  - La subida de la Radiancia: el abismo sube para todos cuando sube cualquiera, y cada uno reaparece en la última
+    plataforma pasada.
 
 </details>
 
@@ -110,7 +131,7 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 <details>
 <summary><b>⚔️ Enemigos y jefes</b></summary>
 
-- Cada enemigo lo mueve el PC del jugador **más cercano** y ataca a los dos. Su vida, sus golpes y su muerte son los
+- Cada enemigo lo mueve el PC del jugador **más cercano** y ataca a todos. Su vida, sus golpes y su muerte son los
   mismos en todos los PCs; los golpes de cualquiera le quitan vida en todos.
 - **Proyectiles, crías e invocaciones** se crean en todos y dañan a todos (disparos, cristales, láseres, orbes del
   Maestro de Almas, bolas de Mawlek, agujas de Hornet, tarros del Coleccionista, barriles del Falso Caballero...).
@@ -119,9 +140,11 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 - **Piezas y trampas** de los jefes iguales en todos: el rayo del Guardián de Cristal y sus torretas, la aguja de
   Hornet, la cabeza del Falso Caballero...
 - **Arenas por oleadas**: Señores Mantis, Coliseo de los Tontos (Bronce, Plata y Oro), Caballeros Vigía...
-- **Los combates de jefe esperan a que estéis los dos**, con un aviso de a quién se espera; mientras, el jefe es
-  invulnerable. Los **diálogos antes de un combate** los ven los dos y cada uno espera a que el otro termine de leer.
-- **Presentaciones de jefe** con los dos caballeros quietos, que recuperan el control a la vez.
+- **Los combates de jefe esperan a que estén todos los de la sala**, con un aviso de a quién se espera; mientras, el
+  jefe es invulnerable. Los **diálogos antes de un combate** los ven todos y cada uno espera a que los demás terminen
+  de leer.
+- **Presentaciones de jefe** con todos los caballeros quietos, que recuperan el control a la vez.
+- **Barras de vida de jefe** solo del jefe que está peleando; el Rey Vengamosca y la Madre Gruz cuentan como jefes.
 - Si el jefe cambia de PC a mitad del combate (porque el otro está más cerca), sigue donde iba.
 - Los enemigos muertos siguen muertos al volver a la sala, hasta descansar en un banco (como en el juego).
 
@@ -133,10 +156,11 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 - **Progreso compartido en directo**: jefes vencidos, puertas, palancas, paredes rotas, salas visitadas y mapas.
 - **Habilidades de cada jugador** (de movimiento, hechizos, aguijón onírico): cada uno consigue las suyas y ve la
   escena de recogerlas. Los personajes guardados con una versión anterior conservan las que ya tenían.
-- **El botín cae en el mismo sitio** en los dos PCs: el geo de los enemigos, de las rocas y de los cofres.
+- **El botín cae en el mismo sitio** en todos los PCs: el geo de los enemigos, de las rocas y de los cofres.
 - **Viaje en ciervo juntos** (opción del host): cuando uno elige destino, los compañeros que están cerca de él en la
   estación viajan con él.
-- **Bancos para dos**: sentados en el mismo banco, cada uno ocupa una mitad.
+- **Bancos compartidos**: hasta 4 jugadores sentados uno al lado del otro en el mismo banco, nunca dentro de la
+  pared.
 - **Avisos de versión**: en el menú principal sale un aviso si hay una versión nueva (y *Multijugador* ofrece
   descargarla) o si el mod se acaba de actualizar (con sus novedades). Es una consulta a la lista pública de versiones
   de GitHub al abrir el juego; se desactiva en *Multijugador › Buscar actualizaciones*.
@@ -149,7 +173,10 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 - **Objetos individuales** (objetos brillantes, fragmentos de máscara y vasija, orbes de sueño): lo que recoge uno no
   desaparece para el otro.
 - **Misiones de NPC**: Mr. Mushroom, Quirrel, Bretta, Zote, Tiso, Myla, Hornet, el Forjaguijones, la Compañía de
-  Grimm... El personaje avanza o se va en los dos PCs y la misión no avanza dos veces.
+  Grimm... La misión no avanza dos veces.
+- **Conversaciones de cada jugador**: lo que un personaje ya le contó a uno no se lo salta al siguiente (Zote ya no le
+  pregunta al segundo por qué lo sigue molestando), y el personaje que se va o cambia de sitio tras hablar (Zote,
+  Quirrel, Cloth, Tiso...) solo lo hace para quien habló con él.
 - **Peligros animados al mismo ritmo** (sierras y pinchos del Palacio Blanco y del Camino del Dolor).
 - Quien entra en una sala la encuentra como está: lo activado, lo roto, los enemigos muertos y los combates en marcha.
 
@@ -168,13 +195,15 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
   aunque esté en otra sala.
 - **HUD del compañero** arriba a la derecha (nombre, máscaras, alma y dónde está), sus máscaras sobre su cabeza al
   cambiarle la vida y **flechas** en el borde de la pantalla hacia el compañero y los cuerpos.
-- **Compañeros en el mapa**: con el mapa abierto, cada compañero sale como una brújula azul donde está (si los dos
-  llevan el Wayward Compass equipado), y en rojo en su cuerpo si está caído.
+- **Compañeros en el mapa**: con el mapa abierto, cada compañero sale como una brújula de su color, con su nombre,
+  donde está, también dentro de las tiendas (si los dos llevan el Wayward Compass equipado), y en rojo en su cuerpo si
+  está caído.
 - **Barras de enemigos** opcionales sobre cada enemigo herido.
 - **Cinemáticas compartidas**: los finales, los créditos y Mr. Mushroom se ven a la vez aunque estéis en salas
-  distintas; se saltan cuando todos votan ("Esperando a X para saltar 1/2").
-- **Sueños compartidos**: si uno entra en un sueño con el aguijón onírico, el compañero de la misma sala entra con él.
-  Al ganar salen los dos; quien cae o muere sale solo. Jefes de sueño, Rey de las Pesadillas y Radiancia.
+  distintas; se saltan cuando todos votan ("Esperando a X para saltar 1/2"). La excepción es el final del Panteón de
+  Hallownest: cada uno lo ve al acabar el suyo.
+- **Sueños compartidos**: si uno entra en un sueño con el aguijón onírico, los compañeros de la misma sala entran con
+  él. Al ganar salen todos; quien cae o muere sale solo. Jefes de sueño, Rey de las Pesadillas y Radiancia.
 - **Grimmchild**: si uno lo recibe, el otro también.
 - **Skins** compatibles con CustomKnight (*Pausa › Multijugador › Skin*): cuerpo, hechizos y efectos; se envían por la
   red del mod en segundo plano sin retrasar los golpes (la primera vez; luego quedan en una caché y cargan al
@@ -189,22 +218,24 @@ jugadores (admite algunos más) y escrito desde cero sobre la Modding API de Hol
 
 ## 🧪 Estado de las pruebas
 
-Las pruebas se hacen con dos (o tres) copias del juego en el mismo PC, con un modo de prueba del mod y rutas
-automáticas que recorren el mundo comprobando que los dos ven lo mismo.
+Las pruebas se hacen con hasta cuatro copias del juego en el mismo PC, con un modo de prueba del mod y rutas
+automáticas que recorren el mundo comprobando que todos ven lo mismo.
 
 ✅ **Probado jugando:**
 
 - Conexión, mundos coop y personajes de los invitados.
 - Enemigos de todas las zonas.
 - Jefes: Mamá Gruz, Falso Caballero (también con mala conexión), Hornet, Mawlek, Maestro de Almas, Defensor del
-  Estiércol, Nosk, Vasija Rota, Guardián de Cristal, Señores Mantis, Uumuu, Coleccionista, Señor Traidor, Caballeros
-  Vigía, Grimm, Tirano de Almas, Hollow Knight y Radiancia.
+  Estiércol, Nosk, Vasija Rota, Guardián de Cristal y Guardián Furioso, Señores Mantis, Uumuu, Coleccionista, Señor
+  Traidor, Caballeros Vigía, Flukemarm, Rey Vengamosca, Grimm, Tirano de Almas, Hollow Knight, Recipiente Puro,
+  Radiancia y Radiancia Absoluta.
 - Coliseo de los Tontos: Bronce, Plata y Oro.
 - Sueños: Campeón Fallido (el Falso Caballero del sueño), Hermano Perdido, Tirano de Almas, Defensor Blanco, Príncipe Gris Zote y Rey
   de las Pesadillas.
 - Revivir (también el cuerpo en el último sitio seguro, sobre pinchos y ácido), sombras, HUD del compañero,
-  compañeros en el mapa, ajustes del host, cinemáticas, skins, ir con un compañero, misiones de NPC, plataformas de
-  liana y la reconexión automática (también cancelarla y rendirse).
+  compañeros en el mapa (también dentro de las tiendas), ajustes del host, cinemáticas, skins, ir con un compañero,
+  misiones y conversaciones de NPC, plataformas de liana, el Menderbug, el mod en inglés y la reconexión automática
+  (también cancelarla y rendirse).
 - Instalar, actualizar y desinstalar.
 - 0.26.0: se revisó todo el mod contra el código del juego. Los 172 fallos encontrados se arreglaron o se revisaron, y
   la mayoría se comprobó en el juego; al probarlos salieron y se arreglaron 16 más.
@@ -212,18 +243,17 @@ automáticas que recorren el mundo comprobando que los dos ven lo mismo.
   sueños y los guerreros soñadores, los tres Soñadores, el Huevo Negro, el Hollow Knight (los dos finales) y la
   Radiancia, la Compañía de Grimm, Grey Prince Zote, el Coliseo de los Tontos (Bronce, con Zote), Zote y Cloth, y el
   Panteón del Maestro de principio a fin.
+- 0.30.0: todos los combates de jefes otra vez con 4 jugadores, uno a uno, y el Panteón de Hallownest hasta su final,
+  que cada jugador acaba en su propio PC.
 
 ⚠️ **Probado en parte:**
 
-- Caballero de la Colmena, Flukemarm, Cargador Musgoso y Rey Mosca: mueren en los dos PCs, pero falta verlos atacar.
+- Caballero de la Colmena y Cargador Musgoso: mueren en todos los PCs, pero falta verlos atacar.
+- 0.30.0: las 16 rutas automáticas no se han vuelto a pasar con esta versión.
 
 ❓ **Sin probar:**
 
-- Una partida entre dos PCs por internet.
-- La traducción al inglés dentro del juego.
-- De 0.22.0: el icono del compañero dentro de salas que no salen en el mapa (tiendas).
-- El vapor naranja de la muerte del Falso Caballero (arreglado sin volver a probarlo).
-- Menderbug y los finales de Panteón que acaban en una cinemática (el 5.º).
+- Una partida entre PCs reales por internet.
 - Jugar 3 o 4: los casos que solo pasan con tres o más se arreglaron en la 0.28.0 y se probaron con cuatro copias del
   juego en un PC, pero aún no entre PCs reales.
 
@@ -385,12 +415,12 @@ Las FSM de PlayMaker no salen ahí; ver [Código del juego](docs/arquitectura.md
 
 ### Probar
 
-- **Dos jugadores en un PC**: `tools/mp-test-lib.sh` abre dos copias del juego (`test-instances/b` y `c`) en modo de
-  prueba y les manda órdenes por archivo: hostear y unirse, ir a una sala, moverse, golpear, capturas de las dos a la
-  vez, estado de enemigos y objetos, mala conexión simulada (`netsim`)... Órdenes en
+- **Hasta cuatro jugadores en un PC**: `tools/mp-test-lib.sh` y `tools/routes/lib.sh` (`setup_group`) abren copias del
+  juego (`test-instances/`) en modo de prueba y les mandan órdenes por archivo: hostear y unirse, ir a una sala,
+  moverse, golpear, capturas de todas a la vez, estado de enemigos y objetos, mala conexión simulada (`netsim`)... Órdenes en
   [docs/arquitectura.md](docs/arquitectura.md#pruebas).
-- **Rutas automáticas**: `bash tools/run-routes.sh` recorre el juego por zonas con un host y un invitado y comprueba en
-  cada sala que los dos ven lo mismo (`--pairs 3` reparte las zonas entre 3 pares). Formato:
+- **Rutas automáticas**: `bash tools/run-routes.sh` recorre el juego por zonas con un host e invitados y comprueba en
+  cada sala que todos ven lo mismo (`--players 4` las juega con cuatro, `--pairs 3` reparte las zonas entre 3 pares). Formato:
   [tests/routes/README.md](tests/routes/README.md).
 - **Instalador**: `bash tools/manual-tests/installer-test.sh <zip>` instala, arranca, desinstala y compara en copias
   limpias, sin tocar el juego de Steam.

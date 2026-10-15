@@ -94,6 +94,12 @@ internal static class Difficulty {
     /// <summary>Vida a partir de la cual cuenta como jefe lo que está en la parte de la sala del jefe (ver IsBoss).</summary>
     private const int BossSceneHealth = 150;
 
+    /// <summary>
+    /// Jefes del juego con poca vida y sin estatua en su sala: el Rey Vengamosca (55) y la Madre Gruz (90). No contaban
+    /// como jefes: sin barra, sin la vida extra de jefe y sin esperar a los demás para empezar.
+    /// </summary>
+    private static readonly HashSet<string> SmallBosses = new() { "Giant Buzzer", "Giant Fly" };
+
     /// <summary>Lo decidido para cada enemigo la primera vez que se miró (con la vida del principio).</summary>
     private static readonly Dictionary<HealthManager, bool> BossCache = new();
 
@@ -119,7 +125,7 @@ internal static class Difficulty {
 
         // También lo de mucha vida en la parte de la sala que el juego carga para el jefe ("..._boss"): la primera fase del
         // Maestro de Almas (275) no tiene estatua (la lleva la segunda) y se quedaba sin barra y sin la vida extra
-        boss = health.hp < DummyHealth && (UnlockBossSceneField?.GetValue(health) as Object != null || health.hp >= BossStartHealth ||
+        boss = health.hp < DummyHealth && (SmallBosses.Contains(health.gameObject.name) || UnlockBossSceneField?.GetValue(health) as Object != null || health.hp >= BossStartHealth ||
                health.hp >= BossSceneHealth && health.gameObject.scene.name.EndsWith("_boss", System.StringComparison.Ordinal));
         BossCache[health] = boss;
         return boss;

@@ -47,6 +47,12 @@ internal sealed class TestDriver : MonoBehaviour {
 
     public static bool IsEnabled() => Enabled;
 
+    /// <summary>
+    /// Saltar solas las cinemáticas (orden autoskip). Lo pone la preparación del grupo de las pruebas: con cuatro copias,
+    /// la introducción de cada invitado nuevo y las del host tardaban mucho en saltarse una a una.
+    /// </summary>
+    public static bool AutoSkip { get; private set; }
+
     /// <summary>Quién pegó al caballero y si se veía (un golpe de algo que no se dibuja es sospechoso).</summary>
     private static string DescribeSource(GameObject source) {
         if (source == null) {
@@ -111,6 +117,13 @@ internal sealed class TestDriver : MonoBehaviour {
 
     private void Update() {
         Warp.Update();
+        if (AutoSkip && GameManager.instance != null && GameManager.instance.inputHandler is { } skipInput &&
+            skipInput.skipMode is not (GlobalEnums.SkipPromptMode.NOT_SKIPPABLE or
+                GlobalEnums.SkipPromptMode.NOT_SKIPPABLE_DUE_TO_LOADING) && !skipInput.skippingCutscene) {
+            skipInput.skippingCutscene = true;
+            GameManager.instance.SkipCutscene();
+        }
+
         if (Time.unscaledTime < _nextPoll) {
             return;
         }
@@ -288,6 +301,20 @@ internal sealed class TestDriver : MonoBehaviour {
                 } else {
                     challengeUi.Begin();
                     Log.Info($"{Tag}Panteón empezado");
+                }
+
+                break;
+            case "field":
+                // field <objeto>|<componente>|<campo>: valor de un campo de un componente de cada objeto con ese nombre (p. ej.
+                // el dato que mira un DeactivateIfPlayerdataTrue)
+                var fieldArgs = string.Join(" ", args.Skip(1)).Split('|');
+                foreach (var holder in Resources.FindObjectsOfTypeAll<Component>()
+                             .Where(c => c.gameObject.scene.IsValid() && c.gameObject.name == fieldArgs[0] &&
+                                         c.GetType().Name == fieldArgs[1])) {
+                    var info = holder.GetType().GetField(fieldArgs[2],
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    Log.Info($"{Tag}campo {holder.gameObject.name}/{fieldArgs[1]}.{fieldArgs[2]}={info?.GetValue(holder)} " +
+                             $"activo={holder.gameObject.activeInHierarchy}");
                 }
 
                 break;
@@ -819,6 +846,12 @@ internal sealed class TestDriver : MonoBehaviour {
                 GameManager.instance.profileID = int.Parse(args[1]);
                 GameManager.instance.StartNewGame(false, false);
                 break;
+            case "autoskip":
+                // autoskip si|no: salta solas las cinemáticas en cuanto se pueden saltar (y el invitado nuevo no ve la
+                // introducción del juego)
+                AutoSkip = args.Length < 2 || args[1] != "no";
+                Log.Info($"{Tag}autoskip={AutoSkip}");
+                break;
             case "skip":
                 var input = GameManager.instance.inputHandler;
                 if (input.skipMode is not (GlobalEnums.SkipPromptMode.NOT_SKIPPABLE
@@ -827,6 +860,16 @@ internal sealed class TestDriver : MonoBehaviour {
                     GameManager.instance.SkipCutscene();
                 }
 
+                break;
+            case "fadein":
+                // fadein: quita el negro de la pantalla como al acabar de entrar en una sala (al entrar con goscene por una
+                // puerta de llegada de sueño, door_dreamEnter de Godhome, su fundido de entrada no se hace)
+                GameManager.instance.FadeSceneIn();
+                break;
+            case "lastdoor":
+                // lastdoor <puerta>: como si la última puerta cruzada fuera esa (la arena de los Caballeros Vigía solo se
+                // carga al entrar por "top1"; goscene no cruza ninguna)
+                TransitionPoint.lastEntered = args.Length > 1 ? args[1] : string.Empty;
                 break;
             case "goscene":
                 // goscene <sala> <puerta>: entra por esa puerta, como al cruzarla

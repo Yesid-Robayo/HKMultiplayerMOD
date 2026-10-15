@@ -33,12 +33,13 @@ internal sealed class PartyAbilities {
     /// Objetos de sala cuya FSM mira una habilidad para preparar la sala misma (y su FSM): con las del grupo, la sala queda
     /// igual en todos los PCs. La pared del Falso Caballero se ve reparada si se tiene el primer hechizo (y si no, sigue la
     /// pared de antes: en un PC sólida y en otro no), la puerta del Abismo y el alud del Borde del Reino miran la Marca del
-    /// Rey y el puente del Pico de Cristal, el Corazón de Cristal. Las demás lecturas de habilidades (el ácido, los
-    /// diálogos, lo que da la habilidad) siguen siendo de cada uno.
+    /// Rey y el puente del Pico de Cristal, el Corazón de Cristal. El viento de la sala de las Alas de Monarca
+    /// (`Abyss_19`) para cuando se tiene el doble salto: en un PC soplaba y en otro no. Las demás lecturas de habilidades
+    /// (el ácido, los diálogos, lo que da la habilidad) siguen siendo de cada uno.
     /// </summary>
     private static readonly (string Name, string Fsm)[] RoomFsms = {
         ("Fk Break Wall", "Control"), ("abyss_door", "Control"), ("mine_break_bridge", "Bridge Control"),
-        ("Avalanche", "Activate")
+        ("Avalanche", "Activate"), ("Windy_Set", "Set Windy")
     };
 
     /// <summary>Cada cuánto se mira si cambiaron las propias (se envían solo al cambiar o al entrar alguien).</summary>
@@ -120,12 +121,35 @@ internal sealed class PartyAbilities {
 
             // Las del grupo solo mientras el cargador decide (lo hace aquí mismo); luego vuelven las propias
             var saved = active.ApplyParty(PlayerData.instance);
+            // La parte de un jefe que solo se carga al entrar por una puerta (la arena de los Caballeros Vigía, desde
+            // arriba): con un compañero ya en la sala, se carga aunque este jugador entre por otra. Si no, él no veía a los
+            // caballeros mientras los demás peleaban contra ellos
+            var door = TransitionPoint.lastEntered;
+            var asDoor = !string.IsNullOrEmpty(self.doorTrigger) && door != self.doorTrigger &&
+                         active.PartnerInRoom(self.gameObject.scene.name);
+            if (asDoor) {
+                TransitionPoint.lastEntered = self.doorTrigger;
+            }
+
             try {
                 orig(self);
             } finally {
                 Restore(PlayerData.instance, saved);
+                if (asDoor) {
+                    TransitionPoint.lastEntered = door;
+                }
             }
         };
+    }
+
+    private bool PartnerInRoom(string scene) {
+        foreach (var player in _session.Players) {
+            if (!player.IsLocal && player.Scene == scene) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsRoomFsm(HutongGames.PlayMaker.Fsm fsm) {

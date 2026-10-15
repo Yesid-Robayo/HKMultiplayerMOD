@@ -566,6 +566,9 @@ internal sealed class SharedCutscenes {
     // Llevar a los demás
     // =====================================================================================================
 
+    /// <summary>Sala del final del Panteón de Hallownest, que cada PC acaba por su cuenta.</summary>
+    private const string OwnEndingScene = "GG_Radiance";
+
     private void OnPull(SessionPlayer from, PacketReader reader) {
         var scene = reader.ReadString(128);
         if (from.Id != GameSession.HostPlayerId || !SharedScenes.Contains(scene)) {
@@ -575,6 +578,13 @@ internal sealed class SharedCutscenes {
         // Ya viendo una cinemática compartida (p. ej. de un final a los créditos): se llega por su curso normal. Un
         // caído no va (su compañero lo revive al volver o muere de forma normal si no queda nadie)
         if (_current != null || UnitySceneManager.GetActiveScene().name == scene || _revive != null && _revive.IsDowned) {
+            return;
+        }
+
+        // El final del Panteón de Hallownest lo lleva cada PC por su cuenta (ver EnemySync.FinaleRunning): cada uno ve la
+        // cinemática al acabar el suyo. Antes, el primero en acabar se llevaba a los demás a mitad de su final
+        if (Scene.EnemySync.FinaleRunning || UnitySceneManager.GetActiveScene().name == OwnEndingScene) {
+            Log.Info($"Un compañero empezó {scene}; este PC sigue con su final y la verá al acabarlo");
             return;
         }
 

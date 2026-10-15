@@ -213,8 +213,15 @@ setup_group() {
   done
   sleep 2
 
+  # Mundo nuevo: la copia guardada de uno recién empezado (save_world_snapshot), o uno de cero si no hay copia (la
+  # partida nueva y sus cinemáticas tardan varios minutos con cuatro copias)
   if [ "${HK_GROUP_FRESH:-0}" = 1 ]; then
-    rm -rf "$(_data_dir "$host")/HKMultiplayer/Mundos/$HK_ROUTE_WORLD"
+    local world="$(_data_dir "$host")/HKMultiplayer/Mundos/$HK_ROUTE_WORLD"
+    rm -rf "$world"
+    if [ -d "$HK_WORLD_SNAPSHOT" ]; then
+      mkdir -p "$(dirname "$world")" && cp -r "$HK_WORLD_SNAPSHOT" "$world"
+      echo "grupo: mundo nuevo desde la copia $HK_WORLD_SNAPSHOT"
+    fi
   fi
 
   launch_instance "$host"
@@ -230,6 +237,9 @@ setup_group() {
   if [ -n "$HK_LAG" ]; then
     for inst in "$host" "${guests[@]}"; do send "$inst" "netsim $HK_LAG"; done
   fi
+
+  # Mientras se prepara, las cinemáticas se saltan solas (y los invitados nuevos no ven la introducción)
+  for inst in "$host" "${guests[@]}"; do send "$inst" "autoskip"; done
 
   send "$host" "hostworld $HK_ROUTE_WORLD Host $port $HK_ROUTE_CODE"
   local deadline=$((SECONDS + 150))
@@ -248,8 +258,21 @@ setup_group() {
     wait_log_since "$inst" "$since" "Progreso compartido activo" 150 >/dev/null || { echo "grupo: $inst no entró en el mundo" >&2; return 1; }
     wait_playable "$inst" 90 || { echo "grupo: $inst no llegó a una sala jugable" >&2; return 1; }
   done
+  for inst in "$host" "${guests[@]}"; do send "$inst" "autoskip no"; done
   sleep 4
   return 0
+}
+
+# Copia de un mundo recién empezado (sin jugar), para que setup_group con HK_GROUP_FRESH=1 no tenga que empezar uno
+HK_WORLD_SNAPSHOT="${HK_WORLD_SNAPSHOT:-$HK_INSTANCES_DIR/.snapshots/mundo-nuevo}"
+
+# Guarda el mundo de rutas del host como copia de mundo nuevo. Uso: save_world_snapshot <host> (justo tras setup_group
+# con HK_GROUP_FRESH=1 y sin copia, antes de jugar nada)
+save_world_snapshot() {
+  local world="$(_data_dir "$1")/HKMultiplayer/Mundos/$HK_ROUTE_WORLD"
+  [ -d "$world" ] || { echo "no hay mundo $world" >&2; return 1; }
+  rm -rf "$HK_WORLD_SNAPSHOT"; mkdir -p "$(dirname "$HK_WORLD_SNAPSHOT")"
+  cp -r "$world" "$HK_WORLD_SNAPSHOT" && echo "copia guardada en $HK_WORLD_SNAPSHOT"
 }
 
 stop_group() { local inst; for inst in "$@"; do stop_instance "$inst"; done; }

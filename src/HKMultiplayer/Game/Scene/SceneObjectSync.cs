@@ -842,8 +842,12 @@ internal sealed class SceneObjectSync {
 
         item.Activated.Value = true;
         item.LastValue = true;
-        // Si ya está ahí (p. ej. llevado por su cadena), volver a entrar repetiría sus acciones
-        if (item.ActivatedState != null && item.Fsm.ActiveStateName != item.ActivatedState) {
+        // Si ya está ahí (p. ej. llevado por su cadena), volver a entrar repetiría sus acciones. Tampoco si su cadena ya
+        // acabó en un estado final (sin salidas): el estado de "activado al cargar" repite lo de cargar la sala, y la
+        // batalla del Señor Traidor, ya en "End", abría de golpe en este PC las rejas que en el suyo seguían cerradas
+        var active = item.Fsm.Fsm.ActiveState;
+        var finished = active != null && active.Transitions.Length == 0;
+        if (item.ActivatedState != null && item.Fsm.ActiveStateName != item.ActivatedState && !finished) {
             FsmStateSync.ApplyingSavedState = true;
             try {
                 item.Fsm.SetState(item.ActivatedState);

@@ -3,12 +3,10 @@ room Fungus2_01 left1
 partner-moves
 breakables-sync
 objects-sync
-enemies-sync
 scene-data-sync
 
 room Fungus2_02 right1
 breakables-sync
-objects-sync host
 scene-data-sync
 
 room Fungus2_14 top1
@@ -25,5 +23,11 @@ scene-data-sync
 
 # Señores Mantis
 room Fungus2_15 left1
-boss defeatedMantisLords
+# El desafío como un jugador: en el cartel, arriba
+host tpobj Mantis Battle/Challenge Prompt|0
+# Hasta que caiga al suelo: en el aire el cartel cancela el desafío
+wait 3
+host press up 0.3
+wait 8
+fight defeatedMantisLords
 scene-data-sync

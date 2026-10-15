@@ -69,6 +69,13 @@ internal sealed class EnemySync {
 
     private const int MaxEffectVectors = 16;
 
+    /// <summary>
+    /// Objetos de las variables que van con cada efecto. La Radiancia Absoluta tiene unos 75 (el Señor de las Sombras, su
+    /// mano, el abismo, las plataformas...): con los 16 de los vectores, los de su final no llegaban y en los demás PCs
+    /// su escena final salía sin ellos.
+    /// </summary>
+    private const int MaxEffectObjects = 128;
+
     /// <summary>Modo de prueba: cada efecto reproducido en una marioneta se registra.</summary>
     private static readonly bool TestMode = HKMultiplayer.Testing.TestDriver.IsEnabled();
 
@@ -100,6 +107,19 @@ internal sealed class EnemySync {
     /// </summary>
     public const MessageType EnemyRelease = (MessageType) 98;
 
+    /// <summary>
+    /// Un enemigo que el dueño de la sala no tiene (una parte de la sala que en su PC no se cargó): el dueño reparte los
+    /// suyos y a este no lo veía, así que se quedaba con él sin moverlo. Con 0, quien lo envía lo tiene; con un jugador,
+    /// lo mueve ese (lo decide el de número más bajo de los que lo tienen, como el dueño: el más cercano) (→ sala).
+    /// </summary>
+    public const MessageType EnemyOrphan = (MessageType) 115;
+
+    /// <summary>
+    /// Tiempo sin reparto ni noticias del dueño para dar por hecho que no tiene el enemigo (su estado llega al menos cada
+    /// medio segundo aunque esté quieto, y el reparto se repite cada 2 s).
+    /// </summary>
+    private const float OrphanSeconds = 5f;
+
     /// <summary>Aviso con el que un enemigo de jaula sale de ella (la plantilla de las crías de los Hatcher).</summary>
     private const string CageReleaseEvent = "SPAWN";
 
@@ -111,7 +131,11 @@ internal sealed class EnemySync {
     /// <summary>Tras encontrar un enemigo, cuándo buscar los objetos que enciende (su lógica ya los tiene apuntados).</summary>
     private const float LinkedResolveDelay = 1f;
 
-    private const int MaxParts = 24;
+    /// <summary>
+    /// Piezas que se siguen de cada enemigo. Con 24, la Radiancia Absoluta (unas 40) se quedaba sin las últimas: el rayo de
+    /// la subida (Eye Beam Glow/Ascend Beam) no se veía en los demás PCs.
+    /// </summary>
+    private const int MaxParts = 64;
 
     /// <summary>Tras morir, lo que se sigue copiando su cadáver (lo que tarda en caer y, si explota, en explotar).</summary>
     private const float CorpseFollowSeconds = 5f;
@@ -378,6 +402,23 @@ internal sealed class EnemySync {
 
         public bool SatellitesReleased;
 
+        /// <summary>Se vio encendido en la sala (ver <see cref="ReleaseSatellites"/>: el que huye se apaga sin morir).</summary>
+        public bool SeenActive;
+
+        /// <summary>Último estado recibido del PC que lo mueve (ver <see cref="OrphanSeconds"/>).</summary>
+        public float LastStateAt;
+
+        /// <summary>El dueño de la sala no lo tiene: los PCs que sí (ver <see cref="EnemyOrphan"/>); null si no es el caso.</summary>
+        public HashSet<ushort> OrphanHolders;
+
+        public float NextOrphanAssign;
+
+        /// <summary>
+        /// Su estado en el PC que lo mueve espera el botón de atacar del caballero (<c>ListenForAttack</c>): qué FSM y qué
+        /// aviso manda. Ver <see cref="UpdateAttackListens"/>.
+        /// </summary>
+        public (byte Fsm, string Event)? AttackListen;
+
         /// <summary>FSM paradas en la marioneta y si antes reiniciaban al reactivarse (se pausan, no se reinician).</summary>
         public readonly List<(PlayMakerFSM Fsm, bool Restart)> PausedFsms = new();
 
@@ -582,6 +623,16 @@ internal sealed class EnemySync {
 
     private readonly List<RunningEffect> _runningEffects = new();
 
+    /// <summary>En una marioneta: un evento que su lógica envía con retraso (pendiente hasta su hora).</summary>
+    private struct DelayedSend {
+        public Enemy Enemy;
+        public HutongGames.PlayMaker.FsmState State;
+        public HutongGames.PlayMaker.Actions.SendEventByName Action;
+        public float At;
+    }
+
+    private readonly List<DelayedSend> _delayedSends = new();
+
     private readonly Dictionary<HutongGames.PlayMaker.Fsm, SoundFsm> _soundFsms = new();
 
     /// <summary>Todas las FSM de los enemigos: a qué enemigo pertenecen y en qué posición (para lo que crean).</summary>
@@ -670,6 +721,7 @@ internal sealed class EnemySync {
     private readonly MessageHandler _onLinked;
     private readonly MessageHandler _onJar;
     private readonly MessageHandler _onRelease;
+    private readonly MessageHandler _onOrphan;
 
     /// <summary>Alguien entró en la sala: le llegan los objetos encendidos y apagados de los enemigos que mueve este PC.</summary>
     private bool _sendLinkedSnapshot;
@@ -731,6 +783,7 @@ internal sealed class EnemySync {
         MessageRoutes.Register(EnemyLinked, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyJar, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyRelease, Route.SameScene, reliable: true);
+        MessageRoutes.Register(EnemyOrphan, Route.SameScene, reliable: true);
         MessageRoutes.Register(EnemyKilled, Route.Server, reliable: true);
         MessageRoutes.Register(Rested, Route.Server, reliable: true);
     }
@@ -751,6 +804,7 @@ internal sealed class EnemySync {
         _onLinked = OnLinked;
         _onJar = OnJar;
         _onRelease = OnRelease;
+        _onOrphan = OnOrphan;
         _onPlayerScene = OnPlayerScene;
         _onKilled = OnKilled;
         _onLeft = OnPlayerLeft;
@@ -778,6 +832,7 @@ internal sealed class EnemySync {
         session.On(EnemyLinked, _onLinked);
         session.On(EnemyJar, _onJar);
         session.On(EnemyRelease, _onRelease);
+        session.On(EnemyOrphan, _onOrphan);
         session.On(EnemyKilled, _onKilled);
         session.On(Rested, _onRested);
         session.PlayerLeft += _onLeft;
@@ -805,6 +860,7 @@ internal sealed class EnemySync {
             _session.On(EnemyLinked, null);
             _session.On(EnemyJar, null);
             _session.On(EnemyRelease, null);
+            _session.On(EnemyOrphan, null);
             _session.On(EnemyKilled, null);
             _session.On(Rested, null);
             _session.PlayerLeft -= _onLeft;
@@ -846,6 +902,7 @@ internal sealed class EnemySync {
         _cagedByPath.Clear();
         _soundFsms.Clear();
         _runningEffects.Clear();
+        _delayedSends.Clear();
         _enemyFsms.Clear();
         _pendingHealth.Clear();
         _pendingControl.Clear();
@@ -873,6 +930,7 @@ internal sealed class EnemySync {
             _cagedByPath.Clear();
             _soundFsms.Clear();
             _runningEffects.Clear();
+            _delayedSends.Clear();
             _enemyFsms.Clear();
             _pendingControl.Clear();
             if (hash != _sceneHash) {
@@ -959,6 +1017,32 @@ internal sealed class EnemySync {
                     continue;
                 }
 
+                // El que huye en vez de morir (el Guardián de Cristal la primera vez) se apaga: sus trampas también se
+                // sueltan. Si no, en las marionetas se quedaba un rayo de las torretas a medias, que además seguía dañando
+                if (enemy.Root != null && enemy.Root.activeInHierarchy) {
+                    enemy.SeenActive = true;
+                } else if (enemy.SeenActive) {
+                    ReleaseSatellites(enemy);
+                }
+
+                // El dueño nunca lo repartió ni llega nada suyo de él: no lo tiene (una parte de la sala que en su PC no se
+                // cargó). Lo reclama este PC; si no, nadie lo movía y el jefe se quedaba quieto en todos
+                if (enemy.Puppet && !isOwner && enemy.Controller == 0 && enemy.OrphanHolders == null && !enemy.Spawned &&
+                    enemy.LastStateAt < enemy.ScannedAt && now - enemy.ScannedAt > OrphanSeconds && _session.CanSend) {
+                    AnnounceOrphan(enemy);
+                }
+
+                // El que lo reparte entre los que lo tienen: al más cercano, como el dueño con los suyos
+                if (enemy.OrphanHolders != null && now >= enemy.NextOrphanAssign && OrphanAssigner(enemy) == _session.LocalId &&
+                    _session.CanSend) {
+                    enemy.NextOrphanAssign = now + 0.5f;
+                    var next = PickController(enemy, ControllerOf(enemy, owner), enemy.OrphanHolders, now);
+                    if (next != 0) {
+                        SendOrphan(enemy, next);
+                        ApplyControl(enemy, next);
+                    }
+                }
+
                 var local = ControllerOf(enemy, owner) == _session.LocalId;
                 if (local && enemy.HandoverReady && !HandoverUsable(enemy, now, enemy.Puppet)) {
                     enemy.Handover = null;
@@ -984,7 +1068,9 @@ internal sealed class EnemySync {
 
         UpdateReal(isOwner);
         UpdatePuppets();
+        UpdateAttackListens();
         UpdateRunningEffects();
+        UpdateDelayedSends();
         UpdateWakeGates();
     }
 
@@ -1350,6 +1436,112 @@ internal sealed class EnemySync {
             Log.Info("Banco o muerte: se avisa al host para que los enemigos vuelvan a aparecer");
             _session.Begin(Rested);
             _session.End();
+        }
+    }
+
+    /// <summary>
+    /// El final del Panteón de Hallownest: la Radiancia Absoluta recibe el golpe final y empieza la escena del Señor de las
+    /// Sombras, con los golpes que da cada jugador con su botón. Desde ese estado, cada PC sigue el final con su propia
+    /// lógica: antes lo llevaba el PC que la movía, el jefe podía pasar a otro a mitad (su espera de esos golpes parecía
+    /// un reposo), los golpes del que la movía salían solos en los demás y su escena se veía a medias en los otros PCs.
+    /// </summary>
+    private const string FinaleBoss = "Absolute Radiance";
+
+    private const string FinaleState = "Final Impact";
+
+    /// <summary>Sala en la que este PC lleva su propio final (ver <see cref="FinaleRunning"/>).</summary>
+    private string _finaleScene;
+
+    /// <summary>Este PC sigue por su cuenta el final del Panteón de Hallownest (ver <see cref="FinaleBoss"/>).</summary>
+    public static bool FinaleRunning => _active != null && _active._finaleScene != null && _active._finaleScene == _active._scene;
+
+    /// <summary>
+    /// Deja de seguir al jefe en este PC: su lógica sigue aquí sola. En una marioneta, desde el estado al que llegó el
+    /// que lo movía (<paramref name="fsm"/>).
+    /// </summary>
+    private void StartFinale(Enemy enemy, PlayMakerFSM fsm) {
+        Log.Info($"{enemy.Root.name}: su final sigue en cada PC por su cuenta");
+        _finaleScene = _scene;
+        if (fsm != null) {
+            SetPuppet(enemy, false);
+            fsm.SetState(FinaleState);
+        }
+
+        BringHeroToFinale(enemy);
+        Forget(enemy);
+    }
+
+    /// <summary>Lo que puede quedar el caballero por debajo de la Radiancia en su final sin subirlo.</summary>
+    private const float FinaleReach = 15f;
+
+    /// <summary>Las zonas de la subida final, con su punto de reaparición en cada plataforma.</summary>
+    private const string AscendRespawns = "Ascend Respawns";
+
+    /// <summary>
+    /// El caballero de este PC se quedó abajo (en el abismo, reapareciendo) cuando otro dio el golpe final: su final
+    /// sale donde está él (el caballero se parte en su sitio) y no lo veía. Se sube a la última plataforma.
+    /// </summary>
+    private static void BringHeroToFinale(Enemy enemy) {
+        var hero = HeroController.instance;
+        if (hero == null || enemy.Root == null || hero.transform.position.y >= enemy.Transform.position.y - FinaleReach) {
+            return;
+        }
+
+        Transform top = null;
+        foreach (var marker in UnityEngine.Object.FindObjectsByType<HazardRespawnMarker>(FindObjectsInactive.Include,
+                     FindObjectsSortMode.None)) {
+            var parent = marker.transform.parent;
+            if (parent != null && parent.parent != null && parent.parent.name == AscendRespawns &&
+                marker.gameObject.scene == enemy.Root.scene && (top == null || marker.transform.position.y > top.position.y)) {
+                top = marker.transform;
+            }
+        }
+
+        if (top == null) {
+            return;
+        }
+
+        Log.Info($"{enemy.Root.name}: el caballero de este PC estaba abajo; sube a la última plataforma para su final");
+        hero.SetHazardRespawn(top.position, hero.cState.facingRight);
+        hero.transform.position = new Vector3(top.position.x, top.position.y, hero.transform.position.z);
+        if (hero.GetComponent<Rigidbody2D>() is { } body) {
+            body.velocity = Vector2.zero;
+        }
+    }
+
+    /// <summary>Apunta si el estado al que pasó allí espera el botón de atacar (o deja de esperarlo).</summary>
+    private static void NoteAttackListen(Enemy enemy, byte fsmIndex, HutongGames.PlayMaker.FsmState state) {
+        foreach (var action in state.Actions) {
+            if (action is HutongGames.PlayMaker.Actions.ListenForAttack { Enabled: true, wasPressed: { } pressed } &&
+                !string.IsNullOrEmpty(pressed.Name)) {
+                enemy.AttackListen = (fsmIndex, pressed.Name);
+                return;
+            }
+        }
+
+        if (enemy.AttackListen is { } listen && listen.Fsm == fsmIndex) {
+            enemy.AttackListen = null;
+        }
+    }
+
+    /// <summary>
+    /// El botón de atacar de este jugador, a un jefe que lo espera en el PC que lo mueve: su lógica solo escucha al caballero
+    /// de ese PC. Al final del Panteón de Hallownest (la Radiancia Absoluta en el suelo), solo el que la movía podía dar
+    /// los golpes de sombra; los demás miraban.
+    /// </summary>
+    private void UpdateAttackListens() {
+        // Como ListenForAttack: el botón tal cual, aunque el caballero no tenga el control (en ese final no lo tiene)
+        var input = InputHandler.Instance;
+        if (input == null || !input.inputActions.attack.WasPressed ||
+            GameManager.instance != null && GameManager.instance.isPaused) {
+            return;
+        }
+
+        foreach (var enemy in _enemies) {
+            if (enemy.Puppet && enemy.AttackListen is { } listen) {
+                Log.Info($"{enemy.Root.name}: botón de atacar de este jugador, al PC que lo mueve ({listen.Event})");
+                ForwardEvent(enemy, listen.Fsm, listen.Event);
+            }
         }
     }
 
@@ -2035,8 +2227,29 @@ internal sealed class EnemySync {
         // Las salpicaduras al romperse (los barriles que caen en ese combate)
         "SpawnBlood",
         // Salpicaduras continuas (solo en OnUpdate: van con los efectos continuos del estado)
-        "SpawnBloodTime", "SpawnRandomObjectsOverTime"
+        "SpawnBloodTime", "SpawnRandomObjectsOverTime",
+        // Dónde se ve un efecto que su lógica coloca (ver ShouldRunEffect)
+        "SetPosition",
+        // El final que viene después (ver ShouldRunEffect)
+        "SetStaticVariable",
+        // Los avisos por registro que solo dan efectos de su ataque (ver ShouldRunEffect)
+        "SendEventToRegister",
+        // Lo que mueve de la sala con una animación (ver ShouldRunEffect)
+        "iTweenMoveTo", "iTweenMoveBy"
     };
+
+    /// <summary>
+    /// Avisos por registro (<c>SendEventToRegister</c>) que la marioneta también da: las burbujas del ataque de Focus del
+    /// Recipiente Puro (cada una es un objeto de la sala que espera BLAST). No salían en los demás PCs. Los demás (abrir
+    /// jaulas, matar a todos los enemigos, el ascensor...) no: son de la lógica del PC que lo mueve.
+    /// </summary>
+    private static readonly HashSet<string> EffectRegisterEvents = new() { "BLAST" };
+
+    /// <summary>
+    /// Lo que la Radiancia Absoluta deja dicho al morir: tras el tiempo del Panteón sale la cinemática del final. Solo lo
+    /// ponía el PC que la movía; los demás veían el tiempo y volvían al Atrio mientras ese veía el final.
+    /// </summary>
+    private const string CinematicEndingVariable = "ggCinematicEnding";
 
     /// <summary>
     /// Acciones de un estado que la marioneta hace cuando el enemigo real entra en él: sonido y música, y lo que se ve
@@ -2045,7 +2258,37 @@ internal sealed class EnemySync {
     private static bool IsEffectAction(HutongGames.PlayMaker.FsmStateAction action) {
         var name = action.GetType().Name;
         return name.IndexOf("Audio", StringComparison.Ordinal) >= 0 || name.IndexOf("Sound", StringComparison.Ordinal) >= 0 ||
-               name.IndexOf("Music", StringComparison.Ordinal) >= 0 || EffectActions.Contains(name) || IsAreaTitleAction(action);
+               name.IndexOf("Music", StringComparison.Ordinal) >= 0 || EffectActions.Contains(name) || IsAreaTitleAction(action) ||
+               IsHeroRespawnAction(action);
+    }
+
+    /// <summary>
+    /// La reaparición tras los pinchos que la lógica del jefe pone al caballero (ver ShouldRunEffect). Solo esa llamada:
+    /// las demás <c>CallMethodProper</c> son de su lógica. Antes no contaba como efecto y la marioneta no la hacía: en la
+    /// Radiancia Absoluta, los que no la movían seguían reapareciendo en el suelo de la arena, ya dentro del abismo.
+    /// </summary>
+    private static bool IsHeroRespawnAction(HutongGames.PlayMaker.FsmStateAction action) =>
+        action is HutongGames.PlayMaker.Actions.CallMethodProper { methodName.Value: "SetHazardRespawn" };
+
+    private static bool MovesSceneObject(Enemy enemy, GameObject moved) {
+        var hero = HeroController.instance;
+        return moved != null && enemy.Root != null && moved != enemy.Root && !moved.transform.IsChildOf(enemy.Root.transform) &&
+               (hero == null || !moved.transform.IsChildOf(hero.transform)) &&
+               moved.GetComponentInChildren<HealthManager>() == null && !IsEnemyObject(moved.transform);
+    }
+
+    private static bool IsPartOf(Enemy enemy, Transform transform) {
+        if (enemy.Parts == null) {
+            return false;
+        }
+
+        foreach (var part in enemy.Parts) {
+            if (part.Transform == transform) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private const string AreaTitleVariable = "Area Title";
@@ -2073,6 +2316,28 @@ internal sealed class EnemySync {
     /// </summary>
     private static bool ShouldRunEffect(Enemy enemy, HutongGames.PlayMaker.FsmStateAction action) {
         switch (action) {
+            case SetStaticVariable staticVariable:
+                return staticVariable.variableName?.Value == CinematicEndingVariable;
+            // Algo de la sala que su lógica mueve con una animación: el abismo que sube en la Radiancia Absoluta (en los demás
+            // PCs no subía: ni se veía ni empujaba a subir). Él mismo y sus piezas no (van por su posición), ni el caballero
+            // ni otro enemigo
+            case HutongGames.PlayMaker.Actions.iTweenMoveTo moveTo:
+                return MovesSceneObject(enemy, action.Fsm.GetOwnerDefaultTarget(moveTo.gameObject));
+            case HutongGames.PlayMaker.Actions.iTweenMoveBy moveBy:
+                return MovesSceneObject(enemy, action.Fsm.GetOwnerDefaultTarget(moveBy.gameObject));
+            case HutongGames.PlayMaker.Actions.SendEventToRegister register:
+                return register.eventName?.Value != null && EffectRegisterEvents.Contains(register.eventName.Value);
+            // Un efecto que su lógica pone en un punto (la carga del orbe del Maestro de Almas, en el punto al azar donde
+            // saldrá): el punto llega con las variables del efecto. Sin esto la carga salía donde estuviera y el orbe en otro
+            // sitio. Solo lo que solo se ve: ni él mismo ni sus piezas (van por su posición), ni el caballero, ni lo que
+            // tiene vida, daño o choque
+            case HutongGames.PlayMaker.Actions.SetPosition setPosition:
+                var moved = action.Fsm.GetOwnerDefaultTarget(setPosition.gameObject);
+                var movedHero = HeroController.instance;
+                return moved != null && enemy.Root != null && moved != enemy.Root &&
+                       (movedHero == null || !moved.transform.IsChildOf(movedHero.transform)) &&
+                       moved.GetComponent<HealthManager>() == null && moved.GetComponent<DamageHero>() == null &&
+                       moved.GetComponent<Collider2D>() == null && !IsPartOf(enemy, moved.transform);
             // La reaparición tras los pinchos es para el caballero de cada PC (la Radiancia la sube con la pelea en
             // `Climb Plats1`): sin ella, el compañero que caía al abismo reaparecía en el punto viejo
             case HutongGames.PlayMaker.Actions.CallMethodProper { methodName.Value: "SetHazardRespawn" } respawn:
@@ -2184,11 +2449,11 @@ internal sealed class EnemySync {
     }
 
     /// <summary>
-    /// Aviso a todos que manda un jefe ya muerto en el PC que lo mueve: ya no es su lógica de combate sino lo que sigue en la
-    /// sala tras vencerlo (Grimm manda GRIMM DEFEATED para que aparezca el Grimm que se inclina y habla). En la marioneta
-    /// su lógica está parada y ese aviso no salía, así que en este PC no pasaba nada tras el combate.
+    /// Aviso a todos que manda el enemigo en el PC que lo mueve. Ya muerto, es lo que sigue en la sala tras vencerlo (Grimm
+    /// manda GRIMM DEFEATED para que aparezca el Grimm que se inclina y habla; ver BroadcastFromDead); vivo, lo que cambia
+    /// la sala durante el combate (ver BroadcastToRoom). En la marioneta su lógica está parada y ese aviso no salía.
     /// </summary>
-    private static bool IsDeathBroadcast(HutongGames.PlayMaker.FsmStateAction action, out string eventName) {
+    private static bool IsBroadcast(HutongGames.PlayMaker.FsmStateAction action, out string eventName) {
         eventName = null;
         if (action is not HutongGames.PlayMaker.Actions.SendEventByName send ||
             send.eventTarget.target != HutongGames.PlayMaker.FsmEventTarget.EventTarget.BroadcastAll) {
@@ -2197,6 +2462,32 @@ internal sealed class EnemySync {
 
         eventName = send.sendEvent?.Value;
         return !string.IsNullOrEmpty(eventName);
+    }
+
+    /// <summary>
+    /// Aviso a todos de un enemigo vivo, en la marioneta: solo a los objetos de la sala que lo esperan en su estado de ahora
+    /// y que lleva cada PC por su cuenta. El Falso Caballero manda FK RAGE COMPLETE para que el suelo se pueda romper; en
+    /// la marioneta su lógica está parada y ese suelo seguía entero en los demás PCs. Los objetos compartidos (rejas,
+    /// ascensores...) siguen al PC que los mueve, los enemigos tienen su propia lógica y lo persistente o del caballero no
+    /// es de la sala.
+    /// </summary>
+    private static void BroadcastToRoom(Enemy enemy, string eventName) {
+        var hero = HeroController.instance;
+        var receivers = new List<PlayMakerFSM>();
+        foreach (var fsm in PlayMakerFSM.FsmList) {
+            if (fsm == null || !fsm.enabled || !fsm.gameObject.activeInHierarchy || fsm.gameObject.scene.buildIndex < 0 ||
+                IsEnemyObject(fsm.transform) || FsmStateSync.IsSharedController(fsm.Fsm) ||
+                hero != null && fsm.transform.IsChildOf(hero.transform) || !Handles(fsm.Fsm, eventName)) {
+                continue;
+            }
+
+            receivers.Add(fsm);
+        }
+
+        foreach (var fsm in receivers) {
+            Log.Info($"{fsm.gameObject.name}/{fsm.FsmName}: {eventName} de {enemy.Root.name}, como en el PC que lo mueve");
+            fsm.SendEvent(eventName);
+        }
     }
 
     /// <summary>
@@ -2286,14 +2577,15 @@ internal sealed class EnemySync {
         // Y a qué objetos apuntan (él mismo, el caballero...): una marioneta que se activó ya parada (las de las jaulas
         // del Coliseo) nunca preparó su lógica y los tiene vacíos, y sus sonidos fallarían
         var objects = variables.GameObjectVariables;
-        var objectCount = Math.Min(objects.Length, MaxEffectVectors);
+        var objectCount = Math.Min(objects.Length, MaxEffectObjects);
         writer.WriteByte((byte) objectCount);
         for (var i = 0; i < objectCount; i++) {
             var reference = Reference(sound.Enemy, objects[i].Value);
-            // Los de la sala no: buscarlos recorre la sala, y esto pasa en cada efecto
-            var kind = reference.Kind == ObjectKind.Scene ? ObjectKind.None : reference.Kind;
-            writer.WriteByte((byte) kind);
-            if (kind == ObjectKind.Own) {
+            // También los de la sala (por su ruta): la marioneta solo los busca si los tiene vacíos, con una tabla de la
+            // sala que se hace una vez. Sin ellos, la Radiancia Absoluta (su lógica nunca arrancó en las marionetas) no
+            // tenía a quién avisar y sus plataformas solo aparecían y desaparecían en el PC que la movía
+            writer.WriteByte((byte) reference.Kind);
+            if (reference.Kind is ObjectKind.Own or ObjectKind.Scene) {
                 writer.WriteUInt(reference.Path);
             }
         }
@@ -2303,6 +2595,11 @@ internal sealed class EnemySync {
         // de entonces son de su combate
         var health = sound.Enemy.Health;
         writer.WriteBool(sound.Enemy.ZeroHp || sound.Enemy.DeathState || health != null && health.isDead);
+
+        // Hasta qué acción llegó el estado: una que cambia de estado corta las siguientes. "Roar?" del Defensor del
+        // Estiércol mira si ya rugió y, si es así, sale sin hacer nada; la marioneta repetía todos sus efectos y en los
+        // demás PCs rugía y salía su nombre cada vez que salía de la tierra
+        writer.WriteUShort(fsm.ActiveState != state ? (ushort) Math.Max(0, state.ActiveActionIndex) : ushort.MaxValue);
         _session.End();
     }
 
@@ -2348,7 +2645,7 @@ internal sealed class EnemySync {
         var objectCount = reader.ReadByte();
         for (var i = 0; i < objectCount; i++) {
             var reference = new ObjectRef { Kind = (ObjectKind) reader.ReadByte() };
-            if (reference.Kind == ObjectKind.Own) {
+            if (reference.Kind is ObjectKind.Own or ObjectKind.Scene) {
                 reference.Path = reader.ReadUInt();
             }
 
@@ -2359,6 +2656,7 @@ internal sealed class EnemySync {
         }
 
         var deadThere = reader.ReadBool();
+        var ranTo = reader.ReadUShort();
         if (!valid) {
             return;
         }
@@ -2378,11 +2676,19 @@ internal sealed class EnemySync {
 
         // Solo sus efectos (sonido y arena); la lógica de la marioneta sigue parada
         var state = states[stateIndex];
+        if (state.Name == FinaleState && enemy.Root.name == FinaleBoss) {
+            StartFinale(enemy, enemy.Fsms[fsmIndex]);
+            return;
+        }
+
+        NoteAttackListen(enemy, fsmIndex, state);
         if (TestMode) {
             Log.Info($"[TEST] efecto de enemigo {enemy.Fsms[fsmIndex].gameObject.name}/{enemy.Fsms[fsmIndex].FsmName}/{state.Name}");
         }
 
-        foreach (var action in state.Actions) {
+        var actions = state.Actions;
+        for (var actionIndex = 0; actionIndex < actions.Length && actionIndex <= ranTo; actionIndex++) {
+            var action = actions[actionIndex];
             var detach = action as HutongGames.PlayMaker.Actions.SetParent;
             if (!action.Enabled || !IsEffectAction(action) && detach == null) {
                 continue;
@@ -2395,8 +2701,13 @@ internal sealed class EnemySync {
                     continue;
                 }
 
-                if (deadThere && IsDeathBroadcast(action, out var deathEvent)) {
-                    BroadcastFromDead(enemy, deathEvent);
+                if (IsBroadcast(action, out var broadcastEvent)) {
+                    if (deadThere) {
+                        BroadcastFromDead(enemy, broadcastEvent);
+                    } else {
+                        BroadcastToRoom(enemy, broadcastEvent);
+                    }
+
                     continue;
                 }
 
@@ -2405,6 +2716,16 @@ internal sealed class EnemySync {
                 }
 
                 EffectsPlayed++;
+                // Con retraso, el juego lo deja en la cola de su FSM, que en la marioneta está parada y no la atiende nunca
+                // (el cartel del Recipiente Puro, que sube a los 0,5 s del rugido): se envía desde aquí a su hora
+                if (action is HutongGames.PlayMaker.Actions.SendEventByName { everyFrame: false } delayed &&
+                    delayed.delay != null && delayed.delay.Value > 0f) {
+                    _delayedSends.Add(new DelayedSend {
+                        Enemy = enemy, State = state, Action = delayed, At = Time.time + delayed.delay.Value
+                    });
+                    continue;
+                }
+
                 _replaying = true;
                 try {
                     action.OnEnter();
@@ -2416,8 +2737,9 @@ internal sealed class EnemySync {
             }
         }
 
-        // Y los que siguen cada frame mientras su FSM esté en ese estado allí (hasta que llegue el siguiente)
-        if (_soundFsms.TryGetValue(enemy.Fsms[fsmIndex].Fsm, out var sound) && sound.Continuous != null &&
+        // Y los que siguen cada frame mientras su FSM esté en ese estado allí (hasta que llegue el siguiente). No si allí
+        // salió del estado al entrar
+        if (ranTo == ushort.MaxValue && _soundFsms.TryGetValue(enemy.Fsms[fsmIndex].Fsm, out var sound) && sound.Continuous != null &&
             stateIndex < sound.Continuous.Length && sound.Continuous[stateIndex] is { } continuous) {
             foreach (var action in continuous) {
                 action.Init(state);
@@ -2456,6 +2778,40 @@ internal sealed class EnemySync {
             run();
         } finally {
             ease.finishEvent = finish;
+        }
+    }
+
+    /// <summary>Los eventos con retraso de las marionetas que ya tocan, sin retraso (ver <see cref="DelayedSend"/>).</summary>
+    private void UpdateDelayedSends() {
+        if (_delayedSends.Count == 0) {
+            return;
+        }
+
+        var now = Time.time;
+        for (var i = _delayedSends.Count - 1; i >= 0; i--) {
+            var pending = _delayedSends[i];
+            if (now < pending.At) {
+                continue;
+            }
+
+            _delayedSends.RemoveAt(i);
+            if (!pending.Enemy.Puppet || pending.Enemy.Root == null) {
+                continue;
+            }
+
+            var send = pending.Action;
+            var delay = send.delay.Value;
+            send.delay.Value = 0f;
+            _replaying = true;
+            try {
+                send.Init(pending.State);
+                send.OnEnter();
+            } catch (Exception e) {
+                Log.Warn($"Evento con retraso de {pending.Enemy.Root.name} ({pending.State.Name}) no enviado: {e.Message}");
+            } finally {
+                send.delay.Value = delay;
+                _replaying = false;
+            }
         }
     }
 
@@ -2570,66 +2926,11 @@ internal sealed class EnemySync {
             if (enemy.Dying && InScene(current)) {
                 continue;
             }
-            var position = enemy.Transform.position;
-            var moving = MovingFast(enemy, position, now);
-            var interval = enemy.Health.hp >= BossHp ? BossSwitchInterval : SwitchInterval;
-            if (now - enemy.LastSwitch < interval && !currentDown || moving && !currentDown) {
-                continue;
-            }
 
-            // Los que están dentro de su zona de alerta van primero: su lógica solo ataca si su caballero está dentro.
-            // El Rey Vengamosca se iba a esperar a su sitio ("Lurk") siguiendo al más cercano, fuera de la zona, mientras
-            // el otro peleaba dentro, y se quedaba mucho rato sin atacar
-            var zone = AlertZone(enemy);
-            var currentInZone = false;
-            var currentDistance = float.MaxValue;
-            if (!currentDown && TryGetPlayerPosition(current, out var currentPosition)) {
-                currentDistance = Vector2.Distance(position, currentPosition);
-                currentInZone = InZone(zone, currentPosition);
-            }
-
-            var nearest = current;
-            var nearestDistance = currentDistance;
-            var nearestInZone = currentInZone;
-            foreach (var player in _session.Players) {
-                if (player.Scene != _scene || player.Id == current || Features.PartyState.IsInactive(player.Id) ||
-                    !TryGetPlayerPosition(player.Id, out var playerPosition)) {
-                    continue;
-                }
-
-                var distance = Vector2.Distance(position, playerPosition);
-                var inZone = InZone(zone, playerPosition);
-                if (inZone && !nearestInZone || inZone == nearestInZone && distance < nearestDistance) {
-                    nearest = player.Id;
-                    nearestDistance = distance;
-                    nearestInZone = inZone;
-                }
-            }
-
-            // Dentro de su zona, el otro tiene que estar bastante más cerca para quitárselo: el Rey Vengamosca vuela a 13
-            // de su caballero y quedaba más cerca del otro, pasaba a él, volaba hacia ese y volvía a quedar más cerca del
-            // primero; cada cambio lo hacía esperar otra vez para atacar y se quedaba en el aire
-            var margin = zone != null && currentInZone && nearestInZone ? ZoneSwitchMargin : SwitchMargin;
-            if (nearest != current && (currentDown || nearestInZone && !currentInZone ||
-                                       currentDistance - nearestDistance > margin)) {
-                // Un jefe espera a acabar su ataque (salvo si quien lo mueve ya no juega)
-                if (!currentDown && enemy.Health.hp >= BossHp && !IsCalm(enemy, current)) {
-                    if (enemy.SwitchWantedSince <= 0f) {
-                        enemy.SwitchWantedSince = now;
-                    }
-
-                    if (now - enemy.SwitchWantedSince < MaxCalmWait) {
-                        continue;
-                    }
-
-                    Log.Info($"{enemy.Root.name}: no reposó en {MaxCalmWait} s, pasa a otro PC a mitad de su ataque");
-                }
-
-                enemy.SwitchWantedSince = 0f;
-                _controlOut.Add((enemy.Id, nearest));
-                ApplyControl(enemy, nearest);
-            } else {
-                enemy.SwitchWantedSince = 0f;
+            var next = PickController(enemy, current, null, now);
+            if (next != 0) {
+                _controlOut.Add((enemy.Id, next));
+                ApplyControl(enemy, next);
             }
         }
 
@@ -2648,6 +2949,77 @@ internal sealed class EnemySync {
     }
 
     private readonly List<Enemy> _childScratch = new();
+
+    /// <summary>
+    /// A qué PC pasa el enemigo (0: se queda con el de ahora): el del jugador más cercano, con preferencia por los que
+    /// están en su zona de alerta, sin cambiar a cada momento y un jefe solo entre dos ataques. Con
+    /// <paramref name="holders"/>, solo entre esos PCs (los que tienen un enemigo que el dueño de la sala no tiene).
+    /// </summary>
+    private ushort PickController(Enemy enemy, ushort current, HashSet<ushort> holders, float now) {
+        var currentDown = Features.PartyState.IsInactive(current);
+        var position = enemy.Transform.position;
+        var moving = MovingFast(enemy, position, now);
+        var interval = enemy.Health.hp >= BossHp ? BossSwitchInterval : SwitchInterval;
+        if (now - enemy.LastSwitch < interval && !currentDown || moving && !currentDown) {
+            return 0;
+        }
+
+        // Los que están dentro de su zona de alerta van primero: su lógica solo ataca si su caballero está dentro.
+        // El Rey Vengamosca se iba a esperar a su sitio ("Lurk") siguiendo al más cercano, fuera de la zona, mientras
+        // el otro peleaba dentro, y se quedaba mucho rato sin atacar
+        var zone = AlertZone(enemy);
+        var currentInZone = false;
+        var currentDistance = float.MaxValue;
+        if (!currentDown && TryGetPlayerPosition(current, out var currentPosition)) {
+            currentDistance = Vector2.Distance(position, currentPosition);
+            currentInZone = InZone(zone, currentPosition);
+        }
+
+        var nearest = current;
+        var nearestDistance = currentDistance;
+        var nearestInZone = currentInZone;
+        foreach (var player in _session.Players) {
+            if (player.Scene != _scene || player.Id == current || Features.PartyState.IsInactive(player.Id) ||
+                holders != null && !holders.Contains(player.Id) ||
+                !TryGetPlayerPosition(player.Id, out var playerPosition)) {
+                continue;
+            }
+
+            var distance = Vector2.Distance(position, playerPosition);
+            var inZone = InZone(zone, playerPosition);
+            if (inZone && !nearestInZone || inZone == nearestInZone && distance < nearestDistance) {
+                nearest = player.Id;
+                nearestDistance = distance;
+                nearestInZone = inZone;
+            }
+        }
+
+        // Dentro de su zona, el otro tiene que estar bastante más cerca para quitárselo: el Rey Vengamosca vuela a 13
+        // de su caballero y quedaba más cerca del otro, pasaba a él, volaba hacia ese y volvía a quedar más cerca del
+        // primero; cada cambio lo hacía esperar otra vez para atacar y se quedaba en el aire
+        var margin = zone != null && currentInZone && nearestInZone ? ZoneSwitchMargin : SwitchMargin;
+        if (nearest != current && (currentDown || nearestInZone && !currentInZone ||
+                                   currentDistance - nearestDistance > margin)) {
+            // Un jefe espera a acabar su ataque (salvo si quien lo mueve ya no juega)
+            if (!currentDown && enemy.Health.hp >= BossHp && !IsCalm(enemy, current)) {
+                if (enemy.SwitchWantedSince <= 0f) {
+                    enemy.SwitchWantedSince = now;
+                }
+
+                if (now - enemy.SwitchWantedSince < MaxCalmWait) {
+                    return 0;
+                }
+
+                Log.Info($"{enemy.Root.name}: no reposó en {MaxCalmWait} s, pasa a otro PC a mitad de su ataque");
+            }
+
+            enemy.SwitchWantedSince = 0f;
+            return nearest;
+        }
+
+        enemy.SwitchWantedSince = 0f;
+        return 0;
+    }
 
     /// <summary>
     /// Si un caballero en esa posición toca la zona: el juego mira si su caja la toca, no su centro, así que la zona se
@@ -2848,6 +3220,80 @@ internal sealed class EnemySync {
                 enemy.HandoverReady = false;
                 enemy.HandoverFrom = 0;
             }
+        }
+    }
+
+    /// <summary>Avisa de que este PC tiene el enemigo que el dueño de la sala no tiene.</summary>
+    private void AnnounceOrphan(Enemy enemy) {
+        if (enemy.OrphanHolders == null) {
+            Log.Info($"{enemy.Root.name}: el dueño de la sala no lo tiene; lo mueve uno de los que sí");
+        }
+
+        enemy.OrphanHolders ??= new HashSet<ushort>();
+        enemy.OrphanHolders.Add(_session.LocalId);
+        SendOrphan(enemy, 0);
+        StartOrphan(enemy);
+    }
+
+    private void SendOrphan(Enemy enemy, ushort controller) {
+        var writer = _session.Begin(EnemyOrphan);
+        writer.WriteUShort(_sceneHash);
+        writer.WriteUInt(enemy.Id);
+        writer.WriteUShort(controller);
+        _session.End();
+    }
+
+    private void OnOrphan(SessionPlayer from, PacketReader reader) {
+        var sceneHash = reader.ReadUShort();
+        var id = reader.ReadUInt();
+        var controller = reader.ReadUShort();
+        if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var enemy)) {
+            return;
+        }
+
+        if (controller != 0) {
+            // Solo lo decide el que lo reparte
+            if (enemy.OrphanHolders != null && from.Id == OrphanAssigner(enemy)) {
+                ApplyControl(enemy, controller);
+            }
+
+            return;
+        }
+
+        var announced = enemy.OrphanHolders != null && enemy.OrphanHolders.Contains(_session.LocalId);
+        enemy.OrphanHolders ??= new HashSet<ushort>();
+        enemy.OrphanHolders.Add(from.Id);
+        // Este PC también lo tiene: lo dice, para que quien lo reparte cuente con él
+        if (!announced && _session.CanSend && _session.OwnerOf(_scene) != _session.LocalId) {
+            AnnounceOrphan(enemy);
+        } else {
+            StartOrphan(enemy);
+        }
+    }
+
+    /// <summary>De los que lo tienen y están en la sala, el de número más bajo.</summary>
+    private ushort OrphanAssigner(Enemy enemy) {
+        ushort assigner = 0;
+        foreach (var holder in enemy.OrphanHolders) {
+            if ((holder == _session.LocalId || InScene(holder)) && (assigner == 0 || holder < assigner)) {
+                assigner = holder;
+            }
+        }
+
+        return assigner;
+    }
+
+    /// <summary>Mientras lo sigue moviendo el dueño (que no lo tiene), lo toma el que lo reparte, sin traspaso que esperar.</summary>
+    private void StartOrphan(Enemy enemy) {
+        var owner = _session.OwnerOf(_scene);
+        var assigner = OrphanAssigner(enemy);
+        if (assigner == 0 || enemy.OrphanHolders.Contains(ControllerOf(enemy, owner))) {
+            return;
+        }
+
+        ApplyControl(enemy, assigner);
+        if (assigner == _session.LocalId) {
+            enemy.PreviousController = 0;
         }
     }
 
@@ -3259,6 +3705,7 @@ internal sealed class EnemySync {
                 // Ya estaba en ese estado (parado desde que pasó a marioneta): su espera también va como allí. Antes se
                 // quedaba la de cuando se paró y el arreglo del Rey Vengamosca no valía si los dos estaban en el mismo
                 KeepWaited(fsm.Fsm.ActiveState, data.Waited);
+                RestartAnimationWaits(enemy, fsm.Fsm.ActiveState);
             }
         }
 
@@ -3798,18 +4245,45 @@ internal sealed class EnemySync {
 
                 return null;
             case ObjectKind.Scene:
-                // Raro (solo variables vacías al retomarlo) y caro: se recorre la sala
-                foreach (var candidate in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include,
-                             FindObjectsSortMode.None)) {
-                    if (candidate.gameObject.scene.buildIndex >= 0 && ScenePaths.StableHash(candidate) == reference.Path) {
-                        return candidate.gameObject;
-                    }
-                }
-
-                return null;
+                return FindScenePath(reference.Path);
             default:
                 return null;
         }
+    }
+
+    /// <summary>Objetos de la sala por la huella de su ruta (ver <see cref="FindScenePath"/>), de la sala de <see cref="_scenePathsOf"/>.</summary>
+    private static readonly Dictionary<uint, GameObject> ScenePathTable = new();
+
+    private static string _scenePathsOf;
+
+    private static float _scenePathsAt;
+
+    /// <summary>
+    /// El objeto de la sala con esa ruta. Recorrer la sala es caro: se hace una tabla la primera vez y se rehace si no
+    /// está (lo que se carga después, como la parte del jefe) como mucho una vez por segundo.
+    /// </summary>
+    private static GameObject FindScenePath(uint path) {
+        var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+        if (_scenePathsOf == scene && ScenePathTable.TryGetValue(path, out var known) && known != null) {
+            return known;
+        }
+
+        var now = Time.unscaledTime;
+        if (_scenePathsOf == scene && now - _scenePathsAt < 1f) {
+            return null;
+        }
+
+        _scenePathsOf = scene;
+        _scenePathsAt = now;
+        ScenePathTable.Clear();
+        foreach (var candidate in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include,
+                     FindObjectsSortMode.None)) {
+            if (candidate.gameObject.scene.buildIndex >= 0) {
+                ScenePathTable[ScenePaths.StableHash(candidate)] = candidate.gameObject;
+            }
+        }
+
+        return ScenePathTable.TryGetValue(path, out var found) ? found : null;
     }
 
     /// <summary>Huella de la ruta de una pieza dentro del enemigo (0: el propio enemigo).</summary>
@@ -3865,6 +4339,38 @@ internal sealed class EnemySync {
         }
 
         return 0f;
+    }
+
+    /// <summary>
+    /// Al retomarlo en el mismo estado en que su lógica se quedó parada aquí: lo que espera el final de una animación ya no
+    /// lo va a recibir (esa animación acabó hace rato, o la marioneta puso otras encima). Se vuelve a poner como al
+    /// entrar en el estado. La Radiancia Absoluta se quedaba para siempre en el aire: su FSM de teletransporte esperaba el
+    /// final de "Tele Out" de un teletransporte anterior y el PC que la tomó en la subida no la volvía a lanzar.
+    /// </summary>
+    private static void RestartAnimationWaits(Enemy enemy, HutongGames.PlayMaker.FsmState state) {
+        if (state == null) {
+            return;
+        }
+
+        foreach (var action in state.Actions) {
+            var waits = action switch {
+                HutongGames.PlayMaker.Actions.Tk2dPlayAnimationWithEvents play =>
+                    play.animationCompleteEvent != null || play.animationTriggerEvent != null,
+                HutongGames.PlayMaker.Actions.Tk2dWatchAnimationEvents => true,
+                _ => false
+            };
+            if (!action.Enabled || !waits) {
+                continue;
+            }
+
+            try {
+                action.Finished = false;
+                action.OnEnter();
+                Log.Info($"{enemy.Root.name}/{state.Fsm.Name}: al retomarlo en {state.Name} vuelve a esperar su animación");
+            } catch (Exception e) {
+                Log.Warn($"{enemy.Root.name}/{state.Name}: no se pudo volver a lanzar su animación ({e.Message})");
+            }
+        }
     }
 
     private static void KeepWaited(HutongGames.PlayMaker.FsmState state, float waited) {
@@ -4530,17 +5036,33 @@ internal sealed class EnemySync {
     /// la mueve. La Radiancia se quedaba en "Abyss Up" si subía primero un jugador que no era el que la movía.
     /// </summary>
     private void ForwardBroadcast(HutongGames.PlayMaker.Actions.SendEventByName send) {
+        var targetKind = send.eventTarget?.target;
         if (_session == null || !_session.CanSend || _replaying || _playingFx || _spawningCopy ||
-            FsmStateSync.IsApplyingRemote || send.eventTarget?.target != HutongGames.PlayMaker.FsmEventTarget.EventTarget.BroadcastAll) {
+            FsmStateSync.IsApplyingRemote || targetKind != HutongGames.PlayMaker.FsmEventTarget.EventTarget.BroadcastAll &&
+            targetKind != HutongGames.PlayMaker.FsmEventTarget.EventTarget.GameObject) {
             return;
         }
 
-        // Los de un enemigo son de su lógica y los de un controlador compartido pasan en todos los PCs
+        // Los de un enemigo son de su lógica y los de un controlador compartido pasan en todos los PCs. Los de la copia
+        // de otro PC ya los manda ese PC con su original
         var sender = send.Fsm;
         var eventName = send.sendEvent?.Value;
         if (sender == null || string.IsNullOrEmpty(eventName) || _enemyFsms.ContainsKey(sender) ||
-            FsmStateSync.IsSharedController(sender)) {
+            FsmStateSync.IsSharedController(sender) || FsmStateSync.IsRemoteCopy(sender.GameObject)) {
             return;
+        }
+
+        // A un objeto concreto: el TAKE DAMAGE que el tajo del aguijón (su FSM damages_enemy) manda a lo que golpea.
+        // PlayMaker solo se lo da a las FSM encendidas, y las de una marioneta están paradas: el Rey Vengamosca no se
+        // soltaba de su percha ni soltaba a Zote si le pegaba un jugador que no lo movía
+        GameObject targetObject = null;
+        var toChildren = false;
+        if (targetKind == HutongGames.PlayMaker.FsmEventTarget.EventTarget.GameObject) {
+            targetObject = sender.GetOwnerDefaultTarget(send.eventTarget.gameObject);
+            toChildren = send.eventTarget.sendToChildren?.Value == true;
+            if (targetObject == null) {
+                return;
+            }
         }
 
         foreach (var enemy in _enemies) {
@@ -4550,6 +5072,11 @@ internal sealed class EnemySync {
 
             for (var i = 0; i < enemy.Fsms.Length && i <= byte.MaxValue; i++) {
                 var fsm = enemy.Fsms[i];
+                if (fsm != null && targetObject != null && fsm.gameObject != targetObject &&
+                    (!toChildren || !fsm.transform.IsChildOf(targetObject.transform))) {
+                    continue;
+                }
+
                 if (fsm != null && !fsm.enabled && HandlesAnywhere(fsm.Fsm, eventName)) {
                     Log.Info($"{enemy.Root.name}/{fsm.FsmName}: {eventName} de {sender.GameObjectName}, al PC que lo mueve");
                     ForwardEvent(enemy, (byte) i, eventName);
@@ -4915,9 +5442,18 @@ internal sealed class EnemySync {
             satellite.enabled = true;
         }
 
+        // Lo que enseñaban se apaga, y su choque también: un rayo a medias seguía dañando al que lo tocaba
         foreach (var part in enemy.Parts ?? Array.Empty<Part>()) {
-            if (part.Key != 0 && part.Renderer != null) {
+            if (part.Key == 0) {
+                continue;
+            }
+
+            if (part.Renderer != null) {
                 part.Renderer.enabled = false;
+            }
+
+            if (part.Damage != null && part.Collider != null) {
+                part.Collider.enabled = false;
             }
         }
     }
@@ -5773,6 +6309,7 @@ internal sealed class EnemySync {
             if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var enemy) && enemy.Puppet &&
                 ControllerOf(enemy, _session.OwnerOf(_scene)) == from.Id) {
                 enemy.Buffer.Add(_incoming, time, reliableTiming);
+                enemy.LastStateAt = Time.unscaledTime;
                 // El dueño espera a que repose para pasarlo a otro: lo hace ya, sin esperar al siguiente reparto
                 var calm = (flags & CalmStateFlag) != 0;
                 if (calm && !enemy.RemoteCalm && enemy.SwitchWantedSince > 0f) {
@@ -6351,6 +6888,12 @@ internal sealed class EnemySync {
                     sync.OnFsmState(self, self.ActiveState);
                 }
             }
+
+            // Ya avisado a los demás (llevan el mismo estado): desde aquí su final es de este PC
+            if (sync?._session != null && toState?.Name == FinaleState && sync._enemyFsms.TryGetValue(self, out var finale) &&
+                !finale.Enemy.Puppet && finale.Enemy.Root != null && finale.Enemy.Root.name == FinaleBoss) {
+                sync.StartFinale(finale.Enemy, null);
+            }
         };
 
         // Lo que crea la lógica de los enemigos reales (proyectiles, crías, efectos)
@@ -6390,8 +6933,13 @@ internal sealed class EnemySync {
             }
 
             // El remitente antes de procesarlo: `Fsm.EventData` es estático y los avisos que se mandan dentro lo cambian.
-            // Con `eventData` se usa ese (si su remitente es null, es que no lo tiene: no se toma el estático)
-            var sentBy = eventData != null ? eventData.SentByFsm : HutongGames.PlayMaker.Fsm.EventData?.SentByFsm;
+            // Con `eventData` se usa ese (si su remitente es null, es que no lo tiene: no se toma el estático). Sin él y sin
+            // ninguna FSM ejecutándose, el aviso viene del código del juego (el TAKE DAMAGE del aguijón, en
+            // DamageEnemies) y no tiene remitente: el estático era el de un aviso anterior, a veces de otro enemigo, y el
+            // aviso se tomaba por lógica de ese enemigo y no se reenviaba (el Rey Vengamosca no se soltaba de su percha)
+            var sentBy = eventData != null ? eventData.SentByFsm
+                : HutongGames.PlayMaker.FsmExecutionStack.ExecutingFsm != null ? HutongGames.PlayMaker.Fsm.EventData?.SentByFsm
+                : null;
             orig(self, fsmEvent, eventData);
             var sync = _active;
             if (sync?._session == null || fsmEvent == null || _replaying || _playingFx || _spawningCopy || _settingPuppet ||
@@ -6400,8 +6948,12 @@ internal sealed class EnemySync {
                 return;
             }
 
-            // Los de otro enemigo (o de sí mismo) son de su lógica: ya pasan en el PC que los mueve
-            var sender = sentBy;
+            // Los de otro enemigo son de su lógica: ya pasan en el PC que los mueve. Uno cuyo remitente es la propia FSM no:
+            // PlayMaker pone como remitente a la FSM que recibe un aviso mandado desde código (Fsm.Event), y la lógica de la
+            // marioneta está parada, así que no puede mandárselo ella. Es el TAKE DAMAGE del aguijón de este jugador: antes
+            // se tomaba por lógica del enemigo y no llegaba al PC que lo mueve (el Rey Vengamosca no se soltaba si le
+            // pegaba otro)
+            var sender = sentBy == self ? null : sentBy;
             if (sender != null && (sync._enemyFsms.ContainsKey(sender) || FsmStateSync.IsSharedController(sender))) {
                 return;
             }
@@ -6414,7 +6966,8 @@ internal sealed class EnemySync {
             sync.ForwardEvent(target.Enemy, target.Index, fsmEvent.Name);
         };
 
-        // Los avisos a todos de la sala no llegan a la lógica de una marioneta (parada, fuera de la lista de FSM activas)
+        // Los avisos a todos de la sala, o a un objeto, no llegan a la lógica de una marioneta (parada, fuera de la lista de
+        // FSM activas)
         On.HutongGames.PlayMaker.Actions.SendEventByName.OnEnter += (orig, self) => {
             // A quién saca de su jaula, antes de que salga (al salir deja la jaula)
             var released = _active?.ReleaseTarget(self);
@@ -6839,6 +7392,12 @@ internal sealed class EnemySync {
         foreach (var enemy in _enemies.ToArray()) {
             if (enemy.Root != null && enemy.Root.activeInHierarchy && enemy.Health != null && !enemy.Health.isDead &&
                 (ignoreInvulnerable || CanBeStruck(enemy))) {
+                // Como un aguijonazo (DamageEnemies.DoDamage): primero el aviso TAKE DAMAGE a su FSM. El Rey Vengamosca
+                // colgado despierta con él; sin él, los golpes de prueba lo mataban sin que llegara a soltarse
+                if (!ignoreInvulnerable) {
+                    FSMUtility.SendEventToGameObject(enemy.Health.gameObject, "TAKE DAMAGE");
+                }
+
                 enemy.Health.Hit(new HitInstance {
                     Source = hero.gameObject, AttackType = AttackTypes.Nail, DamageDealt = damage, Multiplier = 1f,
                     MagnitudeMultiplier = 1f, Direction = 0f, IgnoreInvulnerable = ignoreInvulnerable

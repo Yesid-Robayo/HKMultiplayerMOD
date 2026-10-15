@@ -88,6 +88,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Entrar juntos en un Panteón desde su puerta del Atrio.</summary>
     public Features.PantheonTogether Pantheons { get; } = new();
 
+    /// <summary>El Menderbug sale en todos si sale en uno.</summary>
+    public Scene.MenderBugSync MenderBug { get; } = new();
+
     /// <summary>Skins: la propia y las de los demás.</summary>
     public Features.Skins Skins { get; } = new();
 
@@ -320,6 +323,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Cutscenes.Update();
             Presentations.Update();
             Dreams.Update(scene);
+            MenderBug.Update(scene);
             Grimmchild.Update(scene);
             Stag.Update(scene);
             PartnerMap.Update(scene);
@@ -574,6 +578,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Safely(() => { Grimmchild.Detach(); }, "Grimmchild.Detach");
         Safely(() => { Stag.Detach(); }, "Stag.Detach");
         Safely(() => { Pantheons.Detach(); }, "Pantheons.Detach");
+        Safely(() => { MenderBug.Detach(); }, "MenderBug.Detach");
         Safely(() => { Scene.DropSeeds.Enabled = false; }, "Scene.DropSeeds.Enabled");
         Safely(() => { Scene.ScenePaths.Enabled = false; }, "Scene.ScenePaths.Enabled");
         Safely(() => { Scene.ScenePaths.Clear(); }, "Scene.ScenePaths.Clear");
@@ -721,6 +726,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Grimmchild.Attach(session);
         Stag.Attach(session);
         Pantheons.Attach(session);
+        MenderBug.Attach(session);
         Scene.DropSeeds.Enabled = true;
         Scene.ScenePaths.Enabled = true;
         Scene.ScenePaths.RememberLoaded();

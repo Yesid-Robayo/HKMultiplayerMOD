@@ -14,9 +14,12 @@ scene-data-sync
 
 # Jefes
 room Waterways_05 right1
-boss defeatedDungDefender
+# Sobre el suelo y en la zona de su batalla (x 73-79): no despierta a golpes
+both tp 76 10
+wait 2
+fight defeatedDungDefender
 scene-data-sync
 
 room Waterways_12 right1
-boss flukeMotherDefeated host
+fight flukeMotherDefeated
 scene-data-sync

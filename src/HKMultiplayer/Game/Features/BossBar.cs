@@ -34,7 +34,14 @@ internal sealed class BossBar {
         public Renderer Renderer;
         public int MaxHealth;
         public string Name;
+        public Vector3 StartPosition;
+
+        /// <summary>Ya se movió o recibió daño: está peleando (ver <see cref="Engaged"/>).</summary>
+        public bool Engaged;
     }
+
+    /// <summary>Lo que tiene que moverse un jefe desde donde apareció para darlo por despierto.</summary>
+    private const float WakeDistance = 0.5f;
 
     private sealed class Bar {
         public RectTransform Root;
@@ -92,6 +99,12 @@ internal sealed class BossBar {
             return;
         }
 
+        // Solo la vida que reciben los golpes (la primera del objeto): los Señores Mantis de la segunda fase llevan dos, y
+        // la segunda no baja nunca. Cada uno tenía una barra de más, siempre llena
+        if (health.GetComponent<HealthManager>() != health) {
+            return;
+        }
+
         foreach (var tracked in _tracked) {
             if (tracked.Health == health) {
                 return;
@@ -99,7 +112,8 @@ internal sealed class BossBar {
         }
 
         _tracked.Add(new Tracked {
-            Health = health, Renderer = health.GetComponent<Renderer>(), MaxHealth = health.hp, Name = BossName(health)
+            Health = health, Renderer = health.GetComponent<Renderer>(), MaxHealth = health.hp, Name = BossName(health),
+            StartPosition = health.transform.position
         });
     }
 
@@ -177,6 +191,10 @@ internal sealed class BossBar {
                 tracked.MaxHealth = health.hp;
             }
 
+            if (!Engaged(tracked)) {
+                continue;
+            }
+
             var bar = _bars[used++];
             if (!bar.Root.gameObject.activeSelf) {
                 bar.Root.gameObject.SetActive(true);
@@ -203,6 +221,21 @@ internal sealed class BossBar {
 
         // Los avisos (abajo a la derecha) suben por encima de las barras para no pisarlas
         Notice.SetLift(used > 0 ? NoticeLift + (used - 1) * BarStep : 0f);
+    }
+
+    /// <summary>
+    /// Si ya está peleando: se movió desde donde apareció o recibió daño. Los que esperan quietos su turno no tienen barra
+    /// (los seis Caballeros Vigía duermen a la vista en el techo y salían todas las barras a la vez). Se mira así y no por
+    /// su lógica porque en los PCs que no lo mueven está parada.
+    /// </summary>
+    private static bool Engaged(Tracked tracked) {
+        if (!tracked.Engaged) {
+            var health = tracked.Health;
+            tracked.Engaged = health.hp < tracked.MaxHealth ||
+                              (health.transform.position - tracked.StartPosition).sqrMagnitude > WakeDistance * WakeDistance;
+        }
+
+        return tracked.Engaged;
     }
 
     /// <summary>Si el jefe está a la vista (o cerca del borde): antes de que aparezca no se muestra su barra.</summary>
@@ -329,7 +362,13 @@ internal sealed class BossBar {
         var text = new StringBuilder();
         foreach (var tracked in _tracked) {
             if (tracked.Health != null) {
-                text.Append($"{tracked.Name} {tracked.Health.hp}/{tracked.MaxHealth}; ");
+                var health = tracked.Health;
+                var camera = GameCameras.instance != null ? GameCameras.instance.mainCamera : null;
+                var path = health.transform.parent != null ? $"{health.transform.parent.name}/{health.name}" : health.name;
+                text.Append($"{tracked.Name} {health.hp}/{tracked.MaxHealth} [{path} id={health.GetInstanceID()} " +
+                            $"activo={health.gameObject.activeInHierarchy} muerto={health.isDead} " +
+                            $"visible={(camera != null && OnScreen(camera, tracked))} " +
+                            $"pos=({health.transform.position.x:0.0},{health.transform.position.y:0.0})]; ");
             }
         }
 

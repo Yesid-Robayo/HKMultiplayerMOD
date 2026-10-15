@@ -70,6 +70,22 @@ internal sealed class PantheonTogether {
         }
 
         _hooked = true;
+        // Volver al Atrio por la puerta de un Panteón (al morir dentro): el juego entra por "door_dreamReturn" y luego la
+        // cambia por la de esa puerta (bossReturnEntryGate), pero la puerta solo enciende su lado abierto (donde está la
+        // vuelta) si el Panteón está desbloqueado o si se entra por ella, y lo mira antes del cambio. Jugando solo siempre
+        // lo está; aquí se entra con el compañero que lo empezó, y quien no lo tenía desbloqueado no encontraba la puerta:
+        // se quedaba tumbado entrando en la sala para siempre y el juego lo seguía dando por dentro del Panteón
+        On.BossSequenceDoor.IsEnteringFromGate += (orig, self) => {
+            if (orig(self)) {
+                return true;
+            }
+
+            var gm = GameManager.instance;
+            var pd = PlayerData.instance;
+            return _active != null && gm != null && pd != null && self.dreamReturnGate != null &&
+                   gm.GetEntryGateName() == "door_dreamReturn" && pd.GetString("bossReturnEntryGate") == self.dreamReturnGate.name;
+        };
+
         // El botón de empezar del cuadro de la puerta: la secuencia ya está preparada al volver
         On.BossDoorChallengeUI.Begin += (orig, self) => {
             orig(self);
@@ -114,6 +130,12 @@ internal sealed class PantheonTogether {
         var controller = BossSceneController.Instance;
         if (gm == null || gm.sceneName != scene || !BossSequenceController.IsInSequence || controller == null ||
             HeroController.instance == null || HeroController.instance.cState.dead) {
+            return;
+        }
+
+        // El final del Panteón de Hallownest lo sigue cada PC por su cuenta: cada uno acaba la sala al terminarlo
+        if (Scene.EnemySync.FinaleRunning) {
+            Log.Info($"{from.Name} acabó {scene} del Panteón: este PC sigue con su final");
             return;
         }
 
@@ -233,6 +255,33 @@ internal sealed class PantheonTogether {
         Notice.Show(Lang.T($"Panteón con {from.Name}", $"Pantheon with {from.Name}"), 4f);
     }
 
+    private const string WhiteBlanker = "HUD Blanker White";
+
+    /// <summary>
+    /// Como el juego entre los jefes del Panteón (la salida de cada sala): la pantalla se cubre de blanco al momento y el
+    /// viaje no funde la cámara a negro; en la sala del jefe se destapa el blanco. Sin esto la cámara fundía a negro y se
+    /// quedaba esperando su "FADE OUT COMPLETE", que en ese viaje no llega: los compañeros que entraban con el que empezó
+    /// se quedaban con la pantalla negra.
+    /// </summary>
+    private static void CoverWithWhite() {
+        var blanker = HutongGames.PlayMaker.FsmVariables.GlobalVariables.FindFsmGameObject(WhiteBlanker)?.Value;
+        var control = blanker != null ? PlayMakerFSM.FindFsmOnGameObject(blanker, "Blanker Control") : null;
+        if (control != null) {
+            var fadeTime = control.FsmVariables.FindFsmFloat("Fade Time");
+            if (fadeTime != null) {
+                fadeTime.Value = 0f;
+            }
+
+            control.SendEvent("FADE IN");
+        }
+
+        var cameraFade = GameCameras.instance != null ? GameCameras.instance.cameraFadeFSM : null;
+        var noFade = cameraFade != null ? cameraFade.FsmVariables.FindFsmBool("No Fade") : null;
+        if (noFade != null) {
+            noFade.Value = true;
+        }
+    }
+
     private static BossSequenceDoor FindDoor(string scene, string doorName) {
         foreach (var candidate in Object.FindObjectsByType<BossSequenceDoor>(FindObjectsSortMode.None)) {
             if (candidate.name == doorName && candidate.gameObject.scene.name == scene) {
@@ -254,12 +303,13 @@ internal sealed class PantheonTogether {
         pd.SetString("bossReturnEntryGate", door.dreamReturnGate.name);
         BossSequenceController.SetupNewSequence(door.bossSequence, bindings, door.playerDataString);
         hero.RelinquishControl();
+        CoverWithWhite();
         gm.BeginSceneTransition(new GameManager.SceneLoadInfo {
             SceneName = door.bossSequence.GetSceneAt(0),
             EntryGateName = EntryGate,
             EntryDelay = 0f,
             Visualization = GameManager.SceneLoadVisualizations.GodsAndGlory,
-            PreventCameraFadeOut = false,
+            PreventCameraFadeOut = true,
             WaitForSceneTransitionCameraFade = true,
             AlwaysUnloadUnusedAssets = false
         });

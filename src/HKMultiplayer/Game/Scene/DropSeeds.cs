@@ -77,7 +77,41 @@ internal static class DropSeeds {
 
             SeededFlingObject(orig, self);
         };
+        // Las burbujas del ataque de Focus del Recipiente Puro: cada una elige al azar cuándo y dónde sale
+        On.HutongGames.PlayMaker.Actions.RandomFloat.OnEnter += (orig, self) => {
+            if (!Enabled || !IsPrimeBlast(self)) {
+                orig(self);
+                return;
+            }
+
+            SeededRandomFloat(orig, self);
+        };
+        On.HutongGames.PlayMaker.Actions.WaitRandom.OnEnter += (orig, self) => {
+            if (!Enabled || !IsPrimeBlast(self)) {
+                orig(self);
+                return;
+            }
+
+            SeededWaitRandom(orig, self);
+        };
     }
+
+    /// <summary>
+    /// Burbuja del ataque de Focus del Recipiente Puro (objetos de la sala que esperan su aviso BLAST): cada PC tiraba sus
+    /// dados y salían en sitios y momentos distintos que la del PC que lo mueve.
+    /// </summary>
+    private static bool IsPrimeBlast(HutongGames.PlayMaker.FsmStateAction action) {
+        var owner = action.Owner;
+        return owner != null && owner.name.StartsWith(PrimeBlastName, StringComparison.Ordinal);
+    }
+
+    private const string PrimeBlastName = "HK Prime Blast";
+
+    private static void SeededRandomFloat(On.HutongGames.PlayMaker.Actions.RandomFloat.orig_OnEnter orig, RandomFloat self) =>
+        SeededAction(self, () => orig(self));
+
+    private static void SeededWaitRandom(On.HutongGames.PlayMaker.Actions.WaitRandom.orig_OnEnter orig, WaitRandom self) =>
+        SeededAction(self, () => orig(self));
 
     // Cada uno en su método: un cierre sobre los parámetros del gancho se crearía en cada llamada, aunque no se use
 

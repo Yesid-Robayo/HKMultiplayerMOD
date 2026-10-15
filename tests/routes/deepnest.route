@@ -3,7 +3,6 @@ room Deepnest_01 left1
 partner-moves
 breakables-sync
 objects-sync
-enemies-sync
 scene-data-sync
 
 room Deepnest_02 left1
@@ -21,5 +20,5 @@ scene-data-sync
 
 # Nosk
 room Deepnest_32 left1
-boss killedMimicSpider
+fight killedMimicSpider
 scene-data-sync

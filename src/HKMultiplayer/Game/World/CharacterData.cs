@@ -53,6 +53,97 @@ internal static class CharacterData {
         .Concat(new[] { "statueStateGruzMother", "statueStateVengefly", "statueStateBroodingMawlek", "statueStateFalseKnight", "statueStateFailedChampion", "statueStateHornet1", "statueStateHornet2", "statueStateMegaMossCharger", "statueStateMantisLords", "statueStateOblobbles", "statueStateGreyPrince", "statueStateBrokenVessel", "statueStateLostKin", "statueStateNosk", "statueStateFlukemarm", "statueStateCollector", "statueStateWatcherKnights", "statueStateSoulMaster", "statueStateSoulTyrant", "statueStateGodTamer", "statueStateCrystalGuardian1", "statueStateCrystalGuardian2", "statueStateUumuu", "statueStateDungDefender", "statueStateWhiteDefender", "statueStateHiveKnight", "statueStateTraitorLord", "statueStateGrimm", "statueStateNightmareGrimm", "statueStateHollowKnight", "statueStateElderHu", "statueStateGalien", "statueStateMarkoth", "statueStateMarmu", "statueStateNoEyes", "statueStateXero", "statueStateGorb", "statueStateRadiance", "statueStateSly", "statueStateNailmasters", "statueStateMageKnight", "statueStatePaintmaster", "statueStateZote", "statueStateNoskHornet", "statueStateMantisLordsExtra" })
         .ToArray();
 
+    /// <summary>
+    /// Campos que fueron del mundo hasta la 0.29.0 y son de cada personaje desde la 0.30.0 (ver <see cref="WasShared"/>):
+    /// - <c>dreamerScene1</c>: la escena del sueño de los Soñadores al conseguir la Capa de Polilla (`Fungus1_04`). La
+    ///   Capa es de cada uno; siendo del mundo, la veía solo el primero que la conseguía y a los demás ya no les salía.
+    /// </summary>
+    private static readonly string[] SharedUntil029 = { "dreamerScene1" };
+
+    /// <summary>
+    /// Por dónde va cada conversación con los personajes (desde la 0.30.0): lo que ya le contaron a uno no se lo saltan al
+    /// otro. Siendo del mundo, el primero que hablaba con Zote oía su historia y al siguiente le decía "¿por qué me sigues
+    /// molestando?". Solo los que eligen qué dice el personaje (y el aviso, el alfiler del mapa o la presentación de su
+    /// tienda para este jugador): los que deciden si está en la sala, si se va o si abre algo siguen siendo del mundo
+    /// (<c>zoteLeftCity</c>, <c>clothLeftTown</c>, <c>corn_*</c>, <c>nymmSpoken</c>...), o cada PC lo vería en un sitio.
+    /// No están en <see cref="WasShared"/>: un personaje guardado antes empieza sin ellos y vuelve a oír cada conversación.
+    /// </summary>
+    private static readonly string[] DialogueFields = {
+        // Solo eligen qué dice
+        "elderbugHistory1", "elderbugHistory2", "elderbugSpeechSly", "elderbugSpeechStation", "elderbugSpeechEggTemple",
+        "elderbugSpeechMapShop", "elderbugSpeechBretta", "elderbugSpeechJiji", "elderbugSpeechMinesLift",
+        "elderbugSpeechKingsPass", "elderbugSpeechInfectedCrossroads", "elderbugSpeechFinalBossDoor",
+        "elderbugRequestedFlower", "elderbugNymmConvo", "elderbugTroupeLeftConvo", "elderbugBrettaLeft", "zote",
+        "zotePrecept", "zoteSpokenColosseum", "zoteTownConvo", "slyConvoNailArt", "slyConvoMapper", "slyConvoNailHoned",
+        "slyConvoGrimm", "slyNymmConvo", "iseldaConvo1", "iseldaConvoGrimm", "iseldaCorniferHomeConvo",
+        "iseldaNymmConvo", "metCornifer", "corniferIntroduced", "metQuirrel", "quirrelEggTemple", "quirrelSlugShrine",
+        "quirrelRuins", "quirrelMines", "metCloth", "tisoShieldConvo", "metMiner", "miner", "minerEarly", "queenTalk1",
+        "queenTalk2", "queenHornet", "queenDung1", "queenDung2", "queenConvo_grimm1", "queenConvo_grimm2",
+        "givenWhiteLadyFlower", "jijiShadeOffered", "jijiGrimmConvo", "salubraConvoCombo", "salubraConvoOvercharm",
+        "salubraConvoTruth", "legEaterConvo1", "legEaterConvo2", "legEaterConvo3", "legEaterBoughtConvo",
+        "legEaterGoldConvo", "legEaterInfectedCrossroadConvo", "legEaterDungConvo", "legEaterBrokenConvo",
+        "refusedLegEater", "marmConvo1", "marmConvo2", "marmConvo3", "marmConvoNailsmith", "bankerDeclined",
+        "bankerSpaMet", "metNailmasterMato", "metNailmasterSheo", "metNailmasterOro", "matoConvoSly", "matoConvoOro",
+        "matoConvoSheo", "oroConvoSly", "oroConvoMato", "oroConvoSheo", "sheoConvoSly", "sheoConvoMato", "sheoConvoOro",
+        "sheoConvoNailsmith", "midwifeMet", "midwifeConvo1", "midwifeConvo2", "midwifeWeaverlingConvo", "bigCatMeet",
+        "bigCatTalk1", "bigCatTalk2", "bigCatTalk3", "bigCatShadeConvo", "bigCatKingsBrandConvo", "bigCatHitTailConvo",
+        "mossCultist", "metGiraffe", "metEmilitia", "emilitiaKingsBrandConvo", "givenEmilitiaFlower",
+        "godseekerWaterwaysSpoken1", "godseekerWaterwaysSpoken2", "godseekerWaterwaysSpoken3", "dungDefenderConvo1",
+        "dungDefenderConvo2", "dungDefenderConvo3", "dungDefenderCharmConvo", "dungDefenderIsmaConvo",
+        "dungDefenderAwakeConvo", "maskmakerMet", "maskmakerConvo1", "maskmakerConvo2", "maskmakerUnmasked1",
+        "maskmakerUnmasked2", "maskmakerShadowDash", "maskmakerKingsBrand", "metBrum", "metDivine", "divineEatenConvos",
+        "nymmCharmConvo", "nymmFinalConvo", "metStag", "stagConvoTram", "stagConvoTiso", "stagRemember1",
+        "stagRemember2", "stagRemember3", "stagHopeConvo", "stagEggInspected", "shamanScreamConvo", "shamanQuakeConvo",
+        "shamanFireball2Convo", "shamanScream2Convo", "shamanQuake2Convo", "jinnConvo1", "jinnConvo2", "jinnConvo3",
+        "jinnConvoKingBrand", "jinnConvoShadeCharm", "tukMet", "metXun", "xunFailedConvo1", "xunFailedConvo2",
+        "littleFoolMet", "dreamMothConvo1", "dreamNailConvo", "bossDoorEntranceTextSeen",
+        // Además, el aviso para hablar, el alfiler del mapa o la presentación de la tienda de este jugador (y el
+        // fragmento del Alma del Rey de la Dama Blanca, que ya es de cada uno)
+        "metElderbug", "elderbug", "elderbugConvoGrimm", "metIselda", "metSlyShop", "metRelicDealerShop", "metCharmSlug",
+        "metBanker", "metLegEater", "metNailsmith", "metJinn", "metMoth", "ignoredMoth", "jijiMet", "metQueen",
+        "metHunter", "bigCatHitTail", "ranAway", "eggTempleVisited"
+    };
+
+    /// <summary>
+    /// Si el personaje sigue en su sitio para este jugador (desde la 0.30.0): se va o cambia de sitio cuando ESTE jugador
+    /// acaba su conversación, no cuando la acaba el primero. Siendo del mundo, en cuanto uno se despedía de Quirrel, Cloth o
+    /// Tiso, se iban para todos y los demás se quedaban sin esa conversación. Solo los que deciden la presencia de ese
+    /// personaje y que cada jugador puede volver a poner hablando con él; los que pone un suceso único del mundo (los
+    /// Soñadores, un jefe, la Desterración) o que deciden algo compartido siguen siendo del mundo (<c>corniferAtHome</c>,
+    /// <c>legEaterLeft</c>, <c>clothInTown</c>, <c>quirrelArchiveEncountered</c>...).
+    /// Están en <see cref="WasShared"/>: un personaje guardado antes se queda con lo del mundo (Sly no le cierra la tienda a
+    /// quien ya lo había rescatado).
+    /// </summary>
+    private static readonly string[] NpcPresenceFields = {
+        // Quirrel, Cloth, Tiso, Lemm fuera de su tienda, los bichos del balneario y Hornet sin combate
+        "quirrelLeftStation", "quirrelLeftEggTemple", "quirrelMantisEncountered", "quirrelCityEncountered",
+        "quirrelCityLeft", "quirrelMinesEncountered", "quirrelMinesLeft", "quirrelSpaReady", "quirrelSpaEncountered",
+        "quirrelEpilogueCompleted", "sawWoundedQuirrel", "clothLeftTown", "clothEncounteredQueensGarden",
+        "clothGhostSpoken", "tisoEncounteredTown", "tisoEncounteredBench", "tisoEncounteredLake", "marmOutsideConvo",
+        "spaBugsEncountered", "hornetAbyssEncounter", "hornetDenEncounter",
+        // Lo que el juego pone al cambiar de sala a partir de otro dato (GameManager.TimePasses, en cada PC con su
+        // PlayerData): si el de origen es de cada uno, el resultado también. zoteSpokenCity → zoteLeftCity (Zote se va de
+        // la Ciudad para quien habló con él), godseekerSpokenAwake → nailsmithCorpseAppeared,
+        // scaredFlukeHermitEncountered → scaredFlukeHermitReturned, finalGrubRewardCollected → fatGrubKing (el padre de
+        // las larvas engordaba para todos y los demás se quedaban sin sus recompensas), xunFlowerGiven → extraFlowerAppear
+        "zoteSpokenCity", "zoteLeftCity", "godseekerSpokenAwake", "nailsmithCorpseAppeared",
+        "scaredFlukeHermitEncountered", "scaredFlukeHermitReturned", "fatGrubKing", "extraFlowerAppear",
+        // Cornifer: cada uno le compra su mapa (los mapas ya son de cada uno; Iselda vende el de una zona a quien ya vio
+        // irse a su Cornifer)
+        "corn_crossroadsEncountered", "corn_crossroadsLeft", "corn_greenpathEncountered", "corn_greenpathLeft",
+        "corn_fogCanyonEncountered", "corn_fogCanyonLeft", "corn_fungalWastesEncountered", "corn_fungalWastesLeft",
+        "corn_cityEncountered", "corn_cityLeft", "corn_waterwaysEncountered", "corn_waterwaysLeft",
+        "corn_minesEncountered", "corn_minesLeft", "corn_cliffsEncountered", "corn_cliffsLeft",
+        "corn_deepnestEncountered", "corn_deepnestLeft", "corn_deepnestMet1", "corn_deepnestMet2",
+        "corn_outskirtsEncountered", "corn_outskirtsLeft", "corn_royalGardensEncountered", "corn_royalGardensLeft",
+        "corn_abyssEncountered", "corn_abyssLeft",
+        // Bretta y Sly: cada uno los rescata (su casa, su sótano y la tienda de Sly se abren a quien los rescató). Los
+        // adornos de la habitación de Bretta (brettaState) cuentan las hazañas de cada uno: el Golpe Desolador y los
+        // Soñadores suman uno, y del mundo sumaban uno por cada jugador que lo conseguía
+        "brettaRescued", "brettaSeenBench", "brettaSeenBed", "brettaSeenBenchDiary", "brettaSeenBedDiary", "brettaState",
+        "slyRescued"
+    };
+
     /// <summary>Campos de <see cref="PlayerData"/> que son del personaje.</summary>
     private static readonly string[] FieldNames = new[] {
             "playTime",
@@ -120,6 +211,9 @@ internal static class CharacterData {
         }
         .Concat(AbilityFields)
         .Concat(SharedUntil026)
+        .Concat(SharedUntil029)
+        .Concat(DialogueFields)
+        .Concat(NpcPresenceFields)
         .Concat(Numbered("equippedCharm_", 1, 40))
         .Concat(Numbered("gotCharm_", 1, 40))
         .Concat(Numbered("newCharm_", 1, 40))
@@ -147,10 +241,12 @@ internal static class CharacterData {
     };
 
     /// <summary>
-    /// Campos que fueron del mundo hasta la 0.23.0 (las habilidades): un personaje guardado sin ellos se queda con los del
-    /// mundo (lo que ya tenía, porque se compartía) y no con los de una partida nueva.
+    /// Campos que fueron del mundo (las habilidades hasta la 0.23.0, y los de SharedUntil026 y SharedUntil029): un
+    /// personaje guardado sin ellos se queda con los del mundo (lo que ya tenía, porque se compartía) y no con los de una
+    /// partida nueva.
     /// </summary>
-    private static readonly HashSet<string> WasShared = new(AbilityFields.Concat(SharedUntil026));
+    private static readonly HashSet<string> WasShared =
+        new(AbilityFields.Concat(SharedUntil026).Concat(SharedUntil029).Concat(NpcPresenceFields));
 
     /// <summary>Campos que se toman del host para un personaje nuevo: empieza donde reaparece el host.</summary>
     private static readonly string[] FromHostForNew = {

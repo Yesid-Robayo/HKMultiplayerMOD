@@ -22,7 +22,6 @@ scene-data-sync
 room Crossroads_06 left1
 breakables-sync
 objects-sync
-enemies-sync
 scene-data-sync
 
 room Crossroads_13 left1
@@ -33,7 +32,6 @@ scene-data-sync
 
 room Crossroads_16 left1
 breakables-sync
-objects-sync
 enemies-sync
 scene-data-sync
 
@@ -45,7 +43,6 @@ scene-data-sync
 
 room Crossroads_31 right1
 breakables-sync
-enemies-sync
 scene-data-sync
 
 room Crossroads_35 right1
@@ -56,7 +53,6 @@ scene-data-sync
 
 # Estación de ciervo
 room Crossroads_47 left1
-objects-sync
 scene-data-sync
 
 room Crossroads_48 left1
@@ -71,15 +67,15 @@ scene-data-sync
 
 # Jefes
 room Crossroads_04 right1
-boss giantFlyDefeated
+fight killedBigFly
 breakables-sync
 scene-data-sync
 
 room Crossroads_09 left1
-boss mawlekDefeated
+fight killedMawlek
 scene-data-sync
 
 room Crossroads_10 left1
-boss falseKnightDefeated host
+fight falseKnightDefeated 14 30
 breakables-sync
 scene-data-sync

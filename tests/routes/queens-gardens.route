@@ -2,7 +2,6 @@ title Jardines de la Reina
 room Fungus3_34 right1
 partner-moves left
 breakables-sync
-objects-sync
 enemies-sync
 scene-data-sync
 
@@ -13,6 +12,8 @@ enemies-sync host
 scene-data-sync
 
 # Señor Traidor
+# A todos: la arena del Señor Traidor se carga si alguien la tiene, pero ese dato tarda en llegar a los demás
+both pdset hasShadowDash true
 room Fungus3_23 right1
-boss killedTraitorLord
+fight killedTraitorLord 52 30 Mantis Traitor Lord
 scene-data-sync

@@ -509,10 +509,6 @@ internal sealed class Revive {
 
         var gm = GameManager.instance;
         var zone = gm != null ? gm.GetCurrentMapZone() : string.Empty;
-        if (zone == "GODS_GLORY") {
-            reason = "en los Panteones la muerte es la del juego";
-            return false;
-        }
 
         var scene = UnitySceneManager.GetActiveScene().name;
         var standing = false;
@@ -539,6 +535,13 @@ internal sealed class Revive {
                     scene.StartsWith("Grimm_Nightmare", StringComparison.Ordinal);
         if (dream && !standingHere) {
             reason = "en un sueño sin compañero";
+            return false;
+        }
+
+        // En Godhome (Panteones y estatuas del Salón de los Dioses), igual: se cae si hay un compañero en pie en la sala del
+        // jefe. Antes la muerte era siempre la del juego: el que moría volvía al Atrio y los demás seguían solos
+        if (IsGodhomeFight(zone, scene) && !standingHere) {
+            reason = "en Godhome sin compañero en la sala";
             return false;
         }
 
@@ -877,6 +880,59 @@ internal sealed class Revive {
 
     private const string DreamPrefix = "Dream_";
 
+    private const string GodhomePrefix = "GG_";
+
+    /// <summary>Tiempo que se espera a que el caído llegue con el grupo al siguiente jefe antes de llevarlo con un viaje.</summary>
+    private const float PantheonArrivalWait = 6f;
+
+    /// <summary>Desde cuándo un caído en Godhome se quedó sin nadie en pie en la sala de su cuerpo (host).</summary>
+    private readonly Dictionary<ushort, float> _leftInGodhomeSince = new();
+
+    private static bool IsGodhomeFight(string zone, string scene) =>
+        zone == "GODS_GLORY" && scene.StartsWith(GodhomePrefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Host: un caído en una sala de jefe de Godhome de la que ya se fueron los que estaban en pie (vencieron al jefe del
+    /// Panteón y pasaron al siguiente, o volvieron al Salón tras una estatua) revive junto a su compañero. En un Panteón,
+    /// su PC pasa al siguiente jefe con los demás (el final de la sala le llega como a todos): se le revive cuando llega,
+    /// en esa sala y sin viaje, así su secuencia sigue igual que la de los demás. Si no llega en un rato, con un viaje.
+    /// </summary>
+    private void ReviveLeftInGodhome() {
+        var now = Time.unscaledTime;
+        foreach (var member in _party.Members) {
+            if (member.Status != PlayerStatus.Downed || !member.BodyScene.StartsWith(GodhomePrefix, StringComparison.Ordinal) ||
+                FollowedGodhomeRooms.Contains(member.BodyScene)) {
+                _leftInGodhomeSince.Remove(member.Id);
+                continue;
+            }
+
+            var partner = _party.Get(member.Partner);
+            var partnerScene = partner?.Player?.Scene;
+            if (partner == null || partner.Status == PlayerStatus.Downed || string.IsNullOrEmpty(partnerScene) ||
+                partnerScene == member.BodyScene || AnyStandingIn(member.BodyScene)) {
+                _leftInGodhomeSince.Remove(member.Id);
+                continue;
+            }
+
+            if (!_leftInGodhomeSince.TryGetValue(member.Id, out var since)) {
+                since = now;
+                _leftInGodhomeSince[member.Id] = now;
+            }
+
+            // Con el grupo ya: revive allí. Si no, se espera a que llegue (va con el final de la sala del Panteón)
+            var arrived = member.Player?.Scene == partnerScene;
+            if (!arrived && now - since < PantheonArrivalWait) {
+                continue;
+            }
+
+            _leftInGodhomeSince.Remove(member.Id);
+            Log.Info($"{member.Name} tenía el cuerpo en {member.BodyScene} y el grupo siguió: revive junto a {partner.Name} " +
+                     $"({partnerScene}{(arrived ? "" : ", con un viaje")})");
+            _party.SetStatus(member.Id, PlayerStatus.Standing);
+            SendRevived(member.Id, partnerScene, float.NaN, float.NaN, false, partner.Name);
+        }
+    }
+
     /// <summary>Si algún jugador en pie está en esa sala.</summary>
     private bool AnyStandingIn(string scene) {
         foreach (var member in _party.Members) {
@@ -1013,6 +1069,7 @@ internal sealed class Revive {
         UpdateBench();
         if (_session.IsHost && _party != null) {
             ReviveLeftInDreams();
+            ReviveLeftInGodhome();
             RetargetUnfollowable();
         }
 

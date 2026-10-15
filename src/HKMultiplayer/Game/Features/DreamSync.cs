@@ -69,6 +69,11 @@ internal sealed class DreamSync {
 
     private float _nextBossCheck;
 
+    /// <summary>Sala de Hornet en Sendero Verde, donde cae la Capa de Polilla.</summary>
+    private const string CloakScene = "Fungus1_04";
+
+    private float _nextCloakCheck;
+
     /// <summary>Si el jugador local está en un sueño (zona del mapa del sueño).</summary>
     public bool InDream { get; private set; }
 
@@ -124,6 +129,30 @@ internal sealed class DreamSync {
     private static bool IsDreamVisualization(GameManager.SceneLoadVisualizations visualization) =>
         visualization is GameManager.SceneLoadVisualizations.Dream or GameManager.SceneLoadVisualizations.GrimmDream;
 
+    /// <summary>
+    /// El sueño de los Soñadores al conseguir la Capa de Polilla empieza en cuanto este jugador la recoge y recupera el
+    /// control. En el juego hay que ir antes hacia la reja de la derecha (que no se abre): su zona abre la de la izquierda y
+    /// enciende la del sueño, que está donde cae la capa. Con varios jugadores no era fácil de ver, y quien no iba a la
+    /// derecha se quedaba sin el sueño y con la reja cerrada. Se hace lo mismo que al entrar en esa zona.
+    /// </summary>
+    private static void StartCloakDream() {
+        var hero = HeroController.instance;
+        var pd = PlayerData.instance;
+        if (hero == null || pd == null || hero.controlReqlinquished || !pd.GetBool("hasDash") ||
+            pd.GetBool("dreamerScene1")) {
+            return;
+        }
+
+        var zone = GameObject.Find("Dream Scene Activate");
+        var fsm = zone != null ? zone.GetComponent<PlayMakerFSM>() : null;
+        if (fsm == null || fsm.ActiveStateName != "Idle") {
+            return;
+        }
+
+        Log.Info("Capa de Polilla recogida: empieza el sueño de los Soñadores");
+        fsm.SendEvent("ENTER");
+    }
+
     private static bool LocalInDreamZone() => Vitals.CurrentZone() == (byte) GlobalEnums.MapZone.DREAM_WORLD;
 
     // =====================================================================================================
@@ -175,6 +204,11 @@ internal sealed class DreamSync {
         }
 
         var now = Time.unscaledTime;
+        if (scene == CloakScene && now >= _nextCloakCheck) {
+            _nextCloakCheck = now + 0.25f;
+            StartCloakDream();
+        }
+
         if (InDream && !_bossSeen && now >= _nextBossCheck) {
             _nextBossCheck = now + 0.5f;
             _bossSeen = EnemySync.BossInRoom;
@@ -215,7 +249,7 @@ internal sealed class DreamSync {
 
         foreach (var fsm in UnityEngine.Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include,
                      FindObjectsSortMode.None)) {
-            if (fsm.gameObject.scene.buildIndex < 0 || Contains(fsm)) {
+            if (fsm.gameObject.scene.buildIndex < 0 || Contains(fsm) || fsm.gameObject.name == FallCatcherName) {
                 continue;
             }
 
@@ -243,9 +277,19 @@ internal sealed class DreamSync {
     }
 
     /// <summary>Si la FSM es una entrada a un sueño (un cambio de sala de tipo sueño que hace su propio golpe onírico).</summary>
-    public static bool IsDreamEntrance(PlayMakerFSM fsm) => FindDreamTransition(fsm) != null;
+    public static bool IsDreamEntrance(PlayMakerFSM fsm) =>
+        fsm.gameObject.name != FallCatcherName && FindDreamTransition(fsm) != null;
+
+    /// <summary>
+    /// La zona de Godhome que recoge al caballero que cae por debajo del Atrio (o muere en un Panteón) y lo lleva a la
+    /// entrada con transición de sueño: es de cada jugador. Tomada por una entrada a un sueño, el que caía se llevaba a
+    /// los demás de la sala con él.
+    /// </summary>
+    private const string FallCatcherName = "Dream Fall Catcher";
 
     private static BeginSceneTransitionAction FindDreamTransition(PlayMakerFSM fsm) {
+        // Solo las de sueño: la entrada a Godhome (la Buscadora de Dioses) es de tipo Godhome y es de cada uno, cuando
+        // quiera ir; lo que se hace en grupo allí (empezar un Panteón) lo lleva PantheonTogether
         foreach (var state in fsm.FsmStates) {
             foreach (var action in state.Actions) {
                 if (action is BeginSceneTransitionAction transition && transition.visualization?.Value is

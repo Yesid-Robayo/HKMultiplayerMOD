@@ -8,8 +8,10 @@
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-# Prefijos de objetos de sala que cada jugador recoge por su cuenta (CharacterData.IndividualItemPrefixes): no se comparan
-HK_INDIVIDUAL_PREFIXES='^(Shiny|Heart Piece|Vessel Fragment|Dream Plant|Egg Sac|Reward|Reminder|Interact Reminder|Death Respawn Trigger|Initial Fall Impact|Force Hard Landing|Secret Sound Region|Poo )'
+# Prefijos de objetos de sala que cada jugador recoge por su cuenta (CharacterData.IndividualItemPrefixes), y lo que el
+# juego enseña según lo que tiene cada uno (la plaga de antes de las Alas de Monarca, los restos de Flukemarm con su
+# amuleto): no se comparan
+HK_INDIVIDUAL_PREFIXES='^(Shiny|Heart Piece|Vessel Fragment|Dream Plant|Egg Sac|Reward|Reminder|Interact Reminder|Death Respawn Trigger|Initial Fall Impact|Force Hard Landing|Secret Sound Region|Poo |Pre_Double_Jump|Remains Holder|Cloak Corpse)'
 
 # Estado de la ruta en curso
 _R_HOST=""; _R_GUEST=""; _R_OUT=""; _R_LINE=0; _R_ROOM=""; _R_ROOM_OK=1
@@ -82,6 +84,10 @@ step_room() {
   # Mucha vida: la ruta deja a los caballeros quietos entre enemigos y uno nuevo tiene 5 máscaras. Si muere, reaparece
   # en su banco y lo que se comprueba después ya no es de esta sala (sus enemigos parecen no haber muerto en el otro)
   for inst in $(_all); do send "$inst" "pdset maxHealth $HK_ROUTE_HEALTH"; send "$inst" "pdset health $HK_ROUTE_HEALTH"; done
+
+  # Sin pantalla negra: goscene no cruza ninguna puerta, y al llegar por una de sueño (Godhome) el fundido de entrada no
+  # se hace; la pantalla se quedaba en negro aunque se jugara con normalidad
+  for inst in $(_all); do send "$inst" "fadein"; done
 
   # Tiempo para que el dueño de la sala reparta su estado y aparezcan los avatares. Cada uno ve a todos los demás
   sleep 5
@@ -418,8 +424,9 @@ _shot_list() {
   query "$1" "sceneshot list" | grep -a '\[TEST\] so ' | sed -E 's/.*\[TEST\] so //; s/[sn]$//' | grep -a '=1$' | grep -avE "[:/]$individual" | grep -avE "$HK_LOOSE_DEBRIS" | sort
 }
 
-# Escombros que el juego lanza con física al azar (FlingObjects): cada PC los ve caer distinto y algunos se apagan al salirse
-HK_LOOSE_DEBRIS='[:/ ](Chunk|chunk|Debris|debris|Rubble|rubble|Rock Particle)[^/=]*='
+# Escombros que el juego lanza con física al azar (FlingObjects): cada PC los ve caer distinto y algunos se apagan al salirse.
+# También los efectos de una muerte (explosión, humo, onda) con sus hijos: duran un momento y cada PC los quita a su hora
+HK_LOOSE_DEBRIS='[:/ ](Chunk|chunk|Debris|debris|Rubble|rubble|Rock Particle|Death Explode|Death Puff|Death Wave|Burst Effects|Splat Explode)[^=]*='
 
 # Huella de la sala en ese PC: cuántos objetos y su suma
 _shot() { _shot_list "$1" | md5sum | cut -c1-8; }
@@ -446,7 +453,7 @@ _scene_same() {
   fi
 }
 
-step_fight() {
+_step_fight_body() {
   local flag="$1" x="${2:-}" y="${3:-}" name="${4:-}" line pos inst i awake=0 who h missing="" offset
   for inst in $(_all); do send "$inst" "god"; done
 
@@ -456,13 +463,15 @@ step_fight() {
     return
   fi
 
-  # Repartidos a los dos lados del jefe, a 3 y 5 de él; en un punto dado por la ruta (la zona que empieza el combate,
-  # a veces una franja estrecha), el primero justo ahí y los demás a un paso
+  # Juntos a los dos lados del jefe, a 0,5 y a 1 de él: la zona que lo despierta puede ser estrecha (la del Maestro de
+  # Almas mide 3,5 de ancho) y el combate espera a que estén todos dentro (con uno a 3 de Hornet en las Afueras se
+  # quedaba esperándolo para siempre); en un punto dado por la ruta (la zona que empieza el combate, a veces una franja
+  # estrecha), el primero justo ahí y los demás a un paso
   local offsets="0 1 -1 2"
   if [ -z "$x" ] || [ "$x" = "-" ]; then
     pos="$(_boss_pos "$line")"; x="${pos% *}"; y="${pos#* }"
     y="$(awk -v v="$y" 'BEGIN { printf "%.1f", v + 1.5 }')"
-    offsets="-3 3 -5 5"
+    offsets="-0.5 0.5 -1 1"
   fi
 
   i=0
@@ -490,12 +499,12 @@ step_fight() {
   if [ $awake = 1 ]; then
     _result OK "fight $flag" "despertó con todos al lado (lo mueve $who)"
   fi
-  # Golpes hasta vencerlo, como los de un aguijón puro (21) y que respetan la invulnerabilidad ("real"). Uno enorme
-  # mataba de un tirón la cabeza del Falso Caballero y del Campeón Fallido, el juego lo tomaba por un cambio de fase y la
-  # devolvía a su vida: el combate no acababa. Tres por tanda (como tres jugadores pegando) y se mira cada 5 tandas
+  # Golpes hasta vencerlo que respetan la invulnerabilidad ("real"), de 35: casi el doble que un aguijón puro (21) para
+  # acabar antes, pero por debajo de la vida de la cabeza del Falso Caballero (40). Uno enorme la mataba de un tirón, el
+  # juego lo tomaba por un cambio de fase y la devolvía a su vida: el combate no acababa. Tres por tanda (como tres jugadores pegando) y se mira cada 5 tandas
   local j
   for ((i = 0; i < 400; i++)); do
-    for ((j = 0; j < 3; j++)); do send "$_R_HOST" "hitall 21 real"; done
+    for ((j = 0; j < 3; j++)); do send "$_R_HOST" "hitall 35 real"; done
     sleep 1.2
     ((i % 5 == 4)) || continue
     if [ "$flag" = - ]; then
@@ -549,7 +558,8 @@ step_fight() {
   local stuck="" hero
   for inst in $(_all); do
     hero="$(query "$inst" "hero" | grep -a '\[TEST\] hero ')"
-    echo "$hero" | grep -aq 'acceptingInput=True' || stuck="$stuck $inst($(echo "$hero" | grep -oE 'gameState=[A-Z_]+|controlReqlinquished=[A-Za-z]+' | paste -sd,))"
+    # Flotando en el agua (Flukemarm) el juego le quita el control normal, pero nada y salta: no está atascado
+    _hero_free "$hero" || stuck="$stuck $inst($(echo "$hero" | grep -oE 'gameState=[A-Z_]+|controlReqlinquished=[A-Za-z]+' | paste -sd,))"
   done
   if ! _both_in_room; then
     _result FALLO "fight $flag" "vencido en todos, pero alguno ya no está en $_R_ROOM"
@@ -559,6 +569,14 @@ step_fight() {
     _result OK "fight $flag" "vencido en todos y todos con control en la sala"
   fi
   _scene_same "fight $flag"
+  for inst in $(_all); do send "$inst" "god no"; done
+}
+
+# El combate con todos invulnerables; al salir, por donde sea (también un NOCONC o un FALLO a mitad), se quita. Antes
+# un combate que no empezaba dejaba el modo dios puesto y la ruta siguiente no podía herir al caballero
+step_fight() {
+  _step_fight_body "$@"
+  local inst
   for inst in $(_all); do send "$inst" "god no"; done
 }
 
@@ -584,6 +602,12 @@ step_expect_room() {
   fi
 }
 
+# Si el caballero puede moverse: con control, o flotando en el agua (animación "Surface ...": el juego le quita el
+# control normal pero nada y salta)
+_hero_free() {
+  echo "$1" | grep -aq 'acceptingInput=True' || echo "$1" | grep -aq 'anim=Surface'
+}
+
 # expect-control [s]: todos acaban con control (pulsan salto para levantarse tras un sueño o cerrar un mensaje)
 step_expect_control() {
   local timeout="${1:-15}" deadline inst stuck=""
@@ -593,7 +617,7 @@ step_expect_control() {
     sleep 2
     stuck=""
     for inst in $(_all); do
-      query "$inst" "hero" | grep -aq 'acceptingInput=True' || stuck="$stuck $inst($(query "$inst" "hero" | grep -aoE 'anim=[A-Za-z ]+' | head -1))"
+      _hero_free "$(query "$inst" "hero")" || stuck="$stuck $inst($(query "$inst" "hero" | grep -aoE 'anim=[A-Za-z ]+' | head -1))"
     done
     [ -z "$stuck" ] && break
     [ $SECONDS -ge $deadline ] && break

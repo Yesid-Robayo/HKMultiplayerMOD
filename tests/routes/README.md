@@ -1,7 +1,7 @@
 # Rutas de prueba del coop
 
-Pruebas automáticas que recorren el juego con dos jugadores reales: un **host**, que abre un mundo coop nuevo, y un
-**invitado**, que se une a él. Cada archivo `.route` es una zona del juego o un tema (sesión, progreso). En cada sala
+Pruebas automáticas que recorren el juego con jugadores reales (dos, o hasta cuatro con `--players`): un **host**, que
+abre un mundo coop nuevo, y los **invitados**, que se unen a él. Cada archivo `.route` es una zona del juego o un tema (sesión, progreso). En cada sala
 se hace algo en un PC y se comprueba que el otro lo vea igual.
 
 ```bash

@@ -410,6 +410,7 @@ internal sealed class PlayerSync {
         var heroReady = RefreshHero();
         var z = heroReady ? _hero.transform.position.z : 0f;
         var showNames = Features.HostSettings.Current.ShowNames;
+        var hudHidden = UI.HudCanvas.GameHudHidden();
         _sampled.Clear();
         foreach (var remote in _remotes.Values) {
             // Un caído no se dibuja: se ve su cuerpo (Features.Revive) y su caballero va oculto pegado al compañero
@@ -431,9 +432,19 @@ internal sealed class PlayerSync {
 
         ShareBench();
         _darknessPartners.Clear();
-        foreach (var (remote, state) in _sampled) {
+        // En el final de la Radiancia Absoluta cada PC sigue su propia escena (el caballero se parte en la suya): los de
+        // los compañeros, que en sus PCs van por otro momento de la escena, se veían de pie en medio de ella
+        var finale = Scene.EnemySync.FinaleRunning;
+        foreach (var (remote, sampled) in _sampled) {
+            var state = sampled;
+            if (finale) {
+                state.Visible = false;
+            }
+
             remote.Avatar ??= new RemoteAvatar(remote.Player.Name, _hero, Font);
-            remote.Avatar.SetNameVisible(showNames);
+            // Sin nombre si su caballero no se ve o el juego esconde su HUD (cinemáticas, el final de la Radiancia Absoluta,
+            // diálogos): los nombres seguían flotando sobre la escena
+            remote.Avatar.SetNameVisible(showNames && state.Visible && !hudHidden);
             remote.Avatar.Apply(state, _sprites, z);
             remote.Avatar.UpdateLight(_hero);
             _effects.UpdateRemote(remote.Player, remote.Avatar, remote.Buffer.RenderTick);

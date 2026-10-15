@@ -9,6 +9,32 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.30.0
+
+Todos los combates de jefes jugados otra vez con 4 jugadores, uno a uno, y el Panteón de Hallownest hasta su final.
+
+- **Final del Panteón de Hallownest**: cada jugador acaba la Radiancia en su PC. Todos dan los golpes finales con su
+  propio botón de atacar y ven la cinemática del final al acabar el suyo; antes el primero en acabar se llevaba a los
+  demás. Durante el final no se ven los caballeros ni los nombres de los compañeros.
+- **Subida de la Radiancia**: el abismo sube para todos cuando sube cualquiera, y cada jugador reaparece en la última
+  plataforma pasada en vez de caer al abismo una y otra vez. Sus rayos, la sombra que sube y las plataformas se ven en
+  todos los PCs, sus orbes salen donde se cargan y ya no se queda quieta en el aire si cambia de PC a mitad de un
+  teletransporte.
+- **Recipiente Puro**: su nombre y su ataque de burbujas salen para todos, en los mismos sitios.
+- **Panteones**: los compañeros que entran con el que empieza un Panteón ya no se quedan con la pantalla negra, y el
+  que cae en un Panteón revive junto al grupo en la sala del siguiente jefe.
+- **Personajes, de cada jugador**: cada uno oye cada conversación desde el principio (Zote ya no le pregunta al
+  segundo por qué lo sigue molestando), y el personaje que se va tras hablar (Zote, Quirrel, Cloth, Tiso...) solo se
+  va para el jugador que habló con él.
+- **Barras de vida**: solo tiene barra el jefe que está peleando (los seis Caballeros Vigía mostraban seis). El Rey
+  Vengamosca y la Madre Gruz cuentan como jefes: barra, vida extra y espera a todos.
+- **Señores Mantis**: dos jugadores pueden desafiarlos a la vez. **Maestro de Almas**: el orbe falso desaparece para
+  todos, todos caen al piso de abajo y su orbe sale donde se carga. **Hornet**: la Capa de Polilla cae en todos los
+  PCs y el sueño de los Soñadores empieza en cuanto cada jugador la recoge.
+- **Enemigos que solo tienen algunos PCs** (una parte de la sala que no se cargó en el PC del dueño de la sala): los
+  mueve uno de esos jugadores en vez de quedarse quietos hasta que alguien los golpea. El **Menderbug** sale para
+  todos si le sale a cualquiera.
+
 ## 0.29.0
 
 La historia entera jugada con 4 jugadores (cuatro copias del juego a la vez), de los primeros jefes a los dos finales

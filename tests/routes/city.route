@@ -2,7 +2,6 @@ title Ciudad de Lágrimas
 room Ruins1_01 left1
 partner-moves
 breakables-sync
-objects-sync
 enemies-sync
 scene-data-sync
 
@@ -26,25 +25,31 @@ scene-data-sync
 
 room Ruins2_10 right1
 breakables-sync
-objects-sync
 scene-data-sync
 
 room Ruins2_10b left1
 breakables-sync
-objects-sync host
-enemies-sync
 scene-data-sync
 
 # Jefes
 room Ruins1_24 right1
-boss mageLordDefeated
+fight - - - Mage Lord hp
+# La segunda fase empieza al coger el orbe falso (lo coge uno; la secuencia va en todos)
+host tpobj Quake Fake|0
+wait 15
+fight mageLordDefeated - - Mage Lord Phase2
 breakables-sync
 scene-data-sync
 
+# La arena solo se carga entrando por la puerta de arriba: goscene no cruza ninguna
+both lastdoor top1
 room Ruins2_03 top1
-boss killedBlackKnight host
+# En la zona de la batalla, que espera a que entren todos (los caballeros duermen en el techo)
+both tp 60 70
+wait 2
+fight killedBlackKnight
 scene-data-sync
 
 room Ruins2_11 right1
-boss collectorDefeated
+fight collectorDefeated 53 95
 scene-data-sync

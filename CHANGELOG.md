@@ -9,6 +9,32 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.30.0
+
+Every boss fight played again with 4 players, one at a time, and the Pantheon of Hallownest played to its ending.
+
+- **Pantheon of Hallownest ending**: each player finishes the Radiance on their own PC. Everyone strikes the final
+  blows with their own attack button and sees the ending cutscene when they finish theirs; the first one to finish
+  used to take the others along. Partners' knights and names are hidden during the ending.
+- **The Radiance's climb**: the abyss rises for everyone when anyone climbs, and every player respawns on the last
+  platform passed instead of falling into the abyss again and again. Its rays, the rising shade and the platforms are
+  seen on every PC, its orbs come out where they charge, and it no longer freezes in the air when it changes PC in
+  the middle of a teleport.
+- **Pure Vessel**: its name and its bubble attack appear for everyone, in the same places.
+- **Pantheons**: the partners who go in with the player who starts a Pantheon no longer get a black screen, and a
+  player who falls in a Pantheon is revived next to the group in the next boss's room.
+- **NPCs, per player**: each player hears every conversation from the start (Zote no longer asks the second player
+  why they keep bothering him), and a character who leaves after talking (Zote, Quirrel, Cloth, Tiso...) only leaves
+  for the player who talked to them.
+- **Health bars**: only the boss that is fighting has one (the six Watcher Knights showed six). The Vengefly King and
+  Gruz Mother count as bosses: health bar, extra health and waiting for everyone.
+- **Mantis Lords**: two players can challenge them at the same time. **Soul Master**: the fake orb vanishes for
+  everyone, everyone falls to the lower floor and its orb comes out where it charges. **Hornet**: the Mothwing Cloak
+  falls on every PC and the Dreamers' dream starts as soon as each player picks it up.
+- **Enemies that only some PCs have** (a part of the room that didn't load on the room owner's PC) are run by one of
+  those players instead of standing still until someone hits them. The **Menderbug** shows up for everyone if it
+  shows up for anyone.
+
 ## 0.29.0
 
 The whole story played with 4 players (four copies of the game at once), from the first bosses to both Hollow Knight

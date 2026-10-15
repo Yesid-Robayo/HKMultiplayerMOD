@@ -2,17 +2,13 @@ title Tierras de Descanso
 room RestingGrounds_02 bot1
 partner-moves
 breakables-sync
-objects-sync
-enemies-sync
 scene-data-sync
 
 # Donde duermen los Soñadores
 room RestingGrounds_04 left1
 breakables-sync
-objects-sync host
 scene-data-sync
 
 # La Vidente
 room RestingGrounds_07 right1
-objects-sync
 scene-data-sync

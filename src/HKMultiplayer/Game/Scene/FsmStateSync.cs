@@ -195,6 +195,12 @@ internal sealed class FsmStateSync {
     private sealed class Tracked {
         public uint Id;
         public PlayMakerFSM Fsm;
+
+        /// <summary>
+        /// Su lógica con la que está apuntado (ver <see cref="Rekey"/>): una FSM hecha de una plantilla cambia de lógica al
+        /// encenderse su objeto por primera vez.
+        /// </summary>
+        public Fsm Key;
         public string LastState;
         public float LastStateTime;
         public bool CopyTransitions;
@@ -203,6 +209,9 @@ internal sealed class FsmStateSync {
         public string RestState;
         public bool LocalChain;
         public float RemoteChainUntil;
+
+        /// <summary>Ya le llegó algún estado de otro PC (si no, lo que haga es de la lógica de este).</summary>
+        public bool GotRemote;
 
         // Ascensores y rejas: 0 = aún sin controlador conocido (manda el dueño de la sala)
         public ushort Controller;
@@ -540,16 +549,20 @@ internal sealed class FsmStateSync {
             if (previous != item.Controller && item.Controller != 0 && item.Controller != from.Id &&
                 item.Controller < from.Id && now - item.ClaimedAt < ClaimCrossSeconds) {
                 var keeper = item.Controller == _session.LocalId ? "este PC" : item.Controller.ToString();
-                Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: {from.Id} también lo reclamó; se queda {keeper}");
+                Log.Info($"{NameOf(item)}: {from.Id} también lo reclamó; se queda {keeper}");
                 return;
             }
 
-            Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: lo controla {from.Id}");
+            Log.Info($"{NameOf(item)}: lo controla {from.Id}");
             item.Controller = from.Id;
             item.ClaimedAt = now;
             item.Positions.Clear();
         }
     }
+
+    /// <summary>"objeto/FSM" para el registro; el objeto puede estar ya destruido (la reclamación llega igual).</summary>
+    private static string NameOf(Tracked item) =>
+        item.Fsm != null ? $"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}" : $"(destruido {item.Id:x8})";
 
     /// <summary>Lo que envía otro jugador sobre un objeto solo vale si es quien lo controla (o si aún no se sabe).</summary>
     private bool AcceptFrom(Tracked item, SessionPlayer from) {
@@ -609,6 +622,7 @@ internal sealed class FsmStateSync {
                 continue;
             }
 
+            Rekey(item);
             if (item.PendingRemoteState != null && item.Fsm.Fsm.Started && item.Fsm.isActiveAndEnabled) {
                 var pending = item.PendingRemoteState;
                 item.PendingRemoteState = null;
@@ -831,7 +845,28 @@ internal sealed class FsmStateSync {
         item.RestState = item.CopyTransitions ? null : item.LastState;
         _tracked.Add(item);
         _byId[item.Id] = item;
-        _byFsm[item.Fsm.Fsm] = item;
+        item.Key = item.Fsm.Fsm;
+        _byFsm[item.Key] = item;
+    }
+
+    /// <summary>
+    /// Una FSM hecha de una plantilla (las zonas que suben el abismo en la subida de la Radiancia Absoluta) estrena su
+    /// lógica al encenderse su objeto: la que se apuntó al cargar la sala, apagada, ya no es la que cambia de estado.
+    /// Sin volver a apuntarla, sus cambios no se veían: el abismo solo subía en el PC del que pasaba por ellas y los
+    /// demás reaparecían abajo, dentro del abismo, una y otra vez.
+    /// </summary>
+    private void Rekey(Tracked item) {
+        var current = item.Fsm.Fsm;
+        if (current == null || current == item.Key) {
+            return;
+        }
+
+        if (item.Key != null && _byFsm.TryGetValue(item.Key, out var old) && old == item) {
+            _byFsm.Remove(item.Key);
+        }
+
+        item.Key = current;
+        _byFsm[current] = item;
     }
 
     /// <summary>
@@ -866,7 +901,8 @@ internal sealed class FsmStateSync {
                      FindObjectsSortMode.None)) {
             if (_byFsm.ContainsKey(fsm.Fsm) || fsm.gameObject.scene.buildIndex < 0 ||
                 EnemySync.IsEnemyObject(fsm.transform) ||
-                hero != null && fsm.transform.IsChildOf(hero.transform) || !Listens(fsm, events)) {
+                hero != null && fsm.transform.IsChildOf(hero.transform) || !Listens(fsm, events) ||
+                WatchesHero(fsm, hero)) {
                 continue;
             }
 
@@ -879,6 +915,33 @@ internal sealed class FsmStateSync {
                 Id = id, Fsm = fsm, LastState = fsm.ActiveStateName, LastStateTime = Time.unscaledTime, Battle = true
             });
         }
+    }
+
+    /// <summary>
+    /// Si la FSM mira dónde está el caballero de este PC: lo que hace depende de cada jugador. El techo de la arena del
+    /// Maestro de Almas se vuelve sólido cuando el caballero ya cayó al piso de abajo; copiado del PC del primero que caía,
+    /// se ponía sólido en los demás con su caballero aún arriba, y se quedaban de pie encima sin caer.
+    /// </summary>
+    private static bool WatchesHero(PlayMakerFSM fsm, HeroController hero) {
+        foreach (var state in fsm.FsmStates) {
+            foreach (var action in state.Actions) {
+                switch (action) {
+                    case global::WaitForHeroInPosition:
+                        return true;
+                    case HutongGames.PlayMaker.Actions.GetPosition position:
+                        var owner = position.gameObject;
+                        if (owner != null && owner.OwnerOption == OwnerDefaultOption.SpecifyGameObject &&
+                            (owner.GameObject?.Name == "Hero" ||
+                             hero != null && owner.GameObject?.Value == hero.gameObject)) {
+                            return true;
+                        }
+
+                        break;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Si la FSM cambia de estado con alguno de esos avisos.</summary>
@@ -983,7 +1046,8 @@ internal sealed class FsmStateSync {
         }
 
         var name = fsm.gameObject.name;
-        if (IsMimicBottle(fsm) || IsHollowKnightChain(fsm) || IsStagBell(fsm) || IsStruckQuestObject(fsm)) {
+        if (IsMimicBottle(fsm) || IsHollowKnightChain(fsm) || IsStagBell(fsm) || IsStruckQuestObject(fsm) ||
+            fsm.FsmName == AbyssRaiserFsm) {
             return true;
         }
 
@@ -994,6 +1058,36 @@ internal sealed class FsmStateSync {
         }
 
         return persistent != null && fsm.FsmVariables.FindFsmBool("Activated") != null || IsBreakableTemplate(fsm);
+    }
+
+    /// <summary>
+    /// Zonas de la subida final de la Radiancia Absoluta que suben el abismo al pasar el caballero por ellas. Cada PC lo
+    /// subía solo con su jugador: el que se quedaba abajo no tenía abismo y no subía. Se copia como una palanca: en cuanto
+    /// uno pasa, sube en todos (ver <see cref="FollowAbyssRaise"/>).
+    /// </summary>
+    private const string AbyssRaiserFsm = "raise_abyss_pit";
+
+    private const string AbyssRespawnMarker = "Hazard Respawn Marker";
+
+    /// <summary>
+    /// El abismo subió por el paso de un compañero: el caballero de este PC reaparece en esa plataforma si lo alcanza (como
+    /// el juego con el que pasa por la zona). Si no, el que se quedaba abajo reaparecía dentro del abismo una y otra vez.
+    /// </summary>
+    private static void FollowAbyssRaise(Tracked item) {
+        var hero = HeroController.instance;
+        var marker = item.Fsm.transform.Find(AbyssRespawnMarker);
+        if (item.Fsm.FsmName != AbyssRaiserFsm || hero == null || marker == null) {
+            return;
+        }
+
+        // Solo hacia arriba: si el que sube pasa dos zonas casi a la vez, sus avisos pueden llegar al revés y la
+        // reaparición se quedaba en la de abajo, ya dentro del abismo (que sube con la de arriba)
+        var pd = PlayerData.instance;
+        if (pd != null && pd.hazardRespawnLocation.y >= marker.position.y) {
+            return;
+        }
+
+        hero.SetHazardRespawn(marker.position, hero.cState.facingRight);
     }
 
     /// <summary>
@@ -1196,6 +1290,16 @@ internal sealed class FsmStateSync {
             return false;
         }
 
+        // Lo encendió la lógica de este PC y arranca aquí sin que le haya llegado nada de otro: lo lleva este PC. El
+        // orbe falso del Maestro de Almas enciende el caballero falso del que lo coge; si lo controlaba otro PC (que no lo
+        // había cogido), aquí se retenía su primer paso y el caballero se quedaba invisible y sin control para siempre
+        if (!item.CopyTransitions && !item.GotRemote && string.IsNullOrEmpty(item.LastState) &&
+            item.Fsm.ActiveStateName == item.Fsm.Fsm.StartState && _active != null) {
+            _active.TakeControl(item, $"se encendió aquí ({item.Fsm.ActiveStateName} → {toState.Name})");
+            HideTakenOrb(item);
+            return false;
+        }
+
         item.HeldFrom = item.Fsm.ActiveStateName;
         item.HeldTo = toState.Name;
         return true;
@@ -1206,11 +1310,13 @@ internal sealed class FsmStateSync {
     /// pidan sus acciones corta las acciones siguientes (igual que en el PC de origen) y se retiene.
     /// </summary>
     private static void ApplyRemoteState(Tracked item, string state) {
+        item.GotRemote = true;
         // Sin empezar o apagada: el juego ignora los avisos a una FSM así. Puesto ya, en una apagada sus acciones corrían en
         // un objeto inactivo y al encenderse volvía al principio; en una sin empezar, su Start lo repetía (acciones dos
         // veces). Se pone en cuanto esté en marcha (el último que llegue)
         if (!item.Fsm.Fsm.Started || !item.Fsm.isActiveAndEnabled) {
             item.PendingRemoteState = state;
+            WakeCopy(item);
             return;
         }
 
@@ -1233,6 +1339,76 @@ internal sealed class FsmStateSync {
             fsm.UpdateStateChanges();
         } finally {
             FsmExecutionStack.PopFsm();
+            _applying = null;
+            _requested = false;
+            foreach (var action in DisabledActions) {
+                action.Enabled = true;
+            }
+
+            DisabledActions.Clear();
+        }
+
+        HideTakenOrb(item);
+        FollowAbyssRaise(item);
+    }
+
+    /// <summary>Orbe falso del Maestro de Almas y la escena de quien lo coge (su hermano en la sala).</summary>
+    private const string FakeOrbName = "Quake Fake";
+
+    private const string FakeOrbSceneName = "Knight Get Quake Fake";
+
+    /// <summary>
+    /// Empezó la escena de quien coge el orbe falso: el orbe se apaga en todos los PCs, también en el suyo. Al cogerlo, lo
+    /// que lo esconde (la misma FSM que esconde al caballero que lo coge y le quita el control) solo pasa en el PC de quien
+    /// lo cogió: en los demás seguía flotando. Y su otra FSM, la de las ondas, la lleva un solo PC: seguía lanzándolas (y
+    /// volvía a lanzarlas en el de quien lo cogió al llegarle su estado).
+    /// </summary>
+    private static void HideTakenOrb(Tracked item) {
+        var scene = item.Fsm.gameObject;
+        var parent = scene.transform.parent;
+        var orb = scene.name == FakeOrbSceneName && parent != null ? parent.Find(FakeOrbName) : null;
+        if (orb != null && orb.gameObject.activeSelf) {
+            orb.gameObject.SetActive(false);
+        }
+    }
+
+    private static readonly System.Reflection.MethodInfo FsmComponentStart =
+        typeof(PlayMakerFSM).GetMethod("Start", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+    /// <summary>
+    /// Llegan pasos de otro PC para un objeto que aquí está apagado: lo encendió la lógica de allí (el orbe falso del
+    /// Maestro de Almas enciende el caballero falso del que lo coge). Sin encenderlo, sus pasos esperaban para siempre y
+    /// solo ese jugador veía la escena: el caballero falso, el Maestro que vuelve y el cristal que se rompe. Se enciende
+    /// y su primer estado se hace como copia (sin tocar al caballero de este PC); lo siguiente lo marcan los pasos que
+    /// llegan, y su posición la del objeto de allí.
+    /// </summary>
+    private static void WakeCopy(Tracked item) {
+        var go = item.Fsm.gameObject;
+        if (item.CopyTransitions || go.activeSelf || !item.Fsm.enabled || item.Fsm.Fsm.Started ||
+            go.transform.parent != null && !go.transform.parent.gameObject.activeInHierarchy) {
+            return;
+        }
+
+        Log.Info($"{NameOf(item)}: aquí estaba apagado y allí va por {item.PendingRemoteState}; se enciende para seguirlo");
+        PrepareCopy(item, item.Fsm.Fsm.StartState);
+        _applying = item;
+        _requested = true;
+        try {
+            go.SetActive(true);
+            // Es solo para verla: sus choques no tocan nada de este PC. El caballero falso del Maestro de Almas aparece
+            // encima del orbe, y el orbe de este PC lo tomaba por su caballero: lo escondía y le quitaba el control
+            foreach (var collider in go.GetComponentsInChildren<Collider2D>(true)) {
+                collider.enabled = false;
+            }
+
+            if (!item.Fsm.Fsm.Started) {
+                FsmComponentStart?.Invoke(item.Fsm, null);
+            }
+
+            HideTakenOrb(item);
+        } catch (Exception e) {
+            Log.Warn($"{NameOf(item)}: no se pudo encender ({e.GetType().Name})");
+        } finally {
             _applying = null;
             _requested = false;
             foreach (var action in DisabledActions) {
@@ -1287,6 +1463,23 @@ internal sealed class FsmStateSync {
 
     private static readonly List<PlayMakerFSM> ChallengeScratch = new();
 
+    /// <summary>Cartel de este PC cuyo desafío empezó cuando el combate ya había empezado en otro.</summary>
+    private static PlayMakerFSM _lateChallenge;
+
+    /// <summary>Si su caballero ya aceptó el desafío (el cartel le quitó el control: "Talking").</summary>
+    private static bool IsChallenging(PlayMakerFSM fsm) => fsm.FsmVariables.FindFsmBool("Talking") is { Value: true };
+
+    /// <summary>Si el caballero de este PC aceptó el desafío de algún cartel de la sala.</summary>
+    private static bool LocalChallenger() {
+        foreach (var fsm in PlayMakerFSM.FsmList) {
+            if (fsm != null && fsm.FsmName == ChallengeFsm && IsChallenging(fsm)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// Un combate de batalla empezó en otro PC: el cartel para desafiar (Señores Mantis) se apaga también aquí, como
     /// hace el juego en el PC que lo aceptó (le quita la colisión y esconde la flecha). Si no, este jugador podría
@@ -1312,6 +1505,13 @@ internal sealed class FsmStateSync {
             var arrowFsm = arrow != null ? arrow.GetComponent<PlayMakerFSM>() : null;
             if (arrowFsm != null) {
                 arrowFsm.SendEvent("DOWN");
+            }
+
+            // Este jugador ya estaba desafiando (a la vez que el otro): su desafío sigue hasta el final, o su caballero se
+            // quedaba sin control. Su aviso al acabar ya no cuenta (ver OnEvent): el combate es el que empezó el otro
+            if (IsChallenging(fsm)) {
+                _lateChallenge = fsm;
+                continue;
             }
 
             // De vuelta al reposo (si el caballero estaba al lado, su FSM esperaba la tecla para desafiar)
@@ -1349,9 +1549,13 @@ internal sealed class FsmStateSync {
                 continue;
             }
 
+            // Quien desafió aquí a los Señores Mantis perdió el control como en el PC que lleva la batalla: el trono le
+            // devuelve el control (y la pausa) también en la copia. Si dos desafiaban a la vez, el que no se quedaba la
+            // batalla seguía quieto hasta que un golpe le devolvía el control
+            var forLocalHero = item.Encounter || item.Battle && LocalChallenger();
             foreach (var action in fsmState.Actions) {
-                if (action.Enabled && (PlayerDataActions.Contains(action.GetType().Name) && !SetsOwnField(item, action) ||
-                                       !item.Encounter && TouchesHero(action))) {
+                if (action.Enabled && (PlayerDataActions.Contains(action.GetType().Name) && !SetsOwnField(forLocalHero, action) ||
+                                       !forLocalHero && TouchesHero(action, item.Fsm.Fsm))) {
                     action.Enabled = false;
                     DisabledActions.Add(action);
                 }
@@ -1366,8 +1570,8 @@ internal sealed class FsmStateSync {
     /// siguiente vez su Grimm empezaba por el primer encuentro mientras el del otro empezaba el combate. Solo los que
     /// ponen un valor: sumar o restar se haría dos veces si el dato también fuera compartido.
     /// </summary>
-    private static bool SetsOwnField(Tracked item, FsmStateAction action) {
-        if (!item.Encounter) {
+    private static bool SetsOwnField(bool forLocalHero, FsmStateAction action) {
+        if (!forLocalHero) {
             return false;
         }
 
@@ -1385,7 +1589,9 @@ internal sealed class FsmStateSync {
     /// Llamadas al caballero (devolverle el control, girarlo): en el PC de origen son para quien aceptó el desafío; aquí
     /// el caballero no lo había perdido.
     /// </summary>
-    private static bool TouchesHero(FsmStateAction action) {
+    /// <param name="fsm">La FSM de la acción: en una que aún no arrancó, <c>action.Fsm</c> sigue sin poner (el caballero falso
+    /// del Maestro de Almas, encendido como copia, fallaba aquí y la escena no se veía en los demás PCs).</param>
+    private static bool TouchesHero(FsmStateAction action, Fsm fsm) {
         var hero = HeroController.instance;
         if (hero == null) {
             return false;
@@ -1398,8 +1604,8 @@ internal sealed class FsmStateSync {
         }
 
         var target = action switch {
-            HutongGames.PlayMaker.Actions.CallMethodProper call => action.Fsm.GetOwnerDefaultTarget(call.gameObject),
-            HutongGames.PlayMaker.Actions.SendMessage message => action.Fsm.GetOwnerDefaultTarget(message.gameObject),
+            HutongGames.PlayMaker.Actions.CallMethodProper call => fsm.GetOwnerDefaultTarget(call.gameObject),
+            HutongGames.PlayMaker.Actions.SendMessage message => fsm.GetOwnerDefaultTarget(message.gameObject),
             _ => null
         };
         if (target != null && target == hero.gameObject) {
@@ -1410,10 +1616,10 @@ internal sealed class FsmStateSync {
         // ella con SetVelocity2d, SetScale y Tk2dPlayAnimation sobre {Hero}), el cuadro de diálogo (BOX UP YN,
         // StartConversation) y el cartel de "Inspeccionar" (Prompt Control): eran para quien la usó. Antes, cuando el
         // compañero pagaba un peaje, a este jugador se le movía el caballero y le salía la caja de sí/no con el precio
-        return TargetsHeroOrDialogue(action, hero.gameObject);
+        return TargetsHeroOrDialogue(action, fsm, hero.gameObject);
     }
 
-    private static bool TargetsHeroOrDialogue(FsmStateAction action, GameObject hero) {
+    private static bool TargetsHeroOrDialogue(FsmStateAction action, Fsm fsm, GameObject hero) {
         if (action is HutongGames.PlayMaker.Actions.CallMethodProper { methodName.Value: "StartConversation" }) {
             return true;
         }
@@ -1425,7 +1631,7 @@ internal sealed class FsmStateSync {
             }
 
             var receiver = send.eventTarget.target is FsmEventTarget.EventTarget.GameObject or FsmEventTarget.EventTarget.GameObjectFSM
-                ? action.Fsm.GetOwnerDefaultTarget(send.eventTarget.gameObject)
+                ? fsm.GetOwnerDefaultTarget(send.eventTarget.gameObject)
                 : null;
             if (receiver != null && (receiver == hero || PlayMakerFSM.FindFsmOnGameObject(receiver, "Prompt Control") != null)) {
                 return true;
@@ -1435,7 +1641,7 @@ internal sealed class FsmStateSync {
         foreach (var field in action.GetType().GetFields(System.Reflection.BindingFlags.Public |
                                                          System.Reflection.BindingFlags.Instance)) {
             var target = field.GetValue(action) switch {
-                FsmOwnerDefault owner => action.Fsm.GetOwnerDefaultTarget(owner),
+                FsmOwnerDefault owner => fsm.GetOwnerDefaultTarget(owner),
                 FsmGameObject gameObject => gameObject.Value,
                 _ => null
             };
@@ -1472,6 +1678,12 @@ internal sealed class FsmStateSync {
 
         // Con eventData, su remitente aunque sea nulo: el estático queda viejo con PlayMakerFSM.BroadcastEvent desde C#
         var sender = eventData != null ? eventData.SentByFsm : Fsm.EventData?.SentByFsm;
+
+        // El desafío de este jugador acabó cuando el combate ya lo llevaba otro PC (desafiaron a la vez): no lo empieza
+        // otra vez ni le quita el control a quien lo lleva
+        if (sender != null && _lateChallenge != null && sender == _lateChallenge.Fsm && fsmEvent.Name == ChallengeEvent) {
+            return false;
+        }
 
         // Mientras se aplica aquí la cadena de otro objeto, lo que este manda a los demás ya lo mandó en su PC. Salvo lo
         // que mande un enemigo que mueve este PC (su lógica solo va aquí): la arena del Campeón Fallido, copiada de otro
@@ -2375,7 +2587,10 @@ internal sealed class FsmStateSync {
         var still = item.Fsm.ActiveStateName == state && localStill;
 
         // Quieto allí en otro estado: este PC entró (o volvió) a mitad del combate y se perdió sus pasos
-        var catchUp = item.Ready && localStill && !IsController(item) && state.Length > 0 && item.Fsm.ActiveStateName != state
+        // No si aquí está apagado: la reja que el juego quita al volver a entrar con el jefe ya vencido (Señor Traidor)
+        // se ponía al día con la cerrada del otro PC cada vez que llegaba su estado, sin fin
+        var catchUp = item.Ready && localStill && !IsController(item) && state.Length > 0 && item.Fsm.ActiveStateName != state &&
+                      item.Fsm.gameObject.activeInHierarchy
             ? CatchUpState(item, state)
             : null;
         if (catchUp != null) {

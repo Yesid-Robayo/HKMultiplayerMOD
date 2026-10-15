@@ -396,7 +396,47 @@ internal sealed class QuestNpcSync {
     /// rescatarla); aquí tampoco, o se iba a mitad de su conversación. La campana del ciervo sí: es lo que el otro abrió.
     /// </summary>
     private bool KeptInRoom(string field, PlayMakerFSM fsm) =>
-        _changedHere.Contains(field) && Array.IndexOf(RecheckAlways, fsm.FsmName) < 0 && IsNpc(fsm);
+        _changedHere.Contains(field) && Array.IndexOf(RecheckAlways, fsm.FsmName) < 0 && (IsNpc(fsm) || WaitsForRoom(fsm));
+
+    /// <summary>
+    /// Si la FSM, ya pasada su comprobación de inicio, espera un aviso que le manda otro objeto de la sala (no sus propias
+    /// acciones: zonas, choques, esperas). Lo que pasa en la sala de un compañero también pasa aquí y se lo manda: la Capa
+    /// de Polilla espera el HORNET LEAVE del cadáver de Hornet para caer. Al comprobarse otra vez con hornet1Defeated, en
+    /// los PCs que no movían a Hornet aparecía ya en el suelo, sin caer.
+    /// </summary>
+    private static bool WaitsForRoom(PlayMakerFSM fsm) {
+        var state = fsm.Fsm.ActiveState;
+        if (state == null || state.Name == fsm.Fsm.StartState) {
+            return false;
+        }
+
+        foreach (var transition in state.Transitions) {
+            var name = transition.EventName;
+            if (!string.IsNullOrEmpty(name) && name != "FINISHED" && !SentByOwnActions(state, name)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool SentByOwnActions(FsmState state, string eventName) {
+        foreach (var action in state.Actions) {
+            if (action == null) {
+                continue;
+            }
+
+            foreach (var member in action.GetType().GetFields(BindingFlags.Public | BindingFlags.Instance)) {
+                var value = member.GetValue(action);
+                if (value is FsmEvent single && single.Name == eventName ||
+                    value is FsmEvent[] many && Array.Exists(many, e => e != null && e.Name == eventName)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Si quien cambió el dato está en la misma sala que este jugador. Antes se miraba si había algún otro: con A y B

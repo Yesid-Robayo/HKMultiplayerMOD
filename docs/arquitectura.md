@@ -579,9 +579,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 Decisiones aprobadas en [Decisiones de M5](#decisiones-de-m5). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
-mensajes nuevos van del 73 al 114 (el 98 y el 108 son de `EnemySync`, el 104, el 105 y el 107 de `HazardSync`, el 106
-de `StagTogether`, el 109 y el 110 de `SceneObjectSync`, el 111 de `Revive`, el 112 de `PartyAbilities` y el 113 y el
-114 de `PantheonTogether`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
+mensajes nuevos van del 73 al 116 (el 98, el 108 y el 115 son de `EnemySync`, el 104, el 105 y el 107 de `HazardSync`,
+el 106 de `StagTogether`, el 109 y el 110 de `SceneObjectSync`, el 111 de `Revive`, el 112 de `PartyAbilities`, el 113
+y el 114 de `PantheonTogether` y el 116 de `MenderBugSync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
 juego (16:9; con otra proporción el juego deja franjas) y escala con su alto como el HUD del juego; las piezas se crean
 una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
 
@@ -941,6 +941,42 @@ invulnerabilidad y comparación de la sala en todos los PCs al acabar).
   para cambiar de PC (Grey Prince Zote cambiaba cada 4 s); uno con 9000 de vida o más no es jefe (el maniquí de mantis
   del combate del Señor Traidor, 999999).
 
+### Cambios de cada jefe con 4 jugadores (0.30.0)
+
+Salieron de repetir cada combate de jefe con 4 copias, uno a uno, golpeando desde un PC que no lo mueve, y de jugar el
+Panteón de Hallownest hasta su final.
+
+- **Final del Panteón de Hallownest por PC** (`EnemySync.StartFinale`): al llegar la Radiancia Absoluta a "Final
+  Impact", cada PC deja de seguirla y su lógica sigue sola desde ahí (`FinaleRunning`). Si el caballero de ese PC está
+  muy por debajo (en el abismo), se sube a la última plataforma (`BringHeroToFinale`). Mientras dura, los compañeros
+  no se dibujan (`PlayerSync`), los nombres se esconden con el HUD del juego, las cinemáticas compartidas no se llevan
+  a quien sigue en su final (`SharedCutscenes.OwnEndingScene`) y el fin de sala del Panteón no lo acaba
+  (`PantheonTogether`). El botón de atacar de cada jugador llega al jefe que lo espera (`UpdateAttackListens`).
+- **Efectos de la marioneta**: cuántas acciones del estado hizo el PC que lo mueve (`ranTo`, si salió del estado en
+  el mismo frame); los eventos con retraso se envían desde `UpdateDelayedSends` (la FSM de la marioneta está parada y
+  no atiende su cola: el cartel del Recipiente Puro); `SetPosition` de lo que solo se ve, `iTweenMoveTo`/`MoveBy` de
+  objetos de la sala (el abismo), `SendEventToRegister` con `BLAST` (las burbujas, con `DropSeeds` en sus dados),
+  `SetStaticVariable` de `ggCinematicEnding` y `SetHazardRespawn` al caballero. Los objetos de la sala van por su ruta
+  (tabla en caché) y caben 128 por efecto; se siguen hasta 64 piezas por enemigo.
+- **Traspaso en el mismo estado** (`RestartAnimationWaits`): si la FSM del nuevo PC ya estaba parada en ese estado, lo
+  que espera el final de una animación se vuelve a lanzar (la Radiancia esperaba "Tele Out" para siempre).
+- **Enemigo huérfano** (mensaje 115): uno que el dueño de la sala no tiene (una parte de sala no cargada en su PC) lo
+  reparte el de número más bajo de los que lo tienen, con el mismo criterio de cercanía (`PickController`).
+- **FSM de plantilla** (`FsmStateSync.Rekey`): estrenan lógica al encenderse su objeto; se vuelven a apuntar. Las
+  zonas `raise_abyss_pit` de la subida se copian como palancas y la reaparición sigue al marcador de la zona, solo
+  hacia arriba (`FollowAbyssRaise`).
+- **Personajes por jugador** (`CharacterData.DialogueFields` y `NpcPresenceFields`): por dónde va cada conversación y
+  si el personaje sigue en su sitio para ese jugador (incluidas las cadenas de `TimePasses`, como `zoteSpokenCity` →
+  `zoteLeftCity`). Los de presencia están en `WasShared`.
+- **Entrar en un Panteón con otro** (`PantheonTogether.CoverWithWhite`): como entre jefes, telón blanco al momento y
+  viaje sin fundido de cámara (con fundido, `CameraFade` se quedaba en `FadingOut` y la pantalla negra).
+- **Caído en Godhome** (`Revive.ReviveLeftInGodhome`): el host lo revive junto al compañero cuando el grupo pasa a otra
+  sala de jefe, esperando a que su PC llegue a la misma sala.
+- **Barras de jefe** (`BossBar`): solo el `HealthManager` principal y solo si ya pelea (se movió o recibió daño). El Rey
+  Vengamosca y la Madre Gruz son jefes (`Difficulty.SmallBosses`).
+- **Menderbug** (`MenderBugSync`, mensaje 116): si sale en un PC de la sala, sale en todos.
+- **Desafío de los Señores Mantis**: un desafío que llega tarde a quien ya desafía se descarta.
+
 ## Código del juego
 
 Para ver cómo hace algo el juego antes de tocarlo. Todo queda en `decomp/` (en `.gitignore`): es código de Team Cherry
@@ -1259,6 +1295,16 @@ Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial 
   Después, las 16 rutas con 4 jugadores (`run-routes.sh --players 4`, mundo nuevo): 0 FALLO, y los mismos NOCONC que
   con 2 (los jefes que las rutas no despiertan y salas sin objetos ni enemigos). La de sesión necesitaba `die extras`:
   con 4, al morir el invitado y el host los otros dos seguían en pie y no caían todos.
+- **0.30.0** (14 y 15 oct 2026, 4 copias: J host, K, L y M invitados), jefe a jefe, golpeando el usuario desde un PC que
+  no lo mueve: Rey Vengamosca, Hornet (la Capa cae en todos y el sueño de los Soñadores al recogerla), Señores Mantis
+  (también dos desafiando a la vez), Maestro de Almas (el orbe falso, la caída y el Desolador para todos), Caballeros
+  Vigía, Defensor del Estiércol, Flukemarm, Guardián de Cristal y Guardián Furioso, Señor Traidor, Menderbug, Zote
+  (cada conversación es de cada jugador y se va solo para quien habló con él), el Panteón del Maestro (caídos que
+  reviven en la sala del siguiente jefe) y el Panteón de Hallownest hasta su final: sin pantalla negra al entrar, el
+  nombre y las burbujas del Recipiente Puro en los 4, el abismo de la Radiancia igual en todos y la reaparición sobre
+  él, y el final de cada uno en su PC, con su cinemática al acabar el suyo y sin ver a los demás. Además: el icono del
+  compañero en la tienda de Iselda y en el Sendero Verde (con la Brújula Caprichosa), el menú y los avisos del mod en
+  inglés (con el juego abierto ya en inglés) y el vapor del Falso Caballero. Las 16 rutas no se volvieron a pasar.
 
 ## Pendientes
 
@@ -1272,10 +1318,7 @@ Sin probar:
 - De 0.23.0: todo entre dos PCs reales. En la partida real el invitado dijo que revivir no le gastaba alma; en las
   copias sí la gasta (se cobra entera al empezar Focus y se devuelve si se suelta o le golpean, y su registro tiene
   tres "Golpeado mientras revivía").
-- La traducción al inglés dentro del juego (0.21.0) y el vapor naranja de la muerte del Falso Caballero (0.20.3).
-- De 0.22.0: el icono del compañero en una sala que no sale en el mapa (tiendas) y en otra zona; la reconexión entre
-  dos PCs.
-- Menderbug (por análisis).
+- De 0.22.0: la reconexión entre dos PCs.
 - Volver de una cinemática que acaba en una sala de juego (el final del Panteón de Hallownest; va por `SceneTravel`).
   La vuelta del Panteón del Maestro al Atrio sí está probada (0.29.0). Que su puerta quede completada no se miró
   directamente: lo apunta el juego en cada PC al acabar su secuencia.
@@ -1286,8 +1329,12 @@ Con 3 o 4 jugadores: lo de la revisión del 12/10/2026 está arreglado y probado
 jugadores"). En 0.29.0, la historia entera con 4 copias (ver "Cambios de la historia completa con 4 jugadores"): los
 jefes con golpes de verdad, los sueños, los soñadores, los dos finales del Hollow Knight y la Radiancia por el camino
 del juego, la Compañía de Grimm, Grey Prince Zote, el Coliseo de Bronce (con Zote), Zote tras el Rey Vengamosca, Cloth
-y el Panteón del Maestro entero; después, las 16 rutas con un mundo nuevo y 0 FALLO. Sin probar: el banco pegado a una
-pared (no se encontró uno con una puerta segura para el modo de prueba) y todo con 3 o 4 PCs reales.
+y el Panteón del Maestro entero; después, las 16 rutas con un mundo nuevo y 0 FALLO. En 0.30.0, cada jefe uno a uno y
+el Panteón de Hallownest hasta su final (ver "Cambios de cada jefe con 4 jugadores"), y lo que faltaba: el icono del
+compañero en una tienda y en otra zona (con la Brújula Caprichosa), el menú y los avisos en inglés, el vapor del Falso
+Caballero, el Menderbug y Zote, que se va solo para quien habló con él. No hay ningún banco con una pared más cerca
+que el reparto de los que se sientan (que ya la respeta). Pendiente en 0.30.0: pasar otra vez las 16 rutas con un
+mundo nuevo (se pausó antes de acabar). Sin probar: todo con 3 o 4 PCs reales.
 
 Limitaciones conocidas:
 - El jefe ataca al caballero del PC que lo mueve, y lo mueve el jugador más cercano: cambia como mucho cada 8 s, y
