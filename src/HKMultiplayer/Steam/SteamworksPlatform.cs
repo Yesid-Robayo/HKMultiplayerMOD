@@ -35,10 +35,13 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
     private readonly HashSet<ulong> _expected = new();
     private readonly Callback<SteamNetworkingMessagesSessionRequest_t> _sessionRequest;
     private readonly Callback<GameLobbyJoinRequested_t> _joinRequested;
+    private readonly Callback<GameRichPresenceJoinRequested_t> _presenceJoinRequested;
     private readonly CallResult<LobbyCreated_t> _lobbyCreated;
     private readonly CallResult<LobbyEnter_t> _lobbyEntered;
     private Action<ulong> _onCreated;
     private Action<bool> _onEntered;
+    private bool _friendsCanJoin;
+    private bool _connectShown;
     private bool _disposed;
 
     public ulong LocalId { get; }
@@ -51,6 +54,13 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
         _joinRequested = Callback<GameLobbyJoinRequested_t>.Create(request => {
             Log.Info("Steam: invitación o \"Unirse\" a una partida de un amigo");
             JoinRequested?.Invoke(request.m_steamIDLobby.m_SteamID);
+        });
+        // "Unirse a la partida" o "Invitar a jugar" desde la lista de amigos de Steam: llega la presencia "connect" del host
+        _presenceJoinRequested = Callback<GameRichPresenceJoinRequested_t>.Create(request => {
+            if (TryParseConnect(request.m_rgchConnect, out var lobby)) {
+                Log.Info("Steam: \"Unirse a la partida\" desde la lista de amigos");
+                JoinRequested?.Invoke(lobby);
+            }
         });
         _lobbyCreated = CallResult<LobbyCreated_t>.Create(OnLobbyCreated);
         _lobbyEntered = CallResult<LobbyEnter_t>.Create(OnLobbyEntered);
@@ -186,6 +196,14 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
 
     public void Expect(ulong peer) => _expected.Add(peer);
 
+    /// <summary>La sala de un "+connect_lobby &lt;id&gt;" (la presencia "connect" o la línea de órdenes del juego).</summary>
+    public static bool TryParseConnect(string text, out ulong lobby) {
+        lobby = 0;
+        var parts = (text ?? string.Empty).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        var at = Array.IndexOf(parts, "+connect_lobby");
+        return at >= 0 && at + 1 < parts.Length && ulong.TryParse(parts[at + 1], out lobby) && lobby != 0;
+    }
+
     // =====================================================================================================
     // Salas
     // =====================================================================================================
@@ -193,6 +211,7 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
     public void CreateLobby(bool friendsCanJoin, Action<ulong> done) {
         LeaveLobby();
         _onCreated = done;
+        _friendsCanJoin = friendsCanJoin;
         var type = friendsCanJoin ? ELobbyType.k_ELobbyTypeFriendsOnly : ELobbyType.k_ELobbyTypePrivate;
         _lobbyCreated.Set(SteamMatchmaking.CreateLobby(type, MaxLobbyMembers));
     }
@@ -207,6 +226,13 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
         }
 
         Lobby = result.m_ulSteamIDLobby;
+        // Con la presencia "connect", Steam enseña "Unirse a la partida" e "Invitar a jugar" en la lista de amigos (sin
+        // ella solo sale "Invitar a ver"). En una sala privada no se pone: solo se entra con invitación
+        if (_friendsCanJoin) {
+            SteamFriends.SetRichPresence("connect", $"+connect_lobby {Lobby}");
+            _connectShown = true;
+        }
+
         done?.Invoke(Lobby);
     }
 
@@ -237,6 +263,10 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
 
         SteamMatchmaking.LeaveLobby(new CSteamID(Lobby));
         Lobby = 0;
+        if (_connectShown) {
+            SteamFriends.SetRichPresence("connect", string.Empty);
+            _connectShown = false;
+        }
     }
 
     public void SetLobbyData(string key, string value) {
@@ -280,6 +310,7 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
         LeaveLobby();
         _sessionRequest.Dispose();
         _joinRequested.Dispose();
+        _presenceJoinRequested.Dispose();
         _lobbyCreated.Dispose();
         _lobbyEntered.Dispose();
         Marshal.FreeHGlobal(_sendBuffer);

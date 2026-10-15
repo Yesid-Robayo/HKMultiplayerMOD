@@ -1168,7 +1168,10 @@ fiabilidad y la sesión son los mismos; Steam solo sustituye el transporte entre
 - **Sala de Steam del host** (`MultiplayerRunner.OpenSteamLobby`): al hostear, si hay Steam y el ajuste
   `SteamAccess` no es "Nadie", se crea una sala de hasta 4, solo para amigos (`k_ELobbyTypeFriendsOnly`) o privada con
   "Solo invitados" (`k_ELobbyTypePrivate`). Guarda `hkmp=1`, `version`, `code` (el código de la partida), `host` (el
-  SteamID del host) y `name`. El host escucha por UDP y por Steam a la vez; si el puerto no se puede abrir, la partida se
+  SteamID del host) y `name`. Con "Amigos", el host pone además la presencia de Steam `connect` = `+connect_lobby <sala>`:
+  sin ella, la lista de amigos de Steam solo ofrecía "Invitar a ver" (visto con Steam de verdad), y con ella salen
+  "Invitar a jugar" y "Unirse a la partida" (aviso `GameRichPresenceJoinRequested_t`, o esa línea de órdenes si Steam
+  abre el juego). Con "Solo invitados" no se pone. El host escucha por UDP y por Steam a la vez; si el puerto no se puede abrir, la partida se
   abre igual solo por Steam (la pausa lo dice en vez de la IP).
 - **Unirse** (`JoinSteamLobby`): entra en la sala, comprueba `hkmp` y la versión (si no coincide, lo dice antes de
   conectar) y se conecta a la cuenta del host con el código de la sala (`StartJoinSteam`). Se llega desde la lista
