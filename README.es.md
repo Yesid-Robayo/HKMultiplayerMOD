@@ -14,8 +14,9 @@
 
 <img src="docs/media/coop-hornet.gif" alt="Dos PCs en la misma partida peleando contra Hornet" width="966">
 
-<sub>Dos PCs en la misma partida contra Hornet: los dos ven lo mismo a la vez, cada caballero con su nombre y el HUD del
-compañero arriba a la derecha. El PC 1 lleva la skin Rick Knight (con su HUD). Hollow Knight es de Team Cherry.</sub>
+<sub>Dos PCs en la misma partida contra Hornet: los dos ven lo mismo a la vez. Pierden máscaras con sus golpes, se curan con
+Focus (cada uno ve la curación del otro) y el HUD del compañero, arriba a la derecha, va al día. El PC 1 lleva la skin
+Rick Knight (con su HUD). Hollow Knight es de Team Cherry.</sub>
 
 </div>
 

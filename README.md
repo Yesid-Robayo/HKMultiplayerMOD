@@ -14,8 +14,9 @@
 
 <img src="docs/media/coop-hornet.gif" alt="Two PCs in the same game fighting Hornet" width="966">
 
-<sub>Two PCs in the same game against Hornet: both see the same thing at the same time, each knight with their name and
-the partner HUD at the top right. PC 1 wears the Rick Knight skin (with its HUD). Hollow Knight belongs to Team Cherry.</sub>
+<sub>Two PCs in the same game against Hornet: both see the same thing at the same time. They lose masks to her hits, heal
+with Focus (each one sees the other heal) and the partner HUD at the top right stays up to date. PC 1 wears the Rick
+Knight skin (with its HUD). Hollow Knight belongs to Team Cherry.</sub>
 
 </div>
 
