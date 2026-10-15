@@ -28,8 +28,62 @@ internal static class Difficulty {
                 hit.Multiplier = ScaledMultiplier(self, hit.DamageDealt, hit.Multiplier, multiplier);
             }
 
-            orig(self, hit);
+            // Golpe que no cuenta para aturdir: TakeDamage avisa a la FSM de aturdimiento si la tiene; sin ella ese golpe no
+            // llega, y el daño se hace igual
+            var stun = SkipStunHit(self) ? StunControlField.GetValue(self) : null;
+            if (stun != null) {
+                StunControlField.SetValue(self, null);
+            }
+
+            try {
+                orig(self, hit);
+            } finally {
+                if (stun != null) {
+                    StunControlField.SetValue(self, stun);
+                }
+            }
         };
+    }
+
+    /// <summary>FSM de aturdimiento del enemigo ("Stun Control" o "Stun"), a la que TakeDamage manda STUN DAMAGE.</summary>
+    private static readonly FieldInfo StunControlField =
+        typeof(HealthManager).GetField("stunControlFSM", BindingFlags.NonPublic | BindingFlags.Instance);
+
+    /// <summary>Golpes que aún no llegan a uno que cuente para aturdir, por enemigo.</summary>
+    private static readonly Dictionary<HealthManager, float> StunCarry = new();
+
+    /// <summary>
+    /// Los jefes que se aturden tras unos golpes (Hornet, Vasija Rota, Maestro de Almas, Grimm, Hollow Knight...) cuentan
+    /// cada golpe en su FSM de aturdimiento: el total ("Stun Hit Max") y los seguidos en poco tiempo ("Stun Combo"). Con
+    /// varios jugadores pegando, los dos se llenaban antes y el jefe se pasaba el combate aturdido. Con N jugadores en la
+    /// sala solo cuenta uno de cada N golpes: hacen falta N veces más, y como pegan N veces más rápido, se aturde más o
+    /// menos tan a menudo como jugando solo. No se tocan sus variables: vale igual con Golpe Pesado (que las baja al
+    /// empezar) y cuando el jefe cambia de PC a mitad del combate.
+    /// </summary>
+    private static bool SkipStunHit(HealthManager enemy) {
+        if (StunControlField == null || StunControlField.GetValue(enemy) == null) {
+            return false;
+        }
+
+        var session = MultiplayerRunner.Instance != null ? MultiplayerRunner.Instance.Session : null;
+        if (session == null || !session.IsActive || ShadeSync.IsRemoteShade(enemy.gameObject)) {
+            return false;
+        }
+
+        var players = 1 + PartnersInRoom(session);
+        if (players <= 1) {
+            return false;
+        }
+
+        if (StunCarry.Count > 64) {
+            Prune(StunCarry);
+        }
+
+        StunCarry.TryGetValue(enemy, out var carry);
+        carry += 1f / players;
+        var counts = carry >= 0.999f;
+        StunCarry[enemy] = counts ? carry - 1f : carry;
+        return !counts;
     }
 
     /// <summary>

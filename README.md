@@ -355,7 +355,9 @@ away without being able to change them.
 | Ride the stag together | Yes · No | Yes |
 
 The boss and enemy health is the extra health with one partner: each additional partner standing in the room adds the
-same again (1.5× is 2× with three players and 2.5× with four).
+same again (1.5× is 2× with three players and 2.5× with four). Bosses that get stunned after a number of hits (Hornet,
+Broken Vessel, Grimm...) need as many times more hits as there are players in the room, so they don't spend the fight
+stunned when several players hit them at once.
 
 ---
 

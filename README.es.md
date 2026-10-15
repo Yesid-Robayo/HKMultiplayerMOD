@@ -358,7 +358,9 @@ al momento sin poder cambiarlos.
 | Viajar juntos en ciervo | Sí · No | Sí |
 
 La vida de los jefes y de los enemigos es la vida extra con un compañero: cada compañero más en pie en la sala suma lo
-mismo otra vez (1,5× es 2× con tres jugadores y 2,5× con cuatro).
+mismo otra vez (1,5× es 2× con tres jugadores y 2,5× con cuatro). Los jefes que se aturden tras unos golpes (Hornet,
+Vasija Rota, Grimm...) necesitan tantas veces más golpes como jugadores haya en la sala, así no se pasan el combate
+aturdidos cuando pegan varios a la vez.
 
 ---
 

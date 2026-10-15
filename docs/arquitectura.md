@@ -894,6 +894,14 @@ copias a la vez (`setup_group` en `tools/routes/lib.sh`: el host y hasta tres in
   está caído) y su nombre encima, con una copia de un texto del propio mapa (un `TextMesh` no se veía).
 - **Dificultad** (`Difficulty.Multiplier`): la vida extra elegida es la de un compañero; cada compañero más en pie en la
   sala suma lo mismo otra vez (1,5× con dos jugadores es 2× con tres y 2,5× con cuatro).
+- **Aturdimiento** (`Difficulty.SkipStunHit`): los jefes con FSM "Stun Control"/"Stun" (Hornet 1 y 2, Vasija Rota, Hermano
+  Perdido, Maestro y Tirano de Almas, Defensor del Estiércol, Coleccionista, Caballero de la Colmena, Grimm, Príncipe Gris
+  Zote, Sly, Sheo, Hollow Knight y el del Panteón) cuentan cada golpe que no mata (`HealthManager.TakeDamage` manda
+  `STUN DAMAGE`): total ("Stun Hit Max") y seguidos en 2 s ("Stun Combo"). Con N jugadores en la sala solo cuenta uno de
+  cada N: durante el `TakeDamage` de los que no cuentan se quita `stunControlFSM` del `HealthManager` (y se devuelve), así
+  el daño se hace igual. Se aturden más o menos tan a menudo como jugando solo; no se tocan sus variables (Golpe Pesado
+  las baja al empezar, y el jefe cambia de PC). Elegido por jugadores y no por la vida extra: con la vida en 1× el
+  problema volvía entero.
 - **"Ir con"** (`PartnerTravel`): cuatro sitios junto al compañero (a un paso y a dos de cada lado) y cada número de
   jugador empieza por uno distinto; se salta un sitio en el que ya hay otro jugador dibujado.
 - **Números reutilizados**: el servidor da el número libre más bajo. Al irse un jugador, lo que controlaba en
