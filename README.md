@@ -9,6 +9,7 @@
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
 ![Languages](https://img.shields.io/badge/languages-english%20%7C%20español-7ddc8f)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-support%20the%20project-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/yesidrobayo)
 
 **English** · [Español](README.es.md) · [Changelog](CHANGELOG.md)
 
@@ -41,6 +42,7 @@ API.
 - [Technology](#-technology)
 - [Development](#-development)
 - [Credits](#-credits)
+- [Support the project](#-support-the-project)
 - [License and contributions](#-license-and-contributions)
 
 ---
@@ -467,6 +469,11 @@ PlayMaker FSMs are not in there; see [Código del juego](docs/arquitectura.md#c�
 - Skins compatible with **CustomKnight**.
 
 ---
+
+## ☕ Support the project
+
+HKMultiplayer is free and made by a single person. If you like it and want to support it, you can buy me a coffee on
+**[Ko-fi](https://ko-fi.com/yesidrobayo)**. It's not required: reporting bugs with your `ModLog.txt` helps a lot too.
 
 ## 📄 License and contributions
 
