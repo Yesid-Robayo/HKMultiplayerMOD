@@ -17,7 +17,7 @@
         <Nullable>disable</Nullable>
         <AssemblyName>HKMultiplayer Setup</AssemblyName>
         <RootNamespace>HKMultiplayer.Setup</RootNamespace>
-        <Version>1.0.0</Version>
+        <Version>1.0.1</Version>
         <Product>HKMultiplayer</Product>
         <AssemblyTitle>HKMultiplayer Setup</AssemblyTitle>
         <Description>Instalador de HKMultiplayer, mod cooperativo para Hollow Knight</Description>

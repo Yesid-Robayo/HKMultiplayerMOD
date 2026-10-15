@@ -1253,7 +1253,8 @@ fiabilidad y la sesión son los mismos; Steam solo sustituye el transporte entre
 - La desinstalación (`Installer.Uninstall`) recorre el manifiesto al revés. De `Mods\HKMultiplayer` borra lo que puso el
   instalador y la caché `SkinCache`; lo demás (las skins y lo que haya puesto el jugador) se queda y se dice qué. Las
   carpetas añadidas se borran si quedan vacías. Un ensamblado que ya no es el de la Modding API (`IsModded`: los
-  parcheados nombran `ModHooks`) lo volvió a poner Steam: se deja si es distinto de la copia. Si algo no se pudo devolver, conserva la
+  parcheados nombran `ModHooks` o `MonoMod`; hasta la 0.31.1 solo `ModHooks`, y el `TeamCherry.Localization.dll` de
+  la Modding API, que no lo nombra, se quedaba al desinstalar) lo volvió a poner Steam: se deja si es distinto de la copia. Si algo no se pudo devolver, conserva la
   copia y remite a "Verificar integridad" de Steam. Sin manifiesto (mod puesto a mano) quita solo el mod.
 
 ## Hitos

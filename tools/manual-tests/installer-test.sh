@@ -51,9 +51,9 @@ prepare_copy() {
   fi
 
   # Como el juego sin mods. En este PC no hay un Assembly-CSharp.dll original de esta versión (el .v es de una versión
-  # anterior del juego, que el instalador rechaza): se usa el actual sin el texto ModHooks, que es lo que distingue un
+  # anterior del juego, que el instalador rechaza): se usa el actual sin los textos ModHooks y MonoMod, que es lo que distingue un
   # original de uno parcheado
-  LC_ALL=C perl -0777 -pi -e 's/ModHooks/XodHooks/g' "$managed/Assembly-CSharp.dll"
+  LC_ALL=C perl -0777 -pi -e 's/ModHooks/XodHooks/g; s/MonoMod/XonoMod/g' "$managed/Assembly-CSharp.dll"
   rm -f "$managed/Assembly-CSharp.dll.v"
   local pattern
   for pattern in "${API_PATTERNS[@]}"; do
@@ -169,7 +169,7 @@ done
 
 # Steam cambia Assembly-CSharp.dll entre instalar y desinstalar (el juego se actualizó o se verificó). Antes la
 # desinstalación volvía a poner la copia de la primera instalación, de una versión anterior, y el juego no arrancaba.
-# La "versión nueva" se hace con el Assembly-CSharp.dll de la copia limpia sin el texto ModHooks (lo que distingue un
+# La "versión nueva" se hace con el Assembly-CSharp.dll de la copia limpia sin los textos ModHooks y MonoMod (lo que distingue un
 # original de uno parcheado: en este PC no hay un original de verdad, el .v es una Modding API anterior) y un byte más.
 # El juego no se abre en estos pasos.
 letter="${LETTERS%% *}"
@@ -177,7 +177,7 @@ managed="$(_inst_dir "$letter")/hollow_knight_Data/Managed"
 dll="$managed/Assembly-CSharp.dll"
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 newer="$WORK/Assembly-CSharp.newer.dll"
-LC_ALL=C perl -0777 -pe 's/ModHooks/XodHooks/g' "$WORK/$letter-clean-Assembly-CSharp.dll" > "$newer" && printf 'x' >> "$newer"
+LC_ALL=C perl -0777 -pe 's/ModHooks/XodHooks/g; s/MonoMod/XonoMod/g' "$WORK/$letter-clean-Assembly-CSharp.dll" > "$newer" && printf 'x' >> "$newer"
 grep -aq ModHooks "$newer" && fail "[$letter] la versión nueva de prueba sigue nombrando ModHooks"
 
 echo "[$letter] el juego se actualiza, luego se actualiza el mod y se desinstala"

@@ -216,11 +216,23 @@ internal static class GameFiles {
     }
 
     /// <summary>
-    /// Si un ensamblado lo parcheó la Modding API: los parcheados nombran ModHooks y los del juego original no. Así se sabe
-    /// si un archivo que el instalador cambió sigue siendo el suyo o si Steam lo volvió a poner (al actualizar el juego o
-    /// "Verificar integridad"), sin depender de huellas apuntadas (los manifiestos antiguos no las tienen).
+    /// Si un ensamblado lo parcheó la Modding API: los parcheados nombran ModHooks (Assembly-CSharp.dll) o MonoMod, con lo
+    /// que se parchean (TeamCherry.Localization.dll no nombra ModHooks), y los del juego original ninguno de los dos. Así se
+    /// sabe si un archivo que el instalador cambió sigue siendo el suyo o si Steam lo volvió a poner (al actualizar el juego
+    /// o "Verificar integridad"), sin depender de huellas apuntadas (los manifiestos antiguos no las tienen). Hasta la 0.31.1
+    /// solo se miraba ModHooks: al desinstalar se quedaba el TeamCherry.Localization.dll de la Modding API, tomado por uno
+    /// nuevo del juego.
     /// </summary>
-    internal static bool IsModded(string file) => File.Exists(file) && Contains(File.ReadAllBytes(file), ModHooksBytes);
+    internal static bool IsModded(string file) {
+        if (!File.Exists(file)) {
+            return false;
+        }
+
+        var data = File.ReadAllBytes(file);
+        return Contains(data, ModHooksBytes) || Contains(data, MonoModBytes);
+    }
+
+    private static readonly byte[] MonoModBytes = Encoding.ASCII.GetBytes("MonoMod");
 
     /// <summary>Si el Assembly-CSharp.dll es de la versión del juego para la que es la Modding API del paquete.</summary>
     internal static bool IsGameVersion(string file) => Contains(File.ReadAllBytes(file), GameVersionBytes);
