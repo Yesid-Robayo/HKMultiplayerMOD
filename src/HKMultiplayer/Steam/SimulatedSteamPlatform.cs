@@ -108,17 +108,19 @@ internal sealed class SimulatedSteamPlatform : ISteamPlatform {
         _pendingCreated = done;
     }
 
-    public void JoinLobby(ulong lobby, Action<bool> done) {
+    public void JoinLobby(ulong lobby, Action<LobbyJoinResult> done) {
         LeaveLobby();
         // Como en Steam: en una sala privada solo entra quien recibió una invitación
-        var ok = File.Exists(LobbyFile(lobby)) && (ReadLobby(lobby).TryGetValue("private", out var hidden) && hidden == "1"
-            ? _invitedTo == lobby
-            : true);
-        if (ok) {
+        var result = !File.Exists(LobbyFile(lobby))
+            ? LobbyJoinResult.Gone
+            : ReadLobby(lobby).TryGetValue("private", out var hidden) && hidden == "1" && _invitedTo != lobby
+                ? LobbyJoinResult.NotAllowed
+                : LobbyJoinResult.Ok;
+        if (result == LobbyJoinResult.Ok) {
             Lobby = lobby;
         }
 
-        done?.Invoke(ok);
+        done?.Invoke(result);
     }
 
     public void LeaveLobby() {

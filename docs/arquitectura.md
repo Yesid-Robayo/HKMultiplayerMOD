@@ -1171,7 +1171,11 @@ fiabilidad y la sesión son los mismos; Steam solo sustituye el transporte entre
   SteamID del host) y `name`. Con "Amigos", el host pone además la presencia de Steam `connect` = `+connect_lobby <sala>`:
   sin ella, la lista de amigos de Steam solo ofrecía "Invitar a ver" (visto con Steam de verdad), y con ella salen
   "Invitar a jugar" y "Unirse a la partida" (aviso `GameRichPresenceJoinRequested_t`, o esa línea de órdenes si Steam
-  abre el juego). Con "Solo invitados" no se pone. El host escucha por UDP y por Steam a la vez; si el puerto no se puede abrir, la partida se
+  abre el juego). Steam no separa los dos: con "Solo invitados" también se pone (a petición del usuario, para poder
+  invitar desde la lista de amigos), y a quien pulse "Unirse" sin invitación a la sala Steam no lo deja entrar
+  (`LobbyJoinResult.NotAllowed`: se le dice que pida la invitación desde el juego). La invitación del botón de la pausa
+  (`ActivateGameOverlayInviteDialog`) es una invitación a la sala y vale en todos los modos; la de "Invitar a jugar" de la
+  lista de amigos puede no valer en una sala privada (sin probar). El host escucha por UDP y por Steam a la vez; si el puerto no se puede abrir, la partida se
   abre igual solo por Steam (la pausa lo dice en vez de la IP).
 - **Unirse** (`JoinSteamLobby`): entra en la sala, comprueba `hkmp` y la versión (si no coincide, lo dice antes de
   conectar) y se conecta a la cuenta del host con el código de la sala (`StartJoinSteam`). Se llega desde la lista

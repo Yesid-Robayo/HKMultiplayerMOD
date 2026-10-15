@@ -39,8 +39,7 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
     private readonly CallResult<LobbyCreated_t> _lobbyCreated;
     private readonly CallResult<LobbyEnter_t> _lobbyEntered;
     private Action<ulong> _onCreated;
-    private Action<bool> _onEntered;
-    private bool _friendsCanJoin;
+    private Action<LobbyJoinResult> _onEntered;
     private bool _connectShown;
     private bool _disposed;
 
@@ -211,7 +210,6 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
     public void CreateLobby(bool friendsCanJoin, Action<ulong> done) {
         LeaveLobby();
         _onCreated = done;
-        _friendsCanJoin = friendsCanJoin;
         var type = friendsCanJoin ? ELobbyType.k_ELobbyTypeFriendsOnly : ELobbyType.k_ELobbyTypePrivate;
         _lobbyCreated.Set(SteamMatchmaking.CreateLobby(type, MaxLobbyMembers));
     }
@@ -226,17 +224,16 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
         }
 
         Lobby = result.m_ulSteamIDLobby;
-        // Con la presencia "connect", Steam enseña "Unirse a la partida" e "Invitar a jugar" en la lista de amigos (sin
-        // ella solo sale "Invitar a ver"). En una sala privada no se pone: solo se entra con invitación
-        if (_friendsCanJoin) {
-            SteamFriends.SetRichPresence("connect", $"+connect_lobby {Lobby}");
-            _connectShown = true;
-        }
+        // Con la presencia "connect", Steam enseña "Invitar a jugar" (al host) y "Unirse a la partida" (a sus amigos) en la
+        // lista de amigos; sin ella solo sale "Invitar a ver". Steam no los separa: con "Solo invitados" también se pone, y
+        // a quien pulse "Unirse" sin una invitación a la sala Steam no lo deja entrar (se le dice por qué)
+        SteamFriends.SetRichPresence("connect", $"+connect_lobby {Lobby}");
+        _connectShown = true;
 
         done?.Invoke(Lobby);
     }
 
-    public void JoinLobby(ulong lobby, Action<bool> done) {
+    public void JoinLobby(ulong lobby, Action<LobbyJoinResult> done) {
         LeaveLobby();
         _onEntered = done;
         _lobbyEntered.Set(SteamMatchmaking.JoinLobby(new CSteamID(lobby)));
@@ -245,15 +242,22 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
     private void OnLobbyEntered(LobbyEnter_t result, bool ioFailure) {
         var done = _onEntered;
         _onEntered = null;
-        // 1 = k_EChatRoomEnterResponseSuccess
-        var ok = !ioFailure && result.m_EChatRoomEnterResponse == 1;
-        if (ok) {
+        // EChatRoomEnterResponse: 1 bien, 2 no existe, 3 no permitido (privada sin invitación), 4 llena
+        var response = ioFailure ? 0u : result.m_EChatRoomEnterResponse;
+        var outcome = response switch {
+            1 => LobbyJoinResult.Ok,
+            2 => LobbyJoinResult.Gone,
+            3 => LobbyJoinResult.NotAllowed,
+            4 => LobbyJoinResult.Full,
+            _ => LobbyJoinResult.Failed
+        };
+        if (outcome == LobbyJoinResult.Ok) {
             Lobby = result.m_ulSteamIDLobby;
         } else {
-            Log.Warn($"Steam: no se pudo entrar en la sala (respuesta {result.m_EChatRoomEnterResponse})");
+            Log.Warn($"Steam: no se pudo entrar en la sala ({outcome}, respuesta {response})");
         }
 
-        done?.Invoke(ok);
+        done?.Invoke(outcome);
     }
 
     public void LeaveLobby() {

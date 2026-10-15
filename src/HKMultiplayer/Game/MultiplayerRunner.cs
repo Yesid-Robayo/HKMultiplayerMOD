@@ -557,14 +557,20 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
         CloseSession();
         SetStatus(Lang.T("Entrando en la partida de Steam...", "Joining the Steam game..."));
-        steam.JoinLobby(lobby, ok => {
+        steam.JoinLobby(lobby, result => {
             if (Session != null) {
                 return;
             }
 
-            if (!ok) {
-                SetStatus(Lang.T("No se pudo entrar en la partida de Steam (puede que se haya cerrado)",
-                    "Couldn't join the Steam game (it may have closed)"));
+            if (result != LobbyJoinResult.Ok) {
+                SetStatus(result switch {
+                    LobbyJoinResult.NotAllowed => Lang.T("Esa partida es solo con invitación: pide al host que te invite desde el juego (Pausa > Multijugador)",
+                        "That game is invite-only: ask the host to invite you from the game (Pause > Multiplayer)"),
+                    LobbyJoinResult.Full => Lang.T("La partida de Steam está llena", "The Steam game is full"),
+                    LobbyJoinResult.Gone => Lang.T("Esa partida de Steam ya no está abierta", "That Steam game isn't open anymore"),
+                    _ => Lang.T("No se pudo entrar en la partida de Steam", "Couldn't join the Steam game")
+                });
+                Notice.Show(StatusMessage, 8f);
                 return;
             }
 

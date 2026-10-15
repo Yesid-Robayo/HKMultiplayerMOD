@@ -7,6 +7,20 @@ using HKMultiplayer.Util;
 
 namespace HKMultiplayer.Steam;
 
+/// <summary>Cómo acabó el intento de entrar en una sala de Steam.</summary>
+internal enum LobbyJoinResult {
+    Ok,
+
+    /// <summary>La sala ya no existe (el host cerró la partida).</summary>
+    Gone,
+
+    /// <summary>Es privada y no hay invitación a la sala ("Solo invitados").</summary>
+    NotAllowed,
+
+    Full,
+    Failed
+}
+
 /// <summary>Un amigo de Steam con una partida de HKMultiplayer abierta (en una sala de Steam).</summary>
 internal sealed class SteamFriendGame {
     public string Name;
@@ -31,8 +45,8 @@ internal interface ISteamPlatform : IPeerNetwork, IDisposable {
     /// </summary>
     void CreateLobby(bool friendsCanJoin, Action<ulong> done);
 
-    /// <summary>Entra en esa sala. <paramref name="done"/> dice si se pudo.</summary>
-    void JoinLobby(ulong lobby, Action<bool> done);
+    /// <summary>Entra en esa sala. <paramref name="done"/> dice si se pudo, y si no, por qué.</summary>
+    void JoinLobby(ulong lobby, Action<LobbyJoinResult> done);
 
     void LeaveLobby();
 
