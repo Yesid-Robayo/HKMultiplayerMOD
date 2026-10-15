@@ -9,6 +9,15 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.31.2
+
+- **Desinstalar devuelve el juego entero como estaba**: se quedaba el `TeamCherry.Localization.dll` de la Modding API en
+  vez de volver el original del juego (pasaba con todas las versiones del instalador). Si ya desinstalaste una versión
+  anterior y el juego sin mods da problemas: Steam › clic derecho en Hollow Knight › Propiedades › Archivos instalados ›
+  Verificar integridad.
+- El paquete ya no lleva rutas del PC donde se compiló.
+- Instrucciones en español neutro.
+
 ## 0.31.1
 
 Arreglos de la conexión por Steam, vistos con Steam de verdad.

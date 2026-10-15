@@ -9,6 +9,15 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.31.2
+
+- **Uninstalling puts the whole game back as it was**: the Modding API's `TeamCherry.Localization.dll` stayed instead of
+  the game's original one coming back (this happened with every installer version). If you already uninstalled an
+  earlier version and the game without mods has problems: Steam › right-click Hollow Knight › Properties › Installed
+  Files › Verify integrity.
+- The package no longer contains paths from the PC it was built on.
+- Spanish instructions in neutral Spanish.
+
 ## 0.31.1
 
 Fixes to the Steam connection, found with real Steam.
