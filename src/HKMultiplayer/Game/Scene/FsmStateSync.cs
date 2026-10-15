@@ -1287,6 +1287,11 @@ internal sealed class FsmStateSync {
                 (item.SelfVisited ??= new HashSet<string>()).Add(toState.Name);
             }
 
+            // Coge el orbe falso el PC que ya llevaba su escena: el orbe también se apaga en el suyo
+            if (!item.CopyTransitions && item.Fsm.ActiveStateName == item.Fsm.Fsm.StartState) {
+                HideTakenOrb(item);
+            }
+
             return false;
         }
 

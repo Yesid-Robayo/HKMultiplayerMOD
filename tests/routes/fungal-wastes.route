@@ -23,10 +23,14 @@ scene-data-sync
 
 # Señores Mantis
 room Fungus2_15 left1
-# El desafío como un jugador: en el cartel, arriba
-host tpobj Mantis Battle/Challenge Prompt|0
-# Hasta que caiga al suelo: en el aire el cartel cancela el desafío
-wait 3
+# El desafío como un jugador: en el cartel, arriba. Se le deja caer encima desde un poco más alto: el cartel está por
+# debajo del suelo (y 6,4; el suelo en 7,4) y con tpobj a su altura el cartel no lo dejaba desafiar
+host tp 29.5 10
+# Hasta que caiga al suelo: en el aire el cartel cancela el desafío. Mirar arriba dos veces: recién llegado a veces el
+# cartel aún no lo ve dentro y la primera se pierde (la segunda, ya desafiando, solo mira arriba)
+wait 5
+host press up 0.3
+wait 2
 host press up 0.3
 wait 8
 fight defeatedMantisLords

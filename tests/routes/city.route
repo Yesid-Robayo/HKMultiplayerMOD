@@ -32,6 +32,9 @@ breakables-sync
 scene-data-sync
 
 # Jefes
+# Sin el Golpe Desolador en ningún PC (la ruta effects se lo da al invitado): con él, el juego destruye la puerta del
+# suelo y quita el orbe solo en el PC de quien lo tiene, y la sala ya no se ve igual
+both pdset quakeLevel 0
 room Ruins1_24 right1
 fight - - - Mage Lord hp
 # La segunda fase empieza al coger el orbe falso (lo coge uno; la secuencia va en todos)

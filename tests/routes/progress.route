@@ -20,9 +20,9 @@ shared guest tollBenchCity true
 shared guest cityLift1 true
 shared guest mineLiftOpened true
 shared guest bathHouseOpened true
-# Personajes rescatados
-shared guest brettaRescued true
-shared guest slyRescued true
+# Personajes rescatados: Bretta y Sly son de cada uno desde la 0.30.0 (su casa y la tienda se abren a quien los rescató)
+private guest brettaRescued true
+private guest slyRescued true
 shared guest zoteRescuedBuzzer true
 
 # ---- Del mundo, desde el host ----

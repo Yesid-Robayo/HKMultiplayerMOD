@@ -17,5 +17,6 @@ scene-data-sync
 
 # Recipiente Roto
 room Abyss_19 left1
-fight killedInfectedKnight
+# Despierta al entrar en la zona Battle Start (x 14,1 a 19,1): junto al jefe (x 23,3) ya se está pasada y no salta
+fight killedInfectedKnight 16.6 29.5
 scene-data-sync
