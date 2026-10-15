@@ -44,8 +44,9 @@ API.
 - 🎮 **The whole game and its DLCs, with up to 4 players**: the story to every ending, Hidden Dreams, The Grimm Troupe,
   Lifeblood and Godmaster, with its Pantheons played together up to the Pantheon of Hallownest.
 - 🌍 **Coop worlds**: up to 4 worlds of your own, saved on the host's PC, separate from your normal saves.
-- 🔒 **Connection**: local network or internet, with a game code and everything encrypted, no Steam or relay servers;
-  a guest who loses the connection gets back in on their own.
+- 🔒 **Connection**: through **Steam** (invites and *Join Game*, no port forwarding) or by **IP** (local network or
+  internet), both at once in the same game; with a game code and everything encrypted, no servers of our own. A guest
+  who loses the connection gets back in on their own.
 - 👥 **Players**: you see your partners in real time with their name, animations, attacks, spells and charms, and on
   the map.
 - ⚔️ **Enemies and bosses**: the same on every PC (same health, same hits, same death); bosses wait until everyone is

@@ -44,8 +44,9 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - 🎮 **El juego entero y sus DLC, con hasta 4 jugadores**: la historia hasta todos sus finales, Hidden Dreams, The Grimm
   Troupe, Lifeblood y Godmaster, con sus Panteones jugados juntos hasta el Panteón de Hallownest.
 - 🌍 **Mundos coop**: hasta 4 mundos propios, guardados en el PC del host, aparte de tus partidas normales.
-- 🔒 **Conexión**: red local o internet, con código de partida y todo cifrado, sin Steam ni servidores intermedios;
-  el invitado que pierde la conexión vuelve a entrar solo.
+- 🔒 **Conexión**: por **Steam** (invitar y *Unirse a la partida*, sin abrir puertos) o por **IP** (red local o
+  internet), las dos a la vez en la misma partida; con código de partida y todo cifrado, sin servidores propios. El
+  invitado que pierde la conexión vuelve a entrar solo.
 - 👥 **Jugadores**: los compañeros se ven en tiempo real con su nombre, animaciones, ataques, hechizos y amuletos, y
   también en el mapa.
 - ⚔️ **Enemigos y jefes**: los mismos en todos los PCs (misma vida, mismos golpes, misma muerte); los jefes esperan a
