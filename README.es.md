@@ -471,6 +471,7 @@ Las FSM de PlayMaker no salen ahí; ver [Código del juego](docs/arquitectura.md
   **[BouncyCastle](https://www.bouncycastle.org/)** y **[Newtonsoft.Json](https://www.newtonsoft.com/json)**, todos MIT
   (avisos completos en [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)).
 - Skins compatibles con **CustomKnight**.
+- **Uso de IA:** este mod se desarrolló con ayuda de herramientas de inteligencia artificial.
 
 ---
 
