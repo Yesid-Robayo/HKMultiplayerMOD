@@ -9,6 +9,13 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.32.0
+
+- **Los Señores Mantis ya no se saltan un ataque**: en la segunda fase, un Señor Mantis podía quedarse escondido y quieto
+  un rato cuando el combate pasaba de un PC a otro, porque la orden de su siguiente ataque llegaba justo durante el
+  cambio. Pasaba más jugando por internet. Ahora el PC que toma al señor guarda esa orden y la cumple.
+- **Vida de los jefes 4×**: nuevo valor en la opción *Vida de los jefes*.
+
 ## 0.31.3
 
 - **Jefes aturdidos menos seguido con varios jugadores**: los jefes que se aturden tras unos golpes (Hornet, Vasija

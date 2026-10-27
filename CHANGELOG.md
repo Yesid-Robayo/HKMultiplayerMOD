@@ -9,6 +9,14 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.32.0
+
+- **Mantis Lords no longer sit out an attack**: in the second phase, a Mantis Lord could stay hidden and still for a while
+  when the fight moved from one PC to another, because the order for its next attack arrived right during the change.
+  This happened more often when playing over the internet. Now the PC that takes the lord keeps that order and carries
+  it out.
+- **4× boss health**: new value for the *Boss health* option.
+
 ## 0.31.3
 
 - **Bosses stunned less often with several players**: bosses that get stunned after a number of hits (Hornet, Broken
