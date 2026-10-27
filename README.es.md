@@ -4,7 +4,7 @@
 
 **Mod cooperativo para Hollow Knight: juega el mundo entero con tus amigos, en red local o por internet.**
 
-![Versión](https://img.shields.io/badge/versión-0.31.3-7fb2ff)
+![Versión](https://img.shields.io/badge/versión-0.32.0-7fb2ff)
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
@@ -349,7 +349,7 @@ al momento sin poder cambiarlos.
 
 | Ajuste | Valores | Por defecto |
 |---|---|---|
-| Vida de los jefes | 1× · 1,25× · 1,5× · 2× · 2,5× · 3× | 1,5× |
+| Vida de los jefes | 1× · 1,25× · 1,5× · 2× · 2,5× · 3× · 4× | 1,5× |
 | Vida de los enemigos | 1× · 1,25× · 1,5× · 2× | 1× |
 | Más vida solo con compañero en la sala | Sí · No | Sí |
 | Daño recibido | 0,5× · 1× · 1,5× · 2× | 1× |

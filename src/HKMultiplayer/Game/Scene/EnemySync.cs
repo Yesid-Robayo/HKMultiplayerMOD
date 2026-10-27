@@ -5019,6 +5019,49 @@ internal sealed class EnemySync {
         }
     }
 
+    /// <summary>
+    /// Orden de un controlador de batalla (o de su copia) a una marioneta. Esas órdenes no se reenvían: la copia del
+    /// controlador se la da al enemigo en el PC que lo mueve. Pero si este PC ya lo mueve según el dueño y aún espera el
+    /// traspaso para tomarlo, la orden no la atiende nadie: el PC de antes ya lo tiene parado y aquí aún está parado. Se
+    /// guarda para cuando lo tome. Los Señores Mantis de la segunda fase esperan en `Sub Idle`, sin límite de tiempo, a
+    /// que `Battle Sub` les diga qué hacer, y ese es justo un estado de reposo en el que cambian de PC: si la orden caía
+    /// en el traspaso (más largo por internet), el señor se saltaba ese ataque y se quedaba quieto hasta su siguiente
+    /// orden.
+    /// </summary>
+    private void OnControllerOrder(HutongGames.PlayMaker.Fsm sender, GameObject target, HutongGames.PlayMaker.FsmEvent fsmEvent) {
+        if (_session == null || target == null || fsmEvent == null || string.IsNullOrEmpty(fsmEvent.Name) || sender == null ||
+            !FsmStateSync.IsSharedController(sender) && !FsmStateSync.IsRemoteCopy(sender.GameObject)) {
+            return;
+        }
+
+        target.GetComponents(OrderTargets);
+        foreach (var component in OrderTargets) {
+            if (component != null && !component.enabled && _enemyFsms.TryGetValue(component.Fsm, out var enemy) &&
+                enemy.Enemy.Puppet && HandlesAnywhere(component.Fsm, fsmEvent.Name)) {
+                KeepOrderForTakeOver(enemy.Enemy, enemy.Index, component.Fsm, fsmEvent.Name);
+            }
+        }
+
+        OrderTargets.Clear();
+    }
+
+    private static readonly List<PlayMakerFSM> OrderTargets = new();
+
+    private void KeepOrderForTakeOver(Enemy enemy, byte fsmIndex, HutongGames.PlayMaker.Fsm fsm, string eventName) {
+        var controller = ControllerOf(enemy, _session.OwnerOf(_scene));
+        if (TestMode) {
+            Log.Info($"[TEST] orden {eventName} a la marioneta {enemy.Root.name} (la mueve {controller}, este PC " +
+                     $"{_session.LocalId}, hace {Time.unscaledTime - enemy.LastSwitch:0.00} s del último cambio)");
+        }
+
+        if (controller != _session.LocalId) {
+            return;
+        }
+
+        Log.Info($"{enemy.Root.name}/{fsm.Name}: {eventName} de su controlador mientras se toma, se atiende al tomarlo");
+        KeepPendingEvent(enemy, fsmIndex, eventName);
+    }
+
     /// <summary>Avisos guardados como mucho para cuando se toma un enemigo, y cuánto valen.</summary>
     private const int MaxPendingEvents = 8;
 
@@ -6977,6 +7020,14 @@ internal sealed class EnemySync {
                 _active?.OnReleased(released);
             }
         };
+
+        // Los avisos a un objeto (también los que salen con retraso, que no pasan por SendEventByName) solo llegan a sus FSM
+        // encendidas: las órdenes de un controlador de batalla a una marioneta se miran aquí (ver OnControllerOrder)
+        On.HutongGames.PlayMaker.Fsm.BroadcastEventToGameObject_GameObject_FsmEvent_FsmEventData_bool_bool +=
+            (orig, self, go, fsmEvent, eventData, toChildren, excludeSelf) => {
+                orig(self, go, fsmEvent, eventData, toChildren, excludeSelf);
+                _active?.OnControllerOrder(self, go, fsmEvent);
+            };
 
         // Al empezar a cambiar de sala (aún dentro de la anterior): los enemigos que movía este PC, a los demás
         On.GameManager.BeginSceneTransition += (orig, self, info) => {

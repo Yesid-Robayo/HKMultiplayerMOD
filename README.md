@@ -4,7 +4,7 @@
 
 **A co-op mod for Hollow Knight: play the whole world with your friends, on your local network or over the internet.**
 
-![Version](https://img.shields.io/badge/version-0.31.3-7fb2ff)
+![Version](https://img.shields.io/badge/version-0.32.0-7fb2ff)
 ![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
@@ -346,7 +346,7 @@ away without being able to change them.
 
 | Setting | Values | Default |
 |---|---|---|
-| Boss health | 1× · 1.25× · 1.5× · 2× · 2.5× · 3× | 1.5× |
+| Boss health | 1× · 1.25× · 1.5× · 2× · 2.5× · 3× · 4× | 1.5× |
 | Enemy health | 1× · 1.25× · 1.5× · 2× | 1× |
 | Extra health only with a partner in the room | Yes · No | Yes |
 | Damage taken | 0.5× · 1× · 1.5× · 2× | 1× |

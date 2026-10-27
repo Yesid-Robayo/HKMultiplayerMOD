@@ -82,7 +82,8 @@ internal sealed class HostSettings {
 
     // ---- Dificultad ----
     public static readonly HostOption BossHealthOption = new(0, "bossHealth", "Vida de los jefes", "Boss health",
-        new[] { 1f, 1.25f, 1.5f, 2f, 2.5f, 3f }, new[] { "1×", "1,25×", "1,5×", "2×", "2,5×", "3×" }, new[] { "1×", "1.25×", "1.5×", "2×", "2.5×", "3×" }, 2);
+        new[] { 1f, 1.25f, 1.5f, 2f, 2.5f, 3f, 4f }, new[] { "1×", "1,25×", "1,5×", "2×", "2,5×", "3×", "4×" },
+        new[] { "1×", "1.25×", "1.5×", "2×", "2.5×", "3×", "4×" }, 2);
 
     public static readonly HostOption EnemyHealthOption = new(1, "enemyHealth", "Vida de los enemigos", "Enemy health",
         new[] { 1f, 1.25f, 1.5f, 2f }, new[] { "1×", "1,25×", "1,5×", "2×" }, new[] { "1×", "1.25×", "1.5×", "2×" }, 0);

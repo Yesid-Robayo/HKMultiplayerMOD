@@ -985,6 +985,33 @@ Panteón de Hallownest hasta su final.
 - **Menderbug** (`MenderBugSync`, mensaje 116): si sale en un PC de la sala, sale en todos.
 - **Desafío de los Señores Mantis**: un desafío que llega tarde a quien ya desafía se descarta.
 
+### Órdenes de un controlador durante un traspaso y vida 4× (0.32.0)
+
+De un reporte de una partida real por internet: "a veces un Señor Mantis se queda quieto" y "las bolas del Maestro de
+Almas a veces no desaparecen y salen duplicadas"; también pidieron vida 4× para los jefes.
+
+- **Órdenes de un controlador de batalla mientras se toma un enemigo** (`EnemySync.OnControllerOrder`): los Señores
+  Mantis de la segunda fase esperan en `Sub Idle`, sin límite de tiempo, a que `Battle Sub` les diga qué hacer, y ese
+  es un estado de reposo: ahí es donde cambian de PC. Una orden que caía entre que el PC de antes lo paraba y el nuevo
+  lo tomaba (lo que tarda en llegar el traspaso: un ida y vuelta por internet) no la atendía nadie, y el señor se
+  quedaba escondido sin hacer ese ataque hasta su siguiente orden (`Battle Sub` no lo espera). Ahora el PC que ya
+  lo mueve según el dueño, pero que aún espera el traspaso, la guarda y la atiende al tomarlo (`KeepPendingEvent`,
+  como los avisos reenviados). Se mira en `Fsm.BroadcastEventToGameObject`, no en `ProcessEvent`: PlayMaker solo
+  entrega un aviso a un objeto a sus FSM encendidas (`PlayMakerFSM.FsmList`) y las de una marioneta están apagadas; y
+  ahí pasan también los avisos con retraso de `Battle Sub` (0,5 a 1,5 s), que no vuelven a pasar por `SendEventByName`.
+  Probado en D/E con 120 ± 30 ms y 2 % de pérdida, forzando traspasos (un jugador debajo del centro y el otro muy
+  arriba, cambiando cada ~6 s) durante 300 s de segunda fase: 336 órdenes a marionetas, una (`HIGH THROW` a S1) llegó
+  0,28 s después del cambio al PC que lo iba a tomar y se atendió al tomarlo. Ningún señor se quedó quieto. En el modo
+  de prueba se registra cada orden a una marioneta ("orden ... a la marioneta ...").
+- **Bolas del Maestro de Almas**: no se reprodujo. Con el mismo lag, 200 s de primera fase y 200 s de segunda, con un
+  cambio de PC cada pocos segundos y fotos de las bolas activas tomadas a la vez en los dos PCs: las cuentas coinciden
+  y las diferencias duran una foto (una bola que acaba de chocar en un PC y cuyo aviso aún viene por la red). El giro de
+  4 bolas (`Orb Spinner`) también se probó cambiando de PC a mitad del ataque. Ojo al probarlo: la lógica de la segunda
+  fase (`Mage Lord 2`, estado `Init`) arranca sola en cuanto un caballero baja de y = 11 (el piso de abajo); un `tp` ahí
+  saca a las dos fases a la vez.
+- **Vida de los jefes 4×**: nuevo valor al final de la opción (los índices de los demás no cambian; `settings.json`
+  guarda el valor, no el índice).
+
 ## Código del juego
 
 Para ver cómo hace algo el juego antes de tocarlo. Todo queda en `decomp/` (en `.gitignore`): es código de Team Cherry
