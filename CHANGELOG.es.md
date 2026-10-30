@@ -9,6 +9,11 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.32.1
+
+- **Tus tajos con tu skin**: con una skin, los tajos y las artes del aguijón se veían como los del juego en tu pantalla,
+  aunque los demás jugadores ya los veían con tu skin. Ahora también los ves con tu skin.
+
 ## 0.32.0
 
 - **Los Señores Mantis ya no se saltan un ataque**: en la segunda fase, un Señor Mantis podía quedarse escondido y quieto

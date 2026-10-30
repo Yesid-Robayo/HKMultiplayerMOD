@@ -9,6 +9,11 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.32.1
+
+- **Your own nail slashes with your skin**: with a skin, your nail slashes and nail arts showed the game's default look on
+  your screen, while the other players already saw them with your skin. Now you see them with your skin too.
+
 ## 0.32.0
 
 - **Mantis Lords no longer sit out an attack**: in the second phase, a Mantis Lord could stay hidden and still for a while
