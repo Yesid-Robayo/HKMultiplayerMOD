@@ -1026,6 +1026,7 @@ internal sealed class Skins {
             _localBlockSet = false;
         }
 
+        ApplyToHeroEffects(hero, scene);
         ApplyToDeath(hero);
         if (_session == null || _players == null || scene.Length == 0) {
             return;
@@ -1102,6 +1103,51 @@ internal sealed class Skins {
             }
         }
     }
+
+    /// <summary>
+    /// Los efectos propios que cuelgan del caballero con su misma colección (los tajos del aguijón en `Attacks`) usan
+    /// el material compartido del caballero, que no lleva la skin (es el mismo de los avatares): salían con el dibujo del
+    /// juego en el propio PC aunque el compañero sí los veía con la skin. Llevan la skin propia con un bloque, como el
+    /// cuerpo. Solo las colecciones que no van en material compartido: a las otras un bloque les taparía la skin.
+    /// </summary>
+    private void ApplyToHeroEffects(HeroController hero, string scene) {
+        if (_heroEffectsRoot != hero.gameObject || _heroEffectsScene != scene) {
+            _heroEffectsRoot = hero.gameObject;
+            _heroEffectsScene = scene;
+            _heroEffectSprites.Clear();
+            hero.GetComponentsInChildren(true, _heroEffectSprites);
+            _heroEffectsBlocked.RemoveWhere(renderer => renderer == null);
+        }
+
+        foreach (var sprite in _heroEffectSprites) {
+            if (sprite == null || sprite.gameObject == hero.gameObject) {
+                continue;
+            }
+
+            var renderer = sprite.GetComponent<MeshRenderer>();
+            if (renderer == null) {
+                continue;
+            }
+
+            var collection = sprite.Collection;
+            var skinned = _local != null && collection != null &&
+                          CollectionFiles.ContainsKey(collection.spriteCollectionName) &&
+                          !SharedCollectionFiles.ContainsKey(collection.spriteCollectionName);
+            if (skinned) {
+                if (sprite.gameObject.activeInHierarchy) {
+                    ApplyTo(renderer, sprite, _local);
+                    _heroEffectsBlocked.Add(renderer);
+                }
+            } else if (_heroEffectsBlocked.Remove(renderer)) {
+                renderer.SetPropertyBlock(null);
+            }
+        }
+    }
+
+    private GameObject _heroEffectsRoot;
+    private string _heroEffectsScene;
+    private readonly List<tk2dSprite> _heroEffectSprites = new();
+    private readonly HashSet<MeshRenderer> _heroEffectsBlocked = new();
 
     private bool _localBlockSet;
 

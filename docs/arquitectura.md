@@ -1012,6 +1012,22 @@ Almas a veces no desaparecen y salen duplicadas"; también pidieron vida 4× par
 - **Vida de los jefes 4×**: nuevo valor al final de la opción (los índices de los demás no cambian; `settings.json`
   guarda el valor, no el índice).
 
+### Tajos propios con la skin (0.32.1)
+
+Issue #2: "el compañero ve los tajos de mi skin y yo no". Los tajos del aguijón (`Knight/Attacks`: `Slash`, `AltSlash`,
+`UpSlash`, `DownSlash`, `WallSlash`) y las artes del aguijón (`Great Slash`, `Dash Slash`, `Cyclone Slash`) son
+sprites de la colección `Knight` (`spriteof Great Slash` → `Knight/charge_slash_effect0002`), así que su dibujo está en
+`Knight.png`. Esa colección no va en material compartido (es la misma de los avatares), y la skin propia se ponía con
+un bloque solo en el renderer del cuerpo: en el PC del dueño los tajos salían con el dibujo del juego, mientras que en
+el del compañero `ApplyToEffects` sí se la ponía a todas las copias bajo el avatar.
+
+- `Skins.ApplyToHeroEffects`: cada frame, los sprites hijos del caballero (lista guardada por caballero y sala) cuya
+  colección es de `CollectionFiles` y no de `SharedCollectionFiles` (`Knight`, `Sprint`, `Unn`) llevan la skin propia
+  con un bloque, como el cuerpo; solo los encendidos. A las colecciones compartidas no se les pone bloque: taparía la
+  skin del material. Al quitarse la skin, o si un sprite pasa a otra colección, su bloque se borra.
+- Probado en B con Rick Knight en `Town` (ráfaga de capturas con `slashes 6 0.35`): el tajo sale verde, como en la
+  skin; con `skin normal` vuelve el blanco del juego.
+
 ## Código del juego
 
 Para ver cómo hace algo el juego antes de tocarlo. Todo queda en `decomp/` (en `.gitignore`): es código de Team Cherry
