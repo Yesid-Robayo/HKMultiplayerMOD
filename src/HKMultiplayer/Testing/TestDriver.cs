@@ -635,6 +635,13 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "climbers":
+                // climbers: los que andan por paredes y techos (posición, giro, velocidad y si tienen suelo)
+                foreach (var line in runner.Enemies.DescribeClimbers()) {
+                    Log.Info($"{Tag}climber {line}");
+                }
+
+                break;
             case "abilities":
                 // abilities: las habilidades propias y las de cada compañero (bits) que cuentan para cargar partes de sala
                 Log.Info($"{Tag}habilidades {runner.PartyAbilities.Describe()}");

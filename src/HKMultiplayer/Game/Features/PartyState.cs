@@ -241,6 +241,18 @@ internal sealed class PartyState {
         StatusChanged?.Invoke(member, previous);
     }
 
+    /// <summary>El host mueve el cuerpo de un caído (lo que tenía debajo desapareció).</summary>
+    public void SetBody(ushort id, float x, float y) {
+        if (_session == null || !_session.IsHost || !_members.TryGetValue(id, out var member) ||
+            member.Status != PlayerStatus.Downed) {
+            return;
+        }
+
+        member.BodyX = x;
+        member.BodyY = y;
+        Broadcast();
+    }
+
     /// <summary>El host cambia solo a quién sigue un caído (su compañero se fue o cayó).</summary>
     public void SetPartner(ushort id, ushort partner) {
         if (_session == null || !_session.IsHost || !_members.TryGetValue(id, out var member) ||

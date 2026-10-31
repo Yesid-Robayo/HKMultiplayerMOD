@@ -98,6 +98,14 @@ internal sealed class DownedBody {
 
     public Vector3 Position => _root.transform.position;
 
+    /// <summary>Lo pone en otro sitio de la sala (lo que tenía debajo desapareció). No cambia su profundidad.</summary>
+    public void MoveTo(Vector3 position) {
+        var current = _root.transform.position;
+        if (current.x != position.x || current.y != position.y) {
+            _root.transform.position = new Vector3(position.x, position.y, current.z);
+        }
+    }
+
     /// <summary>
     /// Sube el "† Nombre" sobre su altura normal (0: en su sitio). Con un compañero encima del cuerpo (el que lo revive),
     /// su nombre quedaba a la misma altura y se pisaban.

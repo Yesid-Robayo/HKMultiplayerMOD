@@ -381,10 +381,15 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     efectos solo visuales del pool corren solos. Lo que crean al prepararse (cadáveres, piezas propias) no se replica.
     Se envía al acabar el estado que lo creó (o el frame), tal como lo dejó su lógica: posición, giro entero (el polvo
     y los chorros del juego son partículas giradas en X para salir hacia arriba), tamaño (el pool reutiliza objetos con
-    el tamaño de su último uso) y los números de sus FSM. Así una onda solo visual del Falso Caballero, que recibe su
+    el tamaño de su último uso), velocidad y los números de sus FSM. La velocidad la pone a veces otra acción al salir:
+    el cristal del Crystal Flyer (`FireAtTarget`) daña con una FSM `damages_hero` y no con `DamageHero`, cuenta como
+    visual y corre solo, y sin ella se quedaba en el aire, dañando, hasta salir de la sala (issue #3). Así una onda solo visual del Falso Caballero, que recibe su
     velocidad y dirección con `SetFsmFloat`/`SetFsmBool` justo después de salir, avanza igual en cada PC, echa sus
     chorros (que dañan al caballero de ese PC) y se acaba en la pared. Lo creado en combate no tiene tiempo de
     preparación: sus efectos (los barriles al romperse) cuentan desde que sale.
+  - La copia de un proyectil se quita si su creador tiene el juego en pausa o si en 3 s no llega nada de él
+    (`CopyAbandoned`): los enemigos de quien pausa pasan a otro PC, pero lo que disparó sigue con él y su copia se
+    quedaba quieta, dañando.
   - El aviso lleva también el nombre del prefab: si la acción lo toma de una variable que ponen estados anteriores (el
     Elder Baldur elige en `Goop` o `Roller` qué escupe y `Fire` saca `{Projectile}` del pool), en la marioneta esa
     variable seguía vacía y no se creaba nada: el otro no veía sus disparos ni sus crías. Se busca por su nombre entre
@@ -457,6 +462,14 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     marioneta se paran sus corrutinas; al retomarlo, `Climber` y `Crawler` repiten su `Start` (después de poner la
     velocidad del traspaso: el `Climber` solo la pone al echar a andar y al girar, y con la velocidad a 0 se quedaba
     quieto tras cada cambio de PC) y `WalkLeftRight` vuelve a entrar en su estado.
+  - Un `Climber` sin suelo a 1 unidad gira 90° y lo vuelve a mirar: en el aire no acaba nunca y gira sobre sí mismo con
+    su rayo encendido, sin volver a su pared (los Crystallised Lazer Bug de `Mines_20`, issue #4). Se soltaba al
+    retomarlo cerca de una esquina: el giro de una marioneta llega a saltos y su posición interpolada, `Turn` se corta
+    con el ángulo a medias y `previousTurnPos`, que evita girar otra vez en el mismo sitio, es de cada PC.
+    `PlaceClimber` redondea el giro, lo apoya en la pared más cercana si no tiene suelo y apunta ahí su último giro.
+    Por si se pierde igualmente, `UpdateClimbers` lo devuelve a la pared tras 1 s sin suelo. Probado en `Mines_20` con 63
+    cambios de PC forzados en 6 minutos: antes 4 de sus 7 acabaron en el aire (a 2,1 de su repisa) y otro andando
+    inclinado; después ninguno (a 0,27 como mucho, con 409 retomas) y sin que hiciera falta `UpdateClimbers`.
   - En las pruebas del Coliseo (`Room_Colosseum_*`) ningún enemigo queda muerto hasta el banco, tampoco los de la
     sala (los Mage de las oleadas): cada prueba empieza de cero, y al repetirla sin descansar la oleada 46 de Oro
     esperaba a un Mage que el host daba por muerto.
@@ -579,9 +592,9 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 Decisiones aprobadas en [Decisiones de M5](#decisiones-de-m5). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
-mensajes nuevos van del 73 al 116 (el 98, el 108 y el 115 son de `EnemySync`, el 104, el 105 y el 107 de `HazardSync`,
-el 106 de `StagTogether`, el 109 y el 110 de `SceneObjectSync`, el 111 de `Revive`, el 112 de `PartyAbilities`, el 113
-y el 114 de `PantheonTogether` y el 116 de `MenderBugSync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
+mensajes nuevos van del 73 al 117 (el 98, el 108 y el 115 son de `EnemySync`, el 104, el 105 y el 107 de `HazardSync`,
+el 106 de `StagTogether`, el 109 y el 110 de `SceneObjectSync`, el 111 y el 117 de `Revive`, el 112 de `PartyAbilities`,
+el 113 y el 114 de `PantheonTogether` y el 116 de `MenderBugSync`). La interfaz es uGUI (`UI/HudCanvas`): un lienzo que sigue la zona de la cámara del
 juego (16:9; con otra proporción el juego deja franjas) y escala con su alto como el HUD del juego; las piezas se crean
 una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
 
@@ -622,7 +635,15 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   sueño, solo si está en el mismo; en los Panteones, nunca). El caído envía `Downed` (sala y suelo bajo él; si debajo no hay `Terrain` en 100 unidades, si ese suelo toca un
   `DamageHero` de peligro o si murió por un peligro, su `hazardRespawnLocation`: el cuerpo tiene que quedar donde el
   compañero pueda estar de pie a su lado, y antes un caído en el aire sobre un pozo quedaba flotando); el host
-  le asigna el compañero en pie al que seguir. El caballero del caído se oculta (sin colisión, sin gravedad,
+  le asigna el compañero en pie al que seguir. Lo que tenía debajo puede desaparecer (las plataformas del Coliseo se
+  retraen entre oleadas): cada PC de pie en la sala mira cada 0,25 s si el cuerpo sigue apoyado y no toca un peligro; tras
+  1 s sin suelo pide moverlo (`BodyMoved`, mensaje 117) al suelo de debajo o, si no hay o son pinchos, junto a él si está
+  pisando suelo. El host lo valida y lo reparte con el estado de la partida. Antes quedaba flotando fuera del alcance de
+  quien estaba en el suelo (issue #3) y solo se revivía saliendo a un banco. Probado en `Room_Colosseum_Silver` con el
+  caído en cada PC (de `y=23,4` al suelo en `y=6,4`) y, con los pinchos fuera por la orden real del Coliseo, junto a quien
+  estaba en otra plataforma (`fsmgo Colosseum Manager/Battle Control|Spikes`). Ponerlos en `Expand` con `fsmstate` no
+  sirve para probarlo: así no dañaron. Con la orden real, el daño vino de `Colosseum Spike (19)`, que lleva `DamageHero`,
+  a 17 unidades del caballero. El caballero del caído se oculta (sin colisión, sin gravedad,
   invencible, sin control ni entrada; se reaplica cada frame; se esconde con `Renderer.forceRenderingOff`, así lo que el
   juego encienda o apague entre medias queda como lo dejó, y la luz y la viñeta siguen) y, tras la animación de muerte, se pega al avatar del compañero, con
   las zonas de cámara emuladas; si el compañero cambia de sala, viaja detrás de él y entra por la misma puerta que él

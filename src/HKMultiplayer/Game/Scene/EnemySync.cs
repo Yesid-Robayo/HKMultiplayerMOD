@@ -120,6 +120,21 @@ internal sealed class EnemySync {
     /// </summary>
     private const float OrphanSeconds = 5f;
 
+    /// <summary>Tiempo sin noticias de quien mueve la copia de un proyectil para quitarla (ver <see cref="CopyAbandoned"/>).</summary>
+    private const float CopySilentSeconds = 3f;
+
+    /// <summary>Hasta dónde se busca la pared de un `Climber` al retomarlo (ver <see cref="PlaceClimber"/>).</summary>
+    private const float ClimberAttachRadius = 2.5f;
+
+    /// <summary>Cada cuánto se mira si los `Climber` que mueve este PC siguen en su pared.</summary>
+    private const float ClimberCheckInterval = 0.25f;
+
+    /// <summary>Rato sin pared para darlo por perdido: doblar una esquina dura mucho menos.</summary>
+    private const float ClimberLostSeconds = 1f;
+
+    /// <summary>Hasta dónde se busca pared para uno perdido en el aire.</summary>
+    private const float ClimberLostRadius = 10f;
+
     /// <summary>Aviso con el que un enemigo de jaula sale de ella (la plantilla de las crías de los Hatcher).</summary>
     private const string CageReleaseEvent = "SPAWN";
 
@@ -363,6 +378,9 @@ internal sealed class EnemySync {
         public bool Awake;
         public HutongGames.PlayMaker.FsmState HeldWake;
         public bool WaitingWake;
+
+        /// <summary>Desde cuándo un `Climber` que mueve este PC no tiene pared (0: la tiene).</summary>
+        public float ClimberLostAt;
 
         /// <summary>El tipo de ataque con el que murió aquí (va en el aviso de su muerte).</summary>
         public AttackTypes KilledBy;
@@ -733,6 +751,7 @@ internal sealed class EnemySync {
     private const uint LinkedRefreshTicks = 120;
     private readonly List<(uint Id, ushort Controller)> _controlOut = new();
     private float _nextAssign;
+    private float _nextClimberCheck;
 
     /// <summary>
     /// Cuándo repite el dueño de la sala quién mueve cada enemigo (a todos). Los avisos de cambio solo llegan al cambiar:
@@ -1004,6 +1023,14 @@ internal sealed class EnemySync {
                         continue;
                     }
 
+                    // Un proyectil sin nadie que lo mueva se quedaba quieto en el aire, dañando: los enemigos de quien
+                    // pausa pasan a otro PC, pero lo que dispararon sigue con él (ver CopyAbandoned)
+                    if (enemy.Puppet && enemy.Health == null && CopyAbandoned(enemy, now)) {
+                        Log.Info($"{enemy.Root.name}: se quita la copia, {enemy.Controller} ya no la mueve");
+                        RemoveSpawned(enemy);
+                        continue;
+                    }
+
                     // Los proyectiles siguen siempre a quien los creó; los bichos con vida pueden pasar a otro (ver
                     // AssignControllers) y siguen como los demás enemigos
                     if (enemy.Health == null) {
@@ -1068,6 +1095,7 @@ internal sealed class EnemySync {
 
         UpdateReal(isOwner);
         UpdatePuppets();
+        UpdateClimbers();
         UpdateAttackListens();
         UpdateRunningEffects();
         UpdateDelayedSends();
@@ -1095,6 +1123,15 @@ internal sealed class EnemySync {
 
         return true;
     }
+
+    /// <summary>
+    /// Si la copia de un proyectil se quedó sin quien la mueve: su creador tiene el juego en pausa (allí está parado), o no
+    /// llega nada de él (hasta un proyectil quieto, como un cristal clavado, envía su estado cada medio segundo). Pasa
+    /// también si su aviso de crearse llegó después del de acabarse.
+    /// </summary>
+    private static bool CopyAbandoned(Enemy enemy, float now) =>
+        Features.PartyState.IsPaused(enemy.Controller) ||
+        now - Mathf.Max(enemy.LastStateAt, enemy.ScannedAt) > CopySilentSeconds;
 
     /// <summary>El juego está cambiando de sala (desde que empieza hasta que la nueva está lista).</summary>
     internal static bool InSceneTransition() => GameManager.instance != null && GameManager.instance.IsInSceneTransition;
@@ -4591,6 +4628,9 @@ internal sealed class EnemySync {
             writer.WriteFloat(angles.z);
             writer.WriteFloat(scale.x);
             writer.WriteFloat(scale.y);
+            var velocity = spawned.TryGetComponent<Rigidbody2D>(out var body) ? body.velocity : Vector2.zero;
+            writer.WriteFloat(velocity.x);
+            writer.WriteFloat(velocity.y);
             WriteSpawnVariables(writer, spawned);
             _session.End();
             if (TestMode) {
@@ -4766,6 +4806,7 @@ internal sealed class EnemySync {
         var rotation = Quaternion.Euler(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
         var scaleX = reader.ReadFloat();
         var scaleY = reader.ReadFloat();
+        var velocity = new Vector2(reader.ReadFloat(), reader.ReadFloat());
         // Lo solo visual se crea aunque este PC ya mueva al creador: el aviso pudo llegar justo después de tomarlo (con
         // retraso, la nube de la muerte del Falso Caballero no salía) y su lógica, que siguió desde más adelante, ya no
         // lo crea. Lo de juego no: este PC ya mueve su lógica y lo que cree será el original
@@ -4879,6 +4920,11 @@ internal sealed class EnemySync {
         // Solo visual: corre solo. De juego: copia que sigue al original (daña al tocarla; los golpes van al dueño)
         if (id != 0) {
             Track(copy, id, pooled, puppet: true, from.Id);
+        } else if (velocity.sqrMagnitude is > 0f and < float.PositiveInfinity && copy.TryGetComponent<Rigidbody2D>(out var body)) {
+            // Su velocidad se la da otra acción al salir, que aquí no se repite. El cristal del Crystal Flyer daña con una
+            // FSM (`damages_hero`) y no con `DamageHero`, así que cuenta como visual: sin velocidad se quedaba en el aire,
+            // dañando, hasta salir de la sala, mientras el original ya estaba clavado en la pared
+            body.velocity = velocity;
         }
     }
 
@@ -6129,7 +6175,7 @@ internal sealed class EnemySync {
     /// del PC que lo movía, y vuelve a echar a andar). Antes se quitan sus avisos del retroceso, que `Start` vuelve a
     /// apuntar. Uno que aún no hizo su `Start` (se apagó antes de empezar) lo hará solo al encenderse.
     /// </summary>
-    private static void RestartWalkers(Enemy enemy) {
+    private static void RestartWalkers(Enemy enemy, float climberRadius = ClimberAttachRadius) {
         foreach (var behaviour in enemy.Root.GetComponents<MonoBehaviour>()) {
             if (behaviour is not (Climber or Crawler) || !behaviour.enabled || !WalkerStarted(behaviour)) {
                 continue;
@@ -6142,10 +6188,101 @@ internal sealed class EnemySync {
                 RemoveHandlersOf(recoil, RecoilCancelField, behaviour);
             }
 
+            if (behaviour is Climber climber) {
+                PlaceClimber(climber, climberRadius);
+            }
+
             try {
                 (behaviour is Climber ? ClimberStart : CrawlerStart)?.Invoke(behaviour, null);
             } catch (Exception e) {
                 Log.Warn($"{enemy.Root.name}: no se pudo volver a echar a andar ({e.InnerException?.Message ?? e.Message})");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Deja un `Climber` apoyado en su pared antes de repetir su `Start`, que elige hacia dónde va por su giro. Un `Climber`
+    /// solo sabe doblar esquinas si va bien colocado: sin suelo a 1 unidad gira 90° y lo vuelve a mirar, y en el aire no
+    /// acaba nunca (los Crystallised Lazer Bug de `Mines_20`, girando junto a su repisa con el rayo encendido). Y al
+    /// retomarlo cerca de una esquina no iba bien colocado: el giro de una marioneta llega a saltos y su posición
+    /// interpolada, y `Turn` se cortaba a medias, con el ángulo sin redondear y sin apuntar dónde giró
+    /// (`previousTurnPos`, que evita volver a girar en el mismo sitio y es de cada PC). Devuelve si tiene pared.
+    /// </summary>
+    private static bool PlaceClimber(Climber climber, float radius) {
+        var transform = climber.transform;
+        var angle = Mathf.Round(transform.eulerAngles.z / 90f) * 90f;
+        transform.rotation = Quaternion.Euler(0f, 0f, angle);
+        ClimberTurnRoutine?.SetValue(climber, null);
+        var ground = ClimberCheckGround?.Invoke(climber, null) is true;
+        if (!ground && NearestWall(climber, radius, out var point, out var normal)) {
+            // Con los pies en la pared: la normal es hacia dónde queda su cabeza
+            angle = Mathf.Abs(normal.y) >= Mathf.Abs(normal.x) ? normal.y > 0f ? 0f : 180f : normal.x > 0f ? 270f : 90f;
+            transform.rotation = Quaternion.Euler(0f, 0f, angle);
+            transform.position = new Vector3(point.x, point.y, transform.position.z);
+            ground = true;
+        }
+
+        ClimberPreviousTurnPos?.SetValue(climber, (Vector2) transform.position);
+        return ground;
+    }
+
+    /// <summary>El punto de la pared más cercano al centro del `Climber` y hacia dónde queda este visto desde ahí.</summary>
+    private static bool NearestWall(Climber climber, float radius, out Vector2 point, out Vector2 normal) {
+        var box = climber.GetComponent<BoxCollider2D>();
+        var center = (Vector2) climber.transform.TransformPoint(box != null ? box.offset : Vector2.zero);
+        var best = float.MaxValue;
+        point = default;
+        normal = default;
+        foreach (var wall in Physics2D.OverlapCircleAll(center, radius, TerrainLayerMask)) {
+            if (wall.isTrigger) {
+                continue;
+            }
+
+            var candidate = wall.ClosestPoint(center);
+            var distance = (candidate - center).sqrMagnitude;
+            // Dentro de la pared, ClosestPoint devuelve el mismo punto: no dice hacia dónde salir
+            if (distance > 0.0001f && distance < best) {
+                best = distance;
+                point = candidate;
+                normal = (center - candidate).normalized;
+            }
+        }
+
+        return best < float.MaxValue;
+    }
+
+    /// <summary>
+    /// Por si un `Climber` que mueve este PC se pierde igualmente (un golpe, una pared que se rompe): en el aire no vuelve
+    /// nunca solo, así que pasado un rato se le pone en la pared más cercana.
+    /// </summary>
+    private void UpdateClimbers() {
+        var now = Time.unscaledTime;
+        if (now < _nextClimberCheck) {
+            return;
+        }
+
+        _nextClimberCheck = now + ClimberCheckInterval;
+        foreach (var enemy in _enemies) {
+            if (enemy.Puppet || enemy.Root == null || !enemy.Root.activeInHierarchy || enemy.Health == null ||
+                enemy.Health.isDead) {
+                continue;
+            }
+
+            var climber = enemy.Root.GetComponent<Climber>();
+            if (climber == null || !climber.enabled || !WalkerStarted(climber)) {
+                continue;
+            }
+
+            if (ClimberCheckGround?.Invoke(climber, null) is true) {
+                enemy.ClimberLostAt = 0f;
+            } else if (enemy.ClimberLostAt <= 0f) {
+                enemy.ClimberLostAt = now;
+            } else if (now - enemy.ClimberLostAt >= ClimberLostSeconds) {
+                enemy.ClimberLostAt = 0f;
+                var lost = enemy.Transform.position;
+                RestartWalkers(enemy, ClimberLostRadius);
+                var back = enemy.Transform.position;
+                Log.Info($"{enemy.Root.name}: se quedó sin pared en ({lost.x:0.0}, {lost.y:0.0}), vuelve a ({back.x:0.0}, {back.y:0.0})");
             }
         }
     }
@@ -6223,6 +6360,10 @@ internal sealed class EnemySync {
     private static readonly System.Reflection.MethodInfo ClimberStart = typeof(Climber).GetMethod("Start", AnyInstance);
     private static readonly System.Reflection.MethodInfo CrawlerStart = typeof(Crawler).GetMethod("Start", AnyInstance);
     private static readonly System.Reflection.FieldInfo ClimberPreviousPos = typeof(Climber).GetField("previousPos", AnyInstance);
+    private static readonly System.Reflection.MethodInfo ClimberCheckGround = typeof(Climber).GetMethod("CheckGround", AnyInstance);
+    private static readonly System.Reflection.FieldInfo ClimberPreviousTurnPos = typeof(Climber).GetField("previousTurnPos", AnyInstance);
+    private static readonly System.Reflection.FieldInfo ClimberTurnRoutine = typeof(Climber).GetField("turnRoutine", AnyInstance);
+    private const int TerrainLayerMask = 1 << 8;
     private static readonly System.Reflection.FieldInfo CrawlerVelocity = typeof(Crawler).GetField("velocity", AnyInstance);
     private static readonly System.Reflection.FieldInfo RecoilFreezeField = typeof(Recoil).GetField("OnHandleFreeze", AnyInstance);
     private static readonly System.Reflection.FieldInfo RecoilCancelField = typeof(Recoil).GetField("OnCancelRecoil", AnyInstance);
@@ -7515,6 +7656,26 @@ internal sealed class EnemySync {
         private static string DescribeExecuting() {
             var fsm = HutongGames.PlayMaker.FsmExecutionStack.ExecutingFsm;
             return fsm == null ? "-" : $"{fsm.GameObjectName}/{fsm.Name}/{fsm.ActiveStateName}";
+        }
+    }
+
+    /// <summary>Los que andan por paredes y techos (`Climber`): por dónde van y si tienen suelo (modo de prueba).</summary>
+    public IEnumerable<string> DescribeClimbers() {
+        foreach (var enemy in _enemies) {
+            var climber = enemy.Root != null ? enemy.Root.GetComponent<Climber>() : null;
+            if (climber == null || enemy.Health == null || enemy.Health.isDead) {
+                continue;
+            }
+
+            var p = enemy.Transform.position;
+            var ground = ClimberCheckGround?.Invoke(climber, null);
+            var box = climber.GetComponent<BoxCollider2D>();
+            var turn = ClimberPreviousTurnPos?.GetValue(climber) is Vector2 value ? value : Vector2.zero;
+            yield return $"{enemy.Root.name} {(enemy.Puppet ? "marioneta" : "real")} pos=({p.x:0.00},{p.y:0.00}) " +
+                         $"giro={enemy.Transform.eulerAngles.z:0.0} suelo={ground} vel=({enemy.Body?.velocity.x:0.00},{enemy.Body?.velocity.y:0.00}) " +
+                         $"velocidad={climber.speed:0.00} giroTiempo={climber.spinTime:0.00} minGiro={climber.minTurnDistance:0.00} " +
+                         $"caja=({box?.size.x:0.00},{box?.size.y:0.00}) centro=({box?.offset.x:0.00},{box?.offset.y:0.00}) " +
+                         $"ultimoGiro=({turn.x:0.00},{turn.y:0.00})";
         }
     }
 

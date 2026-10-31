@@ -180,6 +180,10 @@ setup_pair() {
     send "$host" "steamsim 1"; send "$guest" "steamsim 2"
   fi
 
+  # Mientras se prepara, las cinemáticas se saltan solas: con un mundo nuevo, el invitado (personaje nuevo) empieza por
+  # la introducción y nadie la saltaba, así que no llegaba a entrar a tiempo
+  send "$host" "autoskip"; send "$guest" "autoskip"
+
   # El host abre el mundo; si es nuevo empieza la partida desde la cinemática, que se salta
   send "$host" "hostworld $HK_ROUTE_WORLD Host $port $HK_ROUTE_CODE"
   local deadline=$((SECONDS + 150))
@@ -204,6 +208,7 @@ setup_pair() {
   fi
   wait_log_since "$guest" "$since" "Progreso compartido activo" 120 >/dev/null || { echo "par $n: el invitado no entró en el mundo" >&2; return 1; }
   wait_playable "$guest" 60 || { echo "par $n: el invitado no llegó a una sala jugable" >&2; return 1; }
+  send "$host" "autoskip no"; send "$guest" "autoskip no"
   sleep 4
   return 0
 }

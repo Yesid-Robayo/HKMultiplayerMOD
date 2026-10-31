@@ -51,8 +51,29 @@ internal sealed class Revive {
     /// </summary>
     public const MessageType ReviveDenied = (MessageType) 111;
 
+    /// <summary>
+    /// Un cuerpo se quedó sin suelo (la plataforma del Coliseo bajo él se retrajo): quien lo ve pide llevarlo a donde se pueda
+    /// revivir (→ host, que lo valida y lo reparte con el estado de la partida).
+    /// </summary>
+    public const MessageType BodyMoved = (MessageType) 117;
+
     /// <summary>Distancia máxima al cuerpo para revivirlo.</summary>
     private const float ReviveRadius = 2f;
+
+    /// <summary>Cada cuánto se mira si los cuerpos de la sala siguen teniendo suelo.</summary>
+    private const float BodyCheckInterval = 0.25f;
+
+    /// <summary>Rato sin suelo para mover un cuerpo: lo que desaparece un momento y vuelve no lo mueve.</summary>
+    private const float BodyUnsupportedSeconds = 1f;
+
+    /// <summary>
+    /// Al entrar en una sala no se mira todavía: sus plataformas tardan en ponerse como en el PC que ya estaba, y un cuerpo
+    /// sobre una de ellas parecería sin suelo.
+    /// </summary>
+    private const float BodySettleSeconds = 3f;
+
+    /// <summary>Cuánto puede haber bajo los pies de un cuerpo para que cuente como apoyado.</summary>
+    private const float BodySupportReach = 0.6f;
 
     /// <summary>Tras caer, la cámara se queda en el cuerpo este rato (la animación de muerte) antes de seguir al compañero.</summary>
     private const float FollowDelay = 2.5f;
@@ -131,6 +152,7 @@ internal sealed class Revive {
     private readonly MessageHandler _onBench;
     private readonly MessageHandler _onProgress;
     private readonly MessageHandler _onDenied;
+    private readonly MessageHandler _onBodyMoved;
     private readonly Action<PartyState.Member, PlayerStatus> _onStatus;
     private readonly Action<SessionPlayer> _onLeft;
     private readonly Action<SessionPlayer> _onSceneChanged;
@@ -205,6 +227,11 @@ internal sealed class Revive {
     private string _bodiesScene = string.Empty;
     private Font _font;
 
+    /// <summary>Desde cuándo está sin suelo cada cuerpo (ver <see cref="UpdateBodySupport"/>).</summary>
+    private readonly Dictionary<ushort, float> _bodyUnsupportedSince = new();
+
+    private float _nextBodyCheck;
+
     private bool _wasAtBench;
 
     // ---- Pantalla ----
@@ -224,6 +251,7 @@ internal sealed class Revive {
         MessageRoutes.Register(BenchRest, Route.Server, reliable: true);
         MessageRoutes.Register(ReviveProgress, Route.SameScene, reliable: false);
         MessageRoutes.Register(ReviveDenied, Route.Server, reliable: true);
+        MessageRoutes.Register(BodyMoved, Route.Server, reliable: true);
     }
 
     public Revive() {
@@ -234,6 +262,7 @@ internal sealed class Revive {
         _onBench = OnBenchRest;
         _onProgress = OnProgress;
         _onDenied = OnReviveDenied;
+        _onBodyMoved = OnBodyMoved;
         _onStatus = OnStatusChanged;
         _onLeft = OnPlayerLeft;
         _onSceneChanged = OnPlayerSceneChanged;
@@ -266,6 +295,7 @@ internal sealed class Revive {
         session.On(BenchRest, _onBench);
         session.On(ReviveProgress, _onProgress);
         session.On(ReviveDenied, _onDenied);
+        session.On(BodyMoved, _onBodyMoved);
         session.PlayerLeft += _onLeft;
         session.PlayerSceneChanged += _onSceneChanged;
         party.StatusChanged += _onStatus;
@@ -281,6 +311,7 @@ internal sealed class Revive {
             _session.On(BenchRest, null);
             _session.On(ReviveProgress, null);
             _session.On(ReviveDenied, null);
+            _session.On(BodyMoved, null);
             _session.PlayerLeft -= _onLeft;
             _session.PlayerSceneChanged -= _onSceneChanged;
         }
@@ -572,7 +603,7 @@ internal sealed class Revive {
             return safe;
         }
 
-        if (!GroundBelow(hero, out var ground) || InHazard(hero, ground)) {
+        if (!GroundBelow(hero, hero.transform.position, out var ground) || InHazard(hero, ground)) {
             Log.Info("El cuerpo no tiene suelo seguro debajo: queda en el último sitio seguro");
             return safe;
         }
@@ -580,22 +611,24 @@ internal sealed class Revive {
         return ground;
     }
 
-    /// <summary>El suelo justo debajo del caballero (con sus pies apoyados), si lo hay.</summary>
-    private static bool GroundBelow(HeroController hero, out Vector3 ground) {
-        var position = hero.transform.position;
+    /// <summary>
+    /// El suelo justo debajo de <paramref name="position"/>, con los pies del caballero apoyados en él, si lo hay a menos
+    /// de <paramref name="reach"/> unidades.
+    /// </summary>
+    private static bool GroundBelow(HeroController hero, Vector3 position, out Vector3 ground, float reach = 100f) {
         ground = position;
         var collider = hero.GetComponent<Collider2D>();
         if (collider == null) {
             return true;
         }
 
-        var feetOffset = position.y - collider.bounds.min.y;
+        var feetOffset = hero.transform.position.y - collider.bounds.min.y;
         var mask = LayerMask.GetMask("Terrain");
         if (mask == 0) {
             mask = 1 << 8;
         }
 
-        var hit = Physics2D.Raycast(new Vector2(position.x, collider.bounds.min.y + 0.1f), Vector2.down, 100f, mask);
+        var hit = Physics2D.Raycast(new Vector2(position.x, position.y - feetOffset + 0.1f), Vector2.down, reach, mask);
         if (hit.collider == null) {
             return false;
         }
@@ -797,6 +830,29 @@ internal sealed class Revive {
         var y = target.BodyY;
         _party.SetStatus(target.Id, PlayerStatus.Standing);
         SendRevived(target.Id, scene, x, y, false, from.Name);
+    }
+
+    /// <summary>Quien está en la sala de un cuerpo vio que se quedó sin suelo: se valida y se reparte a todos.</summary>
+    private void OnBodyMoved(SessionPlayer from, PacketReader reader) {
+        var targetId = reader.ReadUShort();
+        var scene = reader.ReadString(128);
+        var x = reader.ReadFloat();
+        var y = reader.ReadFloat();
+        if (_session == null || !_session.IsHost) {
+            return;
+        }
+
+        var target = _party.Get(targetId);
+        var sender = _party.Get(from.Id);
+        if (target == null || sender == null || target.Status != PlayerStatus.Downed || target.BodyScene != scene ||
+            sender.Status == PlayerStatus.Downed || from.Scene != scene || float.IsNaN(x) || float.IsNaN(y) ||
+            float.IsInfinity(x) || float.IsInfinity(y)) {
+            return;
+        }
+
+        Log.Info($"El cuerpo de {target.Name} se quedó sin suelo en {scene}: pasa de " +
+                 $"({target.BodyX:0.0}, {target.BodyY:0.0}) a ({x:0.0}, {y:0.0})");
+        _party.SetBody(targetId, x, y);
     }
 
     private void OnBenchRest(SessionPlayer from, PacketReader reader) {
@@ -1074,6 +1130,7 @@ internal sealed class Revive {
         }
 
         UpdateBodies(scene);
+        UpdateBodySupport();
         if (!HandleArrival()) {
             if (_downed) {
                 UpdateDowned(scene);
@@ -1151,11 +1208,18 @@ internal sealed class Revive {
         if (scene != _bodiesScene) {
             ClearBodies();
             _bodiesScene = scene;
+            _nextBodyCheck = Time.unscaledTime + BodySettleSeconds;
         }
 
         var hero = HeroController.instance;
         if (scene.Length == 0 || hero == null || _party == null) {
             return;
+        }
+
+        // El host pudo mover el cuerpo propio (ver UpdateBodySupport): al revivir o morir de verdad se va ahí
+        if (_downed && _arrival == Arrival.None && _party.Local is { Status: PlayerStatus.Downed } own &&
+            own.BodyScene == _bodyScene) {
+            _bodyPosition = new Vector3(own.BodyX, own.BodyY, _bodyPosition.z);
         }
 
         foreach (var member in _party.Members) {
@@ -1166,16 +1230,19 @@ internal sealed class Revive {
             }
 
             var exists = _bodies.TryGetValue(member.Id, out var body);
+            var position = member.Id == _session.LocalId
+                ? _bodyPosition
+                : new Vector3(member.BodyX, member.BodyY, hero.transform.position.z);
             if (shown && !exists) {
-                var position = member.Id == _session.LocalId
-                    ? _bodyPosition
-                    : new Vector3(member.BodyX, member.BodyY, hero.transform.position.z);
                 var fall = NoteFall(member.Id, hero);
                 _bodies[member.Id] = new DownedBody(member.Name, position, hero, Font,
                     fresh: Time.unscaledTime - fall.At < FreshFallSeconds, facingRight: fall.FacingRight);
-            } else if (!shown && exists) {
+            } else if (shown) {
+                body.MoveTo(position);
+            } else if (exists) {
                 body.Destroy();
                 _bodies.Remove(member.Id);
+                _bodyUnsupportedSince.Remove(member.Id);
             }
         }
 
@@ -1221,7 +1288,66 @@ internal sealed class Revive {
         }
 
         _bodies.Clear();
+        _bodyUnsupportedSince.Clear();
         _bodiesScene = string.Empty;
+    }
+
+    /// <summary>
+    /// Un cuerpo queda donde cayó, pero lo que tenía debajo puede desaparecer: las plataformas del Coliseo se retraen entre
+    /// oleadas y el cuerpo se quedaba flotando, lejos del alcance de quien está en el suelo (solo se revivía saliendo a
+    /// un banco). Lo mira cada PC de pie en la sala, porque el caído puede estar siguiendo a su compañero en otra, y si
+    /// sigue sin suelo un rato le pide al host moverlo.
+    /// </summary>
+    private void UpdateBodySupport() {
+        var now = Time.unscaledTime;
+        if (_downed || _bodies.Count == 0 || now < _nextBodyCheck || !_session.CanSend) {
+            return;
+        }
+
+        _nextBodyCheck = now + BodyCheckInterval;
+        var hero = HeroController.instance;
+        var gm = GameManager.instance;
+        if (hero == null || gm == null || gm.IsInSceneTransition || hero.cState.dead) {
+            return;
+        }
+
+        foreach (var pair in _bodies) {
+            var position = pair.Value.Position;
+            if (GroundBelow(hero, position, out _, BodySupportReach) && !InHazard(hero, position)) {
+                _bodyUnsupportedSince.Remove(pair.Key);
+                continue;
+            }
+
+            if (!_bodyUnsupportedSince.TryGetValue(pair.Key, out var since)) {
+                _bodyUnsupportedSince[pair.Key] = now;
+                continue;
+            }
+
+            if (now - since < BodyUnsupportedSeconds || !FindBodySpot(hero, position, out var spot)) {
+                continue;
+            }
+
+            _bodyUnsupportedSince[pair.Key] = now;
+            var writer = _session.Begin(BodyMoved);
+            writer.WriteUShort(pair.Key);
+            writer.WriteString(_bodiesScene);
+            writer.WriteFloat(spot.x);
+            writer.WriteFloat(spot.y);
+            _session.End();
+        }
+    }
+
+    /// <summary>
+    /// Dónde puede quedar un cuerpo sin suelo: en el suelo de debajo o, si no hay o es un peligro (los pinchos del Coliseo),
+    /// junto a este jugador si está pisando suelo: ahí se puede llegar seguro. Si no, se vuelve a mirar en la próxima.
+    /// </summary>
+    private static bool FindBodySpot(HeroController hero, Vector3 position, out Vector3 spot) {
+        if (GroundBelow(hero, position, out spot) && !InHazard(hero, spot)) {
+            return true;
+        }
+
+        spot = hero.transform.position;
+        return hero.cState.onGround && !InHazard(hero, spot);
     }
 
     private Font Font {

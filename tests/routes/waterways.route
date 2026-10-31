@@ -14,10 +14,11 @@ scene-data-sync
 
 # Jefes
 room Waterways_05 right1
-# Sobre el suelo y en la zona de su batalla (x 73-79): no despierta a golpes
+# Sobre el suelo y en la zona de su batalla (x 73-79): no despierta a golpes. Con su punto: enterrado, el jefe no está en
+# la arena, y sin punto fight mandaba a los jugadores adonde estuviera él, fuera del mapa
 both tp 76 10
 wait 2
-fight defeatedDungDefender
+fight defeatedDungDefender 76 10
 scene-data-sync
 
 room Waterways_12 right1
