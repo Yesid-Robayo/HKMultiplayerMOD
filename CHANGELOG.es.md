@@ -9,6 +9,20 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.33.0
+
+- **Revivir en el Coliseo**: quien caía sobre una plataforma se quedaba flotando en el aire al retraerse la plataforma, y
+  nadie podía llegar hasta él. Ahora el cuerpo baja al suelo o, si el suelo está lleno de pinchos, aparece junto a un
+  jugador en pie. Lo mismo con cualquier otro suelo que desaparezca bajo un cuerpo.
+- **Los enemigos de cristal se quedan en sus paredes**: los bichos de cristal que disparan rayos podían soltarse de su
+  repisa y girar en el aire cerca de los jugadores, disparando en todas direcciones.
+- **Los disparos de cristal ya no se quedan en el aire**: los disparos de los enemigos de cristal voladores se congelaban
+  en el aire en la pantalla del otro jugador, y seguían haciendo daño hasta salir de la sala. Ahora vuelan y se clavan en
+  la pared en todas las pantallas.
+- **Disparos de enemigos cuando alguien pausa**: los disparos de los enemigos de quien abre el menú de pausa ya no se
+  quedan congelados en la pantalla de los demás.
+- **Hora en el ModLog**: cada línea del mod lleva ahora la hora, lo que ayuda a comparar los registros de dos jugadores.
+
 ## 0.32.1
 
 - **Tus tajos con tu skin**: con una skin, los tajos y las artes del aguijón se veían como los del juego en tu pantalla,

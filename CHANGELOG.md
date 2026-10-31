@@ -9,6 +9,19 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.33.0
+
+- **Reviving in the Colosseum**: a player who went down on a platform stayed floating in the air when the platform
+  retracted, and nobody could reach them. Now the body drops to the floor, or appears next to a standing player if the
+  floor is covered in spikes. The same goes for any other ground that disappears under a body.
+- **Crystal enemies stay on their walls**: the crystal bugs that fire lasers could come off their ledge and spin in the
+  air when players were near them, firing in every direction.
+- **Crystal shots no longer hang in the air**: the shots of the flying crystal enemies froze in mid-air on the other
+  player's screen, still dealing damage, until they left the room. Now they fly and stick to the wall on every screen.
+- **Enemy shots when someone pauses**: shots from the enemies of a player who opened the pause menu no longer stay
+  frozen on the other players' screens.
+- **Time in the ModLog**: each line of the mod now shows the time, which helps to compare the logs of two players.
+
 ## 0.32.1
 
 - **Your own nail slashes with your skin**: with a skin, your nail slashes and nail arts showed the game's default look on
