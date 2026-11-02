@@ -1998,7 +1998,7 @@ internal sealed class Revive {
         _reservedSoul = 0;
     }
 
-    /// <summary>Hasta cuándo se simula Focus pulsado.</summary>
+    /// <summary>Hasta cuándo cuenta Focus como mantenido (<see cref="TestFocus"/>).</summary>
     private float _testFocusUntil;
 
     private bool IsFocusHeld() {
@@ -2133,13 +2133,13 @@ internal sealed class Revive {
     }
 
     // =====================================================================================================
-    // Diagnóstico
+    // Herramientas de desarrollo y registro
     // =====================================================================================================
 
-    /// <summary>Simula mantener Focus unos segundos.</summary>
+    /// <summary>Cuenta Focus como mantenido durante unos segundos.</summary>
     public void TestFocus(float seconds) => _testFocusUntil = Time.unscaledTime + seconds;
 
-    /// <summary>Posición del cuerpo de otro jugador en esta sala (para ir a él).</summary>
+    /// <summary>Posición del cuerpo de otro jugador en esta sala.</summary>
     public bool TestBodyPosition(out Vector3 position) {
         foreach (var pair in _bodies) {
             if (pair.Key != _session?.LocalId) {

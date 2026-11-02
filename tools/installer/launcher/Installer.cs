@@ -47,7 +47,7 @@ internal sealed class Installer {
 
     /// <summary>
     /// Versión del paquete: la del HKMultiplayer.dll que trae. No va escrita en el .exe, que así es el mismo archivo en
-    /// todas las versiones (SmartScreen le guarda la reputación por archivo exacto).
+    /// todas las versiones del mod.
     /// </summary>
     internal static string PackageVersion(string packageRoot) =>
         DllVersion(Join(Path.Combine(packageRoot, "files"), $"{ModsRelative}/{ModName}/{ModName}.dll"));

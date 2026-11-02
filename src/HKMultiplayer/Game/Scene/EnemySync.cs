@@ -3739,8 +3739,8 @@ internal sealed class EnemySync {
                 // La espera de ese estado sigue por donde iba allí (si no, cada cambio de PC la empezaba de cero)
                 KeepWaited(fsm.Fsm.ActiveState, data.Waited);
             } else if (data.State < states.Length) {
-                // Ya estaba en ese estado (parado desde que pasó a marioneta): su espera también va como allí. Antes se
-                // quedaba la de cuando se paró y el arreglo del Rey Vengamosca no valía si los dos estaban en el mismo
+                // Ya estaba en ese estado (parado desde que pasó a marioneta): su espera también sigue como allí y no
+                // desde que se paró, aunque los dos PCs lo tengan en el mismo estado (la espera del Rey Vengamosca)
                 KeepWaited(fsm.Fsm.ActiveState, data.Waited);
                 RestartAnimationWaits(enemy, fsm.Fsm.ActiveState);
             }

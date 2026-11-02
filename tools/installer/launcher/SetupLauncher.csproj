@@ -1,14 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <!--
       "HKMultiplayer Setup.exe": el instalador del paquete (ventana para instalar, actualizar o desinstalar, y /install o
-      /uninstall en la consola). Todo el trabajo lo hace este programa: hasta la 0.30.0 abría un instalador de PowerShell
-      escondido, que los antivirus miran con lupa. .NET Framework 4.7.2 viene con Windows 10 y 11, así que no hace falta
-      instalar nada. tools/package.sh lo compila y lo pone en el paquete.
+      /uninstall en la consola). Todo el trabajo lo hace este programa, sin scripts por debajo. .NET Framework 4.7.2 viene
+      con Windows 10 y 11, así que no hace falta instalar nada. tools/package.sh lo compila y lo pone en el paquete.
 
       El .exe es el mismo archivo en todas las versiones del mod mientras no cambie su código: no lleva la versión del mod
       (la lee del HKMultiplayer.dll del paquete) y se compila de forma determinista, sin ruta de depuración ni el commit.
-      SmartScreen guarda la reputación de un programa sin firmar por archivo exacto: así la va sumando de versión en
-      versión en vez de empezar de cero en cada una. Su propia versión (Version) solo sube cuando cambia el instalador.
+      Su propia versión (Version) solo sube cuando cambia el instalador.
     -->
     <PropertyGroup>
         <OutputType>WinExe</OutputType>

@@ -5,9 +5,9 @@ namespace HKMultiplayer.Game.Scene;
 
 /// <summary>
 /// Partes de una sala que el juego carga aparte, después de la sala (la del jefe: <c>Waterways_12_boss</c>, cargada por
-/// <c>SceneAdditiveLoadConditional</c>). Los sistemas repasan la sala al entrar y otra vez a los 1,5 s; si esa parte
-/// tardaba más (cuatro juegos abiertos, un PC lento), lo suyo no se repasaba nunca: Flukemarm no se sincronizaba y
-/// cada PC tenía la suya. Con esto, cada sistema vuelve a repasar poco después de que se cargue una.
+/// <c>SceneAdditiveLoadConditional</c>). Los sistemas repasan la sala al entrar y otra vez a los 1,5 s; una parte que
+/// tarda más (en un PC lento) se quedaría sin repasar: Flukemarm no se sincronizaría y cada PC tendría la suya. Con
+/// esto, cada sistema vuelve a repasar poco después de que se cargue una.
 /// </summary>
 internal static class SceneLoads {
     /// <summary>Lo que se espera tras cargarse una parte para repasar (que sus objetos ya estén encendidos).</summary>

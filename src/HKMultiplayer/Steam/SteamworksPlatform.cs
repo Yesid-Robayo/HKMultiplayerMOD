@@ -8,7 +8,7 @@ using Steamworks;
 namespace HKMultiplayer.Steam;
 
 /// <summary>
-/// Steam de verdad, con el Steamworks.NET que trae el juego. El juego ya inicia Steam (SteamOnlineSubsystem) y llama a
+/// Steam con el Steamworks.NET que trae el juego. El juego ya inicia Steam (SteamOnlineSubsystem) y llama a
 /// SteamAPI.RunCallbacks en cada frame, que es lo que entrega aquí los avisos (salas, invitaciones, peticiones de
 /// conexión).
 /// <para>

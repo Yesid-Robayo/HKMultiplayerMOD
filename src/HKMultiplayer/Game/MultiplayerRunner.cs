@@ -490,7 +490,10 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         return true;
     }
 
-    /// <summary>Si se pidió, la conexión se estropea como una mala conexión.</summary>
+    /// <summary>
+    /// Con las herramientas de desarrollo activas y un retraso configurado, envuelve el transporte en
+    /// <see cref="LaggyTransport"/>.
+    /// </summary>
     private static ITransport WithTestNetwork(ITransport transport) {
         if (!TestDriver.IsEnabled() || !LaggyTransport.Configured) {
             return transport;

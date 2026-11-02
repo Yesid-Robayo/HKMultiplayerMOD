@@ -13,9 +13,8 @@ namespace HKMultiplayer.Setup;
 /// carpeta del juego encima del .exe). En la consola, <c>/install</c> o <c>/uninstall</c> y la ruta del juego hacen el
 /// trabajo ahí mismo y devuelven el código de salida (0 bien, 1 error, 2 desinstalado con algo sin devolver).
 /// <para>
-/// Todo el trabajo lo hace este programa. Hasta la 0.30.0 solo abría un instalador de PowerShell escondido con
-/// <c>-ExecutionPolicy Bypass</c>, que es justo lo que vigilan los antivirus. Tampoco lleva dentro la versión del mod (la
-/// lee del paquete): así es el mismo archivo en todas las versiones y SmartScreen le va sumando reputación.
+/// Todo el trabajo lo hace este programa, sin scripts por debajo. No lleva dentro la versión del mod (la lee del
+/// paquete): así es el mismo archivo en todas las versiones del mod mientras no cambie su código.
 /// </para>
 /// </summary>
 internal static class Program {

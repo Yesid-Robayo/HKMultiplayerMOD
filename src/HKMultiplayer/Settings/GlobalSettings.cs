@@ -2,7 +2,7 @@ namespace HKMultiplayer.Settings;
 
 /// <summary>
 /// Ajustes que se guardan entre partidas (archivo de ajustes globales de la Modding API, en la carpeta de datos del
-/// juego; nunca se sube al repositorio).
+/// juego de cada jugador).
 /// </summary>
 public sealed class GlobalSettings {
     /// <summary>Puerto por defecto para hostear.</summary>

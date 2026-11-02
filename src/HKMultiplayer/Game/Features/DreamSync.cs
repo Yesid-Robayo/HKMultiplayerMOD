@@ -605,7 +605,8 @@ internal sealed class DreamSync {
     /// <summary>
     /// Hace que la primera entrada de la sala reciba el golpe del aguijón onírico. Con
     /// <paramref name="activate"/>, si no hay ninguna encendida, enciende la primera (como hace el juego con la de la
-    /// Radiancia al vencer al Hollow Knight con el Corazón del Vacío); el golpe se da con otra orden pasado un segundo.
+    /// Radiancia al vencer al Hollow Knight con el Corazón del Vacío) sin golpearla: el golpe llega en la llamada
+    /// siguiente.
     /// </summary>
     public bool TestDreamHit(bool activate) {
         foreach (var entry in _entries) {

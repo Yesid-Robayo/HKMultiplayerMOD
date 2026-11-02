@@ -12,8 +12,7 @@ using UnityEngine;
 namespace HKMultiplayer.Testing;
 
 /// <summary>
-/// Órdenes internas del mod (solo con el argumento <c>-mptest</c>): ejecuta las que se añaden, una por línea, a
-/// &lt;persistentDataPath&gt;/mp-test.txt y escribe los resultados en el ModLog.
+/// Órdenes internas para desarrollar el mod, con los resultados en el ModLog. No se activan en una partida normal.
 /// </summary>
 internal sealed class TestDriver : MonoBehaviour {
     public const string CommandLineFlag = "-mptest";
@@ -69,7 +68,7 @@ internal sealed class TestDriver : MonoBehaviour {
         _commandFile = Path.Combine(Application.persistentDataPath, "mp-test.txt");
         InputSimulator.Install();
 
-        // Cada daño que recibe el caballero y qué lo hizo (para comprobar que los ataques dañan a los dos jugadores)
+        // Cada daño que recibe el caballero y qué lo hizo
         On.HeroController.TakeDamage += (orig, self, source, side, amount, hazard) => {
             // Con "god" el golpe se registra pero no quita vida (combates largos); "die" sí mata
             if (_god && amount < 99) {
@@ -212,7 +211,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 break;
             case "fsmstates":
                 // fsmstates <texto>: cada objeto de la sala cuyo nombre lo contiene, con su ruta y el estado de cada FSM (sin
-                // límite, ordenados por ruta: para comparar los dos PCs línea a línea)
+                // límite, ordenados por ruta)
                 var stateLines = new List<string>();
                 var stateText = string.Join(" ", args.Skip(1));
                 foreach (var fsm in UnityEngine.Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
@@ -594,7 +593,7 @@ internal sealed class TestDriver : MonoBehaviour {
 
                 break;
             case "say":
-                // say <segundos> <texto>: cartel grande arriba (para la demostración); | separa líneas
+                // say <segundos> <texto>: cartel grande arriba; | separa líneas
                 HKMultiplayer.UI.Banner.Show(string.Join(" ", args.Skip(2)).Replace('|', '\n'), ParseFloat(args[1]));
                 break;
             case "breakables":
@@ -659,8 +658,8 @@ internal sealed class TestDriver : MonoBehaviour {
                 break;
             case "sceneshot":
                 // sceneshot [list]: objetos de la sala que se ven o que chocan (suelos, paredes, ventanas, rejas) y si están
-                // encendidos, para comparar los PCs al acabar un combate (un suelo roto solo en uno). Sin enemigos, sin
-                // copias del pool ni lo del mod. Con "list", también cada uno
+                // encendidos, con una huella del conjunto. Sin enemigos, sin copias del pool ni lo del mod. Con "list",
+                // también cada uno
                 var shot = SceneShot();
                 Log.Info($"{Tag}sceneshot {shot.Count} hash={HKMultiplayer.Game.Scene.ScenePaths.Fnv(string.Join("|", shot)):x8}");
                 if (args.Length > 1 && args[1] == "list") {
@@ -730,7 +729,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 break;
             case "enemytrace":
                 // enemytrace <segundos> <inicio del nombre>: cada 0,1 s, con la hora del reloj (ms UTC), posición, si se ve,
-                // estado de cada FSM y si es marioneta (para comparar los dos PCs momento a momento)
+                // estado de cada FSM y si es marioneta
                 StartCoroutine(TraceEnemy(ParseFloat(args[1]), string.Join(" ", args.Skip(2))));
                 break;
             case "moveobj":
@@ -944,13 +943,12 @@ internal sealed class TestDriver : MonoBehaviour {
 
                 break;
             case "pressat":
-                // pressat <hora en ms desde 1970 (UTC)> <botón> [segundos]: pulsa a esa hora del reloj del PC (dos jugadores a
-                // la vez, o uno justo después del otro, sin depender de cuándo lee cada uno sus órdenes)
+                // pressat <hora en ms desde 1970 (UTC)> <botón> [segundos]: pulsa el botón a esa hora del reloj del PC
                 StartCoroutine(PressAt(long.Parse(args[1]), args[2], args.Length > 3 ? ParseFloat(args[3]) : 0.12f));
                 break;
             case "slashes":
-                // slashes <cuántos> <segundos entre uno y otro> [up|down]: ráfaga de aguijonazos seguidos (las órdenes se
-                // leen cada medio segundo: varios "press attack" seguidos serían uno solo), con arriba o abajo pulsado
+                // slashes <cuántos> <segundos entre uno y otro> [up|down]: ráfaga de aguijonazos seguidos, con arriba o
+                // abajo pulsado
                 StartCoroutine(Slashes(int.Parse(args[1]), ParseFloat(args[2]), args.Length > 3 ? args[3] : null));
                 break;
             case "status":
@@ -1019,8 +1017,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 StartCoroutine(WatchInvulnerable(ParseFloat(args[1])));
                 break;
             case "burst":
-                // burst <nombre> <cuántas> <segundos entre una y otra>: capturas seguidas (nombre-1, nombre-2...), para
-                // ver un efecto mientras pasa (las órdenes se leen cada medio segundo)
+                // burst <nombre> <cuántas> <segundos entre una y otra>: capturas seguidas (nombre-1, nombre-2...)
                 StartCoroutine(Burst(args[1], int.Parse(args[2]), ParseFloat(args[3])));
                 break;
             case "fpscap":
@@ -1038,7 +1035,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 StartCoroutine(Track(ParseFloat(args[1]), self: false));
                 break;
             case "trackself":
-                // Lo mismo con el caballero local: sirve de referencia para comparar con lo que ve el otro
+                // Lo mismo con el caballero local
                 StartCoroutine(Track(ParseFloat(args[1]), self: true));
                 break;
             case "pause":
@@ -1480,7 +1477,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 break;
             case "burston":
                 // burston <prefab>|<nombre> <cuántas> <segundos>: ráfaga de capturas en cuanto sale del pool ese objeto
-                // (en el PC que mueve al enemigo, el original; en los demás, su copia): el mismo momento en los dos PCs
+                // (en el PC que mueve al enemigo, el original; en los demás, su copia)
                 var onArgs = string.Join(" ", args.Skip(1)).Split('|');
                 var onRest = onArgs[1].Split(' ');
                 _burstOnPrefab = onArgs[0];
@@ -1532,7 +1529,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 break;
             case "fsmdumpall":
                 // fsmdumpall [carpeta]: todas las FSM de las salas cargadas a <carpeta>/<sala>.txt (por defecto
-                // <persistentDataPath>/fsmdump); ver FsmDumper
+                // <persistentDataPath>/fsmdump)
                 var dumpFolder = args.Length > 1 ? string.Join(" ", args.Skip(1))
                     : Path.Combine(Application.persistentDataPath, "fsmdump");
                 Log.Info($"{Tag}fsmdumpall {FsmDumper.DumpLoadedScenes(dumpFolder)}");
@@ -1544,7 +1541,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 Log.Info($"{Tag}fsmdumpauto {(args.Length > 1 ? args[1] : "no")}");
                 break;
             case "scenelist":
-                // scenelist: todas las salas del juego, una por línea (para recorrerlas con fsmdumpall)
+                // scenelist: todas las salas del juego, una por línea
                 foreach (var sceneName in FsmDumper.BuildSceneNames()) {
                     Log.Info($"{Tag}scene {sceneName}");
                 }

@@ -15,9 +15,9 @@ using UnityEngine;
 namespace HKMultiplayer.Game.Features;
 
 /// <summary>
-/// Skins del caballero, compatibles con las de CustomKnight (como la 0.7.3): cada skin es una carpeta con Knight.png y,
-/// si quiere, Sprint.png, Unn.png, los hechizos (VS.png, Wraiths.png, VoidSpells.png), Fluke.png, Hatchling.png, Hud.png,
-/// Geo.png y OrbFull.png; lo que falte se ve normal. Se buscan en <c>Mods/HKMultiplayer/Skins</c> y en las carpetas de
+/// Skins del caballero, con el formato de skins de CustomKnight (el de su versión 0.7.3): cada skin es una carpeta con
+/// Knight.png y, si quiere, Sprint.png, Unn.png, los hechizos (VS.png, Wraiths.png, VoidSpells.png), Fluke.png,
+/// Hatchling.png, Hud.png, Geo.png y OrbFull.png; lo que falte se ve normal. Se buscan en <c>Mods/HKMultiplayer/Skins</c> y en las carpetas de
 /// skins de CustomKnight. Cada PC elige la suya en Pausa › Multijugador › Skin, y los demás la ven aunque no la tengan.
 /// <para>
 /// Red: cada jugador anuncia su skin al host (<see cref="SkinInfo"/>: nombre y huella de sus archivos) y el host la
@@ -30,7 +30,7 @@ namespace HKMultiplayer.Game.Features;
 /// se guarda el paquete recibido con un nombre que es su huella; nunca se ejecuta ni se abre fuera del mod.
 /// </para>
 /// <para>
-/// Dibujo (como la 0.7.3): el cuerpo de cada jugador lleva su skin con un bloque de propiedades en su renderer (no en
+/// Dibujo: el cuerpo de cada jugador lleva su skin con un bloque de propiedades en su renderer (no en
 /// los materiales compartidos), así cada uno puede llevar una distinta; los hechizos, amuletos y HUD propios cambian el
 /// material compartido de su colección (como CustomKnight), y a los efectos de los compañeros (sus copias bajo el avatar)
 /// se les pone la skin de su dueño o la textura original. Cada PC puede no ver las skins de los demás (ajuste propio).

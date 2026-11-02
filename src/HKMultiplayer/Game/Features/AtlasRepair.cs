@@ -11,9 +11,8 @@ namespace HKMultiplayer.Game.Features;
 /// Unity 6 algunos sprites del HUD se movieron dentro de su hoja (las máscaras de vida, el geo, el orbe de alma): en
 /// el PNG de la skin esa zona tiene otra cosa o está vacía y se veían mal o no se veían.
 /// <para>
-/// La tabla <see cref="HudMoves"/> dice dónde estaba cada sprite en la hoja antigua. Se sacó con una skin que
-/// conserva las siluetas originales (Rick Knight): cada sprite se encontró en la hoja antigua con coincidencia casi
-/// exacta. Como todas las skins de CustomKnight usan la hoja antigua, la tabla sirve para cualquiera.
+/// La tabla <see cref="HudMoves"/> dice dónde está cada sprite en la hoja antigua. Todas las skins de CustomKnight usan
+/// esa hoja, así que la tabla sirve para cualquiera.
 /// </para>
 /// </summary>
 internal static class AtlasRepair {
