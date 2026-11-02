@@ -810,7 +810,7 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
 
 ### Cambios de la revisión contra el juego (0.26.0)
 
-Lo que cambió al revisar el mod contra el juego descompilado (12/10/2026) y no está ya contado arriba. La lista de
+Lo que cambió al revisar el mod contra el juego (12/10/2026) y no está ya contado arriba. La lista de
 la revisión, con cada fallo, su arreglo y cómo se probó, estaba en `docs/review-backlog.md`: se quitó al cerrarla
 (las 172 entradas) y sigue en el historial (`git show 6ea533d:docs/review-backlog.md`).
 
@@ -1051,14 +1051,8 @@ el del compañero `ApplyToEffects` sí se la ponía a todas las copias bajo el a
 
 ## Código del juego
 
-Para ver cómo hace algo el juego antes de tocarlo. Todo queda en `decomp/` (en `.gitignore`): es código de Team Cherry
-y nunca se sube.
+Para ver cómo hace algo el juego antes de tocarlo. Todo queda en `decomp/`, solo en local.
 
-- **C#:** `bash tools/decompile.sh` (después de `setup-dev.sh`; necesita `ilspycmd`) descompila con ILSpy las DLL de
-  `lib/`, contra las que compila el mod: `Assembly-CSharp` (con la Modding API, así que trae `Modding/ModHooks.cs`),
-  `PlayMaker` y `Assembly-CSharp-firstpass`. Sale un archivo `.cs` por clase, con los nombres originales
-  (`HeroController`, `GameManager`, `HealthManager`...), y tarda unos segundos. Se busca y se lee solo lo que toca
-  cada fallo; son unas 3000 clases.
 - **FSM de PlayMaker:** buena parte de la lógica (jefes, NPC, ascensores, puertas, eventos) no está en el C#. En el
   descompilado salen las piezas, que son las acciones de PlayMaker (esperar, saltar hacia el caballero, lanzar del
   pool, comparar una variable...), pero no cómo las arma cada objeto: sus estados, transiciones, probabilidades,

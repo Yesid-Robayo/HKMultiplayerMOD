@@ -5,7 +5,7 @@
 # Uso: bash tools/decompile.sh   (después de tools/setup-dev.sh; necesita ilspycmd: dotnet tool install -g ilspycmd)
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 LIB="$ROOT/lib"
 OUT="$ROOT/decomp"
 
