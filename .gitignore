@@ -4,7 +4,6 @@ lib/
 vendor/
 test-instances/
 # Solo en local
-decomp/
 tools/local/
 
 # Modding API (código en modding-api/, sí se sube): sin el juego ni lo que se genera al compilarla
@@ -43,5 +42,5 @@ __pycache__/
 # Worktrees y datos locales de los agentes
 .claude/
 
-# Skins de prueba (de otros autores): solo en local
+# Skins de otros autores: solo en local
 skins/
