@@ -30,7 +30,12 @@ Only the latest version published in *Releases* receives fixes.
 - The host answers a connection attempt with a single packet and sends nothing else until it receives an
   authenticated one (a forged address cannot be used to send traffic to someone else), limits new attempts per
   second, and never drops a connected player because of a new attempt from their address.
-- The connection goes directly between the PCs: there are no relay servers or accounts.
+- The mod has no servers of its own. By IP, the connection goes directly between the PCs, with no accounts. Through
+  Steam, each player uses their Steam account and Steam carries the packets, directly between the PCs or through
+  Steam's relay servers when a direct connection is not possible. The packets travel encrypted with the game code
+  just like by IP, and the game's Steam lobby keeps that code so the people who can join it don't have to type it.
+- Through Steam, a connection request is only accepted from a Steam friend, someone in the game's Steam lobby or the
+  host you are joining; anyone else is ignored before the handshake.
 - What arrives from other players is checked before it is used: maximum sizes for packets, texts and transfers, names
   without formatting tags or control characters, character files with names that cannot escape the world's folder,
   and skins that are only stored as verified PNG images, in a cache named by their hash.
@@ -39,7 +44,10 @@ Only the latest version published in *Releases* receives fixes.
 
 - Players in a game trust each other: whoever has the code can, for example, change the world's shared progress. Share
   the code only with people you want to let in.
-- To play over the internet the host opens a UDP port on their router; close it when you are not using it.
+- Through Steam with *Friends*, any Steam friend can read the game code from the lobby and join; with *Invited only*,
+  whoever gets an invite. With *Nobody*, the game is by IP only.
+- To play over the internet by IP the host opens a UDP port on their router; close it when you are not using it.
+  Through Steam no port needs to be opened.
 
 ## Español
 
@@ -68,7 +76,12 @@ Solo la última versión publicada en *Releases* recibe arreglos.
 - El host responde a un intento de conexión con un solo paquete y no envía nada más hasta recibir uno auténtico (con
   una dirección falsificada no se puede mandar tráfico contra otro), limita los intentos nuevos por segundo y nunca
   echa a un jugador conectado por un intento nuevo desde su dirección.
-- La conexión es directa entre los PCs: no hay servidores intermedios ni cuentas.
+- El mod no tiene servidores propios. Por IP, la conexión es directa entre los PCs y sin cuentas. Por Steam, cada
+  jugador usa su cuenta de Steam y Steam lleva los paquetes, directos entre los PCs o por sus servidores de relé cuando
+  no se puede conectar directamente. Los paquetes van cifrados con el código de la partida igual que por IP, y la sala
+  de Steam de la partida guarda ese código para que quien puede entrar en ella no tenga que escribirlo.
+- Por Steam, una petición de conexión solo se acepta si viene de un amigo de Steam, de alguien de la sala de Steam de la
+  partida o del host al que te unes; a cualquier otro se le ignora antes del saludo.
 - Lo que llega de otros jugadores se comprueba antes de usarlo: tamaños máximos de paquetes, textos y transferencias,
   nombres sin etiquetas de formato ni caracteres de control, archivos de personaje con nombres que no pueden salirse
   de la carpeta del mundo y skins que solo se guardan como imágenes PNG comprobadas, en una caché con su huella como
@@ -78,4 +91,7 @@ Solo la última versión publicada en *Releases* recibe arreglos.
 
 - Los jugadores de una partida confían entre sí: quien tiene el código puede, por ejemplo, cambiar el progreso
   compartido del mundo. Comparte el código solo con quien quieras que entre.
-- Para jugar por internet el host abre un puerto UDP en su router; ciérralo cuando no lo uses.
+- Por Steam con *Amigos*, cualquier amigo de Steam puede leer el código de la partida en la sala y entrar; con *Solo
+  invitados*, quien recibe una invitación. Con *Nadie*, la partida es solo por IP.
+- Para jugar por internet por IP el host abre un puerto UDP en su router; ciérralo cuando no lo uses. Por Steam no hace
+  falta abrir ningún puerto.
