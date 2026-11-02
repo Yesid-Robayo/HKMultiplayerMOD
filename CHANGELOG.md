@@ -52,7 +52,6 @@ release notes.
   the game's original one coming back (this happened with every installer version). If you already uninstalled an
   earlier version and the game without mods has problems: Steam › right-click Hollow Knight › Properties › Installed
   Files › Verify integrity.
-- The package no longer contains paths from the PC it was built on.
 - Spanish instructions in neutral Spanish.
 
 ## 0.31.1
@@ -86,7 +85,7 @@ Fixes to the Steam connection.
 
 ## 0.30.0
 
-Every boss fight played again with 4 players, one at a time, and the Pantheon of Hallownest played to its ending.
+Every boss fight with several players, and the Pantheon of Hallownest to its ending.
 
 - **Pantheon of Hallownest ending**: each player finishes the Radiance on their own PC. Everyone strikes the final
   blows with their own attack button and sees the ending cutscene when they finish theirs; the first one to finish
@@ -115,8 +114,8 @@ Every boss fight played again with 4 players, one at a time, and the Pantheon of
 
 ## 0.29.0
 
-The whole story played with 4 players, from the first bosses to both Hollow Knight
-endings and the Radiance, plus the Grimm Troupe, Grey Prince Zote, the Colosseum and a whole Pantheon.
+The whole story with several players, from the first bosses to both Hollow Knight endings and the Radiance, plus the
+Grimm Troupe, Grey Prince Zote, the Colosseum and a whole Pantheon.
 
 - **Pantheons together**: when a player starts a Pantheon, everyone in the Atrium goes in with them, with the same
   bindings, and the group moves on to each boss together (also out of the rest room). They used to fight it alone.
@@ -249,8 +248,8 @@ Development versions, without a release.
 - **0.19.0**: go to a partner and host settings.
 - **0.18.x**: partner charm and companion effects; Grimm, Soul Tyrant, Hollow Knight, Radiance, Failed Champion, False
   Knight and Hive children.
-- **0.16.0 to 0.17.0**: shared progress (M5) and the Golden Colosseum without getting stuck.
-- **0.15.x**: the other player's effects (M4); the whole Silver Colosseum.
+- **0.16.0 to 0.17.0**: shared progress and the Golden Colosseum without getting stuck.
+- **0.15.x**: the other player's effects; the whole Silver Colosseum.
 - **0.14.x**: shared breakables and saved objects; the Colosseum no longer gets stuck between waves.
 - **0.12.0 to 0.13.0**: shared boss dialogues and fights that wait for everyone.
 - **0.9.0 to 0.11.0**: chests, animated hazards in sync and the Collector with his jars.

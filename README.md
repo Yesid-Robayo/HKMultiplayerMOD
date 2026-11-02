@@ -232,42 +232,34 @@ API.
 
 ## 🧪 Testing status
 
-✅ **Tested by playing:**
+✅ **Confirmed:**
 
 - Connection, coop worlds and guests' characters.
 - Enemies in every area.
-- Bosses: Gruz Mother, False Knight (also on a bad connection), Hornet, Brooding Mawlek, Soul Master, Dung Defender,
-  Nosk, Broken Vessel, Crystal Guardian and Enraged Guardian, Mantis Lords, Uumuu, The Collector, Traitor Lord,
-  Watcher Knights, Flukemarm, Vengefly King, Grimm, Soul Tyrant, Hollow Knight, Pure Vessel, the Radiance and the
-  Absolute Radiance.
+- Bosses: Gruz Mother, False Knight, Hornet, Brooding Mawlek, Soul Master, Dung Defender, Nosk, Broken Vessel, Crystal
+  Guardian and Enraged Guardian, Mantis Lords, Uumuu, The Collector, Traitor Lord, Watcher Knights, Flukemarm,
+  Vengefly King, Grimm, Soul Tyrant, Hollow Knight, Pure Vessel, the Radiance and the Absolute Radiance.
 - Colosseum of Fools: Bronze, Silver and Gold.
 - Dreams: Failed Champion, Lost Kin, Soul Tyrant, White Defender, Grey Prince Zote and the Nightmare King.
 - Revive (also the body on the last safe ground, over spikes and acid), shades, partner HUD, partners on the map
   (also inside shops), host settings, cutscenes, skins, go to a partner, NPC quests and conversations, vine platforms,
   the Menderbug, the mod in English and automatic reconnection (also cancelling it and giving up).
 - Install, update and uninstall.
+- The whole story with up to 4 players: every boss, the dreams and the dream warriors, the three Dreamers, the Black
+  Egg, the Hollow Knight (both endings) and the Radiance, the Grimm Troupe, Grey Prince Zote, the Colosseum of Fools,
+  Zote and Cloth, the Pantheon of the Master from start to finish and the Pantheon of Hallownest to its ending, which
+  each player finishes on their own PC.
 - 0.26.0: the whole mod was reviewed. The 172 issues found were fixed or reviewed, and checking them found and fixed
   16 more.
-- 0.29.0: the whole story with 4 players: every boss with real fights, the dreams and the
-  dream warriors, the three Dreamers, the Black Egg, the Hollow Knight (both endings) and the Radiance, the Grimm
-  Troupe, Grey Prince Zote, the Colosseum of Fools (Bronze, Zote included), Zote and Cloth, and the Pantheon of the
-  Master from start to finish.
-- 0.30.0: every boss fight again with 4 players, one at a time, and the Pantheon of Hallownest to its ending, which
-  each player finishes on their own PC.
-- 0.31.0: the mod's Steam logic: joining through the lobby and by invite, private lobbies, and Steam and IP guests in
-  the same game.
 
-⚠️ **Partially tested:**
+⚠️ **Partially confirmed:**
 
 - Hive Knight and Massive Moss Charger: they die on every PC, but their attacks still need checking.
 
-❓ **Not tested yet:**
+❓ **Not confirmed yet:**
 
-- A session between PCs over the internet.
-- Real Steam between two accounts: the part that talks to Steam (creating the lobby, inviting, joining and connecting
-  through its relays) still has to be confirmed.
-- Playing with 3 or 4 players on separate PCs: the cases that only happen with three or more were fixed in 0.28.0, but
-  this still has to be confirmed across several PCs.
+- A long session over the internet, also with 3 or 4 players.
+- Playing through Steam: creating the lobby, inviting, joining and connecting through Steam's relays.
 
 Known limitations:
 
@@ -303,8 +295,7 @@ it, install by hand (below).
 - Checks that the game is version 1.5.12620 and closed, and that the package is complete (`SHA256SUMS.txt`).
 - Saves a copy of every file it changes in `<game>\HKMultiplayer-backup` and records everything in `manifest.txt`.
 - Removes the old **HollowKnightCoop** mod if present and moves other mods to `Mods\Disabled`, telling you which ones
-  before installing (mods built for another
-  Modding API version can break the game).
+  before installing (mods built for another Modding API version can break the game).
 - Copies the Modding API and the mod, and verifies the copy. Installing a new version on top is an update.
 - When it opens it checks GitHub: if there is a newer version than the package, a notice at the top offers to download
   it. **What's new** (bottom right) shows what that version brings, or this package's one if there is none newer.
@@ -388,7 +379,7 @@ stunned when several players hit them at once.
 ## 💻 Development
 
 > [!NOTE]
-> Code identifiers are in English; code comments, logs and the design notes in `docs/` are in Spanish.
+> Code identifiers are in English; code comments, logs and the architecture document in `docs/` are in Spanish.
 
 <details>
 <summary><b>Repository layout</b></summary>
@@ -404,7 +395,7 @@ stunned when several players hit them at once.
 | `src/HKMultiplayer/UI/` | Menus, notices, language and the co-op HUD canvas. |
 | `src/HKMultiplayer/Testing/` | Development tools; inactive in a normal game. |
 | `modding-api/` | Modding API source (hk-modding/api, MIT) for Unity 6: the `hk-beta-branch-unity-6-update` branch of `SFGrenade/api` (PR hk-modding/api#164, commit `468f579`) with our own changes. No game files. |
-| `tests/` | Transport tests outside the game and co-op routes (`tests/routes/`). |
+| `tests/` | Transport tests outside the game (`tests/NetTests`). |
 | `tools/` | PC setup (`setup-dev.sh`), build and install (`test-cycle.sh`), package and installer. |
 | `docs/` | [Architecture](docs/arquitectura.md) (Spanish): how the mod works inside. |
 | `lib/`, `vendor/` | *(local only, not committed)* Game and Modding API DLLs. |

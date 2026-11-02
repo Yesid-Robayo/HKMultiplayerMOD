@@ -234,44 +234,36 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 
 ## 🧪 Estado de las pruebas
 
-✅ **Probado jugando:**
+✅ **Confirmado:**
 
 - Conexión, mundos coop y personajes de los invitados.
 - Enemigos de todas las zonas.
-- Jefes: Mamá Gruz, Falso Caballero (también con mala conexión), Hornet, Mawlek, Maestro de Almas, Defensor del
-  Estiércol, Nosk, Vasija Rota, Guardián de Cristal y Guardián Furioso, Señores Mantis, Uumuu, Coleccionista, Señor
-  Traidor, Caballeros Vigía, Flukemarm, Rey Vengamosca, Grimm, Tirano de Almas, Hollow Knight, Recipiente Puro,
-  Radiancia y Radiancia Absoluta.
+- Jefes: Mamá Gruz, Falso Caballero, Hornet, Mawlek, Maestro de Almas, Defensor del Estiércol, Nosk, Vasija Rota,
+  Guardián de Cristal y Guardián Furioso, Señores Mantis, Uumuu, Coleccionista, Señor Traidor, Caballeros Vigía,
+  Flukemarm, Rey Vengamosca, Grimm, Tirano de Almas, Hollow Knight, Recipiente Puro, Radiancia y Radiancia Absoluta.
 - Coliseo de los Tontos: Bronce, Plata y Oro.
-- Sueños: Campeón Fallido (el Falso Caballero del sueño), Hermano Perdido, Tirano de Almas, Defensor Blanco, Príncipe Gris Zote y Rey
-  de las Pesadillas.
+- Sueños: Campeón Fallido (el Falso Caballero del sueño), Hermano Perdido, Tirano de Almas, Defensor Blanco, Príncipe
+  Gris Zote y Rey de las Pesadillas.
 - Revivir (también el cuerpo en el último sitio seguro, sobre pinchos y ácido), sombras, HUD del compañero,
   compañeros en el mapa (también dentro de las tiendas), ajustes del host, cinemáticas, skins, ir con un compañero,
   misiones y conversaciones de NPC, plataformas de liana, el Menderbug, el mod en inglés y la reconexión automática
   (también cancelarla y rendirse).
 - Instalar, actualizar y desinstalar.
+- La historia entera con hasta 4 jugadores: todos los jefes, los sueños y los guerreros soñadores, los tres Soñadores,
+  el Huevo Negro, el Hollow Knight (los dos finales) y la Radiancia, la Compañía de Grimm, Grey Prince Zote, el Coliseo
+  de los Tontos, Zote y Cloth, el Panteón del Maestro de principio a fin y el Panteón de Hallownest hasta su final, que
+  cada jugador acaba en su propio PC.
 - 0.26.0: se revisó todo el mod. Los 172 fallos encontrados se arreglaron o se revisaron, y al comprobarlos salieron y
   se arreglaron 16 más.
-- 0.29.0: la historia entera con 4 jugadores: todos los jefes con combates de verdad, los
-  sueños y los guerreros soñadores, los tres Soñadores, el Huevo Negro, el Hollow Knight (los dos finales) y la
-  Radiancia, la Compañía de Grimm, Grey Prince Zote, el Coliseo de los Tontos (Bronce, con Zote), Zote y Cloth, y el
-  Panteón del Maestro de principio a fin.
-- 0.30.0: todos los combates de jefes otra vez con 4 jugadores, uno a uno, y el Panteón de Hallownest hasta su final,
-  que cada jugador acaba en su propio PC.
-- 0.31.0: la lógica del mod para Steam: unirse por la sala y por invitación, las salas privadas e invitados por Steam y
-  por IP en la misma partida.
 
-⚠️ **Probado en parte:**
+⚠️ **Confirmado en parte:**
 
 - Caballero de la Colmena y Cargador Musgoso: mueren en todos los PCs, pero falta verlos atacar.
 
-❓ **Sin probar:**
+❓ **Aún sin confirmar:**
 
-- Una partida entre PCs por internet.
-- Steam de verdad entre dos cuentas: la parte que habla con Steam (crear la sala, invitar, unirse y la conexión por sus
-  relés) aún está por confirmar.
-- Jugar 3 o 4 en PCs distintos: los casos que solo pasan con tres o más se arreglaron en la 0.28.0, pero aún falta
-  confirmarlo entre varios PCs.
+- Una partida larga por internet, también con 3 o 4 jugadores.
+- Jugar por Steam: crear la sala, invitar, unirse y la conexión por los relés de Steam.
 
 Limitaciones conocidas:
 
@@ -287,8 +279,9 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md#limitaciones-conocid
 ## 📦 Instalar
 
 > [!NOTE]
-> Necesitas **Hollow Knight 1.5.12620 en Windows** (la versión actual de Steam). Todos los jugadores tienen que tener
-> **la misma versión** de HKMultiplayer.
+> Necesitas **Hollow Knight 1.5.12620 en Windows** (la versión actual de Steam; la de GOG también vale). Todos los
+> jugadores tienen que tener **la misma versión** de HKMultiplayer. Mac y Linux no son compatibles, y la versión de
+> Xbox/Game Pass no está probada.
 
 1. Descarga `HKMultiplayer-<versión>.zip` de la página de [*Releases*](../../releases).
 2. Cierra el juego, **descomprime el zip entero** y haz doble clic en **`HKMultiplayer Setup.exe`**.
@@ -307,12 +300,13 @@ Si prefieres no usarlo, instálalo a mano (más abajo).
 - Comprueba que el juego es la versión 1.5.12620 y que está cerrado, y que el paquete está completo (`SHA256SUMS.txt`).
 - Guarda en `<juego>\HKMultiplayer-backup` una copia de cada archivo que cambia y lo apunta todo en `manifest.txt`.
 - Quita el mod anterior **HollowKnightCoop** si está y aparta los demás mods a `Mods\Disabled`, diciéndote cuáles
-  antes de instalar (los hechos para otra
-  versión de la Modding API pueden romper el juego).
+  antes de instalar (los hechos para otra versión de la Modding API pueden romper el juego).
 - Copia la Modding API y el mod, y comprueba lo copiado. Instalar una versión nueva encima es una actualización.
 - Al abrirse mira en GitHub: si hay una versión más nueva que el paquete, un cartel arriba ofrece descargarla.
   **Novedades** (abajo a la derecha) enseña lo que trae esa versión, o la del paquete si no hay otra más nueva.
 - **Desinstalar** deshace todo al revés: el juego queda como estaba. Tus mundos coop, partidas y skins no se tocan.
+- No lo mezcles con Lumafly ni Scarab en la misma carpeta: su interruptor de "vanilla" mueve los mismos archivos, y
+  entonces desinstalar puede no dejar el juego exactamente como estaba (lo arregla *Verificar integridad* de Steam).
 - También funciona en la consola: `start /wait "" "HKMultiplayer Setup.exe" /install "D:\Juegos\Hollow Knight"` (o
   `/uninstall`).
 
@@ -391,8 +385,8 @@ aturdidos cuando pegan varios a la vez.
 ## 💻 Desarrollo
 
 > [!NOTE]
-> Los identificadores del código están en inglés; los comentarios, los registros y las notas de diseño de `docs/`, en
-> español.
+> Los identificadores del código están en inglés; los comentarios, los registros y el documento de arquitectura de
+> `docs/`, en español.
 
 <details>
 <summary><b>Estructura del repositorio</b></summary>
@@ -408,7 +402,7 @@ aturdidos cuando pegan varios a la vez.
 | `src/HKMultiplayer/UI/` | Menús, avisos, idioma y el lienzo del HUD del coop. |
 | `src/HKMultiplayer/Testing/` | Herramientas de desarrollo; no se activan en una partida normal. |
 | `modding-api/` | Código de la Modding API (hk-modding/api, MIT) para Unity 6: rama `hk-beta-branch-unity-6-update` de `SFGrenade/api` (PR hk-modding/api#164, commit `468f579`) con cambios propios. Sin los archivos del juego. |
-| `tests/` | Pruebas del transporte fuera del juego y rutas del coop (`tests/routes/`). |
+| `tests/` | Pruebas del transporte fuera del juego (`tests/NetTests`). |
 | `tools/` | Preparar el PC (`setup-dev.sh`), compilar e instalar (`test-cycle.sh`), paquete e instalador. |
 | `docs/` | [Arquitectura](docs/arquitectura.md): cómo funciona el mod por dentro. |
 | `lib/`, `vendor/` | *(solo local, no se suben)* DLL del juego y de la Modding API. |

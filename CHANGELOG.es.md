@@ -52,7 +52,6 @@ Al publicar una versión nueva, se añade aquí arriba con lo mismo que su secci
   vez de volver el original del juego (pasaba con todas las versiones del instalador). Si ya desinstalaste una versión
   anterior y el juego sin mods da problemas: Steam › clic derecho en Hollow Knight › Propiedades › Archivos instalados ›
   Verificar integridad.
-- El paquete ya no lleva rutas del PC donde se compiló.
 - Instrucciones en español neutro.
 
 ## 0.31.1
@@ -87,7 +86,7 @@ Arreglos de la conexión por Steam.
 
 ## 0.30.0
 
-Todos los combates de jefes jugados otra vez con 4 jugadores, uno a uno, y el Panteón de Hallownest hasta su final.
+Todos los combates de jefes con varios jugadores, y el Panteón de Hallownest hasta su final.
 
 - **Final del Panteón de Hallownest**: cada jugador acaba la Radiancia en su PC. Todos dan los golpes finales con su
   propio botón de atacar y ven la cinemática del final al acabar el suyo; antes el primero en acabar se llevaba a los
@@ -116,8 +115,8 @@ Todos los combates de jefes jugados otra vez con 4 jugadores, uno a uno, y el Pa
 
 ## 0.29.0
 
-La historia entera jugada con 4 jugadores, de los primeros jefes a los dos finales
-del Hollow Knight y la Radiancia, además de la Compañía de Grimm, Grey Prince Zote, el Coliseo y un Panteón entero.
+La historia entera con varios jugadores, de los primeros jefes a los dos finales del Hollow Knight y la Radiancia,
+además de la Compañía de Grimm, Grey Prince Zote, el Coliseo y un Panteón entero.
 
 - **Panteones juntos**: cuando un jugador empieza un Panteón, los que están en el Atrio entran con él, con las mismas
   ataduras, y el grupo pasa junto a cada jefe (también al salir de la sala de descanso). Antes lo peleaba solo.
@@ -248,8 +247,8 @@ Versiones de desarrollo, sin release.
 - **0.19.0**: ir con un compañero y ajustes del host.
 - **0.18.x**: efectos de amuletos y acompañantes del compañero; Grimm, Tirano de Almas, Hollow Knight, Radiancia,
   Campeón Fallido, Falso Caballero y crías de la Colmena.
-- **0.16.0 a 0.17.0**: progreso compartido (M5) y el Coliseo de Oro sin atascos.
-- **0.15.x**: efectos del otro jugador (M4); Coliseo de Plata entero.
+- **0.16.0 a 0.17.0**: progreso compartido y el Coliseo de Oro sin atascos.
+- **0.15.x**: efectos del otro jugador; Coliseo de Plata entero.
 - **0.14.x**: rompibles y guardables compartidos; el Coliseo ya no se atasca entre oleadas.
 - **0.12.0 a 0.13.0**: diálogos de jefe compartidos y combates que esperan a todos.
 - **0.9.0 a 0.11.0**: cofres, peligros animados al mismo ritmo y el Coleccionista con sus tarros.
