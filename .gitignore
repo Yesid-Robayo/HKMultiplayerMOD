@@ -2,9 +2,6 @@
 # tools/setup-dev.sh a partir del juego instalado)
 lib/
 vendor/
-test-instances/
-# Solo en local
-tools/local/
 
 # Modding API (código en modding-api/, sí se sube): sin el juego ni lo que se genera al compilarla
 modding-api/Vanilla/
@@ -38,9 +35,6 @@ dist/
 ModLog.txt
 __pycache__/
 *.pyc
-
-# Worktrees y datos locales de los agentes
-.claude/
 
 # Skins de otros autores: solo en local
 skins/

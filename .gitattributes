@@ -1,4 +1,2 @@
-# Instalador para jugadores de Windows: los .bat y .ps1 con CRLF en cualquier checkout
-tools/installer/*.bat text eol=crlf
-tools/installer/*.ps1 text eol=crlf
+# Instrucciones del paquete para jugadores de Windows: los .txt con CRLF en cualquier checkout
 tools/installer/*.txt text eol=crlf
