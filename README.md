@@ -22,8 +22,8 @@ Knight skin (with its HUD). Hollow Knight belongs to Team Cherry.</sub>
 </div>
 
 > [!WARNING]
-> **Beta.** Almost everything has been tested by playing with up to four copies of the game on the same PC, but no
-> long session between real PCs over the internet has been played yet, and some parts are not fully tested (see
+> **Beta.** Almost everything has been tested by playing, but no long session between PCs over the internet has been
+> played yet, and some parts are not fully tested (see
 > [Testing status](#-testing-status)). **It may have bugs.** Back up your saves before playing and, if something goes
 > wrong, open an *issue* with a screenshot and your `ModLog.txt`.
 
@@ -232,9 +232,6 @@ API.
 
 ## 🧪 Testing status
 
-Testing uses up to four copies of the game on the same PC, with the mod's test mode and automated routes that walk
-through the world checking that every player sees the same thing.
-
 ✅ **Tested by playing:**
 
 - Connection, coop worlds and guests' characters.
@@ -249,17 +246,16 @@ through the world checking that every player sees the same thing.
   (also inside shops), host settings, cutscenes, skins, go to a partner, NPC quests and conversations, vine platforms,
   the Menderbug, the mod in English and automatic reconnection (also cancelling it and giving up).
 - Install, update and uninstall.
-- 0.26.0: the whole mod was reviewed against the game's code. The 172 issues found were fixed or reviewed, and most
-  were checked in the game; the testing found and fixed 16 more.
-- 0.29.0: the whole story with 4 players (four copies of the game): every boss with real fights, the dreams and the
+- 0.26.0: the whole mod was reviewed. The 172 issues found were fixed or reviewed, and checking them found and fixed
+  16 more.
+- 0.29.0: the whole story with 4 players: every boss with real fights, the dreams and the
   dream warriors, the three Dreamers, the Black Egg, the Hollow Knight (both endings) and the Radiance, the Grimm
   Troupe, Grey Prince Zote, the Colosseum of Fools (Bronze, Zote included), Zote and Cloth, and the Pantheon of the
   Master from start to finish.
 - 0.30.0: every boss fight again with 4 players, one at a time, and the Pantheon of Hallownest to its ending, which
-  each player finishes on their own PC. Then the 16 automated routes with 4 players and a fresh world.
-- 0.31.0: the Steam connection with a simulated Steam, where each copy of the game acts as a different account:
-  joining through the lobby and by invite, private lobbies, Steam and IP guests in the same game, and the test routes
-  with two players joining through Steam and one by IP.
+  each player finishes on their own PC.
+- 0.31.0: the mod's Steam logic: joining through the lobby and by invite, private lobbies, and Steam and IP guests in
+  the same game.
 
 ⚠️ **Partially tested:**
 
@@ -267,11 +263,11 @@ through the world checking that every player sees the same thing.
 
 ❓ **Not tested yet:**
 
-- A session between real PCs over the internet.
+- A session between PCs over the internet.
 - Real Steam between two accounts: the part that talks to Steam (creating the lobby, inviting, joining and connecting
-  through its relays) has only been tested with the simulated Steam.
-- Playing with 3 or 4 players: the cases that only happen with three or more were fixed in 0.28.0 and tested with four
-  copies of the game on one PC, but not yet between real PCs.
+  through its relays) still has to be confirmed.
+- Playing with 3 or 4 players on separate PCs: the cases that only happen with three or more were fixed in 0.28.0, but
+  this still has to be confirmed across several PCs.
 
 Known limitations:
 
@@ -280,7 +276,7 @@ Known limitations:
 - Your partner and the enemies run by another PC are drawn a few hundredths of a second in the past so they move
   smoothly. Very fast falling objects show it a little.
 
-The full list (in Spanish) is in [docs/arquitectura.md](docs/arquitectura.md#pendientes).
+More detail (in Spanish) in [docs/arquitectura.md](docs/arquitectura.md#limitaciones-conocidas).
 
 ---
 
@@ -406,12 +402,12 @@ stunned when several players hit them at once.
 | `src/HKMultiplayer/Game/Features/` | Co-op features: player status, host settings, revive, shades, HUD, partners on the map, bars, geo gifts, going to a partner, dreams, cutscenes, skins. |
 | `src/HKMultiplayer/Game/Scene/` | Room objects, breakables, elevators and gates, battle controllers, enemies and bosses, animated hazards. |
 | `src/HKMultiplayer/UI/` | Menus, notices, language and the co-op HUD canvas. |
-| `src/HKMultiplayer/Testing/` | Test mode: file-driven commands to test with several copies of the game. |
+| `src/HKMultiplayer/Testing/` | Development tools; inactive in a normal game. |
 | `modding-api/` | Modding API source (hk-modding/api, MIT) for Unity 6: the `hk-beta-branch-unity-6-update` branch of `SFGrenade/api` (PR hk-modding/api#164, commit `468f579`) with our own changes. No game files. |
-| `tests/` | Transport tests outside the game and co-op test routes (`tests/routes/`). |
-| `tools/` | PC setup (`setup-dev.sh`), build and install (`test-cycle.sh`), multi-copy tests, automated routes, package and installer. |
-| `docs/` | [Architecture](docs/arquitectura.md) (Spanish): design, decisions, testing and pending work. |
-| `lib/`, `vendor/`, `test-instances/` | *(local only, not committed)* Game and Modding API DLLs, and game copies for testing. |
+| `tests/` | Transport tests outside the game and co-op routes (`tests/routes/`). |
+| `tools/` | PC setup (`setup-dev.sh`), build and install (`test-cycle.sh`), package and installer. |
+| `docs/` | [Architecture](docs/arquitectura.md) (Spanish): how the mod works inside. |
+| `lib/`, `vendor/` | *(local only, not committed)* Game and Modding API DLLs. |
 
 The game's DLLs belong to Team Cherry and are not in the repository: they are taken from your installed game.
 
@@ -425,7 +421,7 @@ You need Hollow Knight 1.5.12620 installed, the .NET SDK (`dotnet`) and Git Bash
 git clone https://github.com/Yesid-Robayo/HKMultiplayerMOD.git
 cd HKMultiplayerMOD
 bash tools/setup-dev.sh "C:/Program Files (x86)/Steam/steamapps/common/Hollow Knight"   # once
-bash tools/test-cycle.sh            # builds the mod and installs it in the test copies (--game: also in the game)
+bash tools/test-cycle.sh --game     # builds the mod and installs it in the game
 dotnet run --project tests/NetTests # transport tests
 bash tools/package.sh               # player package: out/package/HKMultiplayer-<version>.zip
 ```
@@ -434,19 +430,6 @@ bash tools/package.sh               # player package: out/package/HKMultiplayer-
 fills `lib/` and `vendor/`. If the game already has the Modding API, it uses the originals saved by the installer
 (`HKMultiplayer-backup`); if there are none, it asks you to verify the game files in Steam. To change the Modding API,
 edit `modding-api/` and run it again.
-
-### Testing
-
-- **Up to four players on one PC**: `tools/mp-test-lib.sh` and `tools/routes/lib.sh` (`setup_group`) open copies of
-  the game (`test-instances/`) in test mode and send them commands through a file: host and join, go to a room, move, attack, screenshots from all of
-  them at once, enemy and object state, simulated bad connection (`netsim`)... Commands are listed in
-  [docs/arquitectura.md](docs/arquitectura.md#pruebas).
-- **Automated routes**: `bash tools/run-routes.sh` walks through the game area by area with a host and guests and
-  checks in every room that everyone sees the same thing (`--players 4` plays them with four, `--pairs 3` splits the
-  areas between 3 pairs and `--steam` has the guests join through a simulated Steam, where each copy is an account). Format:
-  [tests/routes/README.md](tests/routes/README.md).
-- **Installer**: `bash tools/manual-tests/installer-test.sh <zip>` installs, launches, uninstalls and compares on clean
-  copies, without touching the Steam game.
 
 ---
 

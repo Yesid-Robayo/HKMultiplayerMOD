@@ -22,8 +22,8 @@ Rick Knight (con su HUD). Hollow Knight es de Team Cherry.</sub>
 </div>
 
 > [!WARNING]
-> **Versión beta.** Casi todo se ha probado jugando con hasta cuatro copias del juego en el mismo PC, pero todavía no
-> se ha jugado una partida larga entre PCs reales por internet, y algunas partes no se han probado del todo (ver
+> **Versión beta.** Casi todo se ha probado jugando, pero todavía no se ha jugado una partida larga entre PCs por
+> internet, y algunas partes no se han probado del todo (ver
 > [Estado de las pruebas](#-estado-de-las-pruebas)). **Puede tener errores.** Haz una copia de tus partidas antes de
 > jugar y, si algo falla, cuéntalo en un *issue* con una captura y tu `ModLog.txt`.
 
@@ -234,9 +234,6 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 
 ## 🧪 Estado de las pruebas
 
-Las pruebas se hacen con hasta cuatro copias del juego en el mismo PC, con un modo de prueba del mod y rutas
-automáticas que recorren el mundo comprobando que todos ven lo mismo.
-
 ✅ **Probado jugando:**
 
 - Conexión, mundos coop y personajes de los invitados.
@@ -253,17 +250,16 @@ automáticas que recorren el mundo comprobando que todos ven lo mismo.
   misiones y conversaciones de NPC, plataformas de liana, el Menderbug, el mod en inglés y la reconexión automática
   (también cancelarla y rendirse).
 - Instalar, actualizar y desinstalar.
-- 0.26.0: se revisó todo el mod contra el código del juego. Los 172 fallos encontrados se arreglaron o se revisaron, y
-  la mayoría se comprobó en el juego; al probarlos salieron y se arreglaron 16 más.
-- 0.29.0: la historia entera con 4 jugadores (cuatro copias del juego): todos los jefes con combates de verdad, los
+- 0.26.0: se revisó todo el mod. Los 172 fallos encontrados se arreglaron o se revisaron, y al comprobarlos salieron y
+  se arreglaron 16 más.
+- 0.29.0: la historia entera con 4 jugadores: todos los jefes con combates de verdad, los
   sueños y los guerreros soñadores, los tres Soñadores, el Huevo Negro, el Hollow Knight (los dos finales) y la
   Radiancia, la Compañía de Grimm, Grey Prince Zote, el Coliseo de los Tontos (Bronce, con Zote), Zote y Cloth, y el
   Panteón del Maestro de principio a fin.
 - 0.30.0: todos los combates de jefes otra vez con 4 jugadores, uno a uno, y el Panteón de Hallownest hasta su final,
-  que cada jugador acaba en su propio PC. Después, las 16 rutas automáticas con 4 jugadores y un mundo nuevo.
-- 0.31.0: la conexión por Steam con un Steam simulado, en el que cada copia del juego hace de una cuenta distinta:
-  unirse por la sala y por invitación, las salas privadas, invitados por Steam y por IP en la misma partida, y las
-  rutas de prueba con dos jugadores entrando por Steam y uno por IP.
+  que cada jugador acaba en su propio PC.
+- 0.31.0: la lógica del mod para Steam: unirse por la sala y por invitación, las salas privadas e invitados por Steam y
+  por IP en la misma partida.
 
 ⚠️ **Probado en parte:**
 
@@ -271,11 +267,11 @@ automáticas que recorren el mundo comprobando que todos ven lo mismo.
 
 ❓ **Sin probar:**
 
-- Una partida entre PCs reales por internet.
+- Una partida entre PCs por internet.
 - Steam de verdad entre dos cuentas: la parte que habla con Steam (crear la sala, invitar, unirse y la conexión por sus
-  relés) solo se ha probado con el Steam simulado.
-- Jugar 3 o 4: los casos que solo pasan con tres o más se arreglaron en la 0.28.0 y se probaron con cuatro copias del
-  juego en un PC, pero aún no entre PCs reales.
+  relés) aún está por confirmar.
+- Jugar 3 o 4 en PCs distintos: los casos que solo pasan con tres o más se arreglaron en la 0.28.0, pero aún falta
+  confirmarlo entre varios PCs.
 
 Limitaciones conocidas:
 
@@ -284,7 +280,7 @@ Limitaciones conocidas:
 - El compañero y los enemigos que mueve otro PC se dibujan unas centésimas en el pasado, para que se muevan suave. En
   lo que cae muy rápido se nota un poco.
 
-La lista completa está en [docs/arquitectura.md](docs/arquitectura.md#pendientes).
+Más detalle en [docs/arquitectura.md](docs/arquitectura.md#limitaciones-conocidas).
 
 ---
 
@@ -410,12 +406,12 @@ aturdidos cuando pegan varios a la vez.
 | `src/HKMultiplayer/Game/Features/` | Funciones del coop: estado de cada jugador, ajustes del host, revivir, sombras, HUD, compañeros en el mapa, barras, regalar geo, ir con un compañero, sueños, cinemáticas, skins. |
 | `src/HKMultiplayer/Game/Scene/` | Objetos de sala, rompibles, ascensores y rejas, controladores de batalla, enemigos y jefes, peligros animados. |
 | `src/HKMultiplayer/UI/` | Menús, avisos, idioma y el lienzo del HUD del coop. |
-| `src/HKMultiplayer/Testing/` | Modo de prueba: órdenes por archivo para probar con varias copias del juego. |
+| `src/HKMultiplayer/Testing/` | Herramientas de desarrollo; no se activan en una partida normal. |
 | `modding-api/` | Código de la Modding API (hk-modding/api, MIT) para Unity 6: rama `hk-beta-branch-unity-6-update` de `SFGrenade/api` (PR hk-modding/api#164, commit `468f579`) con cambios propios. Sin los archivos del juego. |
-| `tests/` | Pruebas del transporte fuera del juego y rutas de prueba del coop (`tests/routes/`). |
-| `tools/` | Preparar el PC (`setup-dev.sh`), compilar e instalar (`test-cycle.sh`), pruebas con varias copias, rutas automáticas, paquete e instalador. |
-| `docs/` | [Arquitectura](docs/arquitectura.md): diseño, decisiones, pruebas y pendientes. |
-| `lib/`, `vendor/`, `test-instances/` | *(solo local, no se suben)* DLL del juego y de la Modding API, y copias del juego para probar. |
+| `tests/` | Pruebas del transporte fuera del juego y rutas del coop (`tests/routes/`). |
+| `tools/` | Preparar el PC (`setup-dev.sh`), compilar e instalar (`test-cycle.sh`), paquete e instalador. |
+| `docs/` | [Arquitectura](docs/arquitectura.md): cómo funciona el mod por dentro. |
+| `lib/`, `vendor/` | *(solo local, no se suben)* DLL del juego y de la Modding API. |
 
 Las DLL del juego son de Team Cherry y no están en el repositorio: se sacan del juego instalado.
 
@@ -429,7 +425,7 @@ Necesitas Hollow Knight 1.5.12620 instalado, el SDK de .NET (`dotnet`) y Git Bas
 git clone https://github.com/Yesid-Robayo/HKMultiplayerMOD.git
 cd HKMultiplayerMOD
 bash tools/setup-dev.sh "C:/Program Files (x86)/Steam/steamapps/common/Hollow Knight"   # una vez
-bash tools/test-cycle.sh            # compila el mod e instala en las copias de prueba (--game: también en el juego)
+bash tools/test-cycle.sh --game     # compila el mod y lo instala en el juego
 dotnet run --project tests/NetTests # pruebas del transporte
 bash tools/package.sh               # paquete para jugadores: out/package/HKMultiplayer-<versión>.zip
 ```
@@ -438,19 +434,6 @@ bash tools/package.sh               # paquete para jugadores: out/package/HKMult
 y deja `lib/` y `vendor/`. Si el juego ya tiene la Modding API, usa los originales que guardó el instalador
 (`HKMultiplayer-backup`); si no los hay, pide verificar la integridad de los archivos del juego en Steam. Para cambiar la
 Modding API se edita `modding-api/` y se vuelve a ejecutar.
-
-### Probar
-
-- **Hasta cuatro jugadores en un PC**: `tools/mp-test-lib.sh` y `tools/routes/lib.sh` (`setup_group`) abren copias del
-  juego (`test-instances/`) en modo de prueba y les mandan órdenes por archivo: hostear y unirse, ir a una sala,
-  moverse, golpear, capturas de todas a la vez, estado de enemigos y objetos, mala conexión simulada (`netsim`)... Órdenes en
-  [docs/arquitectura.md](docs/arquitectura.md#pruebas).
-- **Rutas automáticas**: `bash tools/run-routes.sh` recorre el juego por zonas con un host e invitados y comprueba en
-  cada sala que todos ven lo mismo (`--players 4` las juega con cuatro, `--pairs 3` reparte las zonas entre 3 pares y `--steam` hace entrar a
-  los invitados por un Steam simulado, en el que cada copia es una cuenta). Formato:
-  [tests/routes/README.md](tests/routes/README.md).
-- **Instalador**: `bash tools/manual-tests/installer-test.sh <zip>` instala, arranca, desinstala y compara en copias
-  limpias, sin tocar el juego de Steam.
 
 ---
 

@@ -57,7 +57,7 @@ release notes.
 
 ## 0.31.1
 
-Fixes to the Steam connection, found with real Steam.
+Fixes to the Steam connection.
 
 - **"Invite to Game" in the Steam friends list**: outside the game only "Invite to Watch" used to show up; now "Invite
   to Game" shows up while you host, and your friends see "Join Game". Also with "Invited only": there, Steam won't let
@@ -115,7 +115,7 @@ Every boss fight played again with 4 players, one at a time, and the Pantheon of
 
 ## 0.29.0
 
-The whole story played with 4 players (four copies of the game at once), from the first bosses to both Hollow Knight
+The whole story played with 4 players, from the first bosses to both Hollow Knight
 endings and the Radiance, plus the Grimm Troupe, Grey Prince Zote, the Colosseum and a whole Pantheon.
 
 - **Pantheons together**: when a player starts a Pantheon, everyone in the Atrium goes in with them, with the same
@@ -136,7 +136,7 @@ endings and the Radiance, plus the Grimm Troupe, Grey Prince Zote, the Colosseum
 
 ## 0.28.0
 
-Games with 3 and 4 players, tested with four copies of the game running at once.
+Games with 3 and 4 players.
 
 - **Bosses**: a PC that was only watching no longer resumes a boss from an old state (it used to jump back to an
   earlier attack or phase).
@@ -163,8 +163,8 @@ Games with 3 and 4 players, tested with four copies of the game running at once.
 
 ## 0.26.0
 
-A full review of the mod against the game's code: 172 problems found, all of them fixed or reviewed, and most checked
-in the game, which turned up 16 more.
+A full review of the mod: 172 problems found, all of them fixed or reviewed, and 16 more that turned up while checking
+them.
 
 - **Your partner**: the darkness of dark rooms opens around them; their Carefree Melody shield, Baldur Shell, Shade Dash
   recharge and their deaths on spikes, in acid and for real are now shown.
@@ -185,7 +185,7 @@ in the game, which turned up 16 more.
 
 ## 0.25.0
 
-Fixes from the third real game between two PCs.
+Fixes from the third game between two PCs.
 
 - **Garpedes** (Deepnest): they move along the same path at the same time for both players.
 - **Mantis Lords, second phase**: the scythe no longer flies out of the arena first.
@@ -193,7 +193,7 @@ Fixes from the third real game between two PCs.
 
 ## 0.24.1
 
-Fixes from the second real game between two PCs.
+Fixes from the second game between two PCs.
 
 - **Mantis Lords**: when retrying the challenge the first Mantis Lord always appears; the challenge prompt no longer
   turns off too early; their trail no longer stays frozen.
@@ -207,13 +207,13 @@ Fixes from the second real game between two PCs.
 - **New**: abilities belong to each player; ride the stag together; benches for two; new guests see the opening
   cutscene; loot lands in the same place for everyone; partners on the map only with the Wayward Compass; "paused" in
   the HUD; new version notices in the game; `HKMultiplayer Setup.exe` installer with *What's new*.
-- **Fixes from the first real game**: the False Knight dies completely and opens the gates; Elder Baldur shots, Gulka
+- **Fixes from the first game between two PCs**: the False Knight dies completely and opens the gates; Elder Baldur shots, Gulka
   spit and Shrumal Ogre vomit on the other PC; no double attacks when an enemy changes PC; the Vengefly King no longer
   stays in the air; effects that stayed on screen; Greenpath grass, lifeblood cocoon and stag bell.
 
 ## 0.23.0
 
-Fixes from the first real game between two PCs.
+Fixes from the first game between two PCs.
 
 - An error while handling a message no longer cuts the connection for the rest of the game.
 - The False Knight appears again after *Reload room*.
@@ -251,8 +251,7 @@ Development versions, without a release.
   Knight and Hive children.
 - **0.16.0 to 0.17.0**: shared progress (M5) and the Golden Colosseum without getting stuck.
 - **0.15.x**: the other player's effects (M4); the whole Silver Colosseum.
-- **0.14.x**: shared breakables and saved objects; automatic test routes; the Colosseum no longer gets stuck between
-  waves.
+- **0.14.x**: shared breakables and saved objects; the Colosseum no longer gets stuck between waves.
 - **0.12.0 to 0.13.0**: shared boss dialogues and fights that wait for everyone.
 - **0.9.0 to 0.11.0**: chests, animated hazards in sync and the Collector with his jars.
 - **0.7.0 to 0.8.0**: Mantis Lords, enemy handover between PCs, joining in the middle of a fight and the Colosseum.

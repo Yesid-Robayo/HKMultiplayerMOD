@@ -57,7 +57,7 @@ Al publicar una versión nueva, se añade aquí arriba con lo mismo que su secci
 
 ## 0.31.1
 
-Arreglos de la conexión por Steam, vistos con Steam de verdad.
+Arreglos de la conexión por Steam.
 
 - **"Invitar a jugar" en la lista de amigos de Steam**: antes, fuera del juego solo salía "Invitar a ver"; ahora sale
   "Invitar a jugar" mientras hosteas, y tus amigos ven "Unirse a la partida". También con "Solo invitados": ahí, a quien
@@ -116,7 +116,7 @@ Todos los combates de jefes jugados otra vez con 4 jugadores, uno a uno, y el Pa
 
 ## 0.29.0
 
-La historia entera jugada con 4 jugadores (cuatro copias del juego a la vez), de los primeros jefes a los dos finales
+La historia entera jugada con 4 jugadores, de los primeros jefes a los dos finales
 del Hollow Knight y la Radiancia, además de la Compañía de Grimm, Grey Prince Zote, el Coliseo y un Panteón entero.
 
 - **Panteones juntos**: cuando un jugador empieza un Panteón, los que están en el Atrio entran con él, con las mismas
@@ -137,7 +137,7 @@ del Hollow Knight y la Radiancia, además de la Compañía de Grimm, Grey Prince
 
 ## 0.28.0
 
-Partidas de 3 y 4 jugadores, probadas con cuatro copias del juego a la vez.
+Partidas de 3 y 4 jugadores.
 
 - **Jefes**: un PC que solo miraba ya no retoma un jefe con un estado viejo (volvía a un ataque o fase anterior).
 - **Ascensores, Coliseo y Señores Mantis**: cuando dos jugadores los usan a la vez, todos los PCs acaban de acuerdo
@@ -161,8 +161,7 @@ Partidas de 3 y 4 jugadores, probadas con cuatro copias del juego a la vez.
 
 ## 0.26.0
 
-Revisión completa del mod contra el código del juego: 172 fallos encontrados, todos arreglados o revisados, y la
-mayoría comprobados en el juego, donde salieron 16 más.
+Revisión completa del mod: 172 fallos encontrados, todos arreglados o revisados, y 16 más que salieron al comprobarlos.
 
 - **El compañero**: la oscuridad de las salas oscuras se abre a su alrededor; se ven su escudo de Carefree Melody, su
   Baldur Shell, la recarga del Shade Dash y sus muertes en pinchos, en ácido y de verdad.
@@ -183,7 +182,7 @@ mayoría comprobados en el juego, donde salieron 16 más.
 
 ## 0.25.0
 
-Arreglos de la tercera partida real entre dos PCs.
+Arreglos de la tercera partida entre dos PCs.
 
 - **Garpedes** (Nido Profundo): van por el mismo sitio y a la vez para los dos.
 - **Señores Mantis, segunda fase**: la guadaña ya no sale primero hacia fuera de la arena.
@@ -191,7 +190,7 @@ Arreglos de la tercera partida real entre dos PCs.
 
 ## 0.24.1
 
-Arreglos de la segunda partida real entre dos PCs.
+Arreglos de la segunda partida entre dos PCs.
 
 - **Señores Mantis**: al repetir el desafío sale siempre la primera mantis; el cartel ya no se apaga antes de tiempo;
   su estela ya no se queda congelada.
@@ -206,14 +205,14 @@ Arreglos de la segunda partida real entre dos PCs.
   cinemática del principio; el botín cae en el mismo sitio para todos; compañeros en el mapa solo con la Brújula
   Caprichosa; "en pausa" en el HUD; avisos de versión nueva en el juego; instalador `HKMultiplayer Setup.exe` con
   *Novedades*.
-- **Arreglos de la primera partida real**: el Falso Caballero muere entero y abre las rejas; disparos del Elder
+- **Arreglos de la primera partida entre dos PCs**: el Falso Caballero muere entero y abre las rejas; disparos del Elder
   Baldur, escupitajo del Gulka y vómito de los Ogros Hongo en el otro PC; sin ataques dobles al cambiar de PC; el Rey
   Vengamosca ya no se queda en el aire; efectos que se quedaban en pantalla; pasto, capullo de savia y campana del
   ciervo del Sendero Verde.
 
 ## 0.23.0
 
-Arreglos de la primera partida real entre dos PCs.
+Arreglos de la primera partida entre dos PCs.
 
 - Un error al procesar un mensaje ya no corta la conexión el resto de la partida.
 - El Falso Caballero vuelve a salir tras *Recargar sala*.
@@ -251,7 +250,7 @@ Versiones de desarrollo, sin release.
   Campeón Fallido, Falso Caballero y crías de la Colmena.
 - **0.16.0 a 0.17.0**: progreso compartido (M5) y el Coliseo de Oro sin atascos.
 - **0.15.x**: efectos del otro jugador (M4); Coliseo de Plata entero.
-- **0.14.x**: rompibles y guardables compartidos; rutas de prueba automáticas; el Coliseo ya no se atasca entre oleadas.
+- **0.14.x**: rompibles y guardables compartidos; el Coliseo ya no se atasca entre oleadas.
 - **0.12.0 a 0.13.0**: diálogos de jefe compartidos y combates que esperan a todos.
 - **0.9.0 a 0.11.0**: cofres, peligros animados al mismo ritmo y el Coleccionista con sus tarros.
 - **0.7.0 a 0.8.0**: Señores Mantis, traspaso de enemigos entre PCs, entrar a mitad de un combate y el Coliseo.
