@@ -1,25 +1,24 @@
 #!/usr/bin/env bash
-# Utilidades para probar el multijugador con dos instancias de prueba (B = host, C = cliente) en este mismo PC.
+# Utilidades de una sesión multijugador con dos jugadores (B = host, C = cliente).
 # Uso: source tools/mp-test-lib.sh; setup_session; send C "press right 3"; tlog B
-# Las instancias son copias con hard links (test-instances/b, c) con otro nombre de producto, así que cada una tiene
-# su propia carpeta de datos en LocalLow y no tocan las partidas del juego original.
+# Cada uno tiene su propia carpeta de datos en LocalLow: no se tocan las partidas del juego original.
 
 HK_TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HK_LOCALLOW="/c/Users/$USERNAME/AppData/LocalLow/Team Cherry"
 HK_TEST_CODE="PRBA-TEST"
 
-# Carpeta de las copias (se puede cambiar, p. ej. desde un worktree: HK_INSTANCES_DIR=.../test-instances)
+# Carpeta base (se puede cambiar con HK_INSTANCES_DIR, p. ej. desde un worktree)
 HK_INSTANCES_DIR="${HK_INSTANCES_DIR:-$HK_TEST_ROOT/test-instances}"
 _inst_dir() { echo "$HK_INSTANCES_DIR/$(echo "$1" | tr 'A-Z' 'a-z')"; }
 _data_dir() { echo "$HK_LOCALLOW/HollowKnight$1"; }
 
-# Abre el juego de una copia sin que herede nada de este shell
+# Abre el juego sin que herede nada de este shell
 _start_game() {
   local win; win="$(cygpath -w "$1")"
   powershell.exe -NoProfile -Command "Start-Process -FilePath '$win\hollow_knight.exe' -WorkingDirectory '$win' -ArgumentList '-screen-fullscreen 0 -screen-width $2 -screen-height $3 -mptest'" </dev/null >/dev/null 2>&1
 }
 
-# Lanza la instancia en ventana, en modo de prueba. El ModLog anterior se borra antes: si no, wait_log podría
+# Lanza el juego en ventana. El ModLog anterior se borra antes: si no, wait_log podría
 # encontrar líneas de la ejecución pasada y enviar órdenes antes de que el juego vacíe su archivo de órdenes.
 launch() {
   local dir; dir="$(_inst_dir "$1")"
@@ -29,10 +28,10 @@ launch() {
   echo "lanzada $1"
 }
 
-# Añade una orden al archivo que lee el TestDriver del mod
+# Añade una orden al archivo que lee el mod
 send() { printf '%s\n' "$2" >> "$(_data_dir "$1")/mp-test.txt"; }
 
-# Espera hasta que aparezca un patrón (regex extendida) en el ModLog de la instancia
+# Espera hasta que aparezca un patrón (regex extendida) en el ModLog de ese jugador
 wait_log() {
   local log; log="$(_data_dir "$1")/ModLog.txt"
   local deadline=$((SECONDS + ${3:-60}))
@@ -44,12 +43,12 @@ wait_log() {
   return 1
 }
 
-# Líneas relevantes del ModLog: pruebas, avisos y errores
+# Líneas relevantes del ModLog: resultados, avisos y errores
 tlog() {
   grep -E "\[TEST\]|\[HKMultiplayer\]|ERROR|WARN|Exception" "$(_data_dir "$1")/ModLog.txt" | tail -n "${2:-30}"
 }
 
-# Sesión lista para probar: B hostea y carga su partida 1, C carga la suya y se une; ambos quedan en Dirtmouth
+# Sesión lista: B hostea y carga su partida 1, C carga la suya y se une; ambos quedan en Dirtmouth
 setup_session() {
   stop_all; sleep 2
   launch B; sleep 8; launch C
@@ -64,7 +63,7 @@ setup_session() {
   send B "status"; send C "status"; sleep 2
 }
 
-# Cierra las copias de prueba indicadas (por defecto B y C; nunca el juego original ni las copias de otro agente).
+# Cierra los juegos indicados (por defecto B y C; nunca el juego original).
 # Uso: stop_all [letras...]   p. ej. stop_all F G
 stop_all() {
   local letters="${*:-B C}" letter exe

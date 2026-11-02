@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Compila el mod y lo instala en las copias de prueba (test-instances/*). Con --game también en el juego de Steam.
+# Compila el mod y lo instala en las carpetas locales. Con --game también en el juego de Steam.
 # Uso: bash tools/test-cycle.sh [--game] [--only "b c"]
-#   --only "letras"   instala solo en esas copias (para no tocar las de otro agente que tenga sus juegos abiertos)
-#   HK_INSTANCES_DIR  carpeta de las copias (por defecto test-instances de este repo; útil desde un worktree)
+#   --only "letras"   instala solo en esas carpetas
+#   HK_INSTANCES_DIR  carpeta base (útil desde un worktree)
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -41,7 +41,7 @@ for managed in "${targets[@]}"; do
 done
 
 if $INSTALL_GAME; then
-  echo "instalado en las copias de prueba y en el juego"
+  echo "instalado en las carpetas locales y en el juego"
 else
-  echo "instalado en las copias de prueba"
+  echo "instalado en las carpetas locales"
 fi

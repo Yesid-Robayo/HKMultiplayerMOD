@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Prueba del paquete para jugadores (tools/package.sh) sobre copias del juego dentro de test-instances, sin tocar el
-# juego de Steam: crea las copias, las deja como el juego sin mods, instala con "HKMultiplayer Setup.exe" /install y la ruta, arranca
-# la copia, mira en su ModLog que carga el mod y el menú Multijugador, desinstala y comprueba que queda como estaba.
+# Comprueba el paquete para jugadores (tools/package.sh) sin tocar el juego de Steam: deja cada carpeta como el juego
+# sin mods, instala con "HKMultiplayer Setup.exe" /install y la ruta, arranca el juego, mira en su ModLog que carga el
+# mod y el menú Multijugador, desinstala y comprueba que queda como estaba.
 #
-# Uso: HK_INSTANCES_DIR=<carpeta con la copia b> bash tools/manual-tests/installer-test.sh <zip> [letras]
+# Uso: HK_INSTANCES_DIR=<carpeta base> bash tools/manual-tests/installer-test.sh <zip> [letras]
 #   letras: por defecto "H I". H es el juego limpio; I además tiene el mod anterior (HollowKnightCoop) y otro mod
 #   (Satchel) en Mods, para ver que el instalador los quita y el desinstalador los devuelve.
-# Los resultados y las listas de archivos quedan en out/installer-test/. Las copias se quedan al terminar (enlaces duros,
-# casi no ocupan): se pueden borrar con rm -rf, que no toca los archivos de Steam.
+# Los resultados y las listas de archivos quedan en out/installer-test/. Las carpetas se quedan al terminar:
+# se pueden borrar con rm -rf, que no toca los archivos de Steam.
 #
-# Las copias de ensure_instance son enlaces duros al juego de Steam. Antes de instalar, Managed y steam_appid.txt se
-# pasan a copias reales: si no, el instalador escribiría dentro de los archivos de Steam.
+# Antes de instalar, Managed y steam_appid.txt pasan a ser archivos propios de la carpeta: si no, el instalador
+# escribiría dentro de los archivos de Steam.
 # Sin la Assembly-CSharp.dll original del juego en este PC, el "juego limpio" usa Assembly-CSharp.dll.v (otra versión,
 # distinta de la del paquete) en su lugar: sirve para ver que el original se guarda y se devuelve.
 set -uo pipefail
@@ -25,7 +25,7 @@ LAUNCH_TIMEOUT=180
 fail() { echo "FALLO: $*"; FAILED=1; }
 FAILED=0
 
-# Archivos de la Modding API y del mod: se quitan para dejar la copia como el juego sin mods
+# Archivos de la Modding API y del mod: se quitan para dejar la carpeta como el juego sin mods
 API_PATTERNS=(Assembly-CSharp.xml 'MMHOOK_*' 'Mono.Cecil*' 'MonoMod.*' unityscenerepacker.dll README.md TeamCherry.Localization.xml)
 
 prepare_copy() {
@@ -39,7 +39,7 @@ prepare_copy() {
   fi
   ensure_instance "$letter" || { fail "[$letter] no se pudo crear la copia"; return 1; }
 
-  # Managed y steam_appid.txt como archivos propios de la copia (sin enlaces al juego de Steam)
+  # Managed y steam_appid.txt como archivos propios de la carpeta
   mv "$managed" "$managed.links"
   cp -r "$managed.links" "$managed"
   rm -rf "$managed.links"
@@ -72,7 +72,7 @@ prepare_copy() {
   echo "[$letter] copia limpia lista en $dir"
 }
 
-# Lista de la copia: todas las rutas con su tamaño y el hash de lo que está fuera de los datos del juego
+# Lista de la carpeta: todas las rutas con su tamaño y el hash de lo que está fuera de los datos del juego
 # (Managed y la raíz), que es lo que tocan el instalador y el desinstalador
 snapshot() {
   local letter="$1" out="$2" dir
@@ -93,7 +93,7 @@ same_snapshot() {
   return $ok
 }
 
-# Ejecuta el instalador del paquete en la consola (/install o /uninstall) con la ruta de la copia (la pausa del final
+# Ejecuta el instalador del paquete en la consola (/install o /uninstall) con la ruta de la carpeta (la pausa del final
 # recibe una entrada vacía)
 run_bat() {
   local mode="$1" letter="$2" log="$3" wrapper
@@ -169,7 +169,7 @@ done
 
 # Steam cambia Assembly-CSharp.dll entre instalar y desinstalar (el juego se actualizó o se verificó). Antes la
 # desinstalación volvía a poner la copia de la primera instalación, de una versión anterior, y el juego no arrancaba.
-# La "versión nueva" se hace con el Assembly-CSharp.dll de la copia limpia sin los textos ModHooks y MonoMod (lo que distingue un
+# La "versión nueva" se hace con el Assembly-CSharp.dll de la carpeta limpia sin los textos ModHooks y MonoMod (lo que distingue un
 # original de uno parcheado: en este PC no hay un original de verdad, el .v es una Modding API anterior) y un byte más.
 # El juego no se abre en estos pasos.
 letter="${LETTERS%% *}"

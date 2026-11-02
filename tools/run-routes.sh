@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Ejecuta las rutas de prueba del coop (tests/routes/*.route) con uno o varios pares de copias del juego en paralelo.
+# Ejecuta las rutas del coop (tests/routes/*.route), con uno o varios pares en paralelo.
 # Cada par (host + invitado) va cogiendo la siguiente ruta libre, así que con más pares la pasada completa tarda menos.
 #
 # Uso:
 #   bash tools/run-routes.sh                       todas las rutas con 1 par
-#   bash tools/run-routes.sh --pairs 3             todas, repartidas entre 3 pares (6 juegos abiertos)
+#   bash tools/run-routes.sh --pairs 3             todas, repartidas entre 3 pares
 #   bash tools/run-routes.sh crossroads progress   solo esas rutas (nombre del archivo sin .route, o su ruta)
 #   bash tools/run-routes.sh --lag "120 30 2"      con red mala en todos los pares (retraso ms, variación ms, pérdida %)
 #   bash tools/run-routes.sh --keep                deja los juegos abiertos al terminar
@@ -12,13 +12,13 @@
 #   bash tools/run-routes.sh -v                    muestra cada comprobación según pasa
 #   bash tools/run-routes.sh --players 4           con 4 jugadores: el par J/K y L y M, que entran en cada sala y
 #                                                  cuentan en cada comprobación (un solo grupo; 3 = solo L)
-#   bash tools/run-routes.sh --steam               los invitados entran por Steam (simulado: cada copia hace de una
-#                                                  cuenta); con 4 jugadores, M entra por IP a la vez. Solo con 1 par
+#   bash tools/run-routes.sh --steam               los invitados entran por Steam; con 4 jugadores, M entra por IP
+#                                                  a la vez. Solo con 1 par
 #
-# Usa las copias test-instances/d..k (las crea si faltan, con hard links: no ocupan disco). No toca b ni c.
+# Usa las carpetas d..k (las crea si faltan). No toca b ni c.
 # Si otro proceso ya está usando un par, se usa el siguiente libre.
 # Resultado: out/routes/<fecha>/ (un .txt por ruta y resumen.txt). Sale con 0 si no hubo ningún FALLO.
-# Para instalar una versión nueva del mod en todas las copias: bash tools/test-cycle.sh (con los juegos cerrados).
+# Para instalar una versión nueva del mod: bash tools/test-cycle.sh (con los juegos cerrados).
 
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -63,7 +63,7 @@ while [ $# -gt 0 ]; do
 done
 export HK_LAG HK_VERBOSE HK_VIA
 
-# El Steam simulado usa puertos y salas fijos por cuenta: dos pares a la vez se pisarían
+# Por Steam se usan puertos y salas fijos por cuenta: dos pares a la vez se pisarían
 if [ "$HK_VIA" = steam ] && [ "$PAIRS" != 1 ]; then
   echo "--steam va con un solo par" >&2
   exit 2

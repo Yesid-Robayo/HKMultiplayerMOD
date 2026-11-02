@@ -36,7 +36,7 @@ q() { query "$1" "$2" "${3:-20}"; }
 tanky() { for p in F G; do send $p "pdset maxHealth ${1:-500}"; send $p "pdset health ${1:-500}"; done; }
 shots() { send F "shot $1"; send G "shot $1"; }
 
-# Los dos entran en la sala y se espera a que estén dentro (la carga puede tardar mucho con varios juegos abiertos)
+# Los dos entran en la sala y se espera a que estén dentro (la carga puede tardar mucho)
 enter() {  # sala puerta
   send F "goscene $1 $2"; sleep 2; send G "goscene $1 $2"
   local deadline=$((SECONDS + 120))

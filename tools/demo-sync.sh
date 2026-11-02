@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Demostración visible de las sincronizaciones con las dos instancias de prueba (B a la izquierda, C a la derecha).
+# Demostración visible de las sincronizaciones con dos jugadores (B a la izquierda, C a la derecha).
 # Cada paso muestra un cartel en las dos pantallas con lo que está pasando y lo que debería verse en la otra.
 # Uso: bash tools/demo-sync.sh            (prepara la partida y recorre todos los pasos)
-#      bash tools/demo-sync.sh --sin-preparar   (las instancias ya están conectadas en la misma partida)
+#      bash tools/demo-sync.sh --sin-preparar   (los dos ya están conectados en la misma partida)
 
 source "$(dirname "${BASH_SOURCE[0]}")/mp-test-lib.sh"
 
 PAUSA=${PAUSA:-7}
 
-# Coloca las ventanas de las instancias lado a lado (B izquierda, C derecha) arriba de la pantalla
+# Coloca las dos ventanas lado a lado (B izquierda, C derecha) arriba de la pantalla
 tile_windows() {
   powershell.exe -NoProfile -Command '
     Add-Type @"

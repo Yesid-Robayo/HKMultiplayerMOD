@@ -1,7 +1,7 @@
 """Mide el retraso de la copia de un enemigo en el cliente respecto al enemigo real del host.
 
 Uso: python measure_lag.py <ModLog host> <nombre host> <ModLog cliente> <nombre cliente>
-Lee las líneas "[TEST] track HH:MM:SS.fff '<nombre>' pos=(x, y)" de cada log y busca el desfase temporal que
+Lee las líneas "track HH:MM:SS.fff '<nombre>' pos=(x, y)" de cada log y busca el desfase temporal que
 mejor alinea la trayectoria del cliente con la del host.
 """
 import re

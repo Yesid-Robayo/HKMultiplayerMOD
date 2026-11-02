@@ -74,4 +74,4 @@ find "$API/OutputFinal" -maxdepth 1 -type f -name "*.dll" -exec cp {} "$ROOT/lib
 
 echo
 echo "Listo. Para compilar el mod: dotnet build src/HKMultiplayer/HKMultiplayer.csproj -c Release"
-echo "Para probarlo en copias del juego: bash tools/test-cycle.sh; para el paquete de jugadores: bash tools/package.sh"
+echo "Para instalarlo en el juego: bash tools/test-cycle.sh --game; para el paquete de jugadores: bash tools/package.sh"

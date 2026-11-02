@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
-# Librería de las rutas de prueba (tools/run-routes.sh). Cada "par" son dos copias del juego en modo de prueba: un host
-# (que abre su mundo coop) y un invitado que se une a él. Las órdenes van por el archivo mp-test.txt de cada copia y
-# los resultados se leen de su ModLog, como en tools/mp-test-lib.sh.
+# Librería de las rutas (tools/run-routes.sh). Cada "par" son dos jugadores: un host (que abre su mundo coop) y un
+# invitado que se une a él. Las órdenes van por el archivo mp-test.txt de cada uno y los resultados se leen de su
+# ModLog, como en tools/mp-test-lib.sh.
 #
-# Los pares usan sus propias copias (test-instances/d y e, f y g...), nunca b ni c: así se pueden lanzar mientras otro
-# agente o una persona prueba a mano con b y c, y nunca se cierran juegos que no son suyos.
+# Los pares usan sus propias carpetas (d y e, f y g...), nunca b ni c, y nunca se cierran juegos que no son suyos.
 
 HK_TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-# Carpeta de las copias (se puede cambiar, p. ej. desde un worktree: HK_INSTANCES_DIR=.../test-instances)
+# Carpeta base (se puede cambiar con HK_INSTANCES_DIR, p. ej. desde un worktree)
 HK_INSTANCES_DIR="${HK_INSTANCES_DIR:-$HK_TEST_ROOT/test-instances}"
 HK_STEAM_GAME="${HK_STEAM_GAME:-/c/Program Files (x86)/Steam/steamapps/common/Hollow Knight}"
 HK_LOCALLOW="/c/Users/$USERNAME/AppData/LocalLow/Team Cherry"
-HK_TEMPLATE="B"                      # copia de la que se toman el nombre de producto parcheado y la carpeta Mods
+HK_TEMPLATE="B"                      # plantilla de la que se toman el nombre de producto parcheado y la carpeta Mods
 HK_ROUTE_CODE="PRBA-TEST"
 HK_ROUTE_WORLD="Ruta"
 HK_ROUTE_BASE_PORT="${HK_ROUTE_BASE_PORT:-27100}"
@@ -25,13 +24,13 @@ HK_PAIR_GUESTS=(E G I K)
 HK_IGNORE_ERRORS="${HK_IGNORE_ERRORS:-zz_never_matches}"
 
 # =====================================================================================================
-# Copias del juego
+# Carpetas y procesos
 # =====================================================================================================
 
 _inst_dir() { echo "$HK_INSTANCES_DIR/$(echo "$1" | tr 'A-Z' 'a-z')"; }
 _data_dir() { echo "$HK_LOCALLOW/HollowKnight$1"; }
 
-# Abre el juego de una copia sin que herede nada de este shell (ver launch_instance)
+# Abre el juego sin que herede nada de este shell (ver launch_instance)
 _start_game() {
   local win; win="$(cygpath -w "$1")"
   powershell.exe -NoProfile -Command "Start-Process -FilePath '$win\hollow_knight.exe' -WorkingDirectory '$win' -ArgumentList '-screen-fullscreen 0 -screen-width $2 -screen-height $3 -mptest'" </dev/null >/dev/null 2>&1
@@ -39,9 +38,8 @@ _start_game() {
 
 _log_file() { echo "$(_data_dir "$1")/ModLog.txt"; }
 
-# Crea la copia <letra> si no existe: hard links al juego de Steam (no ocupa disco), salvo los dos archivos con el nombre
-# de producto (cada copia guarda sus datos en su propia carpeta de LocalLow) y la carpeta Mods (copia real, para que
-# instalar el mod en una copia no lo cambie en las demás).
+# Prepara la carpeta <letra> si no existe, con su nombre de producto (cada una guarda sus datos en su propia carpeta
+# de LocalLow) y su carpeta Mods (para que instalar el mod en una no lo cambie en las demás).
 ensure_instance() {
   local letter="$1" dir template
   dir="$(_inst_dir "$letter")"
@@ -72,9 +70,9 @@ ensure_instance() {
   done
 
   # Ajustes de pantalla (PlayerPrefs) y de la Modding API como los de la plantilla (sin MSYS_NO_PATHCONV, Git Bash
-  # convertía /s y /f en rutas y reg copy fallaba sin avisar: la copia nueva se quedaba en la primera pantalla del
+  # convertía /s y /f en rutas y reg copy fallaba sin avisar: la carpeta nueva se quedaba en la primera pantalla del
   # juego, la de idioma y brillo); la clave de jugador del mod no se
-  # copia: cada copia genera la suya y así es otro personaje
+  # copia: cada carpeta genera la suya y así es otro personaje
   MSYS_NO_PATHCONV=1 reg copy "HKCU\\Software\\Team Cherry\\HollowKnight$HK_TEMPLATE" "HKCU\\Software\\Team Cherry\\HollowKnight$letter" /s /f >/dev/null 2>&1
   mkdir -p "$(_data_dir "$letter")"
   cp -f "$(_data_dir "$HK_TEMPLATE")/ModdingApi.GlobalSettings.json" "$(_data_dir "$letter")/" 2>/dev/null
@@ -86,13 +84,13 @@ instance_running() {
   powershell.exe -NoProfile -Command "if (Get-Process hollow_knight -ErrorAction SilentlyContinue | Where-Object { \$_.Path -like '$dir\\*' }) { 'si' }" 2>/dev/null | grep -q si
 }
 
-# Cierra solo esa copia
+# Cierra solo ese juego
 stop_instance() {
   local dir; dir="$(cygpath -w "$(_inst_dir "$1")")"
   powershell.exe -NoProfile -Command "Get-Process hollow_knight -ErrorAction SilentlyContinue | Where-Object { \$_.Path -like '$dir\\*' } | Stop-Process -Force" >/dev/null 2>&1
 }
 
-# Lanza la copia en una ventana pequeña. El ModLog anterior se borra: si no, se leerían resultados de la ejecución pasada.
+# Lanza el juego en una ventana pequeña. El ModLog anterior se borra: si no, se leerían resultados de la ejecución pasada.
 # Con Start-Process y no desde bash: un proceso de Windows lanzado desde bash hereda los handles abiertos, también el
 # extremo de escritura de una tubería, y "setup_pair | tail" se quedaba esperando hasta que se cerraran los juegos.
 launch_instance() {
@@ -155,7 +153,7 @@ status_of() { query "$1" "status" | grep -a "\[TEST\] status" | head -n1; }
 # Pares
 # =====================================================================================================
 
-# Prepara el par <n> (0..3): copias creadas, lanzadas, host con su mundo y el invitado dentro.
+# Prepara el par <n> (0..3): juegos abiertos, host con su mundo y el invitado dentro.
 # Con <limpio>=1 el mundo de la ruta se borra antes (partida nueva desde cero).
 setup_pair() {
   local n="$1" fresh="${2:-1}" host="${HK_PAIR_HOSTS[$1]}" guest="${HK_PAIR_GUESTS[$1]}"
@@ -175,7 +173,7 @@ setup_pair() {
   if [ -n "$HK_LAG" ]; then
     send "$host" "netsim $HK_LAG"; send "$guest" "netsim $HK_LAG"
   fi
-  # Con HK_VIA=steam cada copia hace de una cuenta de Steam (simulado) y el invitado entra por la sala del host
+  # Con HK_VIA=steam el invitado entra por la sala de Steam del host
   if [ "${HK_VIA:-ip}" = steam ]; then
     send "$host" "steamsim 1"; send "$guest" "steamsim 2"
   fi
@@ -227,7 +225,7 @@ setup_group() {
   sleep 2
 
   # Mundo nuevo: la copia guardada de uno recién empezado (save_world_snapshot), o uno de cero si no hay copia (la
-  # partida nueva y sus cinemáticas tardan varios minutos con cuatro copias)
+  # partida nueva y sus cinemáticas tardan varios minutos)
   if [ "${HK_GROUP_FRESH:-0}" = 1 ]; then
     local world="$(_data_dir "$host")/HKMultiplayer/Mundos/$HK_ROUTE_WORLD"
     rm -rf "$world"
@@ -250,7 +248,7 @@ setup_group() {
   if [ -n "$HK_LAG" ]; then
     for inst in "$host" "${guests[@]}"; do send "$inst" "netsim $HK_LAG"; done
   fi
-  # Con HK_VIA=steam cada copia hace de una cuenta de Steam (simulado): el host la 1, los invitados las siguientes
+  # Con HK_VIA=steam, el host usa la cuenta 1 y los invitados las siguientes
   if [ "${HK_VIA:-ip}" = steam ]; then
     local account=0
     for inst in "$host" "${guests[@]}"; do account=$((account + 1)); send "$inst" "steamsim $account"; done
@@ -305,7 +303,7 @@ stop_group() { local inst; for inst in "$@"; do stop_instance "$inst"; done; }
 # (sin alternativa vacía: "^(|...)$" deja pasar cualquier sala con la regex de bash en Windows; la sala vacía se mira aparte)
 HK_NOT_PLAYABLE='^(Pre_Menu_Intro|Menu_Title|Quit_To_Menu|BetaEnd|Knight_Pickup|Opening_Sequence|Cinematic_.*|End_.*)$'
 
-# Espera a que la copia esté jugando en una sala normal; mientras tanto salta cinemáticas
+# Espera a que ese jugador esté en una sala normal; mientras tanto salta cinemáticas
 wait_playable() {
   local inst="$1" deadline=$((SECONDS + ${2:-60})) scene
   while [ $SECONDS -lt $deadline ]; do
@@ -320,7 +318,7 @@ wait_playable() {
   return 1
 }
 
-# Si el par sigue bien: las dos copias abiertas y la sesión activa en las dos
+# Si el par sigue bien: los dos juegos abiertos y la sesión activa en los dos
 pair_healthy() {
   local host="${HK_PAIR_HOSTS[$1]}" guest="${HK_PAIR_GUESTS[$1]}" hs gs
   instance_running "$host" && instance_running "$guest" || return 1

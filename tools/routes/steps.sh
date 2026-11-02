@@ -17,12 +17,12 @@ HK_INDIVIDUAL_PREFIXES='^(Shiny|Heart Piece|Vessel Fragment|Dream Plant|Egg Sac|
 _R_HOST=""; _R_GUEST=""; _R_OUT=""; _R_LINE=0; _R_ROOM=""; _R_ROOM_OK=1
 _R_START_HOST=0; _R_START_GUEST=0
 
-# Jugadores de más (3 o 4 jugadores, run-routes.sh --players): copias que se unen a la partida del par, entran en cada
+# Jugadores de más (3 o 4 jugadores, run-routes.sh --players): los que se unen a la partida del par, entran en cada
 # sala con los dos y cuentan en cada comprobación (el mismo progreso, los mismos enemigos vivos, sin errores...)
 read -r -a HK_EXTRAS <<< "${HK_EXTRAS_LIST:-}"
 declare -A _R_START_EXTRA=()
 
-# Todas las copias de la ruta: host, invitado y los de más
+# Todos los jugadores de la ruta: host, invitado y los de más
 _all() { echo "$_R_HOST" "$_R_GUEST" "${HK_EXTRAS[@]}"; }
 
 # Todas menos esa
@@ -45,7 +45,7 @@ _who() {
 
 _other() { [ "$1" = host ] && echo guest || echo host; }
 
-# Espera hasta <segundos> a que el campo valga <valor> en esa copia. Imprime el último valor leído.
+# Espera hasta <segundos> a que el campo valga <valor> en ese jugador. Imprime el último valor leído.
 _wait_pd() {
   local inst="$1" field="$2" want="$3" timeout="$4" deadline value
   deadline=$((SECONDS + timeout))
@@ -681,7 +681,7 @@ step_die() {
 # Ruta
 # =====================================================================================================
 
-# Errores del log de una copia desde el principio de la ruta
+# Errores del log de un jugador desde el principio de la ruta
 _new_errors() {
   log_since "$1" "$2" | grep -aE '\[ERROR\]|Exception' | grep -avE "$HK_IGNORE_ERRORS" | head -n 3
 }

@@ -17,7 +17,7 @@ expect-pd guest geo 2468
 room Town left1
 partner-moves
 
-# Morir con el compañero en pie (M5): el invitado queda caído (su avatar no se dibuja) y el host lo revive con Focus
+# Morir con el compañero en pie: el invitado queda caído (su avatar no se dibuja) y el host lo revive con Focus
 # junto a su cuerpo
 die guest
 expect-log guest Caído en Town
