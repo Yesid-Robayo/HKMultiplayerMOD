@@ -38,7 +38,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     receptor los entrega en orden y sin duplicados. Un fallo de quien procesa un mensaje no sale del transporte (se
     registra, como mucho 20 veces y luego uno de cada 500) y el mensaje cuenta como entregado: su paquete ya se
     confirmó y nunca se reenvía. Antes la excepción cortaba la entrega, el receptor se quedaba esperando ese mensaje
-    para siempre y todo lo fiable de esa conexión dejaba de llegar (en una partida real, tras un fallo de
+    para siempre y todo lo fiable de esa conexión dejaba de llegar (en una partida, tras un fallo de
     `EnemySync.OnSpawn`: el compañero se veía invisible al cambiar de sala, "Ir con" no tenía respuesta y las paredes
     rotas por él no se rompían en el otro PC). En el host, un fallo al procesarlo tampoco impide reenviarlo a los demás.
   - *Datos grandes*: sobre el canal fiable, troceados con ventana (partida al unirse, skins). Sustituye al servidor TCP
@@ -123,7 +123,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
       compara `mrMushroomState` con su sitio), Bretta y Quirrel se van, el farol de la Pesadilla aparece.
     - En el registro queda cada personaje que su comprobación quita al cargar la sala, con el dato, su valor y si es del
       mundo o del jugador ("Quirrel Slug Shrine/deactivate: el personaje se quita en esta sala por hasWalljump=True (dato
-      de este jugador)"): en la partida real a uno le salía Quirrel y al otro no, y el registro no decía por qué.
+      de este jugador)"): si a uno le sale Quirrel y al otro no, ahí se ve el motivo.
     - Los objetos que el juego enciende o apaga según un dato (`DeactivateIfPlayerdataTrue`, `...False`,
       `ActivateIfPlayerdataTrue`; Myla, las larvas del Padre de las Larvas) se encienden o apagan igual. No los enemigos.
     - Se mira al cargar la sala qué FSM y objetos miran cada dato (una vez, sin memoria al jugar). No se tocan los
@@ -150,13 +150,11 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     animación, profundidad, activo, vida, daño al tocarlo) con detección de cambios sin crear objetos.
   - Un jefe (150 de vida o más) solo cambia de PC entre dos ataques (0.27.0): cuando su lógica principal (la FSM de su
     objeto con más estados que tenga alguno de reposo) está en un estado de reposo, cuyo nombre lleva `Idle`, `Choice`,
-    `Choose`, `Decide` o `Select` (en el volcado de las FSM, casi todos los jefes tienen alguno), o salió de uno hace
+    `Choose`, `Decide` o `Select` (casi todos los jefes tienen alguno), o salió de uno hace
     menos de 0,15 s (los de elegir ataque duran cero fotogramas). El PC que lo mueve lo envía en el mensaje de estados
     (bit 4 de las banderas) y el dueño, si quería cambiarlo, lo cambia en cuanto llega, sin esperar al siguiente reparto.
     Si no reposa en 4 s, cambia igualmente; si quien lo mueve está caído o en pausa, enseguida. Antes cambiaba a mitad
     de un ataque: el nuevo PC lo retomaba desde el principio de ese estado hacia su caballero y el ataque se cortaba.
-    Probado con Hornet en `Fungus1_04`, cambiando de lado cada 6 s (sin retraso y con 100 ms): los 15 cambios se
-    retomaron en `Run Antic`, `Jump Antic` o `Evade Antic`, el principio de su siguiente movimiento.
   - Si quien lo mueve está fuera de su zona de alerta (la variable `Alert Range` de su lógica, o un hijo "Alert
     Range...", ampliada con el tamaño de la caja del caballero) y otro jugador está dentro, pasa a ese: su lógica solo
     ataca a un caballero dentro de la zona. El Rey Vengamosca se iba a esperar a su sitio (`Lurk`) siguiendo al más
@@ -467,9 +465,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     retomarlo cerca de una esquina: el giro de una marioneta llega a saltos y su posición interpolada, `Turn` se corta
     con el ángulo a medias y `previousTurnPos`, que evita girar otra vez en el mismo sitio, es de cada PC.
     `PlaceClimber` redondea el giro, lo apoya en la pared más cercana si no tiene suelo y apunta ahí su último giro.
-    Por si se pierde igualmente, `UpdateClimbers` lo devuelve a la pared tras 1 s sin suelo. Probado en `Mines_20` con 63
-    cambios de PC forzados en 6 minutos: antes 4 de sus 7 acabaron en el aire (a 2,1 de su repisa) y otro andando
-    inclinado; después ninguno (a 0,27 como mucho, con 409 retomas) y sin que hiciera falta `UpdateClimbers`.
+    Por si se pierde igualmente, `UpdateClimbers` lo devuelve a la pared tras 1 s sin suelo.
   - En las pruebas del Coliseo (`Room_Colosseum_*`) ningún enemigo queda muerto hasta el banco, tampoco los de la
     sala (los Mage de las oleadas): cada prueba empieza de cero, y al repetirla sin descansar la oleada 46 de Oro
     esperaba a un Mage que el host daba por muerto.
@@ -485,10 +481,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     `SUMMON`): solo lo usa el PC que mueve al jefe y los barriles llegan como copias (antes caían al azar distintos en
     cada PC).
   - La sombra de cada jugador no es un enemigo compartido.
-  - Probados: Mamá Gruz, Falso Caballero, Hornet, Mawlek, Maestro de Almas, Defensor del Estiércol, Nosk, Vasija Rota,
-    Guardián de Cristal normal y enfurecido y Señores Mantis (despiertan, atacan al jugador que no es dueño de la sala y siguen el
-    combate al cambiar de PC; el rayo y las torretas del Guardián se ven igual en los dos), escupidores y zombis. El
-    contador del diario (`killsMegaBeamMiner`, que la sala del enfurecido usa para darlo por vencido) baja una sola vez.
+  - El contador del diario (`killsMegaBeamMiner`, que la sala del enfurecido usa para darlo por vencido) baja una sola vez.
 - **Efectos del otro jugador** (`Game/Players/PlayerEffects`, `RemoteEffects`, `HeroEffectTemplates`): cuando el
   caballero local hace algo que se ve, se envía un `PlayerEvent` pequeño (fiable, a la sala) y cada compañero lo
   reproduce sobre el avatar de quien lo hizo con los efectos de **su propio** caballero. Son solo visuales: el daño
@@ -531,7 +524,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
       arriba como `SpellFluke` y revientan a los 2-3 s o al tocar un enemigo. Con Defender's Crest, la mosca grande
       vuela girando, tiembla y explota en su nube a los 2 s.
     - Ráfagas y anillo del dash sombra (también con Sharp Shadow y hacia abajo con Dashmaster), el polvo del dash en el
-      suelo y el aterrizaje fuerte. M4 los buscaba como hijos del caballero y no salían.
+      suelo y el aterrizaje fuerte. Antes se buscaban como hijos del caballero y no salían.
   - **Onda de los gritos**: la crea el estado del grito como en el caballero (`CreateObject`, sin sus ondas, solo las
     líneas) y su final llega con el estado siguiente. Solo si el compañero está a la vista de la cámara local: su FSM y
     los temblores del grito mueven la cámara del que mira.
@@ -569,9 +562,6 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
     posición para inclinarse). El avatar sigue sin colisión ni la etiqueta `Player`.
   - Lo que vuela suelto (bolas de fuego, rayos, moscas, acompañantes) no cuelga del avatar, pero `Skins` le pone la
     skin de su dueño igual (`RemoteAvatar.LooseEffects`).
-  - Comprobados igual en los dos PCs: Quick Slash (cada tajo llega), Mark of Pride y Longnail (tamaño del tajo),
-    Shaman Stone (tamaño de la bola), Spell Twister (el alma del mini-HUD baja lo mismo) y Dashmaster y Sprintmaster
-    (el dash hacia abajo y la carrera llegan con la posición y la animación).
 
 ### Interfaz (`UI/`)
 
@@ -589,7 +579,7 @@ sobre la Modding API. Todo el núcleo es propio. Objetivos de diseño, por orden
 
 ### Funciones del coop (`Game/Features/`)
 
-Decisiones aprobadas en [Decisiones de M5](#decisiones-de-m5). Cada función es una clase con `Attach`/`Detach` que engancha
+Resumen en [Comportamiento de las funciones](#comportamiento-de-las-funciones). Cada función es una clase con `Attach`/`Detach` que engancha
 `MultiplayerRunner` como las demás capas; sus ganchos al juego se ponen al cargar el mod (`Die()` es tan corto que el
 juego lo copia dentro de `TakeDamage` al compilarlo: si se engancha más tarde, la muerte no pasa por el gancho). Los
 mensajes nuevos van del 73 al 117 (el 98, el 108 y el 115 son de `EnemySync`, el 104, el 105 y el 107 de `HazardSync`,
@@ -639,11 +629,7 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   retraen entre oleadas): cada PC de pie en la sala mira cada 0,25 s si el cuerpo sigue apoyado y no toca un peligro; tras
   1 s sin suelo pide moverlo (`BodyMoved`, mensaje 117) al suelo de debajo o, si no hay o son pinchos, junto a él si está
   pisando suelo. El host lo valida y lo reparte con el estado de la partida. Antes quedaba flotando fuera del alcance de
-  quien estaba en el suelo (issue #3) y solo se revivía saliendo a un banco. Probado en `Room_Colosseum_Silver` con el
-  caído en cada PC (de `y=23,4` al suelo en `y=6,4`) y, con los pinchos fuera por la orden real del Coliseo, junto a quien
-  estaba en otra plataforma (`fsmgo Colosseum Manager/Battle Control|Spikes`). Ponerlos en `Expand` con `fsmstate` no
-  sirve para probarlo: así no dañaron. Con la orden real, el daño vino de `Colosseum Spike (19)`, que lleva `DamageHero`,
-  a 17 unidades del caballero. El caballero del caído se oculta (sin colisión, sin gravedad,
+  quien estaba en el suelo (issue #3) y solo se revivía saliendo a un banco. El caballero del caído se oculta (sin colisión, sin gravedad,
   invencible, sin control ni entrada; se reaplica cada frame; se esconde con `Renderer.forceRenderingOff`, así lo que el
   juego encienda o apague entre medias queda como lo dejó, y la luz y la viñeta siguen) y, tras la animación de muerte, se pega al avatar del compañero, con
   las zonas de cámara emuladas; si el compañero cambia de sala, viaja detrás de él y entra por la misma puerta que él
@@ -697,7 +683,6 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
   pública de versiones de GitHub (`UnityWebRequest`, 10 s como mucho, sin datos del jugador) busca la más nueva: si es
   más nueva que la instalada, el menú principal lo avisa y *Multijugador* la ofrece para descargar (todos necesitan la
   misma versión para jugar juntos). Los avisos salen 2 s después de llegar al menú principal, una vez por sesión.
-  Prueba: `fakeupdate <versión>`.
 - **Reconexión automática** (`MultiplayerRunner`): si el invitado pierde la conexión por tiempo después de haber
   entrado (no si el host cierra, ni por código, versión o partida llena), vuelve al menú como antes y, ya en el menú
   principal (el mundo solo se carga ahí), se vuelve a unir con la misma dirección, código y nombre: hasta 12 intentos,
@@ -808,11 +793,9 @@ una vez y cada frame solo se mueven o se encienden, y los textos se rehacen solo
 - **Barra del jefe**: el nombre es el título con el que el juego presenta al jefe (hoja `Titles`, partes `_SUPER`,
   `_MAIN` y `_SUB`), buscado en los textos de sus FSM o en las palabras de su nombre; si no, el de su diario.
 
-### Cambios de la revisión contra el juego (0.26.0)
+### Cambios de la 0.26.0
 
-Lo que cambió al revisar el mod contra el juego (12/10/2026) y no está ya contado arriba. La lista de
-la revisión, con cada fallo, su arreglo y cómo se probó, estaba en `docs/review-backlog.md`: se quitó al cerrarla
-(las 172 entradas) y sigue en el historial (`git show 6ea533d:docs/review-backlog.md`).
+Lo que cambió en esta versión y no está ya contado arriba.
 
 - **Ids de sala** (`ScenePaths`): la huella de cada objeto sincronizado se apunta al cargar su sala (`sceneLoaded`,
   antes del `Start` de los objetos) y se usa siempre esa (`StableHash`): un enemigo de la raíz que se destruye o un
@@ -842,7 +825,7 @@ la revisión, con cada fallo, su arreglo y cómo se probó, estaba en `docs/revi
   no va autenticado y su dirección se puede falsificar, y antes cada uno hacía que el host enviara 60 paquetes por
   segundo durante 10 s a esa dirección.
 - **HUD del compañero**: el texto de estado ("en <zona>") se vuelve a escribir al cambiar el idioma del juego.
-- **Efectos del compañero que faltaban** (J8): `HeroEffectTemplates` copia también `Brumm_shield` (escudo de Carefree
+- **Efectos del compañero que faltaban**: `HeroEffectTemplates` copia también `Brumm_shield` (escudo de Carefree
   Melody), `Hero Death` (sin su FSM, que hace la sombra y vacía el alma) y `Charm Effects/Blocker Shield` (su FSM
   `Control` se reproduce como las de acciones: el caparazón de Baldur Shell al concentrarse, su golpe, su rotura y sus
   trozos). Sus variables se rellenan si la FSM aún no pasó por `Init`. Avisos nuevos de `PlayerEvent`: `CarefreeShield`
@@ -875,18 +858,10 @@ la revisión, con cada fallo, su arreglo y cómo se probó, estaba en `docs/revi
   sabe crear. Lo que guarda apagado un invocador (`EnemySpawner.spawnedEnemy`, creado en su `Awake`) no se apunta como
   enemigo de la sala: se sigue al soltarlo. Antes las mosquitas del Salón solo salían en el PC que movía al jefe, y al
   arreglarlo salían repetidas (apuntadas dos veces y encendidas también en el otro PC).
-- **Órdenes de prueba nuevas**: `pdadd` (suma como el juego), `towall` (deslizarse por una pared), `fsmstates` (estado
-  de todas las FSM de un nombre, sin límite), `givegeo`, `selected`, `uiselect` y `uicancel` (menús sin mando real),
-  `transitionState` en `hero`, `pdget` con listas y estructuras (en JSON), `pdjson` (escribir un dato en JSON),
-  `bossseq si|no` (simular un Panteón), `hitenemytype` (golpe de un tipo concreto), `langset` (cambiar el idioma como
-  desde el menú), `toggles` (objetos que el juego enciende o apaga según un dato), `moveenemy` (llevar un enemigo a un
-  punto), `moveobj` (llevar un objeto a un punto) y `enemytrace <segundos> <nombre>` (posición, si se ve y estado
-  de sus FSM cada 0,1 s con la hora del reloj, para comparar los dos PCs momento a momento). `sdlist` marca lo semipersistente.
 
 ### Cambios para 3 y 4 jugadores (0.28.0)
 
-Salieron de una revisión del código pensando en 3 o 4 jugadores (casi todo se había probado con 2) y se probaron con 4
-copias a la vez (`setup_group` en `tools/routes/lib.sh`: el host y hasta tres invitados en la misma partida).
+Lo que hizo falta para jugar con 3 o 4: el host y hasta tres invitados en la misma partida.
 
 - **Traspaso de enemigo viejo** (`EnemySync.HandoverUsable`): el traspaso va a toda la sala y un PC que solo miraba lo
   guardaba; si mucho después pasaba a mover el enemigo (el dueño nunca recibe sus propios cambios, así que no se le
@@ -934,9 +909,8 @@ copias a la vez (`setup_group` en `tools/routes/lib.sh`: el host y hasta tres in
 
 ### Cambios de la historia completa con 4 jugadores (0.29.0)
 
-Salieron de jugar la historia entera con 4 copias (jefes, sueños, soñadores, los dos finales del Hollow Knight, la
-Radiancia, la compañía de Grimm y lo opcional), con el paso `fight` de las rutas (golpes que respetan la
-invulnerabilidad y comparación de la sala en todos los PCs al acabar).
+Arreglos de la historia entera con 4 jugadores (jefes, sueños, soñadores, los dos finales del Hollow Knight, la
+Radiancia, la compañía de Grimm y lo opcional).
 
 - **Habilidades del grupo** (`World/PartyAbilities`, mensaje 112): cada jugador avisa de sus habilidades. Mientras un
   `SceneAdditiveLoadConditional` decide si carga, y en las FSM que preparan la sala según una habilidad (pared del
@@ -972,8 +946,8 @@ invulnerabilidad y comparación de la sala en todos los PCs al acabar).
 
 ### Cambios de cada jefe con 4 jugadores (0.30.0)
 
-Salieron de repetir cada combate de jefe con 4 copias, uno a uno, golpeando desde un PC que no lo mueve, y de jugar el
-Panteón de Hallownest hasta su final.
+Arreglos de cada combate de jefe con 4 jugadores, también golpeando desde un PC que no lo mueve, y del Panteón de
+Hallownest hasta su final.
 
 - **Final del Panteón de Hallownest por PC** (`EnemySync.StartFinale`): al llegar la Radiancia Absoluta a "Final
   Impact", cada PC deja de seguirla y su lógica sigue sola desde ahí (`FinaleRunning`). Si el caballero de ese PC está
@@ -1008,8 +982,8 @@ Panteón de Hallownest hasta su final.
 
 ### Órdenes de un controlador durante un traspaso y vida 4× (0.32.0)
 
-De un reporte de una partida real por internet: "a veces un Señor Mantis se queda quieto" y "las bolas del Maestro de
-Almas a veces no desaparecen y salen duplicadas"; también pidieron vida 4× para los jefes.
+De un reporte de una partida por internet: "a veces un Señor Mantis se queda quieto"; también pidieron vida 4× para
+los jefes.
 
 - **Órdenes de un controlador de batalla mientras se toma un enemigo** (`EnemySync.OnControllerOrder`): los Señores
   Mantis de la segunda fase esperan en `Sub Idle`, sin límite de tiempo, a que `Battle Sub` les diga qué hacer, y ese
@@ -1020,16 +994,6 @@ Almas a veces no desaparecen y salen duplicadas"; también pidieron vida 4× par
   como los avisos reenviados). Se mira en `Fsm.BroadcastEventToGameObject`, no en `ProcessEvent`: PlayMaker solo
   entrega un aviso a un objeto a sus FSM encendidas (`PlayMakerFSM.FsmList`) y las de una marioneta están apagadas; y
   ahí pasan también los avisos con retraso de `Battle Sub` (0,5 a 1,5 s), que no vuelven a pasar por `SendEventByName`.
-  Probado en D/E con 120 ± 30 ms y 2 % de pérdida, forzando traspasos (un jugador debajo del centro y el otro muy
-  arriba, cambiando cada ~6 s) durante 300 s de segunda fase: 336 órdenes a marionetas, una (`HIGH THROW` a S1) llegó
-  0,28 s después del cambio al PC que lo iba a tomar y se atendió al tomarlo. Ningún señor se quedó quieto. En el modo
-  de prueba se registra cada orden a una marioneta ("orden ... a la marioneta ...").
-- **Bolas del Maestro de Almas**: no se reprodujo. Con el mismo lag, 200 s de primera fase y 200 s de segunda, con un
-  cambio de PC cada pocos segundos y fotos de las bolas activas tomadas a la vez en los dos PCs: las cuentas coinciden
-  y las diferencias duran una foto (una bola que acaba de chocar en un PC y cuyo aviso aún viene por la red). El giro de
-  4 bolas (`Orb Spinner`) también se probó cambiando de PC a mitad del ataque. Ojo al probarlo: la lógica de la segunda
-  fase (`Mage Lord 2`, estado `Init`) arranca sola en cuanto un caballero baja de y = 11 (el piso de abajo); un `tp` ahí
-  saca a las dos fases a la vez.
 - **Vida de los jefes 4×**: nuevo valor al final de la opción (los índices de los demás no cambian; `settings.json`
   guarda el valor, no el índice).
 
@@ -1037,7 +1001,7 @@ Almas a veces no desaparecen y salen duplicadas"; también pidieron vida 4× par
 
 Issue #2: "el compañero ve los tajos de mi skin y yo no". Los tajos del aguijón (`Knight/Attacks`: `Slash`, `AltSlash`,
 `UpSlash`, `DownSlash`, `WallSlash`) y las artes del aguijón (`Great Slash`, `Dash Slash`, `Cyclone Slash`) son
-sprites de la colección `Knight` (`spriteof Great Slash` → `Knight/charge_slash_effect0002`), así que su dibujo está en
+sprites de la colección `Knight` (`Knight/charge_slash_effect0002`), así que su dibujo está en
 `Knight.png`. Esa colección no va en material compartido (es la misma de los avatares), y la skin propia se ponía con
 un bloque solo en el renderer del cuerpo: en el PC del dueño los tajos salían con el dibujo del juego, mientras que en
 el del compañero `ApplyToEffects` sí se la ponía a todas las copias bajo el avatar.
@@ -1046,154 +1010,43 @@ el del compañero `ApplyToEffects` sí se la ponía a todas las copias bajo el a
   colección es de `CollectionFiles` y no de `SharedCollectionFiles` (`Knight`, `Sprint`, `Unn`) llevan la skin propia
   con un bloque, como el cuerpo; solo los encendidos. A las colecciones compartidas no se les pone bloque: taparía la
   skin del material. Al quitarse la skin, o si un sprite pasa a otra colección, su bloque se borra.
-- Probado en B con Rick Knight en `Town` (ráfaga de capturas con `slashes 6 0.35`): el tajo sale verde, como en la
-  skin; con `skin normal` vuelve el blanco del juego.
 
-## Código del juego
+## Pruebas del transporte
 
-Para ver cómo hace algo el juego antes de tocarlo. Todo queda en `decomp/`, solo en local.
+`tests/NetTests` es una aplicación de consola que prueba el transporte fuera del juego (conexión, código incorrecto,
+pérdida y desorden simulados, canal fiable, datos grandes, memoria creada por paquete) y la conexión por Steam con una
+red de pares en memoria (invitados por Steam y por IP a la vez, código incorrecto, pérdida del 20 %).
 
-- **FSM de PlayMaker:** buena parte de la lógica (jefes, NPC, ascensores, puertas, eventos) no está en el C#. En el
-  descompilado salen las piezas, que son las acciones de PlayMaker (esperar, saltar hacia el caballero, lanzar del
-  pool, comparar una variable...), pero no cómo las arma cada objeto: sus estados, transiciones, probabilidades,
-  tiempos y valores. Eso son datos guardados en las escenas (`level*`). Dos formas de verlas:
-  - **FSMViewAvalonia** (herramienta de la comunidad): abre las escenas del juego y dibuja cada FSM como un diagrama,
-    sin abrir el juego. Es la cómoda para mirarlas a ojo.
-  - **Volcarlas a texto desde el mod**: `bash tools/dump-fsms.sh` recorre todas las salas del juego (481, sin menús ni
-    vídeos) con sus propias copias (`test-instances/l`, `m`, `n`, `o`; 3 a la vez, unos 20-30 minutos) y escribe
-    `decomp/fsm/<sala>.txt` con la orden `fsmdumpall` del modo de prueba (`Testing/FsmDumper`): las FSM de la sala y de
-    las que se cargan con ella (`_boss`), también las apagadas, tal como quedan en el juego después de lo que cambian el
-    propio juego y la Modding API; por cada una, los componentes de su objeto (con la vida si es enemigo), sus variables
-    con su valor, eventos, globales y cada estado con sus transiciones y acciones (campo=valor, `{variable}`). Una FSM
-    idéntica a otra (rompibles, pasto) solo dice de cuál es copia. Al final, las FSM de los prefabs que crean sus
-    acciones (disparos, crías), y al principio los componentes de C# de la sala. `decomp/fsm/_persistent.txt` tiene lo
-    que no es de ninguna sala (el caballero, la cámara, el HUD). Cada copia empieza una partida nueva, se hace
-    invulnerable (`god`) y entra en cada sala con `warp`; si una sala falla, la copia se reinicia y sigue. Lo ya
-    volcado se salta (`--retry` repite las fallidas, `--only "Sala"` solo esas).
-  - **Cruzarlas con el mod**: `python tools/analyze-fsms.py` escribe en `decomp/fsm-analysis/` los jefes con lo que
-    crean, a quién avisan y qué llaman; cada acción que usan los enemigos y si el mod la nombra; lo que crean los
-    enemigos y si `EnemySync` conoce esa acción; en qué salas sale cada componente de C# de la revisión; objetos sólidos
-    que mueve una FSM; métodos que llaman las FSM; y quién atiende `ZERO HP`.
-
-## Pruebas
-
-- `tests/NetTests`: aplicación de consola que prueba el transporte fuera del juego (conexión, código incorrecto,
-  pérdida y desorden simulados, canal fiable, datos grandes, memoria creada por paquete).
-- En el juego: dos copias (`test-instances/b` y `c`) controladas por archivo con el modo de prueba del mod
-  (`tools/mp-test-lib.sh`): conexión, movimiento, memoria por segundo, tirones, suavidad, sincronización. Capturas de
-  pantalla de las dos a la vez (`shot`) para comparar lo que se ve; cada daño que recibe el caballero se registra con
-  lo que lo hizo. La memoria creada en combate (≈300 KB/s) es la del juego: es la misma con la partida cerrada.
-  `netsim <ms> <variación ms> <pérdida %>` simula una mala conexión en la próxima partida (`LaggyTransport`, solo en
-  modo de prueba); probado con 80 ± 20 ms y 5 % de pérdida. `arenas` lista los objetos de la sala que dan órdenes a
-  enemigos o los encienden (para ver qué combates necesitan un controlador compartido), `healthlist` todos los objetos
-  con vida y su huella, y `die` mata al caballero; cada muerte de enemigo se registra con quién la provocó. `moving <s>` lista lo sólido o
-  dañino que se mueve o gira, `hazards` los peligros animados alineados y `wake <nombre>` enciende un enemigo apagado. `hero` dice por qué el
-  caballero no responde (si acepta órdenes, si cedió el control, reaparición tras pinchos, pausa) y `regain` le
-  devuelve el control. `tp x y` no fija el punto de reaparición (`tp x y respawn` sí). `enemies` marca también los
-  enemigos ocultos (sin dibujarse) y sin caja de colisión. Si algo apaga un enemigo vivo, el registro dice
-  "apagado vivo" con la FSM que lo hizo y la pila de llamadas. `slashes <n> <s> [up|down]` da una ráfaga de
-  aguijonazos seguidos (varios `press attack` en la misma lectura de órdenes serían uno solo).
-- Personajes de misión: `questnpcs` (datos del mundo que miran al empezar las FSM de la sala y los objetos que se
-  encienden o apagan según ellos), `fsmuses <texto>` (FSM de la sala, también apagadas, con una acción que nombra ese
-  texto, p. ej. `mrMushroomState`) y `pressat <hora en ms UTC> <botón>` (pulsar a una hora del reloj: dos copias a la
-  vez o una medio segundo después de la otra).
-- Ajustes del host e "Ir con ...": `goto <nombre>|#<id>` (como pulsar "Ir con ..."; con `#id` aunque ya no esté),
-  `travel` (lo pedido, el viaje y el último suelo pisado), `warp <sala> <x> <y>` (viaje sin puerta, p. ej. a un sueño
-  o a una cinemática), `scenetrace <s>` (sala, cambio de sala y posición cada 0,2 s), `enemybars`, `invulwatch <s>`
-  (cuándo empieza y acaba la invulnerabilidad), `hurt [daño] [tipo]` (tipo 2 = pinchos, 3 = ácido) y `status` dice el
-  dueño de la sala.
-- Funciones del coop: `settings` (ajustes que rigen), `party` (revivir y estado de cada jugador), `partnermap` (lo
-  enviado al mapa y, de cada compañero, su sala, su punto y si su icono se ve), `vitals`, `shades`,
-  `killshade` (mata la copia de la sombra de un compañero), `killobj <objeto>` (muere por `HealthManager.Die`, p. ej. la
-  sombra propia), `tk2dwatch <s> <objeto>` (cada cambio de animación, cuadro y visibilidad de sus sprites tk2d), `bossbar`, `focus <s>` (Focus simulado), `tpbody`, `heal`
-  (vida llena por la vía del juego: `pdset maxHealth` no redibuja el HUD del juego y el mini-HUD lo mostraría distinto),
-  `soul <n>`, `mppage <partida|ajustes|ajustes2|compañeros>`, `mpoption <etiqueta>|<pasos>`, `mpoptions`,
-  `spriteof <objeto>`, `sprites <colección>|<texto>`, `collections <texto>`, `hudsprite`, `hudrot` y `clips <texto>`.
-  `nailtouch <objeto>` hace como si el aguijón de este jugador tocara esa copia sin vida propia (devolver el escupitajo
-  del Gulka). Los golpes al caballero dicen si quien pega se veía, y los pasos de cadenas de otro PC se registran.
-  `spritewatch <s> <texto>` registra cada cambio del sprite dibujado (al final del frame) de los `SpriteRenderer` cuyo
-  objeto, sprite o textura contiene el texto (p. ej. `soul_orb` para el orbe del HUD). `enemies` da también el giro y
-  la velocidad de cada enemigo, y `hazards` los Goam con su estado y cuánto llevan en su espera.
-  Segunda parte de M5: `partystate`, `cutscenes`, `cinematic` (vídeos de la escena, dónde se dibujan y el fundido),
-  `presentation`, `dreams`, `dreamhit [encender]`, `transitions` (cambios de sala de las FSM de la sala), `senders
-  <evento>`, `covers` (lo que tapa la cámara), `langget <hoja> <clave>`, `charmupdate`, `skins`, `skin <nombre>|normal`
-  y `skinshow si|no`; `findobj` muestra la caja del colisionador y `sdset` acepta ids con espacios. `listeners <evento>`
-  lista las FSM que cambian de estado con un aviso y `bosses` dice la arena de cada jefe y si espera para despertar.
-  `fsmdump` muestra también las variables de objeto y cada efecto que reproduce una marioneta se registra
-  ("efecto de enemigo ...").
-- Efectos del otro jugador: `burst <nombre> <n> <segundos>` hace capturas seguidas (las órdenes se leen cada medio
-  segundo, así que para ver un efecto en el otro PC su ráfaga empieza antes), `hurt` da un golpe de 1 al caballero,
-  `effects` cuenta los enviados, recibidos y reproducidos, y cada efecto reproducido se registra
-  ("efecto Slash de ...", con la FSM y el estado o el objeto). `tree <profundidad> <objeto>` y `fsmall <objeto>`
-  muestran la jerarquía y todas las FSM de un objeto (también inactivo o del pool, como `Fireball Top`); `ptree` es
-  `tree` buscando también entre lo cargado, `fsmvars` da los valores de las variables de sus FSM, `heroprefabs` los
-  objetos a los que apunta el caballero y `spawnlog <segundos>` registra lo que sale del pool (y quién apaga cada pieza
-  de geo, con su pila de llamadas). `findobj` enseña como mucho 15 objetos y cuenta también los del pool: para el geo
-  en el suelo, `findactive`. `bossscene` dice si el juego cree estar en una sala de jefe (el geo se recicla al salir). `effects` dice también
-  qué copias de amuletos y cuántos acompañantes del compañero hay encendidos. Ruta: `tests/routes/effects.route`.
-- FSM del juego: `fsmdumpall [carpeta]` vuelca las de las salas cargadas (ver [Código del juego](#código-del-juego)) y
-  `scenelist` da todas las salas del juego.
-- Paquete para jugadores: `tools/manual-tests/installer-test.sh <zip>` (ver [Paquete e instalador](#paquete-e-instalador)).
-
-### Cómo probar (recordatorio)
-
-- Copias del juego en `test-instances/` (enlaces duros al juego de Steam; `ensure_instance` las crea): B/C para
-  pruebas sueltas (puerto 26950), D/E... para las rutas automáticas (27100+), F/G para el Coliseo y los jefes (27300),
-  H/I para la prueba del instalador (`installer-test.sh` las rehace desde cero), L/M/N/O para volcar las FSM
-  (`dump-fsms.sh`, sin sesión). Instalar solo en las que se usan (`bash tools/test-cycle.sh --only "f g"`) y cerrar solo
-  esas (`stop_all F G`). `ensure_instance` copia los ajustes del juego de la plantilla con `MSYS_NO_PATHCONV=1`: sin
-  eso Git Bash convertía `/s /f` de `reg copy` en rutas, la copia no tenía ajustes y se quedaba en la primera pantalla
-  del juego (idioma y brillo) sin cargar el menú.
-- Órdenes útiles: `hero` (por qué un caballero no responde) y `regain`; `enemies` marca "oculto", "sin-caja" e
-  "(inactivo)"; `bosses` da la vida, si es marioneta y el estado de cada FSM del jefe; `tp x y` no fija el punto de
-  reaparición (`tp x y respawn` sí); `fsmgo` salta a un estado de un objeto con controlador; `fsmstate
-  <objeto>|<estado>|<fsm>` pone el estado de una FSM concreta (sin la tercera parte, la primera del objeto: en Lurien es
-  `Bob`, la que lo hace flotar); `healthlist` dice si cada enemigo cuenta como jefe.
-- Los juegos se abren con `Start-Process` (`_start_game`). Lanzados desde bash heredaban los handles abiertos, también
-  el extremo de una tubería, y `setup_pair | tail` no acababa hasta cerrar los juegos (parecía que la prueba se había
-  trabado).
-- No usar `hitall` ni abusar de `hitenemy` para comprobar combates: quitan vida directamente, matan enemigos dormidos o
-  invulnerables, falsean el contador de las oleadas y pueden saltarse la lógica del jefe (la cabeza del Falso
-  Caballero). Mejor golpes de aguijón reales (`tools/manual-tests/colo-nail.sh`).
-- Los combates de jefe empiezan al entrar en su zona (`Battle Scene`): un `tp` a un sitio fuera de ella no los
-  despierta, y un `tp` junto al jefe puede dejar al caballero al otro lado de una pared.
-- Poner tiempo máximo a todas las esperas de los guiones de prueba (si no, se quedan colgados esperando a un juego
-  cerrado) y no lanzar dos guiones a la vez sobre las mismas copias.
-- Pruebas a mano del Coliseo en `tools/manual-tests/` (`fg-lib.sh`, `colo-natural.sh`, `colo-nail.sh` y
-  `oro-manual.sh`, Oro con los dos dentro de la arena).
-
-## Decisiones de M5
-
-Decisiones aprobadas por el usuario para M5 (las marcadas "elegido" las escogió él; el resto, las recomendadas).
+## Comportamiento de las funciones
 
 - **Base**: funciones en `Game/Features/` con `Attach`/`Detach`; `PartyState` con el estado de cada jugador (un caído
   no cuenta para repartir enemigos ni para las esperas de combate); interfaz uGUI, nunca IMGUI.
-- **Revivir (elegido: Focus 2 s, 33 de alma)**: el caído queda tendido con "† Nombre" y su cámara sigue al compañero;
+- **Revivir (Focus 2 s, 33 de alma)**: el caído queda tendido con "† Nombre" y su cámara sigue al compañero;
   junto al cuerpo, mantener Focus a 2 unidades o menos; si golpean al que revive se pierde el progreso. Vuelve con 1
   máscara y 2 s de invulnerabilidad. Sin límite de tiempo caído; sentarse en un banco revive a los caídos a su lado con
   toda la vida; si caen todos, muerte normal para cada uno. En un sueño se cae y se revive dentro.
-- **Sombras (elegido: copia en cada PC)**: cada PC mueve su copia de la sombra del compañero; matarla hace que el
+- **Sombras (copia en cada PC)**: cada PC mueve su copia de la sombra del compañero; matarla hace que el
   dueño recupere la suya (el host acepta solo el primer aviso). La de alguien desconectado no se ve. La copia se quita
   sin pasar por su muerte, así que al matarla se devuelve la música como hace su estado `Killed` (el audio a "Away"):
   su zona de música (`Music Control`) la había puesto en "Close" y seguía sonando la de sombra. Si la sombra propia
   sigue cerca con su música puesta, se deja.
-- **HUD del compañero**: arriba a la derecha (el usuario lo prefirió allí), con su nombre, máscaras y alma con los
+- **HUD del compañero**: arriba a la derecha, con su nombre, máscaras y alma con los
   sprites del juego y su estado; máscaras sobre su cabeza al cambiarle la vida; flechas en el borde; barra del jefe
   abajo con su nombre.
 - **Cinemáticas**: finales, créditos y Mr. Mushroom a la vez para todos; saltar por votación ("Esperando a X para
   saltar 1/2"); presentaciones de jefe con los dos quietos; al acabar, quien fue llevado vuelve a donde estaba.
 - **Ajustes del host** (Pausa › Multijugador), guardados por mundo; los invitados solo los ven. Por defecto: vida de
-  jefes 1,5× (elegido) solo con el compañero en la sala, enemigos 1×, daño recibido 1×; revivir sí (2 s, 33 de alma, 1
+  jefes 1,5× solo con el compañero en la sala, enemigos 1×, daño recibido 1×; revivir sí (2 s, 33 de alma, 1
   máscara, 2 s de invulnerabilidad, en el banco sí); nombres, vida del compañero, flechas, compañeros en el mapa, avisos
   y barra del jefe sí,
   barras de enemigos no; regalar geo sí; ir con un compañero sí; saltar cinemáticas por votación; viajar juntos en
   ciervo sí. La vida extra divide
   el daño en el PC que mueve al enemigo (las fases de los jefes dependen de su vida).
-- **Ir con un compañero** (pedido después): en *Compañeros*, al quitar la pausa aparece a su lado; no con alguien
+- **Ir con un compañero**: en *Compañeros*, al quitar la pausa aparece a su lado; no con alguien
   caído, en un sueño, en una cinemática, cambiando de sala o en otro mundo.
 - **Sueños**: quien está en la misma sala entra con quien golpea la entrada; al ganar salen los dos; la caída de uno no
   saca al otro. Grimmchild: si uno lo recibe, el otro también.
-- **Skins (elegido: sí, al final)**: compatibles con CustomKnight, enviadas por la red del mod en segundo plano (unos
+- **Skins**: compatibles con CustomKnight, enviadas por la red del mod en segundo plano (unos
   0,5 MB/s, máximo 32 MB); cada PC elige si ve las de los demás.
 
 ## Idioma
@@ -1229,19 +1082,18 @@ fiabilidad y la sesión son los mismos; Steam solo sustituye el transporte entre
   2 MB): el mundo al unirse y las skins salen a 2-2,6 MB/s, y con los valores por defecto Steam los frenaba y descartaba
   paquetes con el búfer lleno (Steam sigue bajando el ritmo solo si la conexión no da). Los datagramas del mod (1200
   bytes como mucho) quedan muy por debajo del límite de un mensaje de Steam (512 KB). `SteamLink` decide qué plataforma hay: la real si el juego inició Steam; ninguna si el juego
-  no trae Steam (sin el ensamblado, `CreateReal` falla al compilarse y se atrapa: por eso va aparte y sin inlining) y
-  ninguna en el modo de prueba, donde se simula.
+  no trae Steam (sin el ensamblado, `CreateReal` falla al compilarse y se atrapa: por eso va aparte y sin inlining).
 - **Sala de Steam del host** (`MultiplayerRunner.OpenSteamLobby`): al hostear, si hay Steam y el ajuste
   `SteamAccess` no es "Nadie", se crea una sala de hasta 4, solo para amigos (`k_ELobbyTypeFriendsOnly`) o privada con
   "Solo invitados" (`k_ELobbyTypePrivate`). Guarda `hkmp=1`, `version`, `code` (el código de la partida), `host` (el
   SteamID del host) y `name`. Con "Amigos", el host pone además la presencia de Steam `connect` = `+connect_lobby <sala>`:
-  sin ella, la lista de amigos de Steam solo ofrecía "Invitar a ver" (visto con Steam de verdad), y con ella salen
+  sin ella, la lista de amigos de Steam solo ofrecía "Invitar a ver", y con ella salen
   "Invitar a jugar" y "Unirse a la partida" (aviso `GameRichPresenceJoinRequested_t`, o esa línea de órdenes si Steam
-  abre el juego). Steam no separa los dos: con "Solo invitados" también se pone (a petición del usuario, para poder
+  abre el juego). Steam no separa los dos: con "Solo invitados" también se pone (para poder
   invitar desde la lista de amigos), y a quien pulse "Unirse" sin invitación a la sala Steam no lo deja entrar
   (`LobbyJoinResult.NotAllowed`: se le dice que pida la invitación desde el juego). La invitación del botón de la pausa
   (`ActivateGameOverlayInviteDialog`) es una invitación a la sala y vale en todos los modos; la de "Invitar a jugar" de la
-  lista de amigos puede no valer en una sala privada (sin probar). El host escucha por UDP y por Steam a la vez; si el puerto no se puede abrir, la partida se
+  lista de amigos puede no valer en una sala privada. El host escucha por UDP y por Steam a la vez; si el puerto no se puede abrir, la partida se
   abre igual solo por Steam (la pausa lo dice en vez de la IP).
 - **Unirse** (`JoinSteamLobby`): entra en la sala, comprueba `hkmp` y la versión (si no coincide, lo dice antes de
   conectar) y se conecta a la cuenta del host con el código de la sala (`StartJoinSteam`). Se llega desde la lista
@@ -1257,16 +1109,6 @@ fiabilidad y la sesión son los mismos; Steam solo sustituye el transporte entre
 - **Interfaz**: *Multijugador* tiene la opción "Partidas por Steam" (Amigos / Solo invitados / Nadie, en los ajustes del
   jugador: solo cuenta para sus partidas como host; sale solo si hay Steam) y, en *Unirse a un mundo*, la lista de amigos
   con partida abierta. La pausa tiene "Invitar amigos de Steam" (el panel de Steam con la sala) mientras se está en una.
-- **Pruebas sin Steam**: todas las copias del juego son la misma cuenta, y en ellas el juego ni siquiera inicia Steam
-  ("Steam failed to initialize" en su `Player.log`). `SimulatedSteamPlatform`, solo en el modo de prueba (orden `steamsim
-  <n>`), hace que cada copia sea una cuenta distinta: mensajes por UDP en `127.0.0.1:27600+n`, salas e invitaciones como
-  archivos en `%TEMP%\hkmp-steamsim` (una sala privada solo deja entrar a la cuenta invitada). No sustituye nada del
-  juego ni de Steam: imita solo la interfaz del mod. Órdenes: `steamjoin <n> <nombre>`, `steaminvite <n>`,
-  `steamaccess <0|1|2>` y `steamfriends`. `run-routes.sh --steam` (un solo par) pasa las rutas con los invitados
-  entrando por la sala de Steam del host; con 4 jugadores, el tercero entra por IP, así la misma partida usa las dos
-  vías. Las NetTests prueban el transporte con una red de pares en memoria (invitados por Steam y por IP a la vez,
-  código incorrecto, pérdida del 20 %).
-- **Sin probar todavía**: `SteamworksPlatform` contra Steam de verdad (dos cuentas que tengan el juego).
 
 ## Paquete e instalador
 
@@ -1299,7 +1141,7 @@ fiabilidad y la sesión son los mismos; Steam solo sustituye el transporte entre
   no hay otra más nueva, pasado de Markdown a texto; si la lista aún no llegó, la pide esperando como mucho 10 s. Un
   botón desactivado se vuelve a dibujar con el texto en blanco: Windows lo pinta en un gris oscuro que no se leía sobre
   el fondo, y `ForeColor` no cuenta en un botón desactivado.
-- Con `/install` o `/uninstall` y la ruta trabaja en la consola (lo usa `installer-test.sh`): se une a la consola
+- Con `/install` o `/uninstall` y la ruta trabaja en la consola: se une a la consola
   desde la que se llamó (o abre una y espera Intro al final), escribe en UTF-8 (en el archivo si la salida va a uno) y
   devuelve 0, 1 (error) o 2 (desinstalado con algo sin devolver). En un `.bat` o con `start /wait` se espera a que
   acabe. Sin `SHA256SUMS.txt` y `files\` al lado (abierto desde dentro del `.zip`) avisa con un cuadro de mensaje.
@@ -1307,7 +1149,7 @@ fiabilidad y la sesión son los mismos; Steam solo sustituye el transporte entre
   de Steam, rutas típicas en los discos locales, GOG). Exige Unity 6 (`UnityPlayer.dll` 6000.x) y
   `TeamCherry.TK2D.dll`: con otra versión del juego la Modding API lo dejaría sin arrancar. Además, el
   `Assembly-CSharp.dll` del juego tiene que llevar `1.5.12620` en UTF-16 (`IsGameVersion`). Solo bloquea si hay un
-  `hollow_knight.exe` abierto desde esa carpeta (otras copias no molestan) o uno cuya ruta no se puede leer (abierto
+  `hollow_knight.exe` abierto desde esa carpeta (uno de otra carpeta no molesta) o uno cuya ruta no se puede leer (abierto
   como administrador; por eso el proceso es de 64 bits, `Prefer32Bit` falso). Antes de instalar, la ventana pregunta
   con la lista de los otros mods que va a apartar.
 - Cada cambio se apunta en `<juego>\HKMultiplayer-backup\manifest.txt` antes de hacerlo: `added-dir`, `added`,
@@ -1323,155 +1165,8 @@ fiabilidad y la sesión son los mismos; Steam solo sustituye el transporte entre
   la Modding API, que no lo nombra, se quedaba al desinstalar) lo volvió a poner Steam: se deja si es distinto de la copia. Si algo no se pudo devolver, conserva la
   copia y remite a "Verificar integridad" de Steam. Sin manifiesto (mod puesto a mano) quita solo el mod.
 
-## Hitos
+## Limitaciones conocidas
 
-| Hito | Contenido | Se da por bueno cuando |
-|---|---|---|
-| M1 | Transporte + sesión + jugadores (verse y moverse) | Dos jugadores conectados con código, se ven moverse fluido, memoria de red ≈ 0 |
-| M2 | Mundo compartido (progreso, objetos persistentes, al unirse) | Las habilidades y el mundo coinciden entre los dos |
-| M3 | Enemigos y objetos de sala | Pelear juntos en salas normales y con jefes probados |
-| M4 | Efectos del otro jugador | Se ven sus ataques, hechizos y movimientos especiales |
-| M5 | Funciones del coop (revivir, sombras, skins, panel...) | Igual o mejor que la 0.7.3 |
-| M6 | Instalador y paquete | Tu amigo lo instala y juegan juntos |
-
-## Comprobado en vivo
-
-Con dos copias del juego en el mismo PC (detalle de cada prueba en el historial de git):
-
-- **Enemigos y jefes del juego base**: todos los combates de M3 (incluidos Mantis, Coliseo de Bronce, Plata y Oro
-  enteros), Grimm, el Tirano de Almas, el Hollow Knight y la Radiancia; el Falso Caballero hasta el final con golpes
-  reales, con red normal y con red mala (120 ms, 30 ms de variación, 2 % de pérdida).
-- **Sueños**: Campeón Fallido, Falso Caballero, Hermano Perdido, Tirano de Almas, Defensor Blanco, Príncipe Gris Zote y
-  Rey de las Pesadillas: entran los dos, el jefe es el mismo, salen juntos al ganar y el dato queda en los dos.
-- **Funciones del coop**: revivir (también con 3 jugadores), sombras, HUD, ajustes del host, cinemáticas con votación,
-  skins, ir con un compañero, recargar sala, regalar geo; misiones de NPC (Mr. Mushroom, Quirrel, Bretta, Zote en Nido
-  Profundo, Tiso, Myla, Hornet, la Compañía de Grimm); objetos de sala y rompibles; efectos y amuletos del compañero.
-- **Paquete**: instalar, actualizar y desinstalar en copias limpias (`installer-test.sh`); la ventana del instalador.
-- **0.22.0** (copias D y E, 10 oct 2026): compañeros en el mapa rápido (el icono en su sitio de Bocasucia, se mueve con
-  el compañero y se quita al cerrar el mapa; rojo en el cuerpo de un caído); el cuerpo en el último sitio seguro al
-  morir sin suelo debajo (fuera del borde de Bocasucia) y en el aire sobre los pinchos del Paso del Rey, y en el suelo
-  de debajo sobre suelo normal; revivir en ese sitio seguro; reconexión automática al cerrar de golpe el juego del host
-  y volver a abrir su mundo (entró en el intento 4, con su personaje). Después: el icono también con el mapa del
-  inventario (al acercar; se quita al cerrar el inventario); morir en el aire sobre el ácido de `Fungus1_07` (el
-  cuerpo nunca queda dentro: sobre una plataforma si la hay debajo, si no en el último sitio seguro); Esc en el menú
-  principal cancela la reconexión (con la tecla de verdad) y corta el intento en curso; sin host, se rinde tras los 12
-  intentos y se queda en el menú. Las plataformas de liana de `Fungus1_06`: cortada a aguijonazos en un PC, cae en los
-  dos, y quien entra después la encuentra caída (como en el juego: el sprite caído en el suelo y sin colisión arriba).
-- **0.23.0** (copias D y E, 11 oct 2026), tras una partida real entre dos PCs: los Tiktik y Reptantes de
-  `Crossroads_01` como marioneta van a velocidad 0 y siguen lo recibido, y andan al retomarlos en los dos sentidos; los
-  17 Goam de `Crossroads_13` se alinean una vez al entrar y luego coinciden (entran en "Down" a la vez, vuelta de
-  2,77 s); el Falso Caballero sale tras recargar su sala dos veces; la pared secreta de `Crossroads_10` rota a
-  aguijonazos por el invitado se rompe en el host; revivir cuesta 33 de alma en los dos sentidos (el orbe baja también
-  en pantalla); con la skin Rick Knight (copia B), el orbe lleno y su pulso salen con la imagen de la skin desde el
-  principio y no vuelven al del juego. Ruta `crossroads` sin fallos.
-- **0.24.0** (copias D y E, 11 oct 2026), con lo que siguió saliendo en la partida real: el Falso Caballero muere
-  entero aunque el host esté junto al cuerpo y el invitado (que lo movía) lejos al matarle la cabeza (no cambia de PC,
-  las 5 rejas se abren en los dos); la campana de `Crossroads_47` aparece en el host en cuanto el invitado abre la
-  estación y su toque se copia paso a paso; las lianas de `Fungus1_01` cortadas en un PC salen cortadas en el otro; el
-  capullo de savia de `Fungus2_15` roto por el invitado se rompe en el host y cada uno tiene sus mariposas; en la
-  misma sala, una palanca golpeada por el invitado ya no apaga el cartel para desafiar a los Señores Mantis del host.
-  El Musgoso Volátil de `Fungus1_01` y sus esporas se ven en el otro PC. Rutas `crossroads` y `greenpath` sin fallos.
-  Después: los disparos y las crías del Elder Baldur de `Crossroads_11_alt` salen en el invitado; un aguijonazo del
-  invitado a la copia del escupitajo del Gulka (`nailtouch`) lo devuelve en el host; el vómito de los Ogros Hongo de
-  `Fungus2_05` se ve en el otro PC y, con los dos acabando el combate a la vez, las rejas se abren en los dos. Los
-  Charged Lumafly de `Fungus3_26` están en el mismo sitio en los dos PCs; la capa de Polilla de `Fungus1_04` sigue para
-  el host cuando el invitado ya tiene la habilidad (también al recargar la sala); tocar un Shrumeling de `Fungus2_28`
-  ya no hace retroceder ni da invulnerabilidad; el Rey Vengamosca, con los dos en el suelo de su arena, ataca cada
-  pocos segundos (embestidas e invocaciones) y casi no cambia de PC. El viaje en ciervo desde `Crossroads_47` a
-  `Room_Town_Stag_Station` lleva al otro en los dos sentidos (lo elige el host o el invitado; los dos llegan a la salida
-  del ciervo con control); a 3,6 del host va con él, a 20 o 28 se queda ("lejos de él"), y con el ajuste en no se queda
-  aunque esté al lado; con el invitado en pausa, el HUD del host dice "en pausa"; sentados los dos en el banco de `Town`, cada uno ocupa una mitad y los dos PCs los ven igual.
-  Habilidades de cada uno: un personaje de antes conserva las del mundo; la garra de uno y el doble salto del otro no
-  pasan al compañero (el mundo, sí). Los soñadores de `RestingGrounds_04`: el host lee la placa, los dos entran juntos
-  en `Dream_NailCollection`, cada uno habla con la Vidente y recoge su aguijón onírico, y los dos despiertan en
-  `RestingGrounds_07`. Lurien: el host entra a su sueño con el aguijón onírico y el invitado va con él; al acabarlo, los
-  dos ven la cinemática y la puerta (`Cutscene_Boss_Door`), vuelven a la Aguja y `guardiansDefeated` queda en 1 en los
-  dos (no se cuenta dos veces). Un invitado nuevo ve la introducción, la salta y entra en la sala del host. El geo de
-  los enemigos de `Crossroads_07` y el de sus rocas cae en el mismo sitio en los dos PCs (a 0,1-0,3; una pieza que rebota
-  en el borde de una cornisa puede quedarse arriba en un PC y caer en el otro). Quirrel: hablarle en el templo y en el
-  santuario de Sendero Verde no lo quita al otro, y en la Estación de la Reina está igual en los dos.
-- **0.24.1** (copias D y E, 11 oct 2026), de la segunda partida real: el host habla con Bretta en `Fungus2_23` y en el
-  invitado sigue en la sala (`brettaRescued` llega, no se vuelve a comprobar); al volver a entrar ya no está. En
-  `Fungus2_15` el invitado entra con el host dentro y el cartel no se apaga; el host desafía y en el invitado se apaga
-  al levantarse los tronos. En el PC que copia al Mantis Lord, al irse se oculta en el mismo cuadro que en el que lo
-  mueve y sigue oculto lo mismo (~0,4 s; antes el último cuadro de la salida se quedaba ~0,36 s más en local).
-  Ascensores de `Town` (`Mines Exit Lift`) y de `Room_Town_Stag_Station` (`Stag Lift`): el invitado se sube, baja y en
-  el host baja a la vez; el host lo sube después desde abajo y en el invitado sube igual. Enemigos de `Crossroads_01`
-  muertos: el invitado se sienta en el banco de `Town` y al volver están todos; muertos otra vez, mueren los dos y al
-  volver están todos. En `Town`, el invitado mata su sombra y luego la copia de la del host: la música de sombra vuelve
-  a la normal ("La música de la sombra vuelve a la normal"). En `Fungus2_15`: se desafía, muere el primer Señor Mantis,
-  los dos salen vivos a `Fungus2_14` y vuelven; al desafiar otra vez sale con 210 de vida en los dos PCs. El host
-  con la skin Rick Knight cae en `Town`: su cuerpo tendido sale con Rick en los dos PCs.
-- **0.25.0** (copias D y E, 12 oct 2026), de la tercera partida real: en `Deepnest_16` los tres Garpedes van por el
-  mismo punto en los dos PCs (a 0,01 s) y en 25 s no hace falta ninguna corrección más. Con 120 ms de lag simulado,
-  en la segunda fase de los Señores Mantis y cambiando a los jugadores de lado cada 2,3 s, los Mantis se retoman
-  entre elegir pared y lanzar (`Throw Antic 2`, `Throw 2`) y su `Shot Event` llega del otro PC (antes se quedaba el
-  anterior, a veces vacío). Una Incubadora de Excavadores muerta en `Deepnest_26b` sigue muerta en los dos al salir
-  y volver (los bichos normales vuelven al volver a entrar, como en el juego sin mod).
-  En `Deepnest_01b` (la caída desde arriba) el invitado entra en la zona de una máscara negra (`Inverse Remasker`,
-  `remasker_inverse`): sus máscaras cambian y las del host se quedan como estaban. Antes la cadena se copiaba al host
-  ("paso de la cadena de Invitado (Fade Out → Fade In)") y a quien estaba lejos se le tapaba la vista hasta que el
-  compañero volvía. Los Cavasuelos (`Baby Centipede`) de `Deepnest_16`, despiertos, van por el mismo sitio en los dos. Vuelto a
-  mirar con `enemytrace` en los dos PCs (12/10/2026), luchando, al enterrarse, al elegir su punto nuevo y al volver a
-  salir cuando llega alguien: la copia va como mucho 0,7 unidades por detrás y se ve o no igual que el original (salvo
-  los 0,1 s del retraso de dibujo al aparecer y al enterrarse); el control pasa a quien se acerca a uno dormido.
-
-- **0.28.0** (13 oct 2026, 4 copias a la vez: J host, K, L y M invitados): Hornet pasa de K a L con J mirando y luego
-  a J: J descarta el traspaso viejo ("traspaso de hace 9,8 s, se descarta") y sigue con el nuevo. Reclamaciones de
-  `Break Floor 1` seguidas (sin retraso) y cruzadas (3 s de retraso): los cuatro con el mismo controlador. Dos
-  presentaciones a la vez (`presentlock`): J quieto por {2,3}, luego por {3}, y suelto al acabar la segunda. Un dato
-  de misión cambiado por L en otra sala se comprueba en J; cambiado por K en la sala de J, se queda. K cae siguiendo a
-  L; L entra en Godhome y el host pasa a K a seguir a J. J y M reviven a K a la vez (M con 1,5 s de retraso): K ve a J
-  todo el rato, a M solo al acabar J, y a M se le devuelven 33 de alma. Mapa en Crossroads_01: tres brújulas de colores
-  con su nombre. Cuatro en el banco de Bocasucia, a 1,1 uno del otro. Vida extra 2× con tres en pie: un golpe de 12 a
-  Hornet quita 4 (3×). Tres van a la vez con el host: quedan en tres sitios distintos. M se va y vuelve con el mismo
-  número: no hereda la reja que controlaba. Ningún mensaje no fiable perdido en el host. Repaso con 2 (J y K): los
-  cambios de Hornet (8 en 90 s, al principio de un movimiento) y revivir.
-  Después, las 16 rutas con 4 jugadores (`run-routes.sh --players 4`, mundo nuevo): 0 FALLO, y los mismos NOCONC que
-  con 2 (los jefes que las rutas no despiertan y salas sin objetos ni enemigos). La de sesión necesitaba `die extras`:
-  con 4, al morir el invitado y el host los otros dos seguían en pie y no caían todos.
-- **0.30.0** (14 y 15 oct 2026, 4 copias: J host, K, L y M invitados), jefe a jefe, golpeando el usuario desde un PC que
-  no lo mueve: Rey Vengamosca, Hornet (la Capa cae en todos y el sueño de los Soñadores al recogerla), Señores Mantis
-  (también dos desafiando a la vez), Maestro de Almas (el orbe falso, la caída y el Desolador para todos), Caballeros
-  Vigía, Defensor del Estiércol, Flukemarm, Guardián de Cristal y Guardián Furioso, Señor Traidor, Menderbug, Zote
-  (cada conversación es de cada jugador y se va solo para quien habló con él), el Panteón del Maestro (caídos que
-  reviven en la sala del siguiente jefe) y el Panteón de Hallownest hasta su final: sin pantalla negra al entrar, el
-  nombre y las burbujas del Recipiente Puro en los 4, el abismo de la Radiancia igual en todos y la reaparición sobre
-  él, y el final de cada uno en su PC, con su cinemática al acabar el suyo y sin ver a los demás. Además: el icono del
-  compañero en la tienda de Iselda y en el Sendero Verde (con la Brújula Caprichosa), el menú y los avisos del mod en
-  inglés (con el juego abierto ya en inglés) y el vapor del Falso Caballero. Las 16 rutas no se volvieron a pasar.
-
-## Pendientes
-
-Sin probar:
-- De 0.24.0, sin reproducir en las copias: los caballeros de musgo B y C de las arenas, que se quedaban quietos (no
-  existen en el mundo de prueba); la curación del compañero pegada (cortada o no, acaba bien). Devolver el escupitajo
-  del Gulka con un aguijonazo físico (probado con `nailtouch`, no con el choque). Un objeto brillante que sale volando
-  (mismo mecanismo que las rocas de geo, sin probar en vivo). En la partida real, a uno le salió Quirrel en su segunda
-  ubicación y al otro no; en las copias no se reprodujo (sin saber cuál era la ubicación). Monomon y Herrah (probado
-  Lurien).
-- De 0.23.0: todo entre dos PCs reales. En la partida real el invitado dijo que revivir no le gastaba alma; en las
-  copias sí la gasta (se cobra entera al empezar Focus y se devuelve si se suelta o le golpean, y su registro tiene
-  tres "Golpeado mientras revivía").
-- De 0.22.0: la reconexión entre dos PCs.
-- Volver de una cinemática que acaba en una sala de juego (el final del Panteón de Hallownest; va por `SceneTravel`).
-  La vuelta del Panteón del Maestro al Atrio sí está probada (0.29.0). Que su puerta quede completada no se miró
-  directamente: lo apunta el juego en cada PC al acabar su secuencia.
-- La revisita del Núcleo.
-- Solo en una sesión real de dos PCs: instalar desde el zip en un juego sin mods y jugar por internet.
-
-Con 3 o 4 jugadores: lo de la revisión del 12/10/2026 está arreglado y probado con 4 copias (ver "Cambios para 3 y 4
-jugadores"). En 0.29.0, la historia entera con 4 copias (ver "Cambios de la historia completa con 4 jugadores"): los
-jefes con golpes de verdad, los sueños, los soñadores, los dos finales del Hollow Knight y la Radiancia por el camino
-del juego, la Compañía de Grimm, Grey Prince Zote, el Coliseo de Bronce (con Zote), Zote tras el Rey Vengamosca, Cloth
-y el Panteón del Maestro entero; después, las 16 rutas con un mundo nuevo y 0 FALLO. En 0.30.0, cada jefe uno a uno y
-el Panteón de Hallownest hasta su final (ver "Cambios de cada jefe con 4 jugadores"), y lo que faltaba: el icono del
-compañero en una tienda y en otra zona (con la Brújula Caprichosa), el menú y los avisos en inglés, el vapor del Falso
-Caballero, el Menderbug y Zote, que se va solo para quien habló con él. No hay ningún banco con una pared más cerca
-que el reparto de los que se sientan (que ya la respeta). Pendiente en 0.30.0: pasar otra vez las 16 rutas con un
-mundo nuevo (se pausó antes de acabar). Sin probar: todo con 3 o 4 PCs reales.
-
-Limitaciones conocidas:
 - El jefe ataca al caballero del PC que lo mueve, y lo mueve el jugador más cercano: cambia como mucho cada 8 s, y
   desde 0.27.0 solo entre dos ataques (ver "Enemigos y objetos de sala"). Es lo que hace que ataque a los dos. Un jefe
   sin estados de reposo en su lógica, o que no reposa en 4 s (Hornet a veces encadena esquivas y ataques sin pasar por
