@@ -403,7 +403,7 @@ internal sealed class HostSettings {
         }
     }
 
-    /// <summary>Resumen para el modo de prueba.</summary>
+    /// <summary>Resumen en texto de su estado.</summary>
     public string Describe() {
         var text = new StringBuilder();
         foreach (var option in Options) {

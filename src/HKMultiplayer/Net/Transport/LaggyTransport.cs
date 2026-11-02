@@ -5,12 +5,12 @@ using System.Diagnostics;
 namespace HKMultiplayer.Net.Transport;
 
 /// <summary>
-/// Solo para el modo de prueba: envuelve otro transporte y estropea lo que llega como una mala conexión (retraso,
+/// Envuelve otro transporte y estropea lo que llega como una mala conexión (retraso,
 /// variación que desordena y pérdidas). Se aplica a lo recibido, así que con las dos partes activas el ida y vuelta
 /// suma los dos retrasos. No crea memoria por datagrama: los retenidos van en una lista con capacidad reservada.
 /// </summary>
 public sealed class LaggyTransport : ITransport {
-    /// <summary>Lo que se usará al abrir o unirse a la próxima partida (lo pone el modo de prueba).</summary>
+    /// <summary>Lo que se usará al abrir o unirse a la próxima partida.</summary>
     public static double NextLatency;
 
     public static double NextJitter;

@@ -233,7 +233,7 @@ internal sealed class RemoteEffects {
     /// <summary>Sus acompañantes (crías, tejedoras, Grimmchild); puede faltar.</summary>
     public RemoteCompanions Companions { get; }
 
-    /// <summary>Lo encendido de sus amuletos (modo de prueba).</summary>
+    /// <summary>Lo encendido de sus amuletos.</summary>
     public string DescribeCharms() =>
         (_charms?.Describe() ?? " sin efectos de amuletos") + $" acompañantes={Companions?.ShownCount ?? 0}" +
         $" aura={_dungAuraOn} corre={_running}" +

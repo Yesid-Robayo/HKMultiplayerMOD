@@ -187,7 +187,7 @@ internal sealed class PantheonTogether {
         }
     }
 
-    /// <summary>Modo de prueba: empieza en este PC el Panteón de esa puerta, como su botón, y avisa a la sala.</summary>
+    /// <summary>Empieza en este PC el Panteón de esa puerta, como su botón, y avisa a la sala.</summary>
     public bool TestStart(string doorName) {
         var door = FindDoor(GameManager.instance != null ? GameManager.instance.sceneName : string.Empty, doorName);
         if (door == null || door.bossSequence == null || door.bossSequence.Count == 0) {

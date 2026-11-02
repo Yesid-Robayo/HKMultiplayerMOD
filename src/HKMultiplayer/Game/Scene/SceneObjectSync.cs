@@ -536,7 +536,7 @@ internal sealed class SceneObjectSync {
         }
     }
 
-    /// <summary>Golpes de otros a piedras vistos en directo (modo de prueba).</summary>
+    /// <summary>Golpes de otros a piedras vistos en directo.</summary>
     public static int RockFxPlayed { get; private set; }
 
     private static readonly List<FsmStateAction> MutedActions = new();
@@ -858,7 +858,7 @@ internal sealed class SceneObjectSync {
     }
 
     // =====================================================================================================
-    // Modo de prueba
+    // Diagnóstico
     // =====================================================================================================
 
     /// <summary>Estado de la FSM y si su objeto sigue en la sala (destruido o inactivo).</summary>

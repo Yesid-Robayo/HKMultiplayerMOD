@@ -99,7 +99,7 @@ internal static class Program {
     /// su código de salida es el de este proceso.
     /// </summary>
     private static int RunInConsole(string root, string version, string mode, string given) {
-        // Si la salida va a un archivo o a una tubería ("> registro.txt", la prueba del instalador), se escribe ahí: un
+        // Si la salida va a un archivo o a una tubería ("> registro.txt"), se escribe ahí: un
         // programa de ventana unido a la consola escribiría en la consola y el archivo se quedaba vacío
         var output = Redirected(StdOutput);
         var error = Redirected(StdError);
@@ -194,7 +194,7 @@ internal sealed class ConsoleOutput : IOutput {
     }
 }
 
-/// <summary>Instalar o desinstalar desde la consola, sin ventana (para pruebas o para quien lo prefiera).</summary>
+/// <summary>Instalar o desinstalar desde la consola, sin ventana (para quien lo prefiera).</summary>
 internal sealed class ConsoleRun {
     private readonly string _root;
     private readonly string _version;

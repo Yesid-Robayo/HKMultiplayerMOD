@@ -29,8 +29,7 @@ internal sealed class SteamFriendGame {
 
 /// <summary>
 /// Lo que el mod usa de Steam: mensajes entre cuentas (para la conexión), salas solo para amigos (para encontrar la
-/// partida y unirse) e invitaciones. Hay una implementación con el Steamworks del juego y otra simulada para el modo de
-/// prueba, en la que cada copia del juego hace de una cuenta distinta.
+/// partida y unirse) e invitaciones. Hay una implementación con el Steamworks del juego y otra local, sin Steam.
 /// </summary>
 internal interface ISteamPlatform : IPeerNetwork, IDisposable {
     /// <summary>La cuenta de este jugador (su SteamID).</summary>
@@ -74,8 +73,7 @@ internal interface ISteamPlatform : IPeerNetwork, IDisposable {
 
 /// <summary>
 /// Acceso a Steam. Con el juego de Steam se usa el Steamworks que trae el juego (ya iniciado por él); en la versión de
-/// GOG no hay Steam y la conexión es solo por IP. En el modo de prueba no se usa el Steam de verdad (todas las copias
-/// son la misma cuenta): se simula con <c>steamsim</c>.
+/// GOG no hay Steam y la conexión es solo por IP.
 /// </summary>
 internal static class SteamLink {
     private static ISteamPlatform _platform;
@@ -97,7 +95,7 @@ internal static class SteamLink {
 
     public static bool Available => Platform != null;
 
-    /// <summary>Modo de prueba: esta copia del juego hace de la cuenta de Steam número <paramref name="index"/>.</summary>
+    /// <summary>Usa la plataforma local con la cuenta número <paramref name="index"/>.</summary>
     public static void UseSimulated(int index) {
         _platform?.Dispose();
         _platform = new SimulatedSteamPlatform(index);

@@ -76,7 +76,7 @@ internal sealed class EnemySync {
     /// </summary>
     private const int MaxEffectObjects = 128;
 
-    /// <summary>Modo de prueba: cada efecto reproducido en una marioneta se registra.</summary>
+    /// <summary>Si cada efecto reproducido en una marioneta se registra.</summary>
     private static readonly bool TestMode = HKMultiplayer.Testing.TestDriver.IsEnabled();
 
     /// <summary>Lo más a menudo que se reenvía el mismo aviso a un mismo enemigo (hay zonas que avisan cada frame).</summary>
@@ -195,7 +195,7 @@ internal sealed class EnemySync {
     private const float CalmGrace = 0.15f;
 
     /// <summary>
-    /// Nombres de los estados de reposo entre ataques de los jefes (sacados del volcado de sus FSM), y los de dormido: Grey
+    /// Nombres de los estados de reposo entre ataques de los jefes, y los de dormido: Grey
     /// Prince Zote espera en "Dormant" a que empiece su combate y pasaba de PC a la fuerza cada 4 s.
     /// </summary>
     private static readonly System.Text.RegularExpressions.Regex CalmStateName = new(
@@ -4711,7 +4711,7 @@ internal sealed class EnemySync {
         _spawnFsms.Clear();
     }
 
-    /// <summary>Estado y algunos números de las FSM de lo creado (modo de prueba).</summary>
+    /// <summary>Estado y algunos números de las FSM de lo creado.</summary>
     private string DescribeSpawnFsms(GameObject spawned) {
         var text = string.Empty;
         foreach (var fsm in spawned.GetComponents<PlayMakerFSM>()) {
@@ -7429,15 +7429,15 @@ internal sealed class EnemySync {
     }
 
     // =====================================================================================================
-    // Modo de prueba
+    // Diagnóstico
     // =====================================================================================================
 
-    /// <summary>Golpes y sonidos de otros reproducidos en marionetas (modo de prueba).</summary>
+    /// <summary>Golpes y sonidos de otros reproducidos en marionetas.</summary>
     public int HitFxPlayed { get; private set; }
 
     public int EffectsPlayed { get; private set; }
 
-    /// <summary>Jugadores caídos o en pausa (no mueven enemigos), para el modo de prueba.</summary>
+    /// <summary>Jugadores caídos o en pausa (no mueven enemigos).</summary>
     private string DescribeInactive() {
         var text = new StringBuilder();
         if (_session == null) {
@@ -7483,7 +7483,7 @@ internal sealed class EnemySync {
 
     /// <summary>
     /// Jefes de la sala (vida de jefe): por cada FSM, su estado y los eventos que lo hacen avanzar, y las transiciones
-    /// globales (modo de prueba: para saber cómo despertarlos).
+    /// globales (para saber cómo despertarlos).
     /// </summary>
     public IEnumerable<string> DescribeBosses() {
         foreach (var enemy in _enemies) {
@@ -7514,7 +7514,7 @@ internal sealed class EnemySync {
         }
     }
 
-    /// <summary>Piezas del primer enemigo con ese nombre: si se ven, posición local y animación (modo de prueba).</summary>
+    /// <summary>Piezas del primer enemigo con ese nombre: si se ven, posición local y animación.</summary>
     public IEnumerable<string> DescribeParts(string name) {
         foreach (var enemy in _enemies) {
             if (enemy.Root == null || enemy.Parts == null || !enemy.Root.name.StartsWith(name, StringComparison.OrdinalIgnoreCase)) {
@@ -7556,13 +7556,13 @@ internal sealed class EnemySync {
         return false;
     }
 
-    /// <summary>Golpea a todos los enemigos vivos y activos de la sala (modo de prueba); devuelve cuántos.</summary>
+    /// <summary>Golpea a todos los enemigos vivos y activos de la sala; devuelve cuántos.</summary>
     /// <summary>
-    /// Modo de prueba: golpea a todos los enemigos vivos. Con <paramref name="ignoreInvulnerable"/> falso, como un aguijonazo
+    /// Golpea a todos los enemigos vivos. Con <paramref name="ignoreInvulnerable"/> falso, como un aguijonazo
     /// de verdad: no hiere a quien está invulnerable (un jefe rugiendo o entrando), que si no moría en momentos en que un
     /// jugador no puede herirlo y dejaba estados que el juego no tiene (el rugido del Maestro de Almas sin acabar).
     /// </summary>
-    /// <summary>Modo de prueba: por qué un HealthManager con ese nombre se sigue o no (los filtros del repaso).</summary>
+    /// <summary>Por qué un HealthManager con ese nombre se sigue o no (los filtros del repaso).</summary>
     public IEnumerable<string> ExplainTracking(string name) {
         foreach (var health in Resources.FindObjectsOfTypeAll<HealthManager>()) {
             if (health == null || !health.gameObject.scene.isLoaded || !health.name.StartsWith(name, StringComparison.Ordinal)) {
@@ -7585,7 +7585,7 @@ internal sealed class EnemySync {
             if (enemy.Root != null && enemy.Root.activeInHierarchy && enemy.Health != null && !enemy.Health.isDead &&
                 (ignoreInvulnerable || CanBeStruck(enemy))) {
                 // Como un aguijonazo (DamageEnemies.DoDamage): primero el aviso TAKE DAMAGE a su FSM. El Rey Vengamosca
-                // colgado despierta con él; sin él, los golpes de prueba lo mataban sin que llegara a soltarse
+                // colgado despierta con él; sin él, los golpes directos lo mataban sin que llegara a soltarse
                 if (!ignoreInvulnerable) {
                     FSMUtility.SendEventToGameObject(enemy.Health.gameObject, "TAKE DAMAGE");
                 }
@@ -7602,8 +7602,8 @@ internal sealed class EnemySync {
     }
 
     /// <summary>
-    /// Modo de prueba: si un aguijonazo de verdad podría alcanzarlo (se ve y tiene algo con lo que chocar). La Radiancia,
-    /// escondida mientras se sube a la segunda arena, seguía perdiendo vida con los golpes de prueba y repetía la subida.
+    /// Si un aguijonazo de verdad podría alcanzarlo (se ve y tiene algo con lo que chocar). La Radiancia,
+    /// escondida mientras se sube a la segunda arena, seguía perdiendo vida con los golpes directos y repetía la subida.
     /// </summary>
     private static bool CanBeStruck(Enemy enemy) {
         var renderer = enemy.Root.GetComponent<Renderer>();
@@ -7620,7 +7620,7 @@ internal sealed class EnemySync {
         return false;
     }
 
-    /// <summary>Modo de prueba: avisa en el registro si alguien apaga el enemigo estando vivo, y desde dónde.</summary>
+    /// <summary>Avisa en el registro si alguien apaga el enemigo estando vivo, y desde dónde.</summary>
     private static void WatchDisable(Enemy enemy) {
         if (!TestMode || enemy.Root == null) {
             return;
@@ -7632,7 +7632,7 @@ internal sealed class EnemySync {
         watch.Id = enemy.Id;
     }
 
-    /// <summary>Registra quién apaga un enemigo vivo (modo de prueba).</summary>
+    /// <summary>Registra quién apaga un enemigo vivo.</summary>
     internal sealed class DisableWatch : MonoBehaviour {
         public HealthManager Health;
         public uint Id;
@@ -7659,7 +7659,7 @@ internal sealed class EnemySync {
         }
     }
 
-    /// <summary>Los que andan por paredes y techos (`Climber`): por dónde van y si tienen suelo (modo de prueba).</summary>
+    /// <summary>Los que andan por paredes y techos (`Climber`): por dónde van y si tienen suelo.</summary>
     public IEnumerable<string> DescribeClimbers() {
         foreach (var enemy in _enemies) {
             var climber = enemy.Root != null ? enemy.Root.GetComponent<Climber>() : null;

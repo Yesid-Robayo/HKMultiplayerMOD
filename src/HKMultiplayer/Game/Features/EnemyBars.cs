@@ -203,7 +203,7 @@ internal sealed class EnemyBars {
         return HudCanvas.WorldToCanvas(camera, top, out point);
     }
 
-    /// <summary>Resumen para el modo de prueba: cuántos se siguen y cuántas barras se ven.</summary>
+    /// <summary>Resumen: cuántos se siguen y cuántas barras se ven.</summary>
     public string Describe() {
         var shown = 0;
         foreach (var bar in _bars) {

@@ -683,7 +683,7 @@ internal sealed class PartnerTravel {
         _groundPosition = hero.transform.position;
     }
 
-    /// <summary>Resumen para el modo de prueba.</summary>
+    /// <summary>Resumen en texto de su estado.</summary>
     public string Describe() =>
         $"pedido={(_wanted != 0 ? _wantedName : "-")} enviado={_sentAt >= 0f} destino={(_hasDestination ? _destinationScene : "-")} " +
         $"viaje={_travel.Active} suelo={_groundScene} ({_groundPosition.x:0.0}, {_groundPosition.y:0.0}) " +

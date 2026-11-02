@@ -330,7 +330,7 @@ internal sealed class PartnerHud {
         slot.Orb.rectTransform.anchoredPosition = new Vector2(-slot.Masks.Width - 30f, -56f);
     }
 
-    /// <summary>Al cambiar los sprites (modo de prueba) se vuelven a poner.</summary>
+    /// <summary>Al cambiar los sprites se vuelven a poner.</summary>
     public void RefreshSprites() {
         foreach (var slot in _slots) {
             if (slot != null) {

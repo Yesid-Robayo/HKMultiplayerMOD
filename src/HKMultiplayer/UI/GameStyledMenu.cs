@@ -467,7 +467,7 @@ internal abstract class GameStyledMenu : MonoBehaviour {
     }
 
     // =====================================================================================================
-    // Modo de prueba
+    // Diagnóstico
     // =====================================================================================================
 
     /// <summary>Pulsa el botón visible cuyo texto empieza así.</summary>
@@ -507,7 +507,7 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         return option.optionList[option.selectedOptionIndex];
     }
 
-    /// <summary>Etiqueta y valor de cada opción visible (modo de prueba).</summary>
+    /// <summary>Etiqueta y valor de cada opción visible.</summary>
     public IEnumerable<string> TestDescribeOptions() {
         foreach (var option in GetComponentsInChildren<MenuOptionHorizontal>(false)) {
             yield return $"{option.transform.parent?.name}={option.optionList[option.selectedOptionIndex]}" +

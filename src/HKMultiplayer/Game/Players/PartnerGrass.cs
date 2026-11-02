@@ -56,10 +56,10 @@ internal sealed class PartnerGrass {
     private Vector2 _size = new(0.5f, 1.3f);
     private Vector2 _offset;
 
-    /// <summary>Pasto de la sala (modo de prueba).</summary>
+    /// <summary>Pasto de la sala.</summary>
     public int GrassCount => _grass.Count;
 
-    /// <summary>Veces que el avatar de un compañero empujó pasto (modo de prueba).</summary>
+    /// <summary>Veces que el avatar de un compañero empujó pasto.</summary>
     public int Pushes { get; private set; }
 
     /// <summary>La sala local cambió: su pasto se busca un poco después y lo tocado se olvida.</summary>

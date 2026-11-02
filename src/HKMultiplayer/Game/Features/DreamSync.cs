@@ -589,7 +589,7 @@ internal sealed class DreamSync {
 
     private const string LeaveDreamState = "Leave Dream";
 
-    /// <summary>Resumen para el modo de prueba.</summary>
+    /// <summary>Resumen en texto de su estado.</summary>
     public string Describe() {
         var text = new System.Text.StringBuilder($"en sueño={InDream} jefe visto={_bossSeen} jefe vivo={EnemySync.BossInRoom} sala={_scene} entradas={_entries.Count}");
         foreach (var entry in _entries) {
@@ -603,7 +603,7 @@ internal sealed class DreamSync {
     }
 
     /// <summary>
-    /// Modo de prueba: hace que la primera entrada de la sala reciba el golpe del aguijón onírico. Con
+    /// Hace que la primera entrada de la sala reciba el golpe del aguijón onírico. Con
     /// <paramref name="activate"/>, si no hay ninguna encendida, enciende la primera (como hace el juego con la de la
     /// Radiancia al vencer al Hollow Knight con el Corazón del Vacío); el golpe se da con otra orden pasado un segundo.
     /// </summary>

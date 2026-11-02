@@ -67,8 +67,7 @@ internal sealed class Skins {
     };
 
     /// <summary>
-    /// Colección de sprites del juego → archivo de la skin que la reemplaza (comprobado en la 0.7.3 comparando la forma
-    /// de cada archivo de una skin de CustomKnight con las colecciones cargadas).
+    /// Colección de sprites del juego → archivo de la skin que la reemplaza.
     /// </summary>
     private static readonly Dictionary<string, string> CollectionFiles = new() {
         { "Knight", "Knight.png" },
@@ -1524,7 +1523,7 @@ internal sealed class Skins {
     }
 
     // =====================================================================================================
-    // Modo de prueba
+    // Diagnóstico
     // =====================================================================================================
 
     public string Describe() {

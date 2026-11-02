@@ -95,7 +95,7 @@ internal static class HudSprites {
         return FullMask != null;
     }
 
-    /// <summary>Cambia el sprite de un tipo por otro de la colección (modo de prueba). Devuelve si existe.</summary>
+    /// <summary>Cambia el sprite de un tipo por otro de la colección. Devuelve si existe.</summary>
     public static bool Override(Kind kind, string name) => TryLoad() && Load(kind, new[] { name });
 
     private static string Describe(Kind kind) {

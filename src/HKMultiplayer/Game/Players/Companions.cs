@@ -606,7 +606,7 @@ internal sealed class RemoteCompanions {
         }
     }
 
-    /// <summary>Cuántos se ven ahora (modo de prueba).</summary>
+    /// <summary>Cuántos se ven ahora.</summary>
     public int ShownCount {
         get {
             var shown = 0;

@@ -585,10 +585,10 @@ internal sealed class SessionMenu : GameStyledMenu {
         UIManager.instance.StartCoroutine(BackToPauseRoutine());
     }
 
-    /// <summary>Abre la pantalla como el botón de la pausa (modo de prueba).</summary>
+    /// <summary>Abre la pantalla como el botón de la pausa.</summary>
     public void TestOpen() => OpenFromPause();
 
-    /// <summary>Muestra una página (modo de prueba): partida, ajustes, ajustes2, compañeros.</summary>
+    /// <summary>Muestra una página: partida, ajustes, ajustes2, compañeros.</summary>
     public bool TestPage(string name) {
         var page = name switch {
             "partida" => MainPage,

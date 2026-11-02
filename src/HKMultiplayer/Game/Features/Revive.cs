@@ -1998,7 +1998,7 @@ internal sealed class Revive {
         _reservedSoul = 0;
     }
 
-    /// <summary>Modo de prueba: hasta cuándo se simula Focus pulsado.</summary>
+    /// <summary>Hasta cuándo se simula Focus pulsado.</summary>
     private float _testFocusUntil;
 
     private bool IsFocusHeld() {
@@ -2133,7 +2133,7 @@ internal sealed class Revive {
     }
 
     // =====================================================================================================
-    // Modo de prueba
+    // Diagnóstico
     // =====================================================================================================
 
     /// <summary>Simula mantener Focus unos segundos.</summary>

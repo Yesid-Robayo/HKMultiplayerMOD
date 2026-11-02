@@ -76,7 +76,7 @@ internal static class CoopSaves {
             return;
         }
 
-        // En las pruebas con autoskip, sin introducción (se saltaría igual)
+        // Con autoskip, sin introducción (se saltaría igual)
         if (Testing.TestDriver.AutoSkip) {
             _introPending = false;
             orig(self);

@@ -183,7 +183,7 @@ internal static class UpdateCheck {
         }
     }
 
-    /// <summary>Modo de prueba: como si GitHub hubiera dicho que la más nueva es esa.</summary>
+    /// <summary>Como si GitHub hubiera dicho que la más nueva es esa.</summary>
     public static void TestSetLatest(string version) {
         Latest = version;
         LatestUrl = $"{ReleasesPage}/tag/v{version}";

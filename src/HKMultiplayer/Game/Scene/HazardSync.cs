@@ -722,7 +722,7 @@ internal sealed class HazardSync {
         }
     }
 
-    /// <summary>Para el modo de prueba: cuántos se siguen y en qué punto van los que están animándose.</summary>
+    /// <summary>Cuántos se siguen y en qué punto van los que están animándose.</summary>
     public string Describe() {
         var builder = new System.Text.StringBuilder($"peligros animados: {_hazards.Count}, con esperas: {_cyclic.Count}, " +
                                                     $"a la deriva: {_drifters.Count}, gusanos: {_burrowers.Count} " +

@@ -10,10 +10,8 @@ using UnitySceneManager = UnityEngine.SceneManagement.SceneManager;
 namespace HKMultiplayer.Testing;
 
 /// <summary>
-/// Vuelca a texto las FSM de las salas cargadas (orden <c>fsmdumpall</c> del modo de prueba): estados, transiciones,
-/// acciones con sus valores y variables, tal como quedan en el juego después de lo que cambian el propio juego y la
-/// Modding API. Las FSM no están en el código descompilado (van dentro de las escenas): así se pueden revisar y buscar
-/// sin abrir el juego. Solo para pruebas: crea mucha memoria.
+/// Escribe en texto las FSM de las salas cargadas: estados, transiciones, acciones con sus valores y variables, tal
+/// como quedan en el juego después de lo que cambian el propio juego y la Modding API. Crea mucha memoria.
 /// </summary>
 internal static class FsmDumper {
     /// <summary>Elementos de un array que se escriben como mucho.</summary>
@@ -307,7 +305,7 @@ internal static class FsmDumper {
     private static bool _autoHooked;
 
     /// <summary>
-    /// Con carpeta, vuelca cada sala en cuanto se activa (un frame después, con sus salas añadidas ya cargadas) si aún no
+    /// Con carpeta, escribe cada sala en cuanto se activa (un frame después, con sus salas añadidas ya cargadas) si aún no
     /// tiene archivo; con null, deja de hacerlo.
     /// </summary>
     public static void SetAuto(string folder, MonoBehaviour host) {

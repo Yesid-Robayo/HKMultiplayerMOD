@@ -496,7 +496,7 @@ internal sealed class PartnerMap {
 
     private static float ReadFloat(FieldInfo field, GameMap map) => field != null ? (float) field.GetValue(map) : 0f;
 
-    /// <summary>Resumen para el modo de prueba.</summary>
+    /// <summary>Resumen en texto de su estado.</summary>
     public string Describe() {
         var text = new System.Text.StringBuilder();
         text.Append($"enviado={_sentState}:{_sentScene}({_sentX:0.00},{_sentY:0.00}) ");

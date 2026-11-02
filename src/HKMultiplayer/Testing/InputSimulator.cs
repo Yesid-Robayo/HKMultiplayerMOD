@@ -6,7 +6,7 @@ using UnityEngine;
 namespace HKMultiplayer.Testing;
 
 /// <summary>
-/// Solo para el modo de prueba: mantiene pulsado un botón del juego (acción de InControl) durante un tiempo. InControl
+/// Mantiene pulsado un botón del juego (acción de InControl) durante un tiempo. InControl
 /// calcula por sí mismo "recién pulsado", "pulsado" y "soltado", igual que con un mando real.
 /// </summary>
 internal static class InputSimulator {

@@ -587,6 +587,6 @@ internal sealed class SharedProgress {
         }
     }
 
-    /// <summary>Nombre de un campo compartido (pruebas y registro).</summary>
+    /// <summary>Nombre de un campo compartido (diagnóstico y registro).</summary>
     public static int IndexOfBool(string name) => Array.FindIndex(BoolFields, f => f.Name == name);
 }

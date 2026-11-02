@@ -12,9 +12,8 @@ using UnityEngine;
 namespace HKMultiplayer.Testing;
 
 /// <summary>
-/// Modo de prueba (solo con el argumento <c>-mptest</c>): ejecuta las órdenes que se añaden, una por línea, a
-/// &lt;persistentDataPath&gt;/mp-test.txt y escribe los resultados en el ModLog con "[TEST]". Permite probar con
-/// varias instancias del juego sin tocar nada: hostear, unirse, cargar partidas, moverse, medir suavidad y memoria.
+/// Órdenes internas del mod (solo con el argumento <c>-mptest</c>): ejecuta las que se añaden, una por línea, a
+/// &lt;persistentDataPath&gt;/mp-test.txt y escribe los resultados en el ModLog.
 /// </summary>
 internal sealed class TestDriver : MonoBehaviour {
     public const string CommandLineFlag = "-mptest";
@@ -48,8 +47,8 @@ internal sealed class TestDriver : MonoBehaviour {
     public static bool IsEnabled() => Enabled;
 
     /// <summary>
-    /// Saltar solas las cinemáticas (orden autoskip). Lo pone la preparación del grupo de las pruebas: con cuatro copias,
-    /// la introducción de cada invitado nuevo y las del host tardaban mucho en saltarse una a una.
+    /// Saltar solas las cinemáticas (orden autoskip): la introducción de cada invitado nuevo y las del host tardaban mucho
+    /// en saltarse una a una.
     /// </summary>
     public static bool AutoSkip { get; private set; }
 
@@ -72,7 +71,7 @@ internal sealed class TestDriver : MonoBehaviour {
 
         // Cada daño que recibe el caballero y qué lo hizo (para comprobar que los ataques dañan a los dos jugadores)
         On.HeroController.TakeDamage += (orig, self, source, side, amount, hazard) => {
-            // Con "god" el golpe se registra pero no quita vida (combates largos en las pruebas); "die" sí mata
+            // Con "god" el golpe se registra pero no quita vida (combates largos); "die" sí mata
             if (_god && amount < 99) {
                 Log.Info($"{Tag}golpe sin daño ({amount}) de {DescribeSource(source)}");
                 return;
@@ -234,7 +233,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 break;
             case "towall":
                 // towall: busca una pared alta cerca (que siga 4 unidades más abajo), pega el caballero a ella en el aire y
-                // pulsa hacia ella 1,5 s, para probar el deslizamiento por la pared
+                // pulsa hacia ella 1,5 s, para deslizarse por la pared
                 var wallFound = false;
                 for (var up = 3f; up <= 12f && !wallFound; up += 1f) {
                     var wallFrom = (Vector2) hero.transform.position + Vector2.up * up;
@@ -341,7 +340,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 Log.Info($"{Tag}Panteón: {(runner.Pantheons.TestStart(string.Join(" ", args.Skip(1))) ? "empezado" : "no hay esa puerta")}");
                 break;
             case "bossseq":
-                // bossseq si|no: hace como si se estuviera dentro de un Panteón (IsInSequence), para probar lo que no
+                // bossseq si|no: hace como si se estuviera dentro de un Panteón (IsInSequence), para ver lo que no
                 // debe pasar entonces; no carga ningún jefe
                 var seqType = typeof(BossSequenceController);
                 var seqFlags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
@@ -359,7 +358,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 });
                 break;
             case "sdclear":
-                // sdclear <sala> <id>: vuelve a dejar sin activar un objeto de sala (p. ej. revivir un jefe para probarlo)
+                // sdclear <sala> <id>: vuelve a dejar sin activar un objeto de sala (p. ej. revivir un jefe)
                 var cleared = SceneData.instance.FindMyState(new PersistentBoolData {
                     sceneName = args[1], id = string.Join(" ", args.Skip(2))
                 });
@@ -844,7 +843,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 runner.Join(args[1], int.Parse(args[2]), args[3], args[4]);
                 break;
             case "steamsim":
-                // steamsim <n>: esta copia hace de la cuenta de Steam n (Steam simulado; las salas las ven las demás copias)
+                // Usa la plataforma local con la cuenta indicada
                 Steam.SteamLink.UseSimulated(int.Parse(args[1]));
                 break;
             case "steamjoin":
@@ -945,8 +944,8 @@ internal sealed class TestDriver : MonoBehaviour {
 
                 break;
             case "pressat":
-                // pressat <hora en ms desde 1970 (UTC)> <botón> [segundos]: pulsa a esa hora del reloj del PC (dos copias a
-                // la vez, o una justo después de la otra, sin depender de cuándo lee cada una sus órdenes)
+                // pressat <hora en ms desde 1970 (UTC)> <botón> [segundos]: pulsa a esa hora del reloj del PC (dos jugadores a
+                // la vez, o uno justo después del otro, sin depender de cuándo lee cada uno sus órdenes)
                 StartCoroutine(PressAt(long.Parse(args[1]), args[2], args.Length > 3 ? ParseFloat(args[3]) : 0.12f));
                 break;
             case "slashes":
@@ -968,7 +967,7 @@ internal sealed class TestDriver : MonoBehaviour {
                          $"anim={hero.GetComponent<tk2dSpriteAnimator>()?.CurrentClip?.name}");
                 break;
             case "regain":
-                // Devuelve el control al caballero (para desatascar una prueba)
+                // Devuelve el control al caballero
                 hero.RegainControl();
                 hero.AcceptInput();
                 hero.StartAnimationControl();
@@ -1539,7 +1538,7 @@ internal sealed class TestDriver : MonoBehaviour {
                 Log.Info($"{Tag}fsmdumpall {FsmDumper.DumpLoadedScenes(dumpFolder)}");
                 break;
             case "fsmdumpauto":
-                // fsmdumpauto <carpeta>|no: vuelca cada sala al activarse (si no está ya en la carpeta), antes de que su
+                // fsmdumpauto <carpeta>|no: escribe cada sala al activarse (si no está ya en la carpeta), antes de que su
                 // lógica saque al caballero (las salas de sueño lo echan nada más cargar si no se entró soñando)
                 FsmDumper.SetAuto(args.Length > 1 && args[1] != "no" ? string.Join(" ", args.Skip(1)) : null, this);
                 Log.Info($"{Tag}fsmdumpauto {(args.Length > 1 ? args[1] : "no")}");

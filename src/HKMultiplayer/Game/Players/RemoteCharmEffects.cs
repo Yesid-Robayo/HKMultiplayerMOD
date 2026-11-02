@@ -879,7 +879,7 @@ internal sealed class RemoteCharmEffects {
         }
     }
 
-    /// <summary>Copias encendidas ahora, con dónde están y si se dibujan (modo de prueba).</summary>
+    /// <summary>Copias encendidas ahora, con dónde están y si se dibujan.</summary>
     public string Describe() {
         var text = new System.Text.StringBuilder();
         foreach (var beam in _beams) {

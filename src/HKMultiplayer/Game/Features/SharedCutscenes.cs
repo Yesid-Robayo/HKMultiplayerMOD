@@ -870,7 +870,7 @@ internal sealed class SharedCutscenes {
         textObject.GetComponent<Shadow>().effectDistance = new Vector2(2f, -2f);
     }
 
-    /// <summary>Resumen para el modo de prueba.</summary>
+    /// <summary>Resumen en texto de su estado.</summary>
     public string Describe() {
         var text = new StringBuilder();
         text.Append($"cinemática={_current ?? "-"} votó={_voted} votos={_votes}/{_watchers} esperando=[{_waitingFor}] " +

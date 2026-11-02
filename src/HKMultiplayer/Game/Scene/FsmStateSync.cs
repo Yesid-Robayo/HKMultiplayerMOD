@@ -2624,7 +2624,7 @@ internal sealed class FsmStateSync {
     }
 
     // =====================================================================================================
-    // Modo de prueba
+    // Diagnóstico
     // =====================================================================================================
 
     public IEnumerable<string> Describe() {
@@ -2676,7 +2676,7 @@ internal sealed class FsmStateSync {
 
     /// <summary>
     /// Este PC toma el control del objeto y pone su FSM en ese estado, que se copia a los demás como cualquier otro
-    /// (modo de prueba: saltar oleadas del Coliseo hasta su jefe final).
+    /// (para saltar oleadas del Coliseo hasta su jefe final).
     /// </summary>
     public bool TestSetState(string namePrefix, string stateName) {
         var slash = namePrefix.IndexOf('/');

@@ -10,14 +10,12 @@ using UnityEngine;
 namespace HKMultiplayer.Steam;
 
 /// <summary>
-/// Steam simulado para el modo de prueba (orden <c>steamsim</c>): cada copia del juego hace de una cuenta distinta, que
-/// el Steam de verdad no permite en un solo PC (todas las copias son la misma cuenta). Los mensajes van por UDP en
-/// 127.0.0.1 y las salas e invitaciones son archivos en una carpeta temporal compartida por las copias. Así se prueba
-/// con las rutas todo lo que hace el mod con Steam: crear la sala, unirse por ella o por invitación, la conexión por
-/// cuenta y la reconexión; solo la llamada a Steamworks queda para una prueba entre dos cuentas de verdad.
+/// Plataforma local, sin Steam: cada cuenta es un número, los mensajes van por UDP en 127.0.0.1 y las salas e
+/// invitaciones son archivos en una carpeta temporal. Cubre lo mismo que el mod hace con Steam: crear la sala, unirse
+/// por ella o por invitación, la conexión por cuenta y la reconexión.
 /// </summary>
 internal sealed class SimulatedSteamPlatform : ISteamPlatform {
-    /// <summary>Cuentas inventadas: un número cualquiera más el de la copia.</summary>
+    /// <summary>Base de los números de cuenta locales.</summary>
     private const ulong AccountBase = 76561190000000000UL;
 
     private const ulong LobbyBase = 109775240000000000UL;
@@ -51,7 +49,7 @@ internal sealed class SimulatedSteamPlatform : ISteamPlatform {
         }
 
         _socket.Bind(new IPEndPoint(IPAddress.Loopback, PortBase + index));
-        // Una invitación vieja de una prueba anterior no cuenta
+        // Una invitación vieja de una sesión anterior no cuenta
         TryDelete(InviteFile(index));
     }
 
@@ -173,7 +171,7 @@ internal sealed class SimulatedSteamPlatform : ISteamPlatform {
 
     public void OpenInviteDialog() => Log.Info("Steam simulado: se abriría el panel para invitar (prueba: steaminvite <cuenta>)");
 
-    /// <summary>Prueba: la cuenta <paramref name="index"/> recibe una invitación a la sala de esta y la acepta.</summary>
+    /// <summary>La cuenta <paramref name="index"/> recibe una invitación a la sala de esta y la acepta.</summary>
     public void Invite(int index) {
         if (Lobby == 0) {
             Log.Info("Steam simulado: no hay sala a la que invitar");

@@ -184,8 +184,8 @@ internal static class GameFiles {
     }
 
     /// <summary>
-    /// Copias del juego abiertas desde esa carpeta (otras copias en otras carpetas no molestan). Una de la que no se puede
-    /// leer la ruta (abierta como administrador y el instalador no) cuenta: puede ser esta, y si no se decía, el bloqueo
+    /// Procesos del juego abiertos desde esa carpeta (los de otras carpetas no molestan). Uno del que no se puede
+    /// leer la ruta (abierto como administrador y el instalador no) cuenta: puede ser este, y si no se decía, el bloqueo
     /// salía después como un error de archivo.
     /// </summary>
     private static int GameProcesses(string gameDir) {

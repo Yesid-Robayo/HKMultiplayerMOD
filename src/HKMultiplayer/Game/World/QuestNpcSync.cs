@@ -736,8 +736,8 @@ internal sealed class QuestNpcSync {
             orig(self);
         };
 
-        // En el registro: un personaje de misión que su comprobación quita, y por qué dato. En la partida real a uno le
-        // salía Quirrel y al otro no, y el registro no decía nada
+        // En el registro: un personaje de misión que su comprobación quita, y por qué dato. Si a uno le sale Quirrel y
+        // al otro no, ahí se ve el motivo
         On.HutongGames.PlayMaker.Actions.PlayerDataBoolTest.OnEnter += (orig, self) => {
             orig(self);
             if (_active != null) {
@@ -937,7 +937,7 @@ internal sealed class QuestNpcSync {
     }
 
     // =====================================================================================================
-    // Modo de prueba
+    // Diagnóstico
     // =====================================================================================================
 
     public IEnumerable<string> Describe() {

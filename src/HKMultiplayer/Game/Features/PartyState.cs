@@ -378,7 +378,7 @@ internal sealed class PartyState {
         _ => "en pie"
     };
 
-    /// <summary>Resumen para el modo de prueba.</summary>
+    /// <summary>Resumen en texto de su estado.</summary>
     public string DescribeAll() {
         var text = new System.Text.StringBuilder();
         foreach (var member in _list) {

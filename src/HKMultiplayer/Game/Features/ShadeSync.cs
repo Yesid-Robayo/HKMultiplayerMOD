@@ -622,7 +622,7 @@ internal sealed class ShadeSync {
     private static string NameOf(ushort id) => PartyState.Current?.Get(id)?.Name ?? id.ToString();
 
     // =====================================================================================================
-    // Modo de prueba
+    // Diagnóstico
     // =====================================================================================================
 
     /// <summary>Mata la primera copia de sombra ajena de la sala como si la golpeara el jugador.</summary>

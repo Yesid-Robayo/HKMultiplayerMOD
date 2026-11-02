@@ -95,7 +95,7 @@ internal sealed class PlayerSync {
         _hasLastSent = false;
     }
 
-    /// <summary>Busca un jugador remoto por id (para pruebas y para otras capas).</summary>
+    /// <summary>Busca un jugador remoto por id (para el diagnóstico y para otras capas).</summary>
     public bool TryGetAvatarPosition(ushort id, out Vector3 position) {
         if (_remotes.TryGetValue(id, out var remote) && remote.Avatar != null) {
             position = remote.Avatar.Position;
@@ -130,7 +130,7 @@ internal sealed class PlayerSync {
         return false;
     }
 
-    /// <summary>Efectos enviados, recibidos y reproducidos (modo de prueba).</summary>
+    /// <summary>Efectos enviados, recibidos y reproducidos.</summary>
     public string DescribeEffects() => $"efectos enviados={_effects.Sent} recibidos={_effects.Received} reproducidos={_effects.Played} " +
                                        $"descartados={_effects.Discarded} esperando={_effects.Waiting} " +
                                        $"amuletos: {_effects.DescribeCharms()} pasto={_grass.GrassCount} " +
@@ -149,7 +149,7 @@ internal sealed class PlayerSync {
         return 0;
     }
 
-    /// <summary>Retraso y variación del búfer de un jugador, en ticks (para el estado de pruebas).</summary>
+    /// <summary>Retraso y variación del búfer de un jugador, en ticks (para el diagnóstico).</summary>
     public bool TryGetBufferStats(ushort id, out double delay, out double jitter) {
         if (_remotes.TryGetValue(id, out var remote)) {
             delay = remote.Buffer.Delay;
@@ -161,7 +161,7 @@ internal sealed class PlayerSync {
         return false;
     }
 
-    /// <summary>Búfer de un jugador (diagnóstico en el modo de prueba).</summary>
+    /// <summary>Búfer de un jugador (diagnóstico).</summary>
     internal SnapshotBuffer BufferOf(ushort id) => _remotes.TryGetValue(id, out var remote) ? remote.Buffer : null;
 
     /// <summary>Huella de la sala local (0 si no se está jugando).</summary>
@@ -398,7 +398,7 @@ internal sealed class PlayerSync {
 
     /// <summary>
     /// Si este caballero está sentado en un banco: `atBench` y el banco con su control. `atBench` solo no basta: el juego
-    /// no lo quita si se sale de la sala sin levantarse (un viaje del modo de prueba), y el caballero se quedaba clavado.
+    /// no lo quita si se sale de la sala sin levantarse (un viaje directo a otra sala), y el caballero se quedaba clavado.
     /// </summary>
     private bool SittingOnBench() =>
         PlayerData.instance is { atBench: true } && _hero != null && _hero.controlReqlinquished;

@@ -309,7 +309,7 @@ internal sealed class PlayerEffects {
         _onCompanions = OnCompanions;
     }
 
-    /// <summary>Eventos enviados y reproducidos (modo de prueba).</summary>
+    /// <summary>Eventos enviados y reproducidos.</summary>
     public int Sent { get; private set; }
 
     public int Received { get; private set; }
@@ -335,12 +335,12 @@ internal sealed class PlayerEffects {
         }
     }
 
-    /// <summary>Pone a cero los contadores (modo de prueba: contar una acción sola).</summary>
+    /// <summary>Pone a cero los contadores (para contar una acción sola).</summary>
     public void ResetCounters() {
         Sent = Received = Played = Discarded = 0;
     }
 
-    /// <summary>Lo encendido de los amuletos de cada compañero (modo de prueba).</summary>
+    /// <summary>Lo encendido de los amuletos de cada compañero.</summary>
     public string DescribeCharms() {
         var text = string.Empty;
         foreach (var remote in _remotes.Values) {
@@ -741,7 +741,7 @@ internal sealed class PlayerEffects {
         remote.Effects.Companions?.Update(renderTick);
     }
 
-    /// <summary>Detalle de un evento para el registro del modo de prueba (FSM y estado, o qué objeto).</summary>
+    /// <summary>Detalle de un evento para el registro (FSM y estado, o qué objeto).</summary>
     private string DescribeEvent(in EffectEvent effect) {
         if (effect.Kind == EffectKind.FsmState && _templates != null && effect.A < _templates.HeroFsms.Length &&
             _templates.HeroFsms[effect.A] is { } fsm && effect.B < fsm.FsmStates.Length) {

@@ -357,7 +357,7 @@ internal sealed class BossBar {
         return string.IsNullOrEmpty(part) || part.Contains("#!#") ? string.Empty : part;
     }
 
-    /// <summary>Resumen para el modo de prueba.</summary>
+    /// <summary>Resumen en texto de su estado.</summary>
     public string Describe() {
         var text = new StringBuilder();
         foreach (var tracked in _tracked) {

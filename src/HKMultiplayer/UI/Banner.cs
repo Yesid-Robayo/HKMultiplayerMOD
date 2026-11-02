@@ -5,8 +5,8 @@ using UnityEngine.UI;
 namespace HKMultiplayer.UI;
 
 /// <summary>
-/// Cartel grande arriba en el centro de la pantalla, con la letra del juego. Lo usa la demostración del modo de prueba
-/// para explicar cada paso. Se crea una vez y se reutiliza.
+/// Cartel grande arriba en el centro de la pantalla, con la letra del juego. Lo usa la demostración de las
+/// sincronizaciones para explicar cada paso. Se crea una vez y se reutiliza.
 /// </summary>
 internal sealed class Banner : MonoBehaviour {
     private static Banner _instance;

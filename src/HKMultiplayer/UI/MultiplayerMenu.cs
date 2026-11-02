@@ -512,6 +512,6 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         }
     }
 
-    /// <summary>Abre el menú (modo de prueba).</summary>
+    /// <summary>Abre el menú.</summary>
     public void TestOpen() => Open();
 }

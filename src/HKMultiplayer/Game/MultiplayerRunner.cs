@@ -48,7 +48,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     public Scene.HazardSync Hazards { get; } = new();
 
-    // ---- Funciones del coop (M5) ----
+    // ---- Funciones del coop ----
 
     /// <summary>Estado de cada jugador (en pie, caído...): lo decide el host.</summary>
     public Features.PartyState Party { get; } = new();
@@ -490,7 +490,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         return true;
     }
 
-    /// <summary>En el modo de prueba, si se pidió (netsim), la conexión se estropea como una mala conexión.</summary>
+    /// <summary>Si se pidió, la conexión se estropea como una mala conexión.</summary>
     private static ITransport WithTestNetwork(ITransport transport) {
         if (!TestDriver.IsEnabled() || !LaggyTransport.Configured) {
             return transport;

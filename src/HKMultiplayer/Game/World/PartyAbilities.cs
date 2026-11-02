@@ -236,7 +236,7 @@ internal sealed class PartyAbilities {
         }
     }
 
-    /// <summary>Resumen para el modo de prueba.</summary>
+    /// <summary>Resumen en texto de su estado.</summary>
     public string Describe() {
         var text = $"propias={(PlayerData.instance != null ? Mask(PlayerData.instance) : 0):x} ";
         foreach (var pair in _remote) {
