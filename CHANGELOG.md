@@ -9,6 +9,13 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.33.1
+
+- **Dream Warrior Essence for everyone**: when a Dream Warrior's ghost (Xero, Gorb, Marmu...) was absorbed, only the
+  player who started the fight got the Essence. Now every player gets it, also players who are in another room.
+- **Dream Warrior ghosts from any player**: talking to the ghost or hitting it with the Dream Nail from a player who
+  didn't start the encounter froze that player's knight, and the fight didn't start. Now any player can do it.
+
 ## 0.33.0
 
 - **Reviving in the Colosseum**: a player who went down on a platform stayed floating in the air when the platform

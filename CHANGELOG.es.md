@@ -9,6 +9,15 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.33.1
+
+- **Esencia de los guerreros soñadores para todos**: al absorber el fantasma de un guerrero soñador (Xero, Gorb,
+  Marmu...), solo recibía la esencia el jugador que había empezado el combate. Ahora la reciben todos, también quienes
+  están en otra sala.
+- **Los fantasmas de los guerreros, desde cualquier jugador**: escuchar al fantasma o darle con el aguijón onírico desde
+  un jugador que no había empezado el encuentro dejaba su caballero sin poder moverse, y el combate no empezaba. Ahora
+  cualquiera puede hacerlo.
+
 ## 0.33.0
 
 - **Revivir en el Coliseo**: quien caía sobre una plataforma se quedaba flotando en el aire al retraerse la plataforma, y
