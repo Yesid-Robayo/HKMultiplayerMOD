@@ -283,7 +283,17 @@ propio. Objetivos de diseño, por orden:
     PC, lo que le mandan otros objetos de este (el Grimmchild que llega a Grimm con `ABSORB END`) no lo hace avanzar ni
     toma el control: si no, los dos se quitarían el control y Grimm se quedaría en "Call Child". La copia sí pone los
     datos propios de cada jugador (`SetPlayerData*` de un campo de `CharacterData`: `metGrimm`, el amuleto, la
-    invulnerabilidad de la presentación); sumar o restar no.
+    invulnerabilidad de la presentación) y las recompensas que suman a uno (`PlayerDataIntAdd` positivo e
+    `IncrementPlayerDataInt`: la esencia al absorber un guerrero soñador); restar no, ni sumar a un dato del mundo (llega
+    por el progreso compartido). Las partes del propio objeto que solo reaccionan al caballero de su PC (`npc_control`,
+    el cartel de hablar, y `ghost_npc_dreamnail`, el golpe del aguijón onírico al fantasma de un guerrero) sí toman el
+    control: lo usa ese jugador.
+  - Guerreros soñadores (`AbsentEssence`): su esencia la recibe quien está en la sala al absorber el fantasma (lo hace el
+    encuentro en cada PC). Quien está en otra sala la recibe cuando le llega el dato del guerrero a 2 (`xeroDefeated`...,
+    absorbido), ya que el fantasma no vuelve. Los jefes de los sueños no lo necesitan: ganar dentro del sueño no da
+    esencia (su `Dream Orb Get` empieza en `Fade Out`); la da su fantasma en el mundo al escucharlo, y su dato
+    (`falseKnightOrbsCollected`...) es de cada personaje. Las raíces susurrantes son de cada jugador (`Dream Plant`): cada
+    uno enciende la suya y recoge sus orbes.
   - Grimm: su primer encuentro, el combate y el Grimm vencido (con quien habla cada uno) van en los dos. Las cadenas
     del Hollow Knight copian sus golpes como una palanca (cada una aguanta unos golpes y, rotas todas, empieza el
     combate). La presentación de la Radiancia (`Boss Control`/`Control`) es un controlador compartido.

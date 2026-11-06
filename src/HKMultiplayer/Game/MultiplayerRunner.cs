@@ -186,7 +186,10 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             _lastLoadedScene = scene;
         };
         CoopSaves.Install();
-        Progress.RemoteFieldChanged = QuestNpcs.OnRemoteChange;
+        Progress.RemoteFieldChanged = (field, before, isBool, origin) => {
+            QuestNpcs.OnRemoteChange(field, before, isBool, origin);
+            HKMultiplayer.Game.World.AbsentEssence.OnRemoteChange(field, before, isBool, origin);
+        };
         // Ganchos de las funciones del coop ya al cargar el mod (después, el juego ya podría haber compilado lo que los
         // llama con el método enganchado copiado dentro)
         Features.Revive.InstallHooks();

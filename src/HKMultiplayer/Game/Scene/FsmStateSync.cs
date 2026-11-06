@@ -187,6 +187,12 @@ internal sealed class FsmStateSync {
     /// </summary>
     private static readonly string[] ZoneOnlyEncounters = { "Final Boss Door", "Boss Corpse" };
 
+    /// <summary>
+    /// FSM de las partes de un encuentro que solo reaccionan al caballero de su PC: el cartel de hablar y el golpe del
+    /// aguijón onírico del fantasma de un guerrero soñador. Su aviso al encuentro es usarlo (ver <c>OnEvent</c>).
+    /// </summary>
+    private static readonly HashSet<string> LocalUseFsms = new() { "npc_control", "ghost_npc_dreamnail" };
+
     private static bool IsZoneOnly(Fsm fsm) {
         var name = fsm.GameObject != null ? fsm.GameObject.name : null;
         return name != null && Array.Exists(ZoneOnlyEncounters, prefix => name.StartsWith(prefix, StringComparison.Ordinal));
@@ -1572,8 +1578,12 @@ internal sealed class FsmStateSync {
     /// En un encuentro con diálogo, lo que pone un dato propio de cada jugador (no llega por el progreso compartido) se
     /// hace también en la copia: "metGrimm" al conocer a Grimm, el amuleto que da, o la invulnerabilidad y la pausa
     /// desactivada durante la presentación. Si no, quien lo veía desde la copia seguía sin haberlo conocido y la
-    /// siguiente vez su Grimm empezaba por el primer encuentro mientras el del otro empezaba el combate. Solo los que
-    /// ponen un valor: sumar o restar se haría dos veces si el dato también fuera compartido.
+    /// siguiente vez su Grimm empezaba por el primer encuentro mientras el del otro empezaba el combate.
+    /// <para>También las recompensas que suman a un dato propio: la esencia (<c>dreamOrbs</c>) de un guerrero soñador
+    /// vencido (estado "Get" de su "Conversation Control"). Antes solo la recibía el PC que llevaba el encuentro y los
+    /// demás, que lo habían vencido con él, se quedaban sin ella. Restar no: no hay encuentros que cobren y, si lo
+    /// hubiera, pagaría quien lo usa. Un dato del mundo nunca se suma aquí: llega por el progreso compartido y se
+    /// sumaría dos veces.</para>
     /// </summary>
     private static bool SetsOwnField(bool forLocalHero, FsmStateAction action) {
         if (!forLocalHero) {
@@ -1585,6 +1595,8 @@ internal sealed class FsmStateSync {
             HutongGames.PlayMaker.Actions.SetPlayerDataInt set => set.intName?.Value,
             HutongGames.PlayMaker.Actions.SetPlayerDataFloat set => set.floatName?.Value,
             HutongGames.PlayMaker.Actions.SetPlayerDataString set => set.stringName?.Value,
+            HutongGames.PlayMaker.Actions.PlayerDataIntAdd add when add.amount != null && add.amount.Value > 0 => add.intName?.Value,
+            HutongGames.PlayMaker.Actions.IncrementPlayerDataInt increment => increment.intName?.Value,
             _ => null
         };
         return !string.IsNullOrEmpty(field) && World.CharacterData.IsCharacterField(field);
@@ -1708,6 +1720,19 @@ internal sealed class FsmStateSync {
             if (sender?.GameObject != null && localHero != null && sender.GameObject.transform.IsChildOf(localHero.transform) &&
                 Handles(fsm, fsmEvent.Name) && !IsController(item)) {
                 TakeControl(item, $"{fsmEvent.Name}: lo usa su caballero");
+                return true;
+            }
+
+            // Las partes del propio objeto que solo reaccionan al caballero de este PC: el cartel de hablar (npc_control,
+            // al pulsar arriba a su lado) y el golpe del aguijón onírico (ghost_npc_dreamnail, que solo lo dispara el
+            // aguijón onírico local). Lo usa este jugador, así que lo lleva este PC. Antes, en el PC que no llevaba el
+            // encuentro de un guerrero soñador, el aviso se perdía: al escuchar al fantasma el caballero se quedaba sin
+            // control (npc_control se lo quita hasta que acabe la charla), y con el aguijón onírico no empezaba el
+            // combate ni se absorbía al fantasma vencido
+            if (sender?.GameObject != null && LocalUseFsms.Contains(sender.Name) &&
+                sender.GameObject.transform.IsChildOf(fsm.GameObject.transform) && Handles(fsm, fsmEvent.Name) &&
+                !IsController(item)) {
+                TakeControl(item, $"{fsmEvent.Name}: lo usa su caballero ({sender.GameObjectName}/{sender.Name})");
                 return true;
             }
 
