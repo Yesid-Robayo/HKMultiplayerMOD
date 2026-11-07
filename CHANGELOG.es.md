@@ -9,6 +9,21 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.34.0
+
+- **Los revividos ya no se quedan atascados en el suelo**: un jugador revivido en un combate de jefe podía quedar metido
+  en el suelo. Ahora el cuerpo y el revivido quedan siempre encima del suelo.
+- **Sonido al ser revivido**: suena el sonido de curarse con Focus, con un destello blanco y vibración del mando.
+- **Sin daño cuando un compañero mata tu sombra**: si tu sombra estaba en otra sala, al recuperarla te podía golpear.
+- **La aguja de Hornet vuelve**: la aguja podía desaparecer en el aire en vez de volver a ella.
+- **Los jefes no se quedan quietos contra una pared**: un jefe podía seguir atacando a un jugador que se quedó fuera de
+  su arena y quedarse atascado contra la pared. Ahora pelea con los que están dentro.
+- **La cámara fuera de la arena de un jefe**: quien se quedaba fuera al cerrarse la arena tenía la cámara fija en ella y
+  no se veía. Ahora se sigue viendo y puede cruzar la reja para ayudar.
+- **Mando en el menú multijugador**: todas las páginas se usan con el mando, y B o A sacan de un campo de texto. Nuevo
+  botón «Pegar dirección y código» para unirse por IP sin teclado y, con Steam, aceptar sobre un campo abre el teclado en
+  pantalla de Steam.
+
 ## 0.33.1
 
 - **Esencia de los guerreros soñadores para todos**: al absorber el fantasma de un guerrero soñador (Xero, Gorb,

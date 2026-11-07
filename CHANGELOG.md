@@ -9,6 +9,21 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.34.0
+
+- **Revived players no longer get stuck in the ground**: a player revived during a boss fight could end up inside the
+  floor. Now the body and the revived player always stay on top of the floor.
+- **Sound when you are revived**: you hear the Focus healing sound, with a white flash and controller vibration.
+- **No damage when a teammate defeats your Shade**: if your Shade was in another room, getting it back could hit you.
+- **Hornet's needle comes back**: the needle could vanish in mid-air instead of returning to her.
+- **Bosses don't freeze against a wall**: a boss could keep attacking a player who stayed outside its arena and get
+  stuck against the wall. Now it fights the players who are inside.
+- **Camera outside a boss arena**: a player who stayed outside when the arena closed got the camera stuck on the arena
+  and couldn't see themselves. Now they keep seeing themselves and can walk through the gate to help.
+- **Controller in the multiplayer menu**: every page can be used with a controller, and B or A leaves a text field. New
+  "Paste address and code" button to join by IP without a keyboard, and with Steam, pressing A on a field opens Steam's
+  on-screen keyboard.
+
 ## 0.33.1
 
 - **Dream Warrior Essence for everyone**: when a Dream Warrior's ghost (Xero, Gorb, Marmu...) was absorbed, only the
