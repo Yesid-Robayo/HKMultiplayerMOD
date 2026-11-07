@@ -65,6 +65,7 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         GetComponent<MenuButtonList>()?.ClearSelectables();
 
         var back = Screen.controls.GetComponentInChildren<MenuButton>(true);
+        BackButton = back;
         MakeCustom(back, Lang.T("Volver", "Back"), OnBack);
         back.cancelAction = CancelAction.CustomCancelAction;
         back.customCancelAction = _ => OnBack();
@@ -111,6 +112,97 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         SelectFirst();
     }
 
+    /// <summary>El botón "Volver" de abajo, el mismo en todas las páginas.</summary>
+    protected MenuButton BackButton { get; private set; }
+
+    private float _nextNavigationCheck;
+
+    private void LateUpdate() {
+        if (Time.unscaledTime < _nextNavigationCheck || Screen == null || !Screen.gameObject.activeInHierarchy) {
+            return;
+        }
+
+        _nextNavigationCheck = Time.unscaledTime + 0.5f;
+        UpdateNavigation();
+    }
+
+    /// <summary>
+    /// Navegación con el mando (y las flechas) entre las piezas de la página, hecha con su posición: filas de arriba abajo,
+    /// izquierda y derecha dentro de la fila, y arriba y abajo a la pieza de la fila vecina más cercana en horizontal; de
+    /// la última, a "Volver". Antes no se podía usar con el mando (issue #7): el `Awake` de los botones del juego
+    /// (`MenuSelectable`) les pone navegación explícita sin destinos al encenderse la página, y la automática de Unity se
+    /// saltaba los campos de texto (desplazados a la derecha) y la fila de botones del panel de partida (un botón de todo
+    /// el ancho debajo le ganaba). Se rehace cada medio segundo porque las páginas cambian (amigos, mundos, compañeros).
+    /// Solo las piezas que se pueden usar: una opción de solo lectura resaltada no deja ni subir ni bajar.
+    /// </summary>
+    private void UpdateNavigation() {
+        if (!_pages.TryGetValue(CurrentPage, out var pageObject) || pageObject == null || !pageObject.activeInHierarchy) {
+            return;
+        }
+
+        var items = pageObject.GetComponentsInChildren<Selectable>(false)
+            .Where(item => item.IsInteractable() && item.transform is RectTransform)
+            .Select(item => (Item: item, Center: CenterOf(item), Height: HeightOf(item)))
+            .OrderByDescending(entry => entry.Center.y)
+            .ToList();
+        var rows = new List<List<(Selectable Item, Vector3 Center, float Height)>>();
+        foreach (var entry in items) {
+            var row = rows.Count > 0 ? rows[rows.Count - 1] : null;
+            if (row != null && Mathf.Abs(row[0].Center.y - entry.Center.y) < Mathf.Max(row[0].Height, entry.Height) * 0.5f) {
+                row.Add(entry);
+            } else {
+                rows.Add(new List<(Selectable, Vector3, float)> { entry });
+            }
+        }
+
+        foreach (var row in rows) {
+            row.Sort((a, b) => a.Center.x.CompareTo(b.Center.x));
+        }
+
+        var back = BackButton != null && BackButton.gameObject.activeInHierarchy && BackButton.IsInteractable() ? BackButton : null;
+        for (var r = 0; r < rows.Count; r++) {
+            var row = rows[r];
+            for (var i = 0; i < row.Count; i++) {
+                var x = row[i].Center.x;
+                row[i].Item.navigation = new Navigation {
+                    mode = Navigation.Mode.Explicit,
+                    selectOnLeft = i > 0 ? row[i - 1].Item : null,
+                    selectOnRight = i < row.Count - 1 ? row[i + 1].Item : null,
+                    selectOnUp = r > 0 ? Nearest(rows[r - 1], x) : null,
+                    selectOnDown = r < rows.Count - 1 ? Nearest(rows[r + 1], x) : back
+                };
+            }
+        }
+
+        if (back != null) {
+            back.navigation = new Navigation {
+                mode = Navigation.Mode.Explicit,
+                selectOnUp = rows.Count > 0 ? Nearest(rows[rows.Count - 1], CenterOf(back).x) : null
+            };
+        }
+    }
+
+    private static Selectable Nearest(List<(Selectable Item, Vector3 Center, float Height)> row, float x) {
+        var best = row[0];
+        foreach (var entry in row) {
+            if (Mathf.Abs(entry.Center.x - x) < Mathf.Abs(best.Center.x - x)) {
+                best = entry;
+            }
+        }
+
+        return best.Item;
+    }
+
+    private static Vector3 CenterOf(Selectable item) {
+        var rect = (RectTransform) item.transform;
+        return rect.TransformPoint(rect.rect.center);
+    }
+
+    private static float HeightOf(Selectable item) {
+        var rect = (RectTransform) item.transform;
+        return Mathf.Abs(rect.rect.height * rect.lossyScale.y);
+    }
+
     private void SwitchTo(int page) {
         CurrentPage = page;
         foreach (var pair in _pages) {
@@ -118,6 +210,10 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         }
 
         Screen.defaultHighlight = FirstSelectable(page);
+        if (Screen.gameObject.activeInHierarchy) {
+            UpdateNavigation();
+        }
+
         SelectFirst();
     }
 
@@ -306,14 +402,129 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         input.colors = colors;
         // Cancelar (B o Esc) sobre el campo vuelve atrás, como en los botones (InputField no lo atiende)
         fieldObject.AddComponent<CancelToBack>().Back = OnBack;
+        fieldObject.AddComponent<GamepadEntry>().Label = label;
         return input;
+    }
+
+    /// <summary>
+    /// Aceptar con el mando sobre un campo abre el teclado en pantalla de Steam: sin él, la dirección y el código para
+    /// unirse por IP solo se podían escribir con el teclado (issue #7). Sin Steam, el campo se activa como siempre.
+    /// </summary>
+    private sealed class GamepadEntry : MonoBehaviour, ISubmitHandler {
+        public string Label;
+        private bool _closeField;
+
+        public void OnSubmit(BaseEventData eventData) {
+            var handler = InputHandler.Instance;
+            if (handler == null || handler.lastActiveController != InControl.BindingSourceType.DeviceBindingSource) {
+                return;
+            }
+
+            // El mismo A con el que se acaba de dejar de escribir no abre el teclado
+            if (GetComponent<CancelToBack>() is { Closing: true }) {
+                return;
+            }
+
+            var input = GetComponent<InputField>();
+            if (input == null || !Steam.SteamKeyboard.TryOpen(Label, input.characterLimit, input.text, text => Fill(input, text))) {
+                return;
+            }
+
+            // El campo también se activa con este mismo aceptar: se cierra al acabar el frame para que no quede escribiendo
+            _closeField = true;
+        }
+
+        private void LateUpdate() {
+            if (!_closeField) {
+                return;
+            }
+
+            _closeField = false;
+            var input = GetComponent<InputField>();
+            if (input != null && input.isFocused) {
+                input.DeactivateInputField();
+            }
+        }
+
+        /// <summary>Lo escrito en el teclado de Steam, con los mismos filtros que al escribir en el campo.</summary>
+        private static void Fill(InputField input, string text) {
+            if (input == null) {
+                return;
+            }
+
+            var filtered = new System.Text.StringBuilder();
+            foreach (var c in text.Trim()) {
+                var accepted = input.onValidateInput != null ? input.onValidateInput(filtered.ToString(), filtered.Length, c) : c;
+                if (accepted != '\0') {
+                    filtered.Append(accepted);
+                }
+
+                if (input.characterLimit > 0 && filtered.Length >= input.characterLimit) {
+                    break;
+                }
+            }
+
+            input.text = filtered.ToString();
+            input.onEndEdit?.Invoke(input.text);
+        }
     }
 
     /// <summary>Lleva Cancelar de un campo de texto a la vuelta atrás del menú.</summary>
     private sealed class CancelToBack : MonoBehaviour, ICancelHandler {
         public Action Back;
 
+        /// <summary>
+        /// Se acaba de dejar de escribir con el mando y aún no se soltó el botón: ese mismo botón no hace nada más (ver
+        /// <see cref="LateUpdate"/>).
+        /// </summary>
+        public bool Closing { get; private set; }
+
+        private int _closedFrame;
+
+        /// <summary>
+        /// Con el campo escribiendo, el juego no le pasa los botones del mando: el campo se queda con el evento de cada
+        /// frame y el módulo de entrada (`HollowKnightInputModule.Process`) ya no manda ni mover ni cancelar, así que con
+        /// B no se dejaba de escribir y no se podía ir a otra opción (issue #7). Aquí se miran directamente B y A: dejan de
+        /// escribir y el campo queda resaltado para moverse con el mando. Solo los del mando: en el teclado esas acciones
+        /// pueden ser letras. El mando se lee después de que el menú procese el frame, así que el mismo botón le llegaba
+        /// al frame siguiente: B como "volver" (salía de la página) y A como "aceptar" (volvía a abrir el campo). Hasta que
+        /// se suelta, ese botón no hace nada más.
+        /// </summary>
+        private void LateUpdate() {
+            var input = GetComponent<InputField>();
+            var actions = InputHandler.Instance != null ? InputHandler.Instance.inputActions : null;
+            if (input == null || actions == null) {
+                return;
+            }
+
+            if (Closing) {
+                if (input.isFocused) {
+                    input.DeactivateInputField();
+                }
+
+                // Al menos unos frames: el "aceptar" que llega tarde abre el campo un frame después
+                if (!actions.menuCancel.IsPressed && !actions.menuSubmit.IsPressed && Time.frameCount - _closedFrame > 3) {
+                    Closing = false;
+                }
+
+                return;
+            }
+
+            if (input.isFocused && (FromGamepad(actions.menuCancel) || FromGamepad(actions.menuSubmit))) {
+                input.DeactivateInputField();
+                Closing = true;
+                _closedFrame = Time.frameCount;
+            }
+        }
+
+        private static bool FromGamepad(InControl.PlayerAction action) =>
+            action != null && action.WasPressed && action.LastInputType == InControl.BindingSourceType.DeviceBindingSource;
+
         public void OnCancel(BaseEventData eventData) {
+            if (Closing) {
+                return;
+            }
+
             var input = GetComponent<InputField>();
             if (input != null && input.isFocused) {
                 input.DeactivateInputField();

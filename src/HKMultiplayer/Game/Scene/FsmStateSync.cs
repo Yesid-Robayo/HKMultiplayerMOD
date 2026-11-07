@@ -253,6 +253,9 @@ internal sealed class FsmStateSync {
         public int InsideSign;
         public bool Passing;
 
+        /// <summary>Cuándo volver a buscar el centro de la arena de la reja (ver <see cref="ArenaCenter"/>).</summary>
+        public float ArenaRetryAt;
+
         // Se vio abierta (ya iniciada): solo entonces su cierre es de una batalla. Las que empiezan cerradas lo siguen
         public bool GateWasOpen;
 
@@ -2268,7 +2271,7 @@ internal sealed class FsmStateSync {
 
         // Una reja cerrada desde que se cargó la sala (p. ej. la derecha de Mamá Gruz) no es de una batalla: sólida
         var hero = HeroController.instance;
-        if (!item.GateWasOpen || IsController(item) || hero == null) {
+        if (!item.GateWasOpen || hero == null) {
             RestoreGate(item);
             return;
         }
@@ -2279,7 +2282,25 @@ internal sealed class FsmStateSync {
         var height = Mathf.Abs(gate.size.y * scale.y);
         var vertical = height >= width;
         var center = gate.transform.TransformPoint(gate.offset);
-        if (item.InsideSign == 0) {
+        if (IsController(item)) {
+            // La lleva este PC, pero puede que su caballero se quedara fuera: el jefe despierta con todos a 25 de él, y
+            // eso incluye al que espera al otro lado de la reja. Antes la reja le quedaba sólida y no podía entrar a
+            // ayudar (issue #7). El lado de dentro aquí no es el de su caballero, sino el del centro de la arena
+            if (item.InsideSign == 0) {
+                if (Time.unscaledTime < item.ArenaRetryAt) {
+                    return;
+                }
+
+                item.ArenaRetryAt = Time.unscaledTime + 1f;
+                if (ArenaCenter(item, center) is not { } arena || (item.InsideSign = Side(arena, center, vertical)) == 0) {
+                    RestoreGate(item);
+                    return;
+                }
+
+                Log.Info($"Reja {item.Fsm.gameObject.name} cerrada en este PC: la arena queda hacia " +
+                         $"{(vertical ? item.InsideSign > 0 ? "la derecha" : "la izquierda" : item.InsideSign > 0 ? "arriba" : "abajo")}");
+            }
+        } else if (item.InsideSign == 0) {
             // Quien la cerró: su controlador o, si aún no se sabe, el dueño de la sala
             var closerId = item.Controller != 0 ? item.Controller : _session.OwnerOf(_scene);
             if (!_players.TryGetAvatarPosition(closerId, out var closer)) {
@@ -2303,6 +2324,48 @@ internal sealed class FsmStateSync {
             item.Passing = true;
             gate.enabled = false;
         }
+    }
+
+    /// <summary>
+    /// Dónde queda la arena de una reja: entre las rejas cerradas de la sala si hay varias separadas (izquierda y
+    /// derecha), o si no donde está el jefe más cercano a ella. Null si no se sabe.
+    /// </summary>
+    private Vector3? ArenaCenter(Tracked item, Vector3 gateCenter) {
+        var sum = Vector3.zero;
+        var count = 0;
+        var spread = 0f;
+        foreach (var other in _tracked) {
+            // Solo las de esta batalla: las cerradas desde que se cargó la sala están en otra parte
+            if (other.Gate == null || other.Fsm == null || !other.GateWasOpen ||
+                other.Fsm.ActiveStateName.IndexOf("Close", StringComparison.Ordinal) < 0) {
+                continue;
+            }
+
+            var otherCenter = other.Gate.transform.TransformPoint(other.Gate.offset);
+            spread = Mathf.Max(spread, Vector2.Distance(otherCenter, gateCenter));
+            sum += otherCenter;
+            count++;
+        }
+
+        if (count >= 2 && spread > 4f) {
+            return sum / count;
+        }
+
+        Vector3? boss = null;
+        var best = 40f;
+        foreach (var health in UnityEngine.Object.FindObjectsByType<HealthManager>(FindObjectsSortMode.None)) {
+            if (health == null || health.isDead || health.hp < 150 || !health.gameObject.activeInHierarchy) {
+                continue;
+            }
+
+            var distance = Vector2.Distance(health.transform.position, gateCenter);
+            if (distance < best) {
+                best = distance;
+                boss = health.transform.position;
+            }
+        }
+
+        return boss;
     }
 
     private static void RestoreGate(Tracked item) {

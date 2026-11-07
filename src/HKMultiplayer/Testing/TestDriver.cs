@@ -192,6 +192,22 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "uimove":
+                // uimove <up|down|left|right>: mueve lo resaltado como el mando (evento de mover de la interfaz)
+                var moveTarget = UnityEngine.EventSystems.EventSystem.current?.currentSelectedGameObject;
+                if (moveTarget != null) {
+                    var axis = new UnityEngine.EventSystems.AxisEventData(UnityEngine.EventSystems.EventSystem.current) {
+                        moveDir = args[1] switch {
+                            "up" => UnityEngine.EventSystems.MoveDirection.Up,
+                            "down" => UnityEngine.EventSystems.MoveDirection.Down,
+                            "left" => UnityEngine.EventSystems.MoveDirection.Left,
+                            _ => UnityEngine.EventSystems.MoveDirection.Right
+                        }
+                    };
+                    UnityEngine.EventSystems.ExecuteEvents.Execute(moveTarget, axis, UnityEngine.EventSystems.ExecuteEvents.moveHandler);
+                }
+
+                break;
             case "uicancel":
                 // uicancel: Atrás/Cancelar sobre lo resaltado, como el botón del mando
                 var cancelTarget = UnityEngine.EventSystems.EventSystem.current?.currentSelectedGameObject;
@@ -207,7 +223,9 @@ internal sealed class TestDriver : MonoBehaviour {
                 var selectedObject = UnityEngine.EventSystems.EventSystem.current?.currentSelectedGameObject;
                 var selectable = selectedObject != null ? selectedObject.GetComponent<UnityEngine.UI.Selectable>() : null;
                 Log.Info($"{Tag}resaltado {(selectedObject != null ? PathOf(selectedObject.transform) : "nada")} " +
-                         $"tipo={selectable?.GetType().Name ?? "-"} usable={selectable != null && selectable.IsInteractable()}");
+                         $"tipo={selectable?.GetType().Name ?? "-"} usable={selectable != null && selectable.IsInteractable()} " +
+                         $"arriba={selectable?.FindSelectableOnUp()?.name ?? "-"} abajo={selectable?.FindSelectableOnDown()?.name ?? "-"} " +
+                         $"navegación={selectable?.navigation.mode.ToString() ?? "-"} seleccionables={UnityEngine.UI.Selectable.allSelectableCount}");
                 break;
             case "fsmstates":
                 // fsmstates <texto>: cada objeto de la sala cuyo nombre lo contiene, con su ruta y el estado de cada FSM (sin

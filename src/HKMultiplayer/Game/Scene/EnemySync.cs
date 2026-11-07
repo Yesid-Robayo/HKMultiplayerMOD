@@ -214,6 +214,9 @@ internal sealed class EnemySync {
     /// <summary>Vida a partir de la cual un enemigo se trata como jefe.</summary>
     private const int BossHp = 150;
 
+    /// <summary>Tiempo que el caballero de quien mueve un jefe puede estar tapado por el terreno antes de pasarlo a otro.</summary>
+    private const float HiddenSwitchSeconds = 2f;
+
     /// <summary>Distancia al jefe a la que tienen que estar todos para que despierte.</summary>
     private const float WakeRange = 25f;
 
@@ -341,6 +344,15 @@ internal sealed class EnemySync {
 
         /// <summary>Cuándo salió por última vez de un estado de reposo en este PC (moviéndolo este PC).</summary>
         public float CalmLeftAt = -1f;
+
+        /// <summary>Estado de su lógica principal que se vigila, desde cuándo y dónde estaba al entrar.</summary>
+        public HutongGames.PlayMaker.FsmState WatchState;
+
+        public float WatchSince;
+        public Vector2 WatchPosition;
+
+        /// <summary>Desde cuándo el caballero de quien lo mueve está tapado por el terreno (0: a la vista).</summary>
+        public float HiddenSince;
 
         /// <summary>Si estaba en reposo según lo último que envió el PC que lo mueve.</summary>
         public bool RemoteCalm;
@@ -1154,6 +1166,16 @@ internal sealed class EnemySync {
 
         var others = OthersInScene();
         var snapshot = _sendSnapshot && roomOwner;
+
+        // Jefes atascados que mueve este PC, también a solas en la sala (ver UnstickBoss)
+        if (Time.unscaledTime >= _nextUnstickCheck) {
+            _nextUnstickCheck = Time.unscaledTime + 0.5f;
+            foreach (var enemy in _enemies) {
+                if (enemy.Root != null && !enemy.ReportedDead && !enemy.Puppet) {
+                    UnstickBoss(enemy);
+                }
+            }
+        }
 
         // Vida y muertes (fiable). Las muertes se apuntan en el host aunque no haya nadie más en la sala
         _healthOut.Clear();
@@ -2996,8 +3018,23 @@ internal sealed class EnemySync {
         var currentDown = Features.PartyState.IsInactive(current);
         var position = enemy.Transform.position;
         var moving = MovingFast(enemy, position, now);
-        var interval = enemy.Health.hp >= BossHp ? BossSwitchInterval : SwitchInterval;
-        if (now - enemy.LastSwitch < interval && !currentDown || moving && !currentDown) {
+        var boss = enemy.Health.hp >= BossHp;
+        var currentPosition = Vector3.zero;
+        var hasCurrent = !currentDown && TryGetPlayerPosition(current, out currentPosition);
+
+        // Un jefe ataca al caballero de quien lo mueve. Si ese caballero está al otro lado de una pared o de una reja (se
+        // quedó fuera de la arena), lo ataca a través de ella: Hornet embestía contra la pared y se quedaba quieta allí.
+        // Si lleva un rato tapado y otro jugador está a la vista, pasa a ese (issue #7)
+        var currentHidden = boss && hasCurrent && HiddenFrom(position, currentPosition);
+        if (!currentHidden) {
+            enemy.HiddenSince = 0f;
+        } else if (enemy.HiddenSince <= 0f) {
+            enemy.HiddenSince = now;
+        }
+
+        var currentOutside = currentHidden && now - enemy.HiddenSince >= HiddenSwitchSeconds;
+        var interval = boss ? BossSwitchInterval : SwitchInterval;
+        if ((now - enemy.LastSwitch < interval || moving) && !currentDown && !currentOutside) {
             return 0;
         }
 
@@ -3007,9 +3044,15 @@ internal sealed class EnemySync {
         var zone = AlertZone(enemy);
         var currentInZone = false;
         var currentDistance = float.MaxValue;
-        if (!currentDown && TryGetPlayerPosition(current, out var currentPosition)) {
+        if (hasCurrent) {
             currentDistance = Vector2.Distance(position, currentPosition);
             currentInZone = InZone(zone, currentPosition);
+        }
+
+        // Tapado del todo, quien lo mueve no cuenta frente a uno a la vista
+        if (currentOutside) {
+            currentDistance = float.MaxValue;
+            currentInZone = false;
         }
 
         var nearest = current;
@@ -3019,6 +3062,11 @@ internal sealed class EnemySync {
             if (player.Scene != _scene || player.Id == current || Features.PartyState.IsInactive(player.Id) ||
                 holders != null && !holders.Contains(player.Id) ||
                 !TryGetPlayerPosition(player.Id, out var playerPosition)) {
+                continue;
+            }
+
+            // Uno al que el jefe no ve (otro lado de la pared) no se lo quita a quien sí ve, ni lo recibe de uno tapado
+            if (boss && (hasCurrent && !currentHidden || currentOutside) && HiddenFrom(position, playerPosition)) {
                 continue;
             }
 
@@ -3035,8 +3083,12 @@ internal sealed class EnemySync {
         // de su caballero y quedaba más cerca del otro, pasaba a él, volaba hacia ese y volvía a quedar más cerca del
         // primero; cada cambio lo hacía esperar otra vez para atacar y se quedaba en el aire
         var margin = zone != null && currentInZone && nearestInZone ? ZoneSwitchMargin : SwitchMargin;
-        if (nearest != current && (currentDown || nearestInZone && !currentInZone ||
+        if (nearest != current && (currentDown || currentOutside || nearestInZone && !currentInZone ||
                                    currentDistance - nearestDistance > margin)) {
+            if (currentOutside) {
+                Log.Info($"{enemy.Root.name}: quien lo mueve lleva {HiddenSwitchSeconds:0} s tapado por el terreno, pasa a {nearest}");
+            }
+
             // Un jefe espera a acabar su ataque (salvo si quien lo mueve ya no juega)
             if (!currentDown && enemy.Health.hp >= BossHp && !IsCalm(enemy, current)) {
                 if (enemy.SwitchWantedSince <= 0f) {
@@ -3150,6 +3202,92 @@ internal sealed class EnemySync {
     /// <summary>Si el enemigo está entre dos ataques en el PC que lo mueve (este u otro: lo que envió).</summary>
     private bool IsCalm(Enemy enemy, ushort controller) =>
         controller == _session.LocalId ? IsCalmHere(enemy) : enemy.RemoteCalm;
+
+    /// <summary>Tiempo quieto en un estado que espera llegar a un sitio para darlo por atascado.</summary>
+    private const float StuckSeconds = 5f;
+
+    private float _nextUnstickCheck;
+
+    private static readonly Dictionary<HutongGames.PlayMaker.FsmState, bool> PositionWaitCache = new();
+
+    /// <summary>
+    /// Un jefe que mueve este PC atascado: su lógica principal lleva <see cref="StuckSeconds"/> en un estado que solo sale
+    /// al llegar a un sitio (compara su posición en cada frame y no espera tiempo ni animación) y no se ha movido. Así no
+    /// sale nunca: la embestida aérea de Hornet (`A Dash`) no da velocidad, solo sale al pasar unas líneas de la arena, y
+    /// lanzada contra un caballero al otro lado de la pared se quedaba quieta contra ella para siempre. Sale por una de las
+    /// salidas del estado (la de aterrizar si la hay), como si hubiera llegado: saltar a un estado de reposo la dejaba sin
+    /// la gravedad que quita la embestida, y salía volando.
+    /// </summary>
+    private void UnstickBoss(Enemy enemy) {
+        if (!enemy.Awake || enemy.Health == null || enemy.Health.hp < BossHp || enemy.Health.isDead || enemy.Fsms == null) {
+            return;
+        }
+
+        var index = CalmFsmOf(enemy);
+        var fsm = index >= 0 && index < enemy.Fsms.Length ? enemy.Fsms[index] : null;
+        var state = fsm != null && fsm.enabled ? fsm.Fsm.ActiveState : null;
+        var now = Time.unscaledTime;
+        var position = (Vector2) enemy.Transform.position;
+        if (state == null || state != enemy.WatchState || Vector2.Distance(position, enemy.WatchPosition) > 0.2f) {
+            enemy.WatchState = state;
+            enemy.WatchSince = now;
+            enemy.WatchPosition = position;
+            return;
+        }
+
+        if (now - enemy.WatchSince < StuckSeconds || !WaitsForPosition(state)) {
+            return;
+        }
+
+        // Sale por su propio camino, mejor por el de aterrizar: es el que le devuelve la gravedad que el ataque quitó
+        var exit = Array.Find(state.Transitions, transition => transition.ToState != null &&
+                                                               transition.ToState.IndexOf("land", StringComparison.OrdinalIgnoreCase) >= 0) ??
+                   (state.Transitions.Length > 0 ? state.Transitions[0] : null);
+        enemy.WatchState = null;
+        if (exit == null || string.IsNullOrEmpty(exit.EventName)) {
+            return;
+        }
+
+        Log.Warn($"{enemy.Root.name}/{fsm.FsmName}: atascado {StuckSeconds:0} s en {state.Name} sin moverse en " +
+                 $"({position.x:0.0}, {position.y:0.0}); sale con {exit.EventName} hacia {exit.ToState}");
+        fsm.SendEvent(exit.EventName);
+    }
+
+    /// <summary>Si el estado solo sale al llegar a un sitio: mira su posición y la compara en cada frame, sin esperas.</summary>
+    private static bool WaitsForPosition(HutongGames.PlayMaker.FsmState state) {
+        if (PositionWaitCache.TryGetValue(state, out var cached)) {
+            return cached;
+        }
+
+        bool readsPosition = false, compares = false, waits = false;
+        foreach (var action in state.Actions) {
+            if (action == null || !action.Enabled) {
+                continue;
+            }
+
+            switch (action) {
+                case HutongGames.PlayMaker.Actions.GetPosition { everyFrame: true }:
+                    readsPosition = true;
+                    break;
+                case HutongGames.PlayMaker.Actions.FloatCompare { everyFrame: true }:
+                    compares = true;
+                    break;
+                default:
+                    var name = action.GetType().Name;
+                    waits |= name.StartsWith("Wait", StringComparison.Ordinal) ||
+                             name.IndexOf("WithEvents", StringComparison.Ordinal) >= 0;
+                    break;
+            }
+        }
+
+        var result = readsPosition && compares && !waits;
+        PositionWaitCache[state] = result;
+        return result;
+    }
+
+    /// <summary>Si hay terreno entre el jefe y ese punto (un caballero al otro lado de una pared o de una reja).</summary>
+    private static bool HiddenFrom(Vector3 boss, Vector3 player) =>
+        Physics2D.Linecast(boss, player + Vector3.up * 0.5f, TerrainLayerMask).collider != null;
 
     /// <summary>
     /// Su lógica principal cambia de estado (moviéndolo este PC): apunta cuándo deja el reposo y, si el dueño (este PC)
@@ -5141,6 +5279,14 @@ internal sealed class EnemySync {
             return;
         }
 
+        // Ni los de una pieza de un enemigo que mueve otro PC: allí su pieza hace lo mismo con su lógica de verdad. La
+        // aguja de Hornet sigue aquí su recorrido sin velocidad (la de verdad la lanza el PC que la mueve), acababa medio
+        // segundo después de salir y su NEEDLE RETURN le llegaba al PC de Hornet mientras la suya aún volaba: Hornet la
+        // recogía antes de tiempo y la aguja desaparecía en el aire sin volver (issue #7)
+        if (IsPuppetPart(sender.GameObject)) {
+            return;
+        }
+
         // A un objeto concreto: el TAKE DAMAGE que el tajo del aguijón (su FSM damages_enemy) manda a lo que golpea.
         // PlayMaker solo se lo da a las FSM encendidas, y las de una marioneta están paradas: el Rey Vengamosca no se
         // soltaba de su percha ni soltaba a Zote si le pegaba un jugador que no lo movía
@@ -5172,6 +5318,28 @@ internal sealed class EnemySync {
                 }
             }
         }
+    }
+
+    /// <summary>Si el objeto es (o cuelga de) una pieza de un enemigo que mueve otro PC.</summary>
+    private bool IsPuppetPart(GameObject sender) {
+        if (sender == null) {
+            return false;
+        }
+
+        var transform = sender.transform;
+        foreach (var enemy in _enemies) {
+            if (!enemy.Puppet || enemy.Parts == null) {
+                continue;
+            }
+
+            foreach (var part in enemy.Parts) {
+                if (part?.Transform != null && (transform == part.Transform || transform.IsChildOf(part.Transform))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static readonly Dictionary<(HutongGames.PlayMaker.Fsm, string), bool> HandlesAnywhereCache = new();

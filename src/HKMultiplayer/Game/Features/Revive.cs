@@ -599,16 +599,26 @@ internal sealed class Revive {
     private static Vector3 BodyPosition(HeroController hero, int hazardType) {
         var safe = (Vector3) PlayerData.instance.hazardRespawnLocation;
         safe.z = hero.transform.position.z;
+        // El sitio seguro es el de su marcador, que suele estar por encima del suelo: el juego lo baja al suelo antes de
+        // poner ahí al caballero (`FindGroundPoint` con alcance largo)
+        if (GroundBelow(hero, safe, out var safeGround, 10f) && !InHazard(hero, safeGround)) {
+            safe = safeGround;
+        }
+
+        safe = OutOfTerrain(hero, safe, "El sitio seguro del cuerpo");
         if (hazardType > 1) {
             return safe;
         }
 
-        if (!GroundBelow(hero, hero.transform.position, out var ground) || InHazard(hero, ground)) {
+        // Si cayó con el caballero metido en el suelo (un golpe que lo empuja contra él), el rayo nacía por debajo de una
+        // plataforma fina y el cuerpo quedaba en el hueco de abajo, a la vista solo su nombre: se sale antes del terreno
+        var start = OutOfTerrain(hero, hero.transform.position, "Al caer, el caballero");
+        if (!GroundBelow(hero, start, out var ground) || InHazard(hero, ground)) {
             Log.Info("El cuerpo no tiene suelo seguro debajo: queda en el último sitio seguro");
             return safe;
         }
 
-        return ground;
+        return OutOfTerrain(hero, ground, "El cuerpo");
     }
 
     /// <summary>
@@ -617,24 +627,97 @@ internal sealed class Revive {
     /// </summary>
     private static bool GroundBelow(HeroController hero, Vector3 position, out Vector3 ground, float reach = 100f) {
         ground = position;
-        var collider = hero.GetComponent<Collider2D>();
-        if (collider == null) {
+        if (hero.GetComponent<Collider2D>() == null) {
             return true;
         }
 
-        var feetOffset = hero.transform.position.y - collider.bounds.min.y;
-        var mask = LayerMask.GetMask("Terrain");
-        if (mask == 0) {
-            mask = 1 << 8;
-        }
-
-        var hit = Physics2D.Raycast(new Vector2(position.x, position.y - feetOffset + 0.1f), Vector2.down, reach, mask);
+        var feetOffset = FeetOffset(hero);
+        var hit = Physics2D.Raycast(new Vector2(position.x, position.y - feetOffset + 0.1f), Vector2.down, reach, TerrainMask());
         if (hit.collider == null) {
             return false;
         }
 
-        ground = new Vector3(position.x, hit.point.y + feetOffset, position.z);
+        // Con 0,01 de holgura, como el juego al poner al caballero en el suelo (`HeroController.FindGroundPoint`)
+        ground = new Vector3(position.x, hit.point.y + feetOffset + 0.01f, position.z);
         return true;
+    }
+
+    private static int TerrainMask() {
+        var mask = LayerMask.GetMask("Terrain");
+        return mask == 0 ? 1 << 8 : mask;
+    }
+
+    /// <summary>
+    /// Distancia del punto del caballero a sus pies, medida con el tamaño de su caja y no con dónde está ahora. Antes se
+    /// medía con `bounds.min.y`, que va un paso de física por delante de la posición (el juego interpola el cuerpo del
+    /// caballero): subiendo, salía corta y el cuerpo quedaba hundido en el suelo. Desde la 0.33.0 la mide también quien
+    /// está de pie al mover un cuerpo, y en un jefe salta sin parar: los revividos salían atascados en el suelo (issue #7).
+    /// </summary>
+    private static float FeetOffset(HeroController hero) {
+        var collider = hero.GetComponent<Collider2D>();
+        if (collider is BoxCollider2D box) {
+            var scale = Mathf.Abs(box.transform.lossyScale.y);
+            return (box.size.y * 0.5f - box.offset.y) * scale;
+        }
+
+        return collider != null ? collider.bounds.extents.y - collider.offset.y : 0f;
+    }
+
+    /// <summary>
+    /// Si el caballero, puesto en <paramref name="position"/>, quedaría metido en el terreno. Su caja se encoge un poco y
+    /// se sube del suelo: estar de pie pegado a él o rozar una pared no cuenta.
+    /// </summary>
+    private static bool InsideTerrain(HeroController hero, Vector3 position) {
+        if (hero.GetComponent<Collider2D>() is not BoxCollider2D box) {
+            return false;
+        }
+
+        var scale = box.transform.lossyScale;
+        var size = new Vector2(Mathf.Abs(box.size.x * scale.x) * 0.7f, Mathf.Max(0.1f, Mathf.Abs(box.size.y * scale.y) - 0.3f));
+        var center = new Vector2(position.x + box.offset.x * scale.x, position.y + box.offset.y * scale.y + 0.15f);
+        foreach (var other in Physics2D.OverlapBoxAll(center, size, 0f, TerrainMask())) {
+            if (other != null && !other.isTrigger) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Un punto metido en el terreno se sube hasta salir de él (como mucho 8 unidades) y se apoya en esa superficie.
+    /// </summary>
+    private static bool LiftOutOfTerrain(HeroController hero, Vector3 position, out Vector3 lifted) {
+        lifted = position;
+        for (var step = 1; step <= 32; step++) {
+            var above = position + Vector3.up * (step * 0.25f);
+            if (InsideTerrain(hero, above)) {
+                continue;
+            }
+
+            lifted = GroundBelow(hero, above, out var ground, step * 0.25f + 0.5f) && !InsideTerrain(hero, ground)
+                ? ground
+                : above;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>El punto, sacado del terreno si quedaba dentro; si no, tal cual.</summary>
+    private static Vector3 OutOfTerrain(HeroController hero, Vector3 position, string what) {
+        if (!InsideTerrain(hero, position)) {
+            return position;
+        }
+
+        if (LiftOutOfTerrain(hero, position, out var lifted)) {
+            Log.Info($"{what}: quedaba metido en el terreno en ({position.x:0.00}, {position.y:0.00}), se sube a " +
+                     $"({lifted.x:0.00}, {lifted.y:0.00})");
+            return lifted;
+        }
+
+        Log.Warn($"{what}: metido en el terreno en ({position.x:0.00}, {position.y:0.00}) y sin salida por encima");
+        return position;
     }
 
     /// <summary>Si el caballero, puesto en <paramref name="position"/>, tocaría un peligro (pinchos, ácido...).</summary>
@@ -1313,7 +1396,9 @@ internal sealed class Revive {
 
         foreach (var pair in _bodies) {
             var position = pair.Value.Position;
-            if (GroundBelow(hero, position, out _, BodySupportReach) && !InHazard(hero, position)) {
+            // Metido en el terreno tampoco vale: el rayo nace dentro del suelo y lo daba por apoyado
+            if (GroundBelow(hero, position, out _, BodySupportReach) && !InHazard(hero, position) &&
+                !InsideTerrain(hero, position)) {
                 _bodyUnsupportedSince.Remove(pair.Key);
                 continue;
             }
@@ -1342,7 +1427,11 @@ internal sealed class Revive {
     /// junto a este jugador si está pisando suelo: ahí se puede llegar seguro. Si no, se vuelve a mirar en la próxima.
     /// </summary>
     private static bool FindBodySpot(HeroController hero, Vector3 position, out Vector3 spot) {
-        if (GroundBelow(hero, position, out spot) && !InHazard(hero, spot)) {
+        if (InsideTerrain(hero, position) && LiftOutOfTerrain(hero, position, out spot) && !InHazard(hero, spot)) {
+            return true;
+        }
+
+        if (GroundBelow(hero, position, out spot) && !InHazard(hero, spot) && !InsideTerrain(hero, spot)) {
             return true;
         }
 
@@ -1482,6 +1571,9 @@ internal sealed class Revive {
             _bodyPosition = new Vector3(position.x, position.y, hero.transform.position.z);
         }
 
+        // Última comprobación antes de devolverle la colisión: dentro del terreno se quedaría atascado (issue #7)
+        _bodyPosition = OutOfTerrain(hero, _bodyPosition, action == Arrival.Revive ? "Al revivir" : "Al volver al cuerpo");
+        Log.Info($"Llega al cuerpo en ({_bodyPosition.x:0.00}, {_bodyPosition.y:0.00})");
         hero.transform.position = _bodyPosition;
         ExitSpectatorCameraAreas();
         RestoreVisibleState();
@@ -1497,9 +1589,57 @@ internal sealed class Revive {
                 Log.Warn($"No se pudo poner la invulnerabilidad al revivir: {e.Message}");
             }
 
+            PlayRevivedCue(hero);
             Log.Info($"De pie otra vez con {pd.health} máscara(s)");
         } else if (action == Arrival.RealDeath) {
             RunRealDeath(hero);
+        }
+    }
+
+    private static AudioClip _revivedSound;
+    private static VibrationDataAsset _revivedVibration;
+    private static bool _revivedCueLoaded;
+
+    /// <summary>
+    /// Aviso de que te revivieron: el sonido, la vibración y el destello blanco de curarse con Focus (estado "Focus Heal"
+    /// de la FSM "Spell Control" del caballero). Lo pidió un jugador (issue #7): al levantarse no se notaba nada.
+    /// </summary>
+    private static void PlayRevivedCue(HeroController hero) {
+        try {
+            if (!_revivedCueLoaded) {
+                _revivedCueLoaded = true;
+                var spells = FSMUtility.LocateFSM(hero.gameObject, "Spell Control");
+                foreach (var state in spells != null ? spells.FsmStates : Array.Empty<HutongGames.PlayMaker.FsmState>()) {
+                    if (state.Name != "Focus Heal") {
+                        continue;
+                    }
+
+                    foreach (var action in state.Actions) {
+                        if (action is HutongGames.PlayMaker.Actions.AudioPlayerOneShotSingle { audioClip.Value: AudioClip clip }) {
+                            _revivedSound = clip;
+                        } else if (action is HutongGames.PlayMaker.Actions.PlayVibrationV2 { vibrationDataAsset.Value: VibrationDataAsset vibration }) {
+                            _revivedVibration = vibration;
+                        }
+                    }
+                }
+
+                if (_revivedSound == null) {
+                    Log.Warn("Sin el sonido de curarse: al revivir no sonará nada");
+                }
+            }
+
+            var audio = hero.GetComponent<AudioSource>();
+            if (_revivedSound != null && audio != null) {
+                audio.PlayOneShot(_revivedSound);
+            }
+
+            if (_revivedVibration != null) {
+                VibrationManager.PlayVibrationClipOneShot(_revivedVibration);
+            }
+
+            hero.GetComponent<SpriteFlash>()?.flashFocusHeal();
+        } catch (Exception e) {
+            Log.Warn($"No se pudo dar el aviso de revivir: {e.Message}");
         }
     }
 

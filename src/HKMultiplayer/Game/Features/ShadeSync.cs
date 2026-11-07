@@ -590,6 +590,7 @@ internal sealed class ShadeSync {
                 var position = hero.transform.position;
                 var spawned = Object.Instantiate(prefab, new Vector3(position.x, position.y + 1.5f, prefab.transform.position.z),
                     Quaternion.identity);
+                Disarm(spawned);
                 // Su lógica se prepara antes de matarla
                 yield return new WaitForSeconds(0.3f);
                 shade = spawned != null ? spawned.GetComponent<HealthManager>() : null;
@@ -605,6 +606,25 @@ internal sealed class ShadeSync {
             _ownSent = false;
             _nextPoll = 0f;
             _recovering = false;
+        }
+    }
+
+    /// <summary>
+    /// Deja sin daño la sombra que se crea junto al caballero solo para matarla: nace encima de él y, en el rato que su
+    /// lógica tarda en prepararse, su cuerpo le pegaba (issue #7). Se quita el componente porque su FSM vuelve a fijar
+    /// el daño al empezar, y el colisionador porque el caballero daña con cualquiera que lo lleve, encendido o no.
+    /// </summary>
+    private static void Disarm(GameObject shade) {
+        if (shade == null) {
+            return;
+        }
+
+        foreach (var damage in shade.GetComponentsInChildren<DamageHero>(true)) {
+            Object.DestroyImmediate(damage);
+        }
+
+        foreach (var collider in shade.GetComponentsInChildren<Collider2D>(true)) {
+            collider.enabled = false;
         }
     }
 

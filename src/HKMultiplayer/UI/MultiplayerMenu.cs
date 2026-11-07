@@ -169,6 +169,9 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         AddSpace(join, 16);
         AddText(join, Lang.T("Por IP: pide al host su dirección y el código de la partida.", "By IP: ask the host for their address and the game code."), 38);
         AddSpace(join, 20);
+        // Con mando no se puede escribir en los campos (sin el teclado de Steam): lo que el host mandó por el chat se pega.
+        // Encima de los campos, para que sea lo primero que se resalta con el mando al abrir la página
+        AddButton(join, Lang.T("Pegar dirección y código", "Paste address and code"), PasteInvite);
         _address = AddInput(join, Lang.T("Dirección del host", "Host address"), settings.LastAddress, 64, InputField.ContentType.Standard);
         _code = AddInput(join, Lang.T("Código", "Code"), string.Empty, 9, InputField.ContentType.Custom);
         _code.onValidateInput = (_, _, c) => c == '-' || char.IsLetterOrDigit(c) ? char.ToUpperInvariant(c) : '\0';
@@ -444,6 +447,96 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         }
 
         MultiplayerRunner.Instance.Join(_address.text, port, _code.text, _name.text);
+    }
+
+    /// <summary>
+    /// Rellena la dirección, el puerto y el código con lo copiado (p. ej. "203.0.113.7:26950 ABCD-EFGH" del chat): basta
+    /// con uno de ellos, y lo que no venga se deja como estaba.
+    /// </summary>
+    private void PasteInvite() {
+        var clipboard = GUIUtility.systemCopyBuffer;
+        if (!TryParseInvite(clipboard, out var address, out var port, out var code)) {
+            _joinStatus.text = Lang.T("No hay una dirección ni un código copiados", "No address or code copied");
+            return;
+        }
+
+        if (address != null) {
+            _address.text = address;
+        }
+
+        if (port is { } value) {
+            _port.text = value.ToString();
+        }
+
+        if (code != null) {
+            _code.text = MultiplayerRunner.FormatCode(code);
+        }
+
+        SaveFields();
+        _joinStatus.text = code != null && address != null
+            ? Lang.T("Dirección y código pegados", "Address and code pasted")
+            : code != null
+                ? Lang.T("Código pegado", "Code pasted")
+                : Lang.T("Dirección pegada", "Address pasted");
+        var pasted = new[] { address != null ? "dirección" : null, port != null ? "puerto" : null, code != null ? "código" : null };
+        Log.Info($"Pegado del portapapeles: {string.Join(", ", pasted.Where(p => p != null))}");
+    }
+
+    /// <summary>
+    /// Saca de un texto la dirección del host (con su puerto si lo lleva: "host:puerto" o "[IPv6]:puerto") y el código de
+    /// la partida. Cada palabra cuenta como código si tiene su formato y no parece una dirección.
+    /// </summary>
+    internal static bool TryParseInvite(string text, out string address, out int? port, out string code) {
+        address = null;
+        port = null;
+        code = null;
+        if (string.IsNullOrWhiteSpace(text) || text.Length > 512) {
+            return false;
+        }
+
+        foreach (var raw in text.Split(new[] { ' ', '\t', '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries)) {
+            var token = raw.Trim();
+            var looksLikeAddress = token.IndexOf('.') >= 0 || token.IndexOf(':') >= 0 ||
+                                   token.Equals("localhost", StringComparison.OrdinalIgnoreCase);
+            var normalized = Net.Crypto.RoomCode.Normalize(token);
+            if (!looksLikeAddress && code == null && Net.Crypto.RoomCode.IsValid(normalized)) {
+                code = normalized;
+                continue;
+            }
+
+            if (!looksLikeAddress || address != null) {
+                continue;
+            }
+
+            var host = token;
+            var portText = (string) null;
+            if (token.StartsWith("[", StringComparison.Ordinal)) {
+                // IPv6 con puerto: [::1]:26950
+                var close = token.IndexOf(']');
+                if (close > 1) {
+                    host = token.Substring(1, close - 1);
+                    if (close + 1 < token.Length && token[close + 1] == ':') {
+                        portText = token.Substring(close + 2);
+                    }
+                }
+            } else if (token.IndexOf(':') == token.LastIndexOf(':') && token.IndexOf(':') > 0) {
+                // host:puerto (con varios ":" es una IPv6 sin puerto)
+                var colon = token.IndexOf(':');
+                host = token.Substring(0, colon);
+                portText = token.Substring(colon + 1);
+            }
+
+            if (host.Length == 0 || host.Length > 64) {
+                continue;
+            }
+
+            address = host;
+            if (portText != null && int.TryParse(portText, out var value) && value is > 0 and < 65536) {
+                port = value;
+            }
+        }
+
+        return address != null || code != null;
     }
 
     private void Update() {

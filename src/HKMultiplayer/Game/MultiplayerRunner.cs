@@ -195,6 +195,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Features.Revive.InstallHooks();
         Features.ShadeSync.InstallHooks();
         Features.BossBar.InstallHooks();
+        Features.ArenaCamera.InstallHooks();
         Features.EnemyBars.InstallHooks();
         Features.Difficulty.Install();
         Scene.SceneLoads.Install();
