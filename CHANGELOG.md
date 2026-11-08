@@ -9,6 +9,25 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.35.0
+
+- **Enter the Colosseum of Fools together**: accepting a trial only opened the entrance gate for the player who
+  accepted it, and everyone else had to use "Go to". Now it opens for everyone at the entrance, and for anyone who
+  arrives later.
+- **Arriving late to a Colosseum trial**: the closed arena gate can be crossed inward, like boss gates, but not outward.
+- **Enemies stay inside the arena**: enemies could chase a player who was outside the arena up to the wall and stay
+  there, where nobody could hit them (Colosseum level 3 couldn't be finished). Now an enemy never goes to a player it
+  can't see.
+- **The Soul Warrior no longer jumps between players** in the Colosseum: platforms don't count as walls between it and
+  the players anymore.
+- **Galien**: his scythe always goes with whoever moves Galien, so his attacks are the same for everyone.
+- **Shared or own map**: new host setting, "Shared map" (on by default). With "No", each player has their own map and
+  only sees where they have been. Switching back to "Yes" merges everyone's maps.
+- **Louder sound when revived**: it couldn't be heard during a fight.
+- **Camera in normal rooms**: since 0.34.0, entering a room from its edge sometimes left the camera unlocked where the
+  game locks it. Now it only stays unlocked for a player outside a closed arena.
+- **No error when the host closes** while the guest is saving.
+
 ## 0.34.0
 
 - **Revived players no longer get stuck in the ground**: a player revived during a boss fight could end up inside the

@@ -9,6 +9,26 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.35.0
+
+- **Entrar juntos al Coliseo de los Tontos**: al aceptar una prueba, la reja de la entrada solo se abría para quien la
+  aceptó y los demás tenían que usar «Ir con». Ahora se abre para todos los que están en la entrada, y también para
+  quien llega después.
+- **Quien llega tarde a una prueba del Coliseo puede entrar**: la reja de la arena ya cerrada se cruza hacia dentro, como
+  las rejas de los jefes, y no hacia fuera.
+- **Los enemigos no se salen de la arena**: los enemigos podían perseguir hasta la pared a un jugador que estaba fuera de
+  la arena y quedarse ahí, donde nadie podía pegarles (en el Coliseo de Oro no se podía terminar). Ahora un enemigo no
+  pasa a quien no lo ve.
+- **El Guerrero de Almas ya no salta de un jugador a otro** en el Coliseo: las plataformas ya no cuentan como paredes
+  entre él y los jugadores.
+- **Galien**: su guadaña va siempre con quien mueve a Galien, así que sus ataques son iguales para todos.
+- **Mapa compartido o propio**: nuevo ajuste del host, «Mapa compartido» (sí por defecto). Con «No», cada jugador tiene su
+  propio mapa y ve solo dónde estuvo él. Al volver a «Sí», los mapas de todos se juntan.
+- **Sonido al ser revivido más fuerte**: antes no se oía durante un combate.
+- **La cámara en las salas normales**: desde la 0.34.0, al entrar por el borde de una sala la cámara a veces no se
+  quedaba fija como en el juego. Ahora solo se deja de fijar con un jugador fuera de una arena cerrada.
+- **Sin error al cerrar el host** mientras el invitado guardaba.
+
 ## 0.34.0
 
 - **Los revividos ya no se quedan atascados en el suelo**: un jugador revivido en un combate de jefe podía quedar metido
