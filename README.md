@@ -204,7 +204,8 @@ API.
   Focus for 2 s** and spending 33 soul revives you with 1 mask. If your partner sits at a bench, downed players revive
   next to them with full health. If everyone goes down, each player dies normally. If you die where nobody could
   stand next to you (in the air over a pit, on spikes or in acid), your body lies on the last safe ground, where the
-  game respawns you after a hazard.
+  game respawns you after a hazard. While reviving you hear the Focus charge; each player picks its volume in *Pause ›
+  Multiplayer › Skin & sound*.
 - **Shared shades**: everyone sees their partner's shade and can kill it; its owner gets their geo and soul back even
   in another room.
 - **Partner HUD** at the top right (name, masks, soul and where they are), their masks above their head when their
@@ -219,7 +220,7 @@ API.
 - **Shared dreams**: if one player enters a dream with the Dream Nail, partners in the same room enter too. When you
   win, everyone leaves; whoever falls or dies leaves alone. Dream bosses, the Nightmare King and the Radiance.
 - **Grimmchild**: if one player gets it, the other does too.
-- **Skins** compatible with CustomKnight (*Pause › Multiplayer › Skin*): body, spells and effects; sent through the
+- **Skins** compatible with CustomKnight (*Pause › Multiplayer › Skin & sound*): body, spells and effects; sent through the
   mod's own network in the background without delaying hits (the first time; then they're kept in a cache and load
   instantly), and you can turn off seeing other players' skins.
 - **Partners** (*Pause › Multiplayer › Partners*): each partner's health, soul and location, **give geo**, **go to**

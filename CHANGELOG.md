@@ -24,9 +24,15 @@ release notes.
 - **Colosseum waves that never ended**: Soul Twisters that lost the player hid above the arena and never came back,
   so the wave waited forever (sometimes "no enemies appeared"). Now they keep reappearing while the trial lasts.
 - **Gulkas**: the leaf covering them no longer disappears on one player's PC when they are killed.
+- **Shardmites floating in the air**: when a far-away player's PC was moving one, it stayed asleep there even with the
+  other player fighting right next to it, and a hit knocked it off its wall. Now it wakes up as soon as any player has
+  it on screen, and the same goes for other enemies that wake up when the camera gets close.
 - **Shared or own map**: new host setting, "Shared map" (on by default). With "No", each player has their own map and
   only sees where they have been. Switching back to "Yes" merges everyone's maps.
-- **Louder sound when revived**: it couldn't be heard during a fight.
+- **Sound while reviving**: holding Focus next to a body made no sound until the end. Now you hear the Focus charge,
+  both the reviver and the downed player, and the sound when you get up is louder (it couldn't be heard in a fight).
+- **Revive volume**: new per-player setting, from *Off* to *400 %* (200 % by default), in *Pause › Multiplayer › Skin &
+  sound* and in the Multiplayer menu. It also works with a controller.
 - **Camera in normal rooms**: since 0.34.0, entering a room from its edge sometimes left the camera unlocked where the
   game locks it. Now it only stays unlocked for a player outside a closed arena.
 - **No error when the host closes** while the guest is saving.

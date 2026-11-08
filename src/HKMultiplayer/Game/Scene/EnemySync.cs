@@ -135,6 +135,15 @@ internal sealed class EnemySync {
     /// <summary>Hasta dónde se busca pared para uno perdido en el aire.</summary>
     private const float ClimberLostRadius = 10f;
 
+    /// <summary>Cada cuánto se mira si otro jugador tiene en pantalla un enemigo que en este PC sigue dormido.</summary>
+    private const float ActivatorCheckInterval = 0.25f;
+
+    /// <summary>Zona activa de la cámara si no se encuentra la de este PC (algo más que la pantalla).</summary>
+    private static readonly Vector2 DefaultActiveRegionExtents = new(16f, 10f);
+
+    private static readonly System.Reflection.FieldInfo FsmActivatorActivated =
+        typeof(FSMActivator).GetField("activated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
     /// <summary>Aviso con el que un enemigo de jaula sale de ella (la plantilla de las crías de los Hatcher).</summary>
     private const string CageReleaseEvent = "SPAWN";
 
@@ -773,6 +782,8 @@ internal sealed class EnemySync {
     private readonly List<(uint Id, ushort Controller)> _controlOut = new();
     private float _nextAssign;
     private float _nextClimberCheck;
+    private float _nextActivatorCheck;
+    private ActiveRegion _activeRegion;
 
     /// <summary>
     /// Cuándo repite el dueño de la sala quién mueve cada enemigo (a todos). Los avisos de cambio solo llegan al cambiar:
@@ -1117,6 +1128,7 @@ internal sealed class EnemySync {
         UpdateReal(isOwner);
         UpdatePuppets();
         UpdateClimbers();
+        UpdateActivators();
         UpdateAttackListens();
         UpdateRunningEffects();
         UpdateDelayedSends();
@@ -6618,6 +6630,88 @@ internal sealed class EnemySync {
                 Log.Info($"{enemy.Root.name}: se quedó sin pared en ({lost.x:0.0}, {lost.y:0.0}), vuelve a ({back.x:0.0}, {back.y:0.0})");
             }
         }
+    }
+
+    /// <summary>
+    /// El juego no arranca la lógica de muchos enemigos (los que llevan `FSMActivator`: Fragmentitas, Brillomos...) hasta
+    /// que entran en la zona activa de la cámara (`ActiveRegion`, algo más grande que la pantalla). En coop eso pasa en
+    /// cada PC por su cuenta, y salían dos fallos (issue #8):
+    /// <list type="bullet">
+    /// <item>Si lo movía un jugador lejano, en su PC seguía dormido aunque el otro estuviera peleando a su lado: quieto, y
+    /// sin lo que su lógica prepara al arrancar. Al Fragmentita su `Check Type` le quita el retroceso de los golpes; sin
+    /// él, un golpe lo despegaba 7 unidades de su pared y se quedaba flotando girado en el aire. Ahora el PC que lo mueve
+    /// lo despierta cuando cualquier jugador lo tiene en su zona activa, como haría la cámara de ese jugador.</item>
+    /// <item>En la marioneta, la cámara de ese PC lo despertaba igualmente y su lógica corría por su cuenta (andaba, giraba
+    /// y atacaba aparte de lo que llegaba). Se pausa como el resto de su lógica al hacerse marioneta.</item>
+    /// </list>
+    /// </summary>
+    private void UpdateActivators() {
+        var now = Time.unscaledTime;
+        if (now < _nextActivatorCheck || _session == null) {
+            return;
+        }
+
+        _nextActivatorCheck = now + ActivatorCheckInterval;
+        var region = ActiveRegionExtents();
+        foreach (var enemy in _enemies) {
+            if (enemy.Root == null || !enemy.Root.activeInHierarchy || enemy.Health == null || enemy.Health.isDead) {
+                continue;
+            }
+
+            if (enemy.Puppet) {
+                PauseWokenPuppet(enemy);
+                continue;
+            }
+
+            var activator = enemy.Root.GetComponent<FSMActivator>();
+            if (activator == null || FsmActivatorActivated?.GetValue(activator) is not false) {
+                continue;
+            }
+
+            var position = enemy.Transform.position;
+            foreach (var player in _session.Players) {
+                if (player.Id == _session.LocalId || player.Scene != _scene ||
+                    !TryGetPlayerPosition(player.Id, out var playerPosition) ||
+                    Mathf.Abs(position.x - playerPosition.x) > region.x || Mathf.Abs(position.y - playerPosition.y) > region.y) {
+                    continue;
+                }
+
+                // Sin escalonar (el componente puede estar apagado y no podría llevar la corrutina)
+                var staggered = activator.activateStaggered;
+                activator.activateStaggered = false;
+                activator.Activate();
+                activator.activateStaggered = staggered;
+                Log.Info($"{enemy.Root.name}: {player.Name} lo tiene en pantalla, su lógica arranca también en este PC");
+                break;
+            }
+        }
+    }
+
+    /// <summary>La lógica propia que el juego encendió en una marioneta se para (y vuelve al retomarla).</summary>
+    private static void PauseWokenPuppet(Enemy enemy) {
+        foreach (var fsm in enemy.Root.GetComponents<PlayMakerFSM>()) {
+            if (!fsm.enabled || enemy.Disabled.Contains(fsm)) {
+                continue;
+            }
+
+            Pause(enemy, fsm);
+            fsm.enabled = false;
+            enemy.Disabled.Add(fsm);
+            Log.Info($"{enemy.Root.name}/{fsm.FsmName}: su lógica arrancó siendo marioneta en este PC, se para");
+        }
+    }
+
+    /// <summary>
+    /// Media anchura y media altura de la zona activa de la cámara de este PC (la de los demás es igual: depende de la
+    /// cámara, no del jugador).
+    /// </summary>
+    private Vector2 ActiveRegionExtents() {
+        if (_activeRegion == null) {
+            _activeRegion = UnityEngine.Object.FindObjectOfType<ActiveRegion>();
+        }
+
+        var box = _activeRegion != null ? _activeRegion.GetComponent<Collider2D>() : null;
+        return box != null && box.enabled ? (Vector2) box.bounds.extents : DefaultActiveRegionExtents;
     }
 
     /// <summary>

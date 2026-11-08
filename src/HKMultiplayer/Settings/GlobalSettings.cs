@@ -45,6 +45,13 @@ public sealed class GlobalSettings {
     /// </summary>
     public int SteamAccess { get; set; } = SteamAccessFriends;
 
+    /// <summary>
+    /// Volumen de los sonidos de revivir en este PC, en % del sonido normal del juego (100 = como curarse con Focus): la
+    /// carga mientras se revive o te reviven y el sonido al levantarse. Lo elige cada jugador, porque a cada uno le
+    /// suena distinto según su equipo y el resto del sonido de la partida.
+    /// </summary>
+    public int ReviveVolume { get; set; } = 200;
+
     public const int SteamAccessFriends = 0;
     public const int SteamAccessInvited = 1;
     public const int SteamAccessNobody = 2;

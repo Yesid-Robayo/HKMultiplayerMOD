@@ -26,9 +26,15 @@ Al publicar una versión nueva, se añade aquí arriba con lo mismo que su secci
   la arena y no volvían a salir, y la oleada esperaba para siempre (a veces «no salían enemigos»). Ahora vuelven a
   aparecer mientras dura la prueba.
 - **Gulkas**: la hoja que las tapa ya no desaparece en el PC de un jugador al matarlas.
+- **Fragmentitas flotando en el aire**: si lo movía el PC de un jugador lejano, allí seguía dormido aunque el otro
+  estuviera peleando a su lado, y un golpe lo despegaba de su pared. Ahora despierta en cuanto cualquier jugador lo
+  tiene en pantalla, y lo mismo vale para otros enemigos que despiertan al acercarse la cámara.
 - **Mapa compartido o propio**: nuevo ajuste del host, «Mapa compartido» (sí por defecto). Con «No», cada jugador tiene su
   propio mapa y ve solo dónde estuvo él. Al volver a «Sí», los mapas de todos se juntan.
-- **Sonido al ser revivido más fuerte**: antes no se oía durante un combate.
+- **Sonido mientras se revive**: mantener Focus junto a un cuerpo no sonaba nada hasta el final. Ahora suena la carga de
+  Focus, para quien revive y para el caído, y el sonido al levantarse es más fuerte (antes no se oía en un combate).
+- **Volumen de revivir**: nuevo ajuste de cada jugador, de *Sin sonido* a *400 %* (200 % por defecto), en *Pausa ›
+  Multijugador › Skin y sonido* y en el menú Multijugador. Se cambia también con el mando.
 - **La cámara en las salas normales**: desde la 0.34.0, al entrar por el borde de una sala la cámara a veces no se
   quedaba fija como en el juego. Ahora solo se deja de fijar con un jugador fuera de una arena cerrada.
 - **Sin error al cerrar el host** mientras el invitado guardaba.

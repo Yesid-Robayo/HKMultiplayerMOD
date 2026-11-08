@@ -75,6 +75,7 @@ internal sealed class SessionMenu : GameStyledMenu {
     // Página "Skin" (ajustes de este PC, no del host)
     private MenuOptionHorizontal _skinOption;
     private MenuOptionHorizontal _showSkinsOption;
+    private MenuOptionHorizontal _reviveVolumeOption;
     private Text _skinStatus;
     private string[] _skinChoices = { "Normal" };
 
@@ -215,7 +216,7 @@ internal sealed class SessionMenu : GameStyledMenu {
         var pages = AddRow(main, "Páginas", 84, 10);
         AddButton(pages, Lang.T("Ajustes de la partida", "Game settings"), () => ShowPage(SettingsPage), 36, 560);
         AddButton(pages, Lang.T("Compañeros", "Partners"), () => ShowPage(PartnersPage), 36, 420);
-        AddButton(pages, "Skin", () => ShowPage(SkinPage), 36, 260);
+        AddButton(pages, Lang.T("Skin y sonido", "Skin & sound"), () => ShowPage(SkinPage), 36, 420);
         _leave = AddButton(main, Lang.T("Cerrar partida", "Close game"), () => ShowPage(LeavePage));
 
         var leave = NewPage(LeavePage);
@@ -231,7 +232,9 @@ internal sealed class SessionMenu : GameStyledMenu {
         ShowPage(MainPage, instant: true);
     }
 
-    /// <summary>Skin propia y si se ven las de los demás (de este PC; se guardan en sus ajustes).</summary>
+    /// <summary>
+    /// Skin propia, si se ven las de los demás y el volumen de revivir (de este PC; se guardan en sus ajustes).
+    /// </summary>
     private void BuildSkinPage() {
         var page = NewPage(SkinPage);
         AddText(page, Lang.T("Skins compatibles con CustomKnight: una carpeta con Knight.png (y, si quiere, los hechizos y el HUD)", "CustomKnight-compatible skins: a folder with Knight.png (and, optionally, the spells and the HUD)"), 30);
@@ -245,6 +248,9 @@ internal sealed class SessionMenu : GameStyledMenu {
         _skinStatus.GetComponent<LayoutElement>().preferredHeight = 120;
         AddSpace(page, 6);
         AddButton(page, Lang.T("Abrir la carpeta de skins", "Open skins folder"), Skins.OpenFolder, 36);
+        AddSpace(page, 6);
+        _reviveVolumeOption = AddOption(page, Lang.T("Volumen de revivir", "Revive volume"), ReviveAudio.VolumeLabels(),
+            ReviveAudio.VolumeIndex(), index => SetOptionValue(_reviveVolumeOption, ReviveAudio.SetVolume(index)));
     }
 
     /// <summary>Lista de skins (puede cambiar con el juego abierto) y qué lleva cada uno.</summary>
@@ -268,6 +274,7 @@ internal sealed class SessionMenu : GameStyledMenu {
         var selected = Array.IndexOf(_skinChoices, Skins.LocalSkinName);
         SetOptionValue(_skinOption, selected > 0 ? selected : 0);
         SetOptionValue(_showSkinsOption, Skins.ShowOthers ? 0 : 1);
+        SetOptionValue(_reviveVolumeOption, ReviveAudio.VolumeIndex());
         _skinStatus.text = Skins.Current?.DescribeForPanel(session) ?? string.Empty;
     }
 

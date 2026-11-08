@@ -3,6 +3,7 @@ using System.Collections;
 using System.Linq;
 using GlobalEnums;
 using HKMultiplayer.Game;
+using HKMultiplayer.Game.Features;
 using HKMultiplayer.Game.World;
 using HKMultiplayer.Util;
 using UnityEngine;
@@ -40,6 +41,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
     private CoopWorldInfo _pendingDelete;
     private Text _updateText;
     private MenuButton _updateButton;
+    private MenuOptionHorizontal _reviveVolume;
     private string _updateUrl;
 
     private static readonly string[] YesNo = { "Sí", "No" };
@@ -114,6 +116,9 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
             });
         UpdateCheck.Changed += RefreshUpdate;
         RefreshUpdate();
+        // De este PC: también se cambia en la pausa, en «Skin y sonido»
+        _reviveVolume = AddOption(start, Lang.T("Volumen de revivir", "Revive volume"), ReviveAudio.VolumeLabels(),
+            ReviveAudio.VolumeIndex(), index => SetOptionValue(_reviveVolume, ReviveAudio.SetVolume(index)));
         // Quién entra por Steam en las partidas que hosteas (sin Steam, la opción no sale: ver OnPageShowing)
         _steamAccess = AddOption(start, Lang.T("Partidas por Steam", "Steam games"),
             Lang.Spanish ? new[] { "Amigos", "Solo invitados", "Nadie" } : new[] { "Friends", "Invited only", "Nobody" },
@@ -307,6 +312,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
     protected override void OnPageShowing(int page) {
         if (page == StartPage) {
             _steamAccess.gameObject.SetActive(Steam.SteamLink.Available);
+            SetOptionValue(_reviveVolume, ReviveAudio.VolumeIndex());
         } else if (page == HostPage) {
             RefreshWorlds();
         } else if (page == JoinPage) {

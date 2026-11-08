@@ -750,6 +750,26 @@ internal sealed class TestDriver : MonoBehaviour {
                 // estado de cada FSM y si es marioneta
                 StartCoroutine(TraceEnemy(ParseFloat(args[1]), string.Join(" ", args.Skip(2))));
                 break;
+            case "activator":
+                // activator <nombre>: si el FSMActivator de ese objeto ya encendió sus FSM, y qué zonas activas (ActiveRegion)
+                // lo tocan ahora
+                var activatorObject = GameObject.Find(string.Join(" ", args.Skip(1)));
+                var activator = activatorObject != null ? activatorObject.GetComponent<FSMActivator>() : null;
+                if (activator == null) {
+                    Log.Warn($"{Tag}sin FSMActivator en '{string.Join(" ", args.Skip(1))}'");
+                    break;
+                }
+
+                var activatedField = typeof(FSMActivator).GetField("activated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                var touching = UnityEngine.Object.FindObjectsByType<ActiveRegion>(FindObjectsSortMode.None)
+                    .Where(region => region.GetComponent<Collider2D>() != null && activatorObject.GetComponent<Collider2D>() != null &&
+                                     region.GetComponent<Collider2D>().IsTouching(activatorObject.GetComponent<Collider2D>()))
+                    .Select(region => PathOf(region.transform));
+                var regions = UnityEngine.Object.FindObjectsByType<ActiveRegion>(FindObjectsSortMode.None)
+                    .Select(region => $"{PathOf(region.transform)} activo={region.isActiveAndEnabled} cuerpo={region.GetComponent<Rigidbody2D>()?.bodyType.ToString() ?? "-"}");
+                Log.Info($"{Tag}activator {activatorObject.name} activado={activatedField?.GetValue(activator)} " +
+                         $"encendido={activator.enabled} tocan=[{string.Join(", ", touching)}] zonas=[{string.Join("; ", regions)}]");
+                break;
             case "objtrace":
                 // objtrace <segundos> <nombre>: como enemytrace, para cualquier objeto activo con ese nombre (la guadaña de
                 // Galien): cada 0,1 s, con la hora del reloj (ms UTC), su posición y el estado de sus FSM
@@ -1762,8 +1782,13 @@ internal sealed class TestDriver : MonoBehaviour {
             if (found != null) {
                 var position = found.transform.position;
                 var states = string.Join(",", found.GetComponents<PlayMakerFSM>().Select(f => $"{f.FsmName}:{f.ActiveStateName}{(f.enabled ? "" : "(parada)")}"));
+                var body = found.GetComponent<Rigidbody2D>();
+                var physics = body == null ? string.Empty :
+                    $" vel=({body.velocity.x:0.0};{body.velocity.y:0.0}) giro={found.transform.eulerAngles.z:0} " +
+                    $"angvel={body.angularVelocity:0} {body.bodyType} grav={body.gravityScale:0.0} rest={body.constraints}" +
+                    $" retroceso={(found.GetComponent<Recoil>() is { } recoil ? recoil.freezeInPlace ? "congelado" : "normal" : "-")}";
                 Log.Info($"{Tag}trazaobj {DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()} {found.name} " +
-                         $"pos=({position.x:0.00};{position.y:0.00}) {states}");
+                         $"pos=({position.x:0.00};{position.y:0.00}){physics} {states}");
             }
 
             yield return new WaitForSecondsRealtime(0.1f);

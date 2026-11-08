@@ -206,7 +206,8 @@ escrito desde cero sobre la Modding API de Hollow Knight.
   **manteniendo Focus 2 s** y gastando 33 de alma, lo revive con 1 máscara. Si el compañero se sienta en un banco, los
   caídos reviven a su lado con toda la vida. Si caen todos, cada uno muere de forma normal. Si mueres donde nadie
   podría ponerse a tu lado (en el aire sobre un pozo, en pinchos o en ácido), el cuerpo queda en el último suelo
-  seguro, donde el juego te hace reaparecer tras un peligro.
+  seguro, donde el juego te hace reaparecer tras un peligro. Mientras se revive suena la carga de Focus; su volumen lo
+  elige cada uno en *Pausa › Multijugador › Skin y sonido*.
 - **Sombras compartidas**: cada uno ve la sombra del compañero y puede matarla; el dueño recupera su geo y su alma
   aunque esté en otra sala.
 - **HUD del compañero** arriba a la derecha (nombre, máscaras, alma y dónde está), sus máscaras sobre su cabeza al
@@ -221,7 +222,7 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - **Sueños compartidos**: si uno entra en un sueño con el aguijón onírico, los compañeros de la misma sala entran con
   él. Al ganar salen todos; quien cae o muere sale solo. Jefes de sueño, Rey de las Pesadillas y Radiancia.
 - **Grimmchild**: si uno lo recibe, el otro también.
-- **Skins** compatibles con CustomKnight (*Pausa › Multijugador › Skin*): cuerpo, hechizos y efectos; se envían por la
+- **Skins** compatibles con CustomKnight (*Pausa › Multijugador › Skin y sonido*): cuerpo, hechizos y efectos; se envían por la
   red del mod en segundo plano sin retrasar los golpes (la primera vez; luego quedan en una caché y cargan al
   momento), y se puede desactivar ver las de los demás.
 - **Compañeros** (*Pausa › Multijugador › Compañeros*): la vida y el alma de cada uno y dónde está, **dar geo**, **ir

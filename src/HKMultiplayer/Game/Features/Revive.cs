@@ -303,6 +303,7 @@ internal sealed class Revive {
     }
 
     public void Detach() {
+        ReviveAudio.StopCharge();
         if (_session != null) {
             _session.On(Downed, null);
             _session.On(ReviveRequest, null);
@@ -1226,6 +1227,10 @@ internal sealed class Revive {
             ApplyHiddenState();
         }
 
+        // La carga de Focus suena al que revive y al caído mientras lo reviven
+        var beingRevived = _downed && _revivingTarget == _session.LocalId &&
+                           Time.unscaledTime - _revivingAt < BeingRevivedTimeout;
+        ReviveAudio.UpdateCharge(beingRevived || !_downed && _progress > 0f && !_notEnoughSoul);
         UpdateUi(scene);
     }
 
@@ -1589,63 +1594,10 @@ internal sealed class Revive {
                 Log.Warn($"No se pudo poner la invulnerabilidad al revivir: {e.Message}");
             }
 
-            PlayRevivedCue(hero);
+            ReviveAudio.PlayRevived(hero);
             Log.Info($"De pie otra vez con {pd.health} máscara(s)");
         } else if (action == Arrival.RealDeath) {
             RunRealDeath(hero);
-        }
-    }
-
-    private static AudioClip _revivedSound;
-    private static VibrationDataAsset _revivedVibration;
-    private static bool _revivedCueLoaded;
-
-    /// <summary>Copias simultáneas del sonido de revivir (cada una suma su volumen).</summary>
-    private const int RevivedSoundLayers = 2;
-
-    /// <summary>
-    /// Aviso de que te revivieron: el sonido, la vibración y el destello blanco de curarse con Focus (estado "Focus Heal"
-    /// de la FSM "Spell Control" del caballero). Lo pidió un jugador (issue #7): al levantarse no se notaba nada.
-    /// </summary>
-    private static void PlayRevivedCue(HeroController hero) {
-        try {
-            if (!_revivedCueLoaded) {
-                _revivedCueLoaded = true;
-                var spells = FSMUtility.LocateFSM(hero.gameObject, "Spell Control");
-                foreach (var state in spells != null ? spells.FsmStates : Array.Empty<HutongGames.PlayMaker.FsmState>()) {
-                    if (state.Name != "Focus Heal") {
-                        continue;
-                    }
-
-                    foreach (var action in state.Actions) {
-                        if (action is HutongGames.PlayMaker.Actions.AudioPlayerOneShotSingle { audioClip.Value: AudioClip clip }) {
-                            _revivedSound = clip;
-                        } else if (action is HutongGames.PlayMaker.Actions.PlayVibrationV2 { vibrationDataAsset.Value: VibrationDataAsset vibration }) {
-                            _revivedVibration = vibration;
-                        }
-                    }
-                }
-
-                if (_revivedSound == null) {
-                    Log.Warn("Sin el sonido de curarse: al revivir no sonará nada");
-                }
-            }
-
-            var audio = hero.GetComponent<AudioSource>();
-            if (_revivedSound != null && audio != null) {
-                // Dos veces a la vez (el doble de fuerte): una sola no se oía en mitad de un jefe (issue #8)
-                for (var i = 0; i < RevivedSoundLayers; i++) {
-                    audio.PlayOneShot(_revivedSound, 1f);
-                }
-            }
-
-            if (_revivedVibration != null) {
-                VibrationManager.PlayVibrationClipOneShot(_revivedVibration);
-            }
-
-            hero.GetComponent<SpriteFlash>()?.flashFocusHeal();
-        } catch (Exception e) {
-            Log.Warn($"No se pudo dar el aviso de revivir: {e.Message}");
         }
     }
 
