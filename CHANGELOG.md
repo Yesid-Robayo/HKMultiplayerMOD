@@ -21,6 +21,9 @@ release notes.
 - **The Soul Warrior no longer jumps between players** in the Colosseum: platforms don't count as walls between it and
   the players anymore.
 - **Galien**: his scythe always goes with whoever moves Galien, so his attacks are the same for everyone.
+- **Colosseum waves that never ended**: Soul Twisters that lost the player hid above the arena and never came back,
+  so the wave waited forever (sometimes "no enemies appeared"). Now they keep reappearing while the trial lasts.
+- **Gulkas**: the leaf covering them no longer disappears on one player's PC when they are killed.
 - **Shared or own map**: new host setting, "Shared map" (on by default). With "No", each player has their own map and
   only sees where they have been. Switching back to "Yes" merges everyone's maps.
 - **Louder sound when revived**: it couldn't be heard during a fight.

@@ -22,6 +22,10 @@ Al publicar una versión nueva, se añade aquí arriba con lo mismo que su secci
 - **El Guerrero de Almas ya no salta de un jugador a otro** en el Coliseo: las plataformas ya no cuentan como paredes
   entre él y los jugadores.
 - **Galien**: su guadaña va siempre con quien mueve a Galien, así que sus ataques son iguales para todos.
+- **Oleadas del Coliseo que no acababan**: los Retorcedores de Almas que perdían al jugador se escondían por encima de
+  la arena y no volvían a salir, y la oleada esperaba para siempre (a veces «no salían enemigos»). Ahora vuelven a
+  aparecer mientras dura la prueba.
+- **Gulkas**: la hoja que las tapa ya no desaparece en el PC de un jugador al matarlas.
 - **Mapa compartido o propio**: nuevo ajuste del host, «Mapa compartido» (sí por defecto). Con «No», cada jugador tiene su
   propio mapa y ve solo dónde estuvo él. Al volver a «Sí», los mapas de todos se juntan.
 - **Sonido al ser revivido más fuerte**: antes no se oía durante un combate.

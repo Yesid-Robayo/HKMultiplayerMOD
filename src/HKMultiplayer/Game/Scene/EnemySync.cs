@@ -354,6 +354,15 @@ internal sealed class EnemySync {
         /// <summary>Desde cuándo el caballero de quien lo mueve está tapado por el terreno (0: a la vista).</summary>
         public float HiddenSince;
 
+        /// <summary>Retorcedor de Almas de una oleada del Coliseo: el nombre de esa oleada (ver <see cref="RewakeColosseumMage"/>).</summary>
+        public string MageWave;
+
+        /// <summary>Ya se miró si es un mago de oleada.</summary>
+        public bool MageWaveChecked;
+
+        /// <summary>La batalla ya llegó a su oleada (desde entonces cuenta para las siguientes hasta morir).</summary>
+        public bool MageWaveReached;
+
         /// <summary>Si estaba en reposo según lo último que envió el PC que lo mueve.</summary>
         public bool RemoteCalm;
 
@@ -1171,8 +1180,13 @@ internal sealed class EnemySync {
         if (Time.unscaledTime >= _nextUnstickCheck) {
             _nextUnstickCheck = Time.unscaledTime + 0.5f;
             foreach (var enemy in _enemies) {
+                if (enemy.Root != null && !enemy.MageWaveChecked) {
+                    NoteMageWave(enemy);
+                }
+
                 if (enemy.Root != null && !enemy.ReportedDead && !enemy.Puppet) {
                     UnstickBoss(enemy);
+                    RewakeColosseumMage(enemy);
                 }
             }
         }
@@ -3232,6 +3246,88 @@ internal sealed class EnemySync {
         controller == _session.LocalId ? IsCalmHere(enemy) : enemy.RemoteCalm;
 
     /// <summary>Tiempo quieto en un estado que espera llegar a un sitio para darlo por atascado.</summary>
+    private const string MageFsm = "Mage";
+    private const string MageManualSleep = "Manual Sleep";
+    private const string MageWakeEvent = "WAKE";
+
+    /// <summary>
+    /// Los Retorcedores de Almas de las oleadas del Coliseo duermen con aparición manual (`Manual Sleep`) y despiertan
+    /// con el WAKE que la batalla manda a los hijos de su oleada en cada frame mientras dura. Al despertar se sueltan de
+    /// ella. Si luego pierden al caballero (sale de su zona: en el coop, el del PC que lo mueve), se teletransportan a su
+    /// sitio de salida, por encima de la arena, y vuelven a `Manual Sleep`, ya fuera de la oleada: el WAKE no les
+    /// llegaba y la oleada esperaba para siempre (la 22, la 23 y la 29 de Oro: «a veces no salen enemigos», issue #8). En
+    /// el PC que lo mueve, desde que la batalla llega a su oleada y mientras dure la prueba, se le vuelve a mandar el WAKE,
+    /// como hace la batalla con los que siguen colgando de ella.
+    /// </summary>
+    private void RewakeColosseumMage(Enemy enemy) {
+        if (enemy.MageWave == null || enemy.Transform.parent != null || enemy.Health == null || enemy.Health.isDead) {
+            return;
+        }
+
+        var fsm = FindMageFsm(enemy);
+        if (fsm == null || !fsm.enabled || fsm.ActiveStateName != MageManualSleep) {
+            return;
+        }
+
+        // Su oleada ya empezó y la prueba sigue: una oleada acaba con uno de sus magos aún vivo (la 22 de Oro, con uno de
+        // dos) y ese cuenta para la siguiente, así que también se le despierta en las oleadas de después
+        var battle = ColosseumBattle();
+        if (battle == null) {
+            return;
+        }
+
+        enemy.MageWaveReached |= battle.ActiveStateName == enemy.MageWave;
+        if (!enemy.MageWaveReached || _colosseumManager == null || _colosseumManager.ActiveStateName != ColosseumFighting) {
+            return;
+        }
+
+        Log.Info($"{enemy.Root.name}: dormido fuera de su oleada ({enemy.MageWave}) con la prueba en curso; se le vuelve a despertar");
+        fsm.SendEvent(MageWakeEvent);
+    }
+
+    /// <summary>Estado de la FSM `Manager` del Coliseo mientras dura la prueba.</summary>
+    private const string ColosseumFighting = "Waves Start";
+
+    private PlayMakerFSM _colosseumManager;
+
+    /// <summary>Apunta la oleada del mago mientras aún cuelga de ella (en todos los PCs: también en las marionetas).</summary>
+    private static void NoteMageWave(Enemy enemy) {
+        enemy.MageWaveChecked = true;
+        var parent = enemy.Transform.parent;
+        if (parent != null && parent.name.StartsWith("Wave", StringComparison.Ordinal) && FindMageFsm(enemy) != null) {
+            enemy.MageWave = parent.name;
+        }
+    }
+
+    private static PlayMakerFSM FindMageFsm(Enemy enemy) {
+        if (enemy.Fsms == null) {
+            return null;
+        }
+
+        foreach (var fsm in enemy.Fsms) {
+            if (fsm != null && fsm.FsmName == MageFsm && fsm.gameObject == enemy.Root) {
+                return fsm;
+            }
+        }
+
+        return null;
+    }
+
+    private PlayMakerFSM _colosseumBattle;
+    private string _colosseumBattleScene;
+
+    /// <summary>La FSM `Battle Control` del Coliseo de esta sala (null si no hay).</summary>
+    private PlayMakerFSM ColosseumBattle() {
+        if (_colosseumBattleScene != _scene) {
+            _colosseumBattleScene = _scene;
+            var manager = GameObject.Find("Colosseum Manager");
+            _colosseumBattle = manager != null ? FSMUtility.LocateFSM(manager, "Battle Control") : null;
+            _colosseumManager = manager != null ? FSMUtility.LocateFSM(manager, "Manager") : null;
+        }
+
+        return _colosseumBattle;
+    }
+
     private const float StuckSeconds = 5f;
 
     private float _nextUnstickCheck;
@@ -4436,7 +4532,24 @@ internal sealed class EnemySync {
 
             var found = 0;
             foreach (var action in start.Actions) {
-                if (action == null || !action.Enabled || !LookupActions.Contains(action.GetType().Name)) {
+                if (action == null || !action.Enabled) {
+                    continue;
+                }
+
+                // Las piezas que su lógica suelta al empezar (la hoja y el fondo de las Gulkas, `Cover` y `Under`): sin
+                // soltarlas aquí seguían colgando de la marioneta y se apagaban con su cuerpo al morir, mientras en el PC
+                // que la movía seguían en la sala (la sala no quedaba igual en los dos, issue #8)
+                if (action is HutongGames.PlayMaker.Actions.SetParent { parent.Value: null } setParent) {
+                    var piece = fsm.Fsm.GetOwnerDefaultTarget(setParent.gameObject);
+                    if (piece != null && piece != enemy.Root && piece.transform.IsChildOf(enemy.Transform)) {
+                        piece.transform.SetParent(null, true);
+                        found++;
+                    }
+
+                    continue;
+                }
+
+                if (!LookupActions.Contains(action.GetType().Name)) {
                     continue;
                 }
 
@@ -6229,6 +6342,9 @@ internal sealed class EnemySync {
 
         enemy.Puppet = puppet;
         if (puppet) {
+            // Si su lógica no llegó a arrancar aquí, nunca arrancará mientras sea marioneta: sus piezas se buscan y se
+            // sueltan ya, como en el PC que la mueve (ver PrepareUnstarted)
+            PrepareUnstarted(enemy);
             enemy.Disabled.Clear();
             enemy.PausedFsms.Clear();
             foreach (var behaviour in enemy.Root.GetComponents<Behaviour>()) {
@@ -7280,6 +7396,7 @@ internal sealed class EnemySync {
                 sync._enemyFsms.TryGetValue(self, out var dying) && !dying.Enemy.Puppet) {
                 dying.Enemy.DeathState = true;
             }
+
 
             if (sync?._session != null && toState != null && sync._soundFsms.Count > 0) {
                 sync.OnFsmState(self, toState);
