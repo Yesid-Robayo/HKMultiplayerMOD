@@ -70,9 +70,9 @@ internal sealed class HostSettings {
     /// <summary>
     /// Versión del formato del mensaje: un invitado con otra la ignora (sigue con los de por defecto). La 2 añadió las
     /// barras de enemigos y "ir con un compañero" (y cambió el orden); la 3, los compañeros en el mapa; la 4, viajar
-    /// juntos en ciervo.
+    /// juntos en ciervo; la 5, el mapa compartido.
     /// </summary>
-    private const byte FormatVersion = 4;
+    private const byte FormatVersion = 5;
 
     private const string FileName = "settings.json";
 
@@ -154,12 +154,20 @@ internal sealed class HostSettings {
     public static readonly HostOption StagTogetherOption = new(20, "stagTogether", "Viajar juntos en ciervo", "Ride the stag together",
         YesNoValues, YesNo, YesNoEnglish, 0);
 
+    /// <summary>
+    /// Si las salas visitadas y dibujadas del mapa son del mundo (lo que explora uno sale en el mapa de todos) o de cada
+    /// jugador (cada uno ve dónde estuvo él). Lo pidió un jugador (issue #8). Compartido por defecto, como antes. Al volver a
+    /// compartirlo, los mapas de los conectados se juntan (ver <see cref="World.SharedProgress"/>).
+    /// </summary>
+    public static readonly HostOption SharedMapOption = new(21, "sharedMap", "Mapa compartido", "Shared map",
+        YesNoValues, YesNo, YesNoEnglish, 0);
+
     /// <summary>Todos, en el orden del mensaje y del panel (su posición es su <see cref="HostOption.Index"/>).</summary>
     public static readonly HostOption[] Options = {
         BossHealthOption, EnemyHealthOption, PartnerInRoomOption, DamageTakenOption,
         ReviveOption, ReviveSecondsOption, ReviveSoulOption, ReviveMasksOption, ReviveInvulnerableOption, ReviveAtBenchOption,
         ShowNamesOption, ShowPartnerHealthOption, ShowArrowsOption, ShowPartnerOnMapOption, ShowNoticesOption, ShowBossBarOption,
-        ShowEnemyBarsOption, GeoGiftsOption, PartnerTravelOption, SkipCutscenesOption, StagTogetherOption
+        ShowEnemyBarsOption, GeoGiftsOption, PartnerTravelOption, SkipCutscenesOption, StagTogetherOption, SharedMapOption
     };
 
     /// <summary>Posición elegida de cada ajuste.</summary>
@@ -219,6 +227,9 @@ internal sealed class HostSettings {
 
     /// <summary>Si quien viaja en ciervo se lleva a los compañeros que están cerca en la estación.</summary>
     public bool StagTogether => Flag(StagTogetherOption);
+
+    /// <summary>Si el mapa (salas visitadas y dibujadas) es del mundo; si no, de cada jugador.</summary>
+    public bool SharedMap => Flag(SharedMapOption);
 
     // =====================================================================================================
     // Red

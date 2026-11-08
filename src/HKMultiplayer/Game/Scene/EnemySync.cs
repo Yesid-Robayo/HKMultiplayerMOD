@@ -1798,6 +1798,26 @@ internal sealed class EnemySync {
         health != null && _active != null && _active._byHealth.TryGetValue(health, out var enemy) &&
         (enemy.DeathState || enemy.Puppet && enemy.DeadThere);
 
+    /// <summary>
+    /// Si este PC mueve el enemigo vivo de la sala con ese nombre (true), lo mueve otro (false) o no está (null). Para los
+    /// objetos que van con un enemigo sin ser parte de él (la guadaña de Galien, ver <see cref="FsmStateSync"/>).
+    /// </summary>
+    internal static bool? MovesHere(string rootName) {
+        var sync = _active;
+        if (sync == null) {
+            return null;
+        }
+
+        foreach (var enemy in sync._enemies) {
+            if (enemy.Root != null && enemy.Health != null && !enemy.Health.isDead && enemy.Root.name == rootName) {
+                // Apagado (antes del combate) aún no lo mueve nadie de verdad
+                return enemy.Root.activeInHierarchy ? !enemy.Puppet : null;
+            }
+        }
+
+        return null;
+    }
+
     internal static uint SyncIdOf(HealthManager health) =>
         health != null && _active != null && _active._byHealth.TryGetValue(health, out var enemy) ? enemy.Id : 0u;
 
@@ -3070,6 +3090,14 @@ internal sealed class EnemySync {
                 continue;
             }
 
+            // Un enemigo normal tampoco pasa a quien no ve (fuera de la arena, al otro lado de una pared): su lógica lo
+            // perseguía contra la pared y nadie de dentro podía pegarle. En el Coliseo de Oro, con el de dentro caído, los
+            // Mosquitos pasaban al que esperaba en la entrada y se quedaban pegados a la pared de la arena (issue #8). Si
+            // nadie a la vista puede llevarlo, sigue con quien lo llevaba aunque esté caído
+            if (!boss && HiddenFrom(position, playerPosition)) {
+                continue;
+            }
+
             var distance = Vector2.Distance(position, playerPosition);
             var inZone = InZone(zone, playerPosition);
             if (inZone && !nearestInZone || inZone == nearestInZone && distance < nearestDistance) {
@@ -3285,9 +3313,30 @@ internal sealed class EnemySync {
         return result;
     }
 
-    /// <summary>Si hay terreno entre el jefe y ese punto (un caballero al otro lado de una pared o de una reja).</summary>
-    private static bool HiddenFrom(Vector3 boss, Vector3 player) =>
-        Physics2D.Linecast(boss, player + Vector3.up * 0.5f, TerrainLayerMask).collider != null;
+    /// <summary>
+    /// Si hay terreno entre el jefe y ese punto (un caballero al otro lado de una pared o de una reja). Las plataformas que
+    /// mueve un objeto compartido (las del Coliseo, ascensores) no tapan: en el Coliseo de Oro el Guerrero de Almas quedaba
+    /// "tapado" por ellas para uno y luego para el otro, y pasaba de un PC a otro cada pocos segundos (issue #8). Las rejas
+    /// sí tapan.
+    /// </summary>
+    private static bool HiddenFrom(Vector3 boss, Vector3 player) {
+        // Metido en el terreno (los que excavan, los que salen del suelo): la línea choca al empezar y no dice nada
+        if (Physics2D.OverlapPoint(boss, TerrainLayerMask) != null) {
+            return false;
+        }
+
+        var count = Physics2D.LinecastNonAlloc(boss, player + Vector3.up * 0.5f, HiddenHits, TerrainLayerMask);
+        for (var i = 0; i < count; i++) {
+            var collider = HiddenHits[i].collider;
+            if (collider != null && !collider.isTrigger && !FsmStateSync.IsMovingPlatform(collider)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static readonly RaycastHit2D[] HiddenHits = new RaycastHit2D[16];
 
     /// <summary>
     /// Su lógica principal cambia de estado (moviéndolo este PC): apunta cuándo deja el reposo y, si el dueño (este PC)

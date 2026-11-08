@@ -22,6 +22,19 @@ internal static class CharacterData {
     /// <summary>Máximo de objetos de sala individuales aceptados de otro PC.</summary>
     private const int MaxSceneItems = 4000;
 
+    /// <summary>Propiedad del JSON del personaje con su propio mapa (ver <see cref="MapLists"/>).</summary>
+    private const string MapProperty = "_map";
+
+    /// <summary>Máximo de salas por lista del mapa aceptadas de otro PC (el juego tiene unas 480).</summary>
+    private const int MaxMapScenes = 2000;
+
+    /// <summary>
+    /// Listas del mapa: las salas visitadas y las ya dibujadas (con la pluma, al descansar). Con el mapa compartido (por
+    /// defecto) son del mundo; si el host lo desactiva, de cada jugador (issue #8). El personaje guarda siempre las suyas
+    /// para que al dejar de compartirlo cada uno conserve lo que llevaba.
+    /// </summary>
+    public static readonly string[] MapLists = { "scenesVisited", "scenesMapped" };
+
     private static IEnumerable<string> Numbered(string prefix, int from, int to) =>
         Enumerable.Range(from, to - from + 1).Select(i => prefix + i);
 
@@ -309,7 +322,59 @@ internal static class CharacterData {
         }
 
         data[SceneItemsProperty] = items;
+        var map = new JObject();
+        foreach (var name in MapLists) {
+            map[name] = new JArray(ReadList(playerData, name).Cast<object>().ToArray());
+        }
+
+        data[MapProperty] = map;
         return data;
+    }
+
+    private static List<string> ReadList(PlayerData playerData, string name) =>
+        typeof(PlayerData).GetField(name, BindingFlags.Public | BindingFlags.Instance)?.GetValue(playerData) as List<string> ??
+        new List<string>();
+
+    /// <summary>Salas válidas de una lista del mapa recibida (texto corto, sin repetir, con límite).</summary>
+    private static JArray CleanMapList(JToken token) {
+        var clean = new JArray();
+        if (token is not JArray list) {
+            return clean;
+        }
+
+        var seen = new HashSet<string>();
+        foreach (var entry in list.Take(MaxMapScenes)) {
+            if (entry.Type == JTokenType.String && (string) entry is { Length: > 0 and <= 128 } scene && seen.Add(scene)) {
+                clean.Add(scene);
+            }
+        }
+
+        return clean;
+    }
+
+    /// <summary>
+    /// Con el mapa compartido, el host junta en su partida las salas del mapa que el personaje que entra tenía y el mundo
+    /// no (las exploró con el mapa de cada uno). La comparación del progreso compartido las envía después a todos.
+    /// Devuelve cuántas añadió.
+    /// </summary>
+    public static int MergeMapInto(PlayerData playerData, JObject character) {
+        if (character?[MapProperty] is not JObject map) {
+            return 0;
+        }
+
+        var added = 0;
+        foreach (var name in MapLists) {
+            var list = ReadList(playerData, name);
+            foreach (var scene in CleanMapList(map[name])) {
+                var value = (string) scene;
+                if (!list.Contains(value)) {
+                    list.Add(value);
+                    added++;
+                }
+            }
+        }
+
+        return added;
     }
 
     /// <summary>
@@ -355,6 +420,15 @@ internal static class CharacterData {
         }
 
         clean[SceneItemsProperty] = items;
+        if (character[MapProperty] is JObject map) {
+            var cleanMap = new JObject();
+            foreach (var name in MapLists) {
+                cleanMap[name] = CleanMapList(map[name]);
+            }
+
+            clean[MapProperty] = cleanMap;
+        }
+
         return clean;
     }
 
@@ -364,10 +438,19 @@ internal static class CharacterData {
     /// <paramref name="defaults"/> (p. ej. personajes guardados con una versión anterior), salvo lo que antes era del
     /// mundo (<see cref="WasShared"/>): eso se queda como está en el mundo.
     /// </summary>
-    public static void ApplyToWorld(JObject worldJson, JObject character, JObject defaults) {
+    /// <param name="sharedMap">
+    /// Si el mapa es del mundo. Si no, el personaje lleva el suyo (uno nuevo, vacío; uno guardado antes de la 0.35.0, sin
+    /// mapa propio, se queda con el del mundo).
+    /// </param>
+    public static void ApplyToWorld(JObject worldJson, JObject character, JObject defaults, bool sharedMap) {
         var playerJson = (JObject) worldJson["playerData"];
         ApplyFields(playerJson, defaults, character != defaults ? character : null);
         ApplyFields(playerJson, character);
+        if (!sharedMap && character[MapProperty] is JObject map) {
+            foreach (var name in MapLists) {
+                playerJson[name] = CleanMapList(map[name]);
+            }
+        }
 
         if (worldJson["sceneData"]?["persistentBoolItems"] is not JArray sceneItems) {
             return;

@@ -4,7 +4,7 @@
 
 **Mod cooperativo para Hollow Knight: juega el mundo entero con tus amigos, en red local o por internet.**
 
-![Versión](https://img.shields.io/badge/versión-0.34.0-7fb2ff)
+![Versión](https://img.shields.io/badge/versión-0.35.0-7fb2ff)
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
@@ -354,6 +354,7 @@ al momento sin poder cambiarlos.
 | Regalar geo · Permitir ir con un compañero | Sí · No | Sí |
 | Saltar cinemáticas | Votación · Cualquiera | Votación |
 | Viajar juntos en ciervo | Sí · No | Sí |
+| Mapa compartido (con No, cada jugador tiene su propio mapa) | Sí · No | Sí |
 
 La vida de los jefes y de los enemigos es la vida extra con un compañero: cada compañero más en pie en la sala suma lo
 mismo otra vez (1,5× es 2× con tres jugadores y 2,5× con cuatro). Los jefes que se aturden tras unos golpes (Hornet,

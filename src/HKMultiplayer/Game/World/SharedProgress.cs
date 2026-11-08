@@ -84,6 +84,14 @@ internal sealed class SharedProgress {
     private static readonly Action<PlayerData, int>[] IntSetters;
     private static readonly FieldInfo[] ListFields;
 
+    /// <summary>Qué listas son las del mapa (<see cref="CharacterData.MapLists"/>): se comparten solo con el mapa compartido.</summary>
+    private static readonly bool[] MapListFlags;
+
+    private static bool IsMapList(int index) => index < MapListFlags.Length && MapListFlags[index];
+
+    /// <summary>Si el mapa se compartía en la última comparación (para notar cuando el host lo vuelve a compartir).</summary>
+    private bool _mapShared = true;
+
     private GameSession _session;
     private readonly MessageHandler _onChange;
     private bool _active;
@@ -120,6 +128,7 @@ internal sealed class SharedProgress {
         BoolFields = fields.Where(f => f.FieldType == typeof(bool)).ToArray();
         IntFields = fields.Where(f => f.FieldType == typeof(int)).ToArray();
         ListFields = fields.Where(f => f.FieldType == typeof(List<string>)).ToArray();
+        MapListFlags = ListFields.Select(f => Array.IndexOf(CharacterData.MapLists, f.Name) >= 0).ToArray();
         BoolGetters = BoolFields.Select(Getter<bool>).ToArray();
         BoolSetters = BoolFields.Select(Setter<bool>).ToArray();
         IntGetters = IntFields.Select(Getter<int>).ToArray();
@@ -242,6 +251,8 @@ internal sealed class SharedProgress {
             _listCounts[i] = (ListFields[i].GetValue(playerData) as List<string>)?.Count ?? 0;
         }
 
+        _mapShared = Features.HostSettings.Current.SharedMap;
+
         _knownActivated.Clear();
         _knownInts.Clear();
         _knownRocks.Clear();
@@ -281,12 +292,14 @@ internal sealed class SharedProgress {
             }
         }
 
+        CheckMapSharing();
         for (var i = 0; i < ListFields.Length; i++) {
             if (ListFields[i].GetValue(playerData) is not List<string> list) {
                 continue;
             }
 
-            if (list.Count < _listCounts[i]) {
+            if (list.Count < _listCounts[i] || IsMapList(i) && !_mapShared) {
+                // El mapa de cada uno no se envía
                 _listCounts[i] = list.Count;
                 continue;
             }
@@ -297,6 +310,25 @@ internal sealed class SharedProgress {
 
             _listCounts[i] = list.Count;
         }
+    }
+
+    /// <summary>
+    /// Si el host acaba de volver a compartir el mapa, cada PC envía todas sus salas del mapa (las cuentas a 0): quien las
+    /// recibe añade las que le faltan y todos acaban con la unión de lo que exploró cada uno por su cuenta.
+    /// </summary>
+    private void CheckMapSharing() {
+        var shared = Features.HostSettings.Current.SharedMap;
+        if (shared && !_mapShared) {
+            for (var i = 0; i < _listCounts.Length; i++) {
+                if (IsMapList(i)) {
+                    _listCounts[i] = 0;
+                }
+            }
+
+            Log.Info("El mapa vuelve a ser compartido: se envían las salas de este jugador para juntar los mapas");
+        }
+
+        _mapShared = shared;
     }
 
     private static void InstallHooks() {
@@ -392,7 +424,8 @@ internal sealed class SharedProgress {
 
     /// <summary>Un cambio local: al host (o, si somos el host, a todos).</summary>
     private void Send(in Change change) {
-        if (_session == null) {
+        // Sin conexión (el host acaba de cerrar y este PC guarda al salir) no hay a quién enviarlo (issue #8)
+        if (_session == null || !_session.CanSend) {
             return;
         }
 
@@ -483,6 +516,11 @@ internal sealed class SharedProgress {
             }
 
             change.Origin = from.Id;
+            if (change.Kind == Kind.ListAdd && IsMapList(change.Index) && !Features.HostSettings.Current.SharedMap) {
+                // Llegó justo al dejar de compartir el mapa: ni se reenvía ni se aplica
+                return;
+            }
+
             Broadcast(change, from);
         }
 
@@ -537,6 +575,11 @@ internal sealed class SharedProgress {
                     break;
                 }
                 case Kind.ListAdd:
+                    if (IsMapList(change.Index) && !Features.HostSettings.Current.SharedMap) {
+                        // Mapa de cada uno: lo que explora el otro no sale en el de este jugador
+                        break;
+                    }
+
                     if (ListFields[change.Index].GetValue(playerData) is List<string> list && !list.Contains(change.Id)) {
                         var before = list.Count;
                         list.Add(change.Id);

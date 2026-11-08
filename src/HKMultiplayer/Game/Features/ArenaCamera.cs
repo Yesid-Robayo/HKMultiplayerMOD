@@ -10,6 +10,9 @@ namespace HKMultiplayer.Game.Features;
 /// llegar más allá de las rejas), se quedaba con la cámara fija en la arena y sin verse (issue #7). Ahora la zona solo
 /// fija la cámara si con sus límites el caballero sigue a la vista; en cuanto entra, la fija como siempre (el juego la
 /// vuelve a pedir en cada paso de física mientras está dentro).
+/// Solo con el caballero fuera de una arena cerrada (<see cref="Scene.FsmStateSync.HeroOutsideClosedArena"/>): en las
+/// salas normales el juego fija zonas con el caballero aún en el borde (al entrar por una puerta), y en la 0.34.0 este
+/// filtro las rechazaba también y la cámara dejaba de seguir al juego (visto en los registros del issue #8).
 /// </summary>
 internal static class ArenaCamera {
     /// <summary>Media vista de la cámara del juego (los límites por defecto de `CameraController`).</summary>
@@ -60,9 +63,10 @@ internal static class ArenaCamera {
 
         position = hero.transform.position;
         // Un límite negativo es "sin límite" por ese lado (el del borde de la sala)
-        return area.cameraXMin >= 0f && position.x < area.cameraXMin - HalfWidth + Margin ||
-               area.cameraXMax >= 0f && position.x > area.cameraXMax + HalfWidth - Margin ||
-               area.cameraYMin >= 0f && position.y < area.cameraYMin - HalfHeight + Margin ||
-               area.cameraYMax >= 0f && position.y > area.cameraYMax + HalfHeight - Margin;
+        var outOfView = area.cameraXMin >= 0f && position.x < area.cameraXMin - HalfWidth + Margin ||
+                        area.cameraXMax >= 0f && position.x > area.cameraXMax + HalfWidth - Margin ||
+                        area.cameraYMin >= 0f && position.y < area.cameraYMin - HalfHeight + Margin ||
+                        area.cameraYMax >= 0f && position.y > area.cameraYMax + HalfHeight - Margin;
+        return outOfView && Scene.FsmStateSync.HeroOutsideClosedArena();
     }
 }

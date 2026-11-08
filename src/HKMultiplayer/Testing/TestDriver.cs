@@ -750,6 +750,11 @@ internal sealed class TestDriver : MonoBehaviour {
                 // estado de cada FSM y si es marioneta
                 StartCoroutine(TraceEnemy(ParseFloat(args[1]), string.Join(" ", args.Skip(2))));
                 break;
+            case "objtrace":
+                // objtrace <segundos> <nombre>: como enemytrace, para cualquier objeto activo con ese nombre (la guadaña de
+                // Galien): cada 0,1 s, con la hora del reloj (ms UTC), su posición y el estado de sus FSM
+                StartCoroutine(TraceObject(ParseFloat(args[1]), string.Join(" ", args.Skip(2))));
+                break;
             case "moveobj":
                 // moveobj <ruta del objeto>|<x>|<y>: lleva ese objeto a ese punto (p. ej. un recorte de la oscuridad)
                 var moveObjArgs = string.Join(" ", args.Skip(1)).Split('|');
@@ -1744,6 +1749,21 @@ internal sealed class TestDriver : MonoBehaviour {
                 Log.Info($"{Tag}traza {DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()} {health.name} " +
                          $"pos=({position.x:0.00};{position.y:0.00}) ve={(renderer != null && renderer.enabled)} " +
                          $"anim={animator?.CurrentClip?.name} {states}");
+            }
+
+            yield return new WaitForSecondsRealtime(0.1f);
+        }
+    }
+
+    private IEnumerator TraceObject(float seconds, string name) {
+        var until = Time.unscaledTime + seconds;
+        while (Time.unscaledTime < until) {
+            var found = GameObject.Find(name);
+            if (found != null) {
+                var position = found.transform.position;
+                var states = string.Join(",", found.GetComponents<PlayMakerFSM>().Select(f => $"{f.FsmName}:{f.ActiveStateName}{(f.enabled ? "" : "(parada)")}"));
+                Log.Info($"{Tag}trazaobj {DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()} {found.name} " +
+                         $"pos=({position.x:0.00};{position.y:0.00}) {states}");
             }
 
             yield return new WaitForSecondsRealtime(0.1f);

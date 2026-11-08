@@ -86,6 +86,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Viajar juntos en ciervo desde la misma estación.</summary>
     public Features.StagTogether Stag { get; } = new();
 
+    /// <summary>Entrar juntos a una prueba del Coliseo: la reja se abre para todos los de la entrada.</summary>
+    public Features.ColosseumEntry Colosseum { get; } = new();
+
     /// <summary>Entrar juntos en un Panteón desde su puerta del Atrio.</summary>
     public Features.PantheonTogether Pantheons { get; } = new();
 
@@ -350,6 +353,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             MenderBug.Update(scene);
             Grimmchild.Update(scene);
             Stag.Update(scene);
+            Colosseum.Update(scene);
             PartnerMap.Update(scene);
             PartyAbilities.Update();
             Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene
@@ -781,6 +785,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Safely(() => { Skins.Detach(); }, "Skins.Detach");
         Safely(() => { Grimmchild.Detach(); }, "Grimmchild.Detach");
         Safely(() => { Stag.Detach(); }, "Stag.Detach");
+        Safely(() => { Colosseum.Detach(); }, "Colosseum.Detach");
         Safely(() => { Pantheons.Detach(); }, "Pantheons.Detach");
         Safely(() => { MenderBug.Detach(); }, "MenderBug.Detach");
         Safely(() => { Scene.DropSeeds.Enabled = false; }, "Scene.DropSeeds.Enabled");
@@ -935,6 +940,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Travel.Attach(session, Party, Revive, Dreams, Cutscenes, Players);
         Grimmchild.Attach(session);
         Stag.Attach(session);
+        Colosseum.Attach(session);
         Pantheons.Attach(session);
         MenderBug.Attach(session);
         Scene.DropSeeds.Enabled = true;

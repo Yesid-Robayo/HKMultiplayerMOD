@@ -82,7 +82,18 @@ internal sealed class FsmStateSync {
     /// combate.
     /// </summary>
     private static bool IsGate(PlayMakerFSM fsm) =>
-        fsm.FsmName == GateFsm || (fsm.FsmName == DreamGateFsm || fsm.FsmName == DreamGatePhase2Fsm) && IsDreamGate(fsm.gameObject.name);
+        fsm.FsmName == GateFsm || (fsm.FsmName == DreamGateFsm || fsm.FsmName == DreamGatePhase2Fsm) && IsDreamGate(fsm.gameObject.name) ||
+        fsm.FsmName == ColosseumGateFsm && fsm.gameObject.name == ColosseumGateName;
+
+    /// <summary>
+    /// La reja de la izquierda de las arenas del Coliseo (`Colosseum Gate`, FSM `Rise`): se cierra al empezar la prueba.
+    /// Era un objeto más de la batalla y no se podía cruzar: quien llegaba tarde se quedaba fuera, en la entrada, y los
+    /// enemigos que movía su PC (o el de un caído, cuya cámara lo sigue) se pegaban a la pared persiguiéndolo (issue #8).
+    /// Ahora es una reja de batalla: se cruza hacia dentro, no hacia fuera.
+    /// </summary>
+    private const string ColosseumGateName = "Colosseum Gate";
+
+    private const string ColosseumGateFsm = "Rise";
 
     /// <summary>"Dream Gate", "Dream Gate (1)", "Dream Gate Phase 2 (2)"...; no "Dream Gate Set Lock" (no es una puerta).</summary>
     private static bool IsDreamGate(string name) =>
@@ -128,6 +139,7 @@ internal sealed class FsmStateSync {
         ("Colosseum Manager", "Battle Control"),
         ("Colosseum Cage", "Spawn"),
         ("Colosseum Cage Zote", "Control"),
+        (ColosseumGateName, ColosseumGateFsm),
         ("Hornet Outskirts Battle Encounter", "Encounter"),
         // La Radiancia: la desafía uno en su cartel y su presentación (y la Radiancia, que enciende) va en todos
         ("Boss Control", "Control"),
@@ -192,6 +204,85 @@ internal sealed class FsmStateSync {
     /// aguijón onírico del fantasma de un guerrero soñador. Su aviso al encuentro es usarlo (ver <c>OnEvent</c>).
     /// </summary>
     private static readonly HashSet<string> LocalUseFsms = new() { "npc_control", "ghost_npc_dreamnail" };
+
+    /// <summary>
+    /// Armas que son un objeto de la sala aparte de su enemigo (principio del nombre del arma, nombre del enemigo): la
+    /// guadaña de Galien (`Galien Hammer`, hermana de `Ghost Warrior Galien`). Su `Control` lo sigue la arena del guerrero
+    /// (como un controlador de batalla) y su `Attack` persigue al caballero con física cuando Galien se lo pide. Antes el
+    /// control de la guadaña y Galien acababan en PCs distintos, y en cada PC su `Attack` la movía hacia su propio
+    /// caballero mientras llegaba la posición del otro: la guadaña saltaba y sus ataques no coincidían (issue #8). Ahora la
+    /// lleva siempre el PC que mueve al enemigo; en los demás solo sigue su posición y sus estados.
+    /// </summary>
+    private static readonly (string Weapon, string Enemy)[] EnemyWeapons = { ("Galien Hammer", "Ghost Warrior Galien") };
+
+    private static string WeaponOwner(GameObject owner) {
+        if (owner == null) {
+            return null;
+        }
+
+        foreach (var (weapon, enemy) in EnemyWeapons) {
+            if (owner.name.StartsWith(weapon, StringComparison.Ordinal)) {
+                return enemy;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// El arma de un enemigo va con quien lo mueve: ese PC la controla y su ataque corre allí; en los demás su ataque se
+    /// apaga (sigue la posición que llega) y no se le reenvían los avisos del enemigo (ver <see cref="EnemyWeapons"/>).
+    /// </summary>
+    private void UpdateWeapon(Tracked item) {
+        var here = EnemySync.MovesHere(item.FollowsEnemy);
+        if (here == true && item.Controller != _session.LocalId) {
+            TakeControl(item, $"este PC mueve a {item.FollowsEnemy}");
+        }
+
+        var runs = here ?? IsController(item);
+        foreach (var other in item.Fsm.GetComponents<PlayMakerFSM>()) {
+            if (other == item.Fsm || other.enabled == runs) {
+                continue;
+            }
+
+            other.enabled = runs;
+            if (!runs) {
+                // Lo que llevaba de su persecución no debe seguir moviéndola: aquí la mueve la posición recibida
+                var body = other.GetComponent<Rigidbody2D>();
+                if (body != null) {
+                    body.velocity = Vector2.zero;
+                }
+            } else if (here == true) {
+                ResumeWeaponAttack(item, other);
+            }
+
+            Log.Info($"{other.gameObject.name}/{other.FsmName}: {(runs ? "corre en este PC (mueve a " : "parado aquí (lo lleva quien mueve a ")}{item.FollowsEnemy})");
+        }
+    }
+
+    /// <summary>
+    /// El enemigo pide el ataque del arma una sola vez, al empezar (Galien: `HAMMER ATTACK` desde su estado `Attack`). Si
+    /// el arma pasa a este PC con el combate ya en marcha (su `Control` girando), su `Attack` vuelve a encenderse en
+    /// reposo y se quedaba quieta para siempre: sigue persiguiendo desde `Chase`, con el enemigo que busca al empezar.
+    /// </summary>
+    private static void ResumeWeaponAttack(Tracked item, PlayMakerFSM attack) {
+        if (attack.FsmName != WeaponAttackFsm || item.Fsm.ActiveStateName is not ("Start Spin" or "Spinning" or "Decel")) {
+            return;
+        }
+
+        var enemy = GameObject.Find(item.FollowsEnemy);
+        var variable = attack.FsmVariables.FindFsmGameObject(item.FollowsEnemy);
+        if (enemy == null || variable == null || attack.Fsm.GetState(WeaponChaseState) == null) {
+            return;
+        }
+
+        variable.Value = enemy;
+        attack.SetState(WeaponChaseState);
+        Log.Info($"{attack.gameObject.name}/{attack.FsmName}: sigue persiguiendo en este PC desde {WeaponChaseState}");
+    }
+
+    private const string WeaponAttackFsm = "Attack";
+    private const string WeaponChaseState = "Chase";
 
     private static bool IsZoneOnly(Fsm fsm) {
         var name = fsm.GameObject != null ? fsm.GameObject.name : null;
@@ -301,6 +392,9 @@ internal sealed class FsmStateSync {
         public readonly HashSet<ushort> ConvoDone = new();
         public bool WaitingConvo;
         public float WaitingSince;
+
+        /// <summary>Arma de un enemigo: el nombre de ese enemigo (ver <see cref="EnemyWeapons"/>); null si no lo es.</summary>
+        public string FollowsEnemy;
     }
 
     private readonly List<Tracked> _tracked = new();
@@ -672,6 +766,10 @@ internal sealed class FsmStateSync {
                 UpdateGatePassage(item);
             }
 
+            if (item.FollowsEnemy != null) {
+                UpdateWeapon(item);
+            }
+
             if (IsController(item)) {
                 // Lo mueve este PC porque el controlador se fue (o nadie lo había usado): pasa a serlo de verdad. Así,
                 // si vuelve (p. ej. tras morir), no manda con lo que cargó su sala; antes se espera un poco por si ya
@@ -852,6 +950,7 @@ internal sealed class FsmStateSync {
         // Un guardable recién cargado aún se está iniciando (p. ej. "Pause" → "Idle"): su reposo se toma cuando lleva un
         // rato quieto; si no, el fin de su inicio parecía un golpe y se copiaba a los demás al entrar en la sala
         item.RestState = item.CopyTransitions ? null : item.LastState;
+        item.FollowsEnemy = item.CopyTransitions ? null : WeaponOwner(item.Fsm.gameObject);
         _tracked.Add(item);
         _byId[item.Id] = item;
         item.Key = item.Fsm.Fsm;
@@ -1712,6 +1811,12 @@ internal sealed class FsmStateSync {
             return _applying == item;
         }
 
+        // El arma de un enemigo que mueve otro PC: lo que le manden aquí no es usarla (allí ya pasó)
+        if (item.FollowsEnemy != null && sender != null && sender != fsm && fsmEvent.Name != "FINISHED" &&
+            EnemySync.MovesHere(item.FollowsEnemy) == false) {
+            return false;
+        }
+
         if (item.Encounter) {
             if (fsmEvent.Name == ConvoFinish) {
                 return OnConvoFinish(item);
@@ -2324,6 +2429,67 @@ internal sealed class FsmStateSync {
             item.Passing = true;
             gate.enabled = false;
         }
+    }
+
+    /// <summary>
+    /// Si el colisionador es de un objeto compartido que se mueve y no es una reja (plataformas del Coliseo y de la
+    /// Radiancia, ascensores): no es una pared entre un enemigo y un caballero (ver <c>EnemySync.HiddenFrom</c>).
+    /// </summary>
+    public static bool IsMovingPlatform(Collider2D collider) {
+        var sync = _active;
+        if (sync == null || collider == null) {
+            return false;
+        }
+
+        foreach (var item in sync._tracked) {
+            if (item.Fsm == null || item.CopyTransitions || item.Gate != null || !IsPlatformFsm(item.Fsm)) {
+                continue;
+            }
+
+            if (collider.transform == item.Fsm.transform || collider.transform.IsChildOf(item.Fsm.transform)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Plataformas y ascensores entre los objetos con controlador (no los controladores de batalla, que contienen la arena).</summary>
+    private static bool IsPlatformFsm(PlayMakerFSM fsm) =>
+        fsm.FsmName == LiftFsm || fsm.gameObject.name.StartsWith("Colosseum Platform", StringComparison.Ordinal) ||
+        fsm.gameObject.name.StartsWith("Radiant Plat", StringComparison.Ordinal) ||
+        fsm.gameObject.name.StartsWith("White Palace Lift", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Si el caballero de este PC está fuera de una arena cerrada en la sala (al otro lado de una reja de batalla o de
+    /// jefe cerrada, del lado contrario a la arena). Solo entonces una zona de cámara puede dejarlo fuera de la vista
+    /// (<see cref="Features.ArenaCamera"/>); en el resto de la sala manda el juego.
+    /// </summary>
+    public static bool HeroOutsideClosedArena() {
+        var sync = _active;
+        var hero = HeroController.instance;
+        if (sync == null || hero == null) {
+            return false;
+        }
+
+        var position = hero.transform.position;
+        foreach (var item in sync._tracked) {
+            if (item.Gate == null || item.Fsm == null || item.InsideSign == 0 ||
+                item.Fsm.ActiveStateName.IndexOf("Close", StringComparison.Ordinal) < 0) {
+                continue;
+            }
+
+            var gate = item.Gate;
+            var scale = gate.transform.lossyScale;
+            var vertical = Mathf.Abs(gate.size.y * scale.y) >= Mathf.Abs(gate.size.x * scale.x);
+            var center = gate.transform.TransformPoint(gate.offset);
+            var along = vertical ? position.x - center.x : position.y - center.y;
+            if (along * item.InsideSign < 0f) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

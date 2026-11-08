@@ -4,7 +4,7 @@
 
 **A co-op mod for Hollow Knight: play the whole world with your friends, on your local network or over the internet.**
 
-![Version](https://img.shields.io/badge/version-0.34.0-7fb2ff)
+![Version](https://img.shields.io/badge/version-0.35.0-7fb2ff)
 ![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
@@ -348,6 +348,7 @@ away without being able to change them.
 | Gift geo · Allow going to a partner | Yes · No | Yes |
 | Skip cutscenes | Vote · Anyone | Vote |
 | Ride the stag together | Yes · No | Yes |
+| Shared map (with No, each player has their own map) | Yes · No | Yes |
 
 The boss and enemy health is the extra health with one partner: each additional partner standing in the room adds the
 same again (1.5× is 2× with three players and 2.5× with four). Bosses that get stunned after a number of hits (Hornet,

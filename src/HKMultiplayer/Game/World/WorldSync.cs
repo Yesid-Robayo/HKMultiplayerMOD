@@ -275,11 +275,20 @@ internal sealed class WorldSync {
         var gm = GameManager.instance;
         // Lo que hay en la sala actual pasa a los datos de las salas antes de copiarlos
         gm.SaveLevelState();
+        var character = WorldStore.LoadCharacter(world.Id, key);
+        var sharedMap = Features.HostSettings.Current.SharedMap;
+        if (sharedMap && character != null) {
+            // Lo que exploró con el mapa de cada uno pasa al del mundo (y de ahí a todos)
+            var added = CharacterData.MergeMapInto(gm.playerData, character);
+            if (added > 0) {
+                Log.Info($"{added} salas del mapa de {target.Name} añadidas al mapa compartido");
+            }
+        }
+
         var json = JObject.Parse(JsonConvert.SerializeObject(new SaveGameData(gm.playerData, gm.sceneData),
             Formatting.None, WorldStore.SaveSettings));
-        var character = WorldStore.LoadCharacter(world.Id, key);
         var fresh = CharacterData.CreateNew(gm.playerData);
-        CharacterData.ApplyToWorld(json, character ?? fresh, fresh);
+        CharacterData.ApplyToWorld(json, character ?? fresh, fresh, sharedMap);
         var data = Compress(json.ToString(Formatting.None));
         _session.SendLargeTo(target, LargeWorld, data);
         Log.Info($"Mundo enviado a {target.Name} ({data.Length / 1024} KB, personaje {(character != null ? "guardado" : "nuevo")})");

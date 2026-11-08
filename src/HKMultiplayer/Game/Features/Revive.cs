@@ -1600,6 +1600,9 @@ internal sealed class Revive {
     private static VibrationDataAsset _revivedVibration;
     private static bool _revivedCueLoaded;
 
+    /// <summary>Copias simultáneas del sonido de revivir (cada una suma su volumen).</summary>
+    private const int RevivedSoundLayers = 2;
+
     /// <summary>
     /// Aviso de que te revivieron: el sonido, la vibración y el destello blanco de curarse con Focus (estado "Focus Heal"
     /// de la FSM "Spell Control" del caballero). Lo pidió un jugador (issue #7): al levantarse no se notaba nada.
@@ -1630,7 +1633,10 @@ internal sealed class Revive {
 
             var audio = hero.GetComponent<AudioSource>();
             if (_revivedSound != null && audio != null) {
-                audio.PlayOneShot(_revivedSound);
+                // Dos veces a la vez (el doble de fuerte): una sola no se oía en mitad de un jefe (issue #8)
+                for (var i = 0; i < RevivedSoundLayers; i++) {
+                    audio.PlayOneShot(_revivedSound, 1f);
+                }
             }
 
             if (_revivedVibration != null) {

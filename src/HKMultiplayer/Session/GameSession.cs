@@ -217,16 +217,20 @@ public sealed class GameSession : INetListener, IDisposable {
     /// </summary>
     public PacketWriter Begin(MessageType type) {
         DiscardAbandoned();
-        _writingLocal = true;
-        _localType = (byte) type;
         if (_server != null) {
+            _writingLocal = true;
+            _localType = (byte) type;
             // Host: se escribe aparte y al terminar se reparte a cada destinatario
             _localWriter.Reset(_localScratch, 0, _localScratch.Length - 3);
             return _localWriter;
         }
 
+        // Sin conexión (el host acaba de cerrar y este PC guardaba): antes fallaba aquí con el mensaje ya marcado como
+        // empezado, y cada mensaje siguiente volvía a fallar al descartarlo (issue #8)
+        var connection = _client?.Connection ?? throw new InvalidOperationException("Sin conexión con el host");
+        _writingLocal = true;
+        _localType = (byte) type;
         // Se dejan 2 bytes: el host añade quién lo envía al reenviarlo. Sin ellos, uno de 998-999 bytes no cabía allí
-        var connection = _client.Connection;
         var writer = MessageRoutes.IsReliable(_localType) ? connection.BeginReliable(2) : connection.BeginUnreliable(2);
         writer.WriteByte(_localType);
         return writer;
@@ -247,7 +251,7 @@ public sealed class GameSession : INetListener, IDisposable {
         }
 
         _writingLocal = false;
-        _client?.Connection.CancelMessage();
+        _client?.Connection?.CancelMessage();
         AbandonedMessages++;
         _log("Se descartó un mensaje a medio escribir (su escritor falló)");
     }
