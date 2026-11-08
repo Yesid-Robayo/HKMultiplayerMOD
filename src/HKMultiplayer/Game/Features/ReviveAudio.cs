@@ -29,6 +29,7 @@ internal static class ReviveAudio {
     private static bool _loaded;
     private static AudioClip _chargeClip;
     private static AudioClip _healClip;
+    private static GameObject _healPlayer;
     private static VibrationDataAsset _healVibration;
     private static float _fade;
 
@@ -153,16 +154,7 @@ internal static class ReviveAudio {
     public static void PlayRevived(HeroController hero, bool vibrate = true) {
         try {
             StopCharge();
-            Load(hero);
-            var audio = hero.GetComponent<AudioSource>();
-            var volume = Volume;
-            if (_healClip != null && audio != null && volume > 0f) {
-                // Varias copias a la vez, cada una con su parte del volumen: una sola no se oía en mitad de un jefe (#8)
-                var layers = Mathf.Min(MaxLayers, Mathf.CeilToInt(volume));
-                for (var i = 0; i < layers; i++) {
-                    audio.PlayOneShot(_healClip, volume / layers);
-                }
-            }
+            PlayHealBurst(hero);
 
             if (vibrate && _healVibration != null) {
                 VibrationManager.PlayVibrationClipOneShot(_healVibration);
@@ -173,6 +165,41 @@ internal static class ReviveAudio {
             }
         } catch (Exception e) {
             Log.Warn($"No se pudo dar el aviso de revivir: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// El estallido de curarse con Focus, como lo pone el juego: su reproductor de efectos ("Audio Player Actor") donde
+    /// está el caballero. Suena al levantarse y a quien revive al terminar. Varias copias a la vez con su parte del
+    /// volumen: una sola no se oía en mitad de un jefe (#8).
+    /// </summary>
+    public static void PlayHealBurst(HeroController hero) {
+        try {
+            if (!EnsureSources(hero) || _healClip == null) {
+                return;
+            }
+
+            var volume = Volume;
+            if (volume <= 0f) {
+                return;
+            }
+
+            var layers = Mathf.Min(MaxLayers, Mathf.CeilToInt(volume));
+            for (var i = 0; i < layers; i++) {
+                var player = _healPlayer != null
+                    ? ObjectPoolExtensions.Spawn(_healPlayer, hero.transform.position, Quaternion.Euler(Vector3.up))
+                    : null;
+                var audio = player != null ? player.GetComponent<AudioSource>() : null;
+                if (audio != null) {
+                    audio.pitch = 1f;
+                    audio.volume = Mathf.Min(1f, volume / layers);
+                    audio.PlayOneShot(_healClip);
+                } else {
+                    Layers[i].PlayOneShot(_healClip, volume / layers);
+                }
+            }
+        } catch (Exception e) {
+            Log.Warn($"No se pudo poner el sonido de curarse al revivir: {e.Message}");
         }
     }
 
@@ -192,8 +219,9 @@ internal static class ReviveAudio {
             }
 
             foreach (var action in state.Actions) {
-                if (action is HutongGames.PlayMaker.Actions.AudioPlayerOneShotSingle { audioClip.Value: AudioClip clip }) {
+                if (action is HutongGames.PlayMaker.Actions.AudioPlayerOneShotSingle { audioClip.Value: AudioClip clip } oneShot) {
                     _healClip = clip;
+                    _healPlayer = oneShot.audioPlayer.Value;
                 } else if (action is HutongGames.PlayMaker.Actions.PlayVibrationV2 { vibrationDataAsset.Value: VibrationDataAsset vibration }) {
                     _healVibration = vibration;
                 }
@@ -220,14 +248,19 @@ internal static class ReviveAudio {
         }
 
         var template = hero.transform.Find("Focus Effects/Charge Audio")?.GetComponent<AudioSource>();
+        Log.Info(template == null ? "Carga de revivir: sin la fuente de audio del caballero, va sin canal del mezclador"
+            : $"Carga de revivir: canal {template.outputAudioMixerGroup?.name ?? "-"}, volumen {template.volume:0.00}, " +
+              $"3D {template.spatialBlend:0.00} ({template.minDistance:0}-{template.maxDistance:0})");
         _root = new GameObject("HKMP Revive Audio");
         _root.transform.SetParent(hero.transform, false);
         for (var i = 0; i < MaxLayers; i++) {
             var source = _root.AddComponent<AudioSource>();
             source.playOnAwake = false;
+            // En 2D: el caballero siempre está en el centro de la pantalla, y en 3D, sin el alcance del original, a la
+            // distancia de la cámara no se oía nada
+            source.spatialBlend = 0f;
             if (template != null) {
                 source.outputAudioMixerGroup = template.outputAudioMixerGroup;
-                source.spatialBlend = template.spatialBlend;
                 source.priority = template.priority;
                 source.pitch = template.pitch;
             }

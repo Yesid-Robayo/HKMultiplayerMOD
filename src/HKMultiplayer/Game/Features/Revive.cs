@@ -1958,6 +1958,9 @@ internal sealed class Revive {
         _reservedSoul = 0;
         var target = _target;
         Log.Info($"Revivir a {_party.Get(target)?.Name ?? target.ToString()}: terminado, se pide al host");
+        // Quien revive también oye el estallido de Focus al terminar (antes la carga se cortaba sin más)
+        ReviveAudio.StopCharge();
+        ReviveAudio.PlayHealBurst(hero);
         var writer = _session.Begin(ReviveRequest);
         writer.WriteUShort(target);
         _session.End();

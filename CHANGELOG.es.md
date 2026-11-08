@@ -32,7 +32,8 @@ Al publicar una versión nueva, se añade aquí arriba con lo mismo que su secci
 - **Mapa compartido o propio**: nuevo ajuste del host, «Mapa compartido» (sí por defecto). Con «No», cada jugador tiene su
   propio mapa y ve solo dónde estuvo él. Al volver a «Sí», los mapas de todos se juntan.
 - **Sonido mientras se revive**: mantener Focus junto a un cuerpo no sonaba nada hasta el final. Ahora suena la carga de
-  Focus, para quien revive y para el caído, y el sonido al levantarse es más fuerte (antes no se oía en un combate).
+  Focus, para quien revive y para el caído, y al terminar los dos oyen el estallido de curarse, más fuerte que antes
+  (no se oía en un combate).
 - **Volumen de revivir**: nuevo ajuste de cada jugador, de *Sin sonido* a *400 %* (200 % por defecto), en *Pausa ›
   Multijugador › Skin y sonido* y en el menú Multijugador. Se cambia también con el mando.
 - **La cámara en las salas normales**: desde la 0.34.0, al entrar por el borde de una sala la cámara a veces no se

@@ -30,7 +30,8 @@ release notes.
 - **Shared or own map**: new host setting, "Shared map" (on by default). With "No", each player has their own map and
   only sees where they have been. Switching back to "Yes" merges everyone's maps.
 - **Sound while reviving**: holding Focus next to a body made no sound until the end. Now you hear the Focus charge,
-  both the reviver and the downed player, and the sound when you get up is louder (it couldn't be heard in a fight).
+  both the reviver and the downed player, and when it finishes both hear the Focus healing burst, louder than before
+  (it couldn't be heard in a fight).
 - **Revive volume**: new per-player setting, from *Off* to *400 %* (200 % by default), in *Pause › Multiplayer › Skin &
   sound* and in the Multiplayer menu. It also works with a controller.
 - **Camera in normal rooms**: since 0.34.0, entering a room from its edge sometimes left the camera unlocked where the
