@@ -632,8 +632,21 @@ internal sealed class Revive {
             return true;
         }
 
+        // Desde el centro del caballero, como el juego (`HeroController.FindGroundPoint`), y alcanzando lo mismo que antes
+        // por debajo de los pies. Antes salía 0,1 por encima de los pies: con un sitio seguro a ras de suelo (los de las
+        // zonas de pinchos están bajos) el rayo nacía dentro del suelo, y en este juego los rayos no ven el colisionador
+        // en el que nacen (`Physics2D.queriesStartInColliders` falso): lo cruzaba y el cuerpo quedaba en el suelo de
+        // debajo, donde nadie podía revivirlo (issue #10). Si el centro está dentro del terreno (el sitio seguro de una
+        // puerta metido en la pared), desde los pies como antes: subirlo lo dejaba encima de la pared
         var feetOffset = FeetOffset(hero);
-        var hit = Physics2D.Raycast(new Vector2(position.x, position.y - feetOffset + 0.1f), Vector2.down, reach, TerrainMask());
+        var mask = TerrainMask();
+        var origin = new Vector2(position.x, position.y);
+        if (Physics2D.OverlapPoint(origin, mask) is { isTrigger: false }) {
+            origin.y = position.y - feetOffset + 0.1f;
+        }
+
+        var lowest = position.y - feetOffset + 0.1f - reach;
+        var hit = Physics2D.Raycast(origin, Vector2.down, origin.y - lowest, mask);
         if (hit.collider == null) {
             return false;
         }

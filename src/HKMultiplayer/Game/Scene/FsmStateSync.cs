@@ -2086,12 +2086,24 @@ internal sealed class FsmStateSync {
         }
 
         foreach (var action in state.Actions) {
-            if (action is HutongGames.PlayMaker.Actions.Trigger2dEvent trigger && trigger.sendEvent?.Name == eventName) {
+            if (action is HutongGames.PlayMaker.Actions.Trigger2dEvent trigger && trigger.sendEvent?.Name == eventName &&
+                EnteredByKnight(trigger)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Si el aviso es de que entró un caballero (sin etiqueta, `Player` o `HeroBox`) y no de un golpe: el frasco de una
+    /// larva se rompe con un `Trigger2dEvent` de `Nail Attack`, y en una sala con un enemigo grande (el «Shell» de 9999
+    /// de vida de Fungus1_13) se tomaba por la zona de un combate y el golpe esperaba a que todos entraran en el frasco:
+    /// no se podía romper (issue #11). Tampoco cuentan el aguijón onírico, los hechizos ni lo que rompe paredes.
+    /// </summary>
+    private static bool EnteredByKnight(HutongGames.PlayMaker.Actions.Trigger2dEvent trigger) {
+        var tag = trigger.collideTag?.Value;
+        return string.IsNullOrEmpty(tag) || tag == "Untagged" || tag == "Player" || tag == "HeroBox";
     }
 
     /// <summary>Si los caballeros de todos los jugadores de la sala están dentro de la zona del combate.</summary>

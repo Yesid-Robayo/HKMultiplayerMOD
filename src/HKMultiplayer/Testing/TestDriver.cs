@@ -750,6 +750,28 @@ internal sealed class TestDriver : MonoBehaviour {
                 // estado de cada FSM y si es marioneta
                 StartCoroutine(TraceEnemy(ParseFloat(args[1]), string.Join(" ", args.Skip(2))));
                 break;
+            case "respawnmarkers":
+                // respawnmarkers: cada sitio seguro de la sala (HazardRespawnMarker): el suelo que elige el cuerpo del caído
+                // (Revive.GroundBelow desde el marcador) y el que hay de verdad (rayo desde 3 unidades más arriba). "MAL" si
+                // no coinciden (el cuerpo quedaría en otro suelo, p. ej. debajo)
+                var groundBelow = typeof(HKMultiplayer.Game.Features.Revive).GetMethod("GroundBelow",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                Log.Info($"{Tag}rayos desde dentro de un colisionador: {Physics2D.queriesStartInColliders}");
+                foreach (var marker in UnityEngine.Object.FindObjectsByType<HazardRespawnMarker>(FindObjectsSortMode.None)) {
+                    var at = marker.transform.position;
+                    var callArgs = new object[] { hero, at, null, 10f };
+                    var found = groundBelow != null && (bool) groundBelow.Invoke(null, callArgs);
+                    var bodyGround = found ? (Vector3) callArgs[2] : at;
+                    var feet = hero.GetComponent<BoxCollider2D>() is { } heroBox
+                        ? (heroBox.size.y * 0.5f - heroBox.offset.y) * Mathf.Abs(heroBox.transform.lossyScale.y) : 0f;
+                    var truth = Physics2D.Raycast((Vector2) at + Vector2.up * 3f, Vector2.down, 13f, 1 << 8);
+                    var realGround = truth.collider != null ? truth.point.y + feet + 0.01f : float.NaN;
+                    var bad = found && truth.collider != null && Mathf.Abs(bodyGround.y - realGround) > 0.5f;
+                    Log.Info($"{Tag}marcador {PathOf(marker.transform)} en ({at.x:0.00}, {at.y:0.00}): cuerpo " +
+                             $"{(found ? bodyGround.y.ToString("0.00") : "sin suelo")} suelo real {realGround:0.00}{(bad ? " MAL" : "")}");
+                }
+
+                break;
             case "activator":
                 // activator <nombre>: si el FSMActivator de ese objeto ya encendió sus FSM, y qué zonas activas (ActiveRegion)
                 // lo tocan ahora
@@ -984,6 +1006,11 @@ internal sealed class TestDriver : MonoBehaviour {
                     Log.Warn($"{Tag}no existe el botón '{args[1]}'");
                 }
 
+                break;
+            case "pressin":
+                // pressin <segundos> <botón> [segundos pulsado]: pulsa el botón pasado ese rato, medido en el juego y no entre
+                // lecturas de órdenes (que van por tandas): el salto en el aire justo después de un tp
+                StartCoroutine(PressIn(ParseFloat(args[1]), args[2], args.Length > 3 ? ParseFloat(args[3]) : 0.12f));
                 break;
             case "pressat":
                 // pressat <hora en ms desde 1970 (UTC)> <botón> [segundos]: pulsa el botón a esa hora del reloj del PC
@@ -1922,6 +1949,11 @@ internal sealed class TestDriver : MonoBehaviour {
         }
 
         Log.Info($"{Tag}ráfaga {name} terminada ({count} capturas)");
+    }
+
+    private static IEnumerator PressIn(float delay, string button, float seconds) {
+        yield return new WaitForSecondsRealtime(delay);
+        InputSimulator.Press(button, seconds);
     }
 
     private static IEnumerator PressAt(long epochMs, string button, float seconds) {

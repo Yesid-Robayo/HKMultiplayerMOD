@@ -9,6 +9,14 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.35.1
+
+- **Downed players under the floor**: when dying on spikes or thorns (the platforming sections of Deepnest, Greenpath
+  and Crystal Peak), the body sometimes ended up under the floor, where nobody could revive it. Now it stays where the
+  game respawns you after a hazard.
+- **Grub jars**: in some rooms they couldn't be broken and "Waiting for… to start the fight" appeared. Now they always
+  break.
+
 ## 0.35.0
 
 - **Enter the Colosseum of Fools together**: accepting a trial only opened the entrance gate for the player who

@@ -9,6 +9,14 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.35.1
+
+- **Caídos debajo del suelo**: al morir en pinchos o espinas (las zonas de plataformas de Nido Profundo, Sendero Verde y
+  Pico de Cristal), el cuerpo a veces quedaba debajo del suelo, donde nadie podía revivirlo. Ahora queda donde el juego
+  te hace reaparecer tras un peligro.
+- **Frascos de larvas**: en algunas salas no se podían romper y salía «Esperando a… para empezar el combate». Ahora se
+  rompen siempre.
+
 ## 0.35.0
 
 - **Entrar juntos al Coliseo de los Tontos**: al aceptar una prueba, la reja de la entrada solo se abría para quien la
