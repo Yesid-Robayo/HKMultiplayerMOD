@@ -9,6 +9,23 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.35.2
+
+- **Recent games**: the Multiplayer menu remembers the last IP games you joined, and in *Join a world* a "Rejoin…"
+  button takes you back without typing the address or the code (also with a controller). Each co-op world keeps its
+  code: the host always opens it with the same one.
+- **Colosseum spikes that didn't go down**: sometimes they stayed up for one player (mostly with the game paused, for
+  example while downed) and they couldn't continue the trial. Now they go up and down the same for everyone.
+- **The Trial of the Fool can be repeated**: the second time you entered the arena, the Soul Twisters that hid never
+  came back and wave 22 never ended. Now they come back on every attempt.
+- **Going back to a Colosseum trial**: whoever left mid-trial couldn't walk back in (the door led to the rest room).
+  Now, if a teammate is in the arena, the entrance door leads there.
+- **The arena gate on the guest's PC**: it had the arena on the wrong side, so the guest could walk out and not back
+  in. Also, while someone crossed it, enemies could get out too. Now nobody walks out, latecomers get in and enemies
+  stay inside.
+- **Gulkas in Greenpath**: after the Massive Moss Charger fight, a Gulka's leaf could be missing for one player and its
+  spit effect stuck on screen for the other. Now the room looks the same for everyone.
+
 ## 0.35.1
 
 - **Downed players under the floor**: when dying on spikes or thorns (the platforming sections of Deepnest, Greenpath

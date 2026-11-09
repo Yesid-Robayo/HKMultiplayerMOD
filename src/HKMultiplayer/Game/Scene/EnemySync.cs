@@ -301,8 +301,17 @@ internal sealed class EnemySync {
         /// <summary>Ya se buscaron aquí las piezas que sus FSM sin arrancar guardan en su estado inicial (ver PrepareUnstarted).</summary>
         public bool StartPrepared;
 
+        /// <summary>
+        /// La cámara de este PC quiso despertar su lógica (`FSMActivator`) siendo marioneta: se despierta al pasar a moverlo
+        /// este PC (ver HoldPuppetActivation).
+        /// </summary>
+        public bool ActivationHeld;
+
         /// <summary>Piezas que se mueven aparte (null si no tiene).</summary>
         public Part[] Parts;
+
+        /// <summary>Hijos que su propia lógica suelta en la sala (ver DetachablePieces); van como piezas de fuera.</summary>
+        public HashSet<Transform> Detachable;
 
         /// <summary>Objetos de la arena que su lógica enciende y apaga (se buscan tras prepararse).</summary>
         public Linked[] Linked;
@@ -3327,11 +3336,16 @@ internal sealed class EnemySync {
 
     private PlayMakerFSM _colosseumBattle;
     private string _colosseumBattleScene;
+    private float _colosseumLookupAt;
 
     /// <summary>La FSM `Battle Control` del Coliseo de esta sala (null si no hay).</summary>
     private PlayMakerFSM ColosseumBattle() {
-        if (_colosseumBattleScene != _scene) {
+        // También si el guardado ya no existe: al salir de la arena y volver a entrar la sala se llama igual, pero sus
+        // objetos son otros. Con el de la visita anterior (destruido) ya no se despertaba a ningún mago y la oleada 22 de
+        // Oro no acababa en el segundo intento (issue #13: «la primera vez salió, después nunca más»)
+        if (_colosseumBattleScene != _scene || _colosseumBattle == null && Time.unscaledTime >= _colosseumLookupAt) {
             _colosseumBattleScene = _scene;
+            _colosseumLookupAt = Time.unscaledTime + 1f;
             var manager = GameObject.Find("Colosseum Manager");
             _colosseumBattle = manager != null ? FSMUtility.LocateFSM(manager, "Battle Control") : null;
             _colosseumManager = manager != null ? FSMUtility.LocateFSM(manager, "Manager") : null;
@@ -5609,8 +5623,9 @@ internal sealed class EnemySync {
     /// </summary>
     private static void CollectParts(Enemy enemy) {
         List<Part> parts = null;
+        enemy.Detachable = DetachablePieces(enemy);
         foreach (var child in enemy.Root.GetComponentsInChildren<Transform>(true)) {
-            if (child == enemy.Transform || child.GetComponent<HealthManager>() != null) {
+            if (child == enemy.Transform || child.GetComponent<HealthManager>() != null || IsDetachable(enemy, child)) {
                 continue;
             }
 
@@ -5634,6 +5649,48 @@ internal sealed class EnemySync {
         }
 
         enemy.Parts = parts?.ToArray();
+    }
+
+    /// <summary>
+    /// Los hijos que la lógica del propio enemigo suelta en la sala (`SetParent` a nada): la hoja y el fondo de las Gulkas
+    /// (`Cover` y `Under`). Las piezas que cuelgan de él van por su sitio en la lista de hijos, y esa lista se hace al
+    /// registrarlo: si en un PC ya las había soltado y en el otro no, las listas no coincidían y cada uno aplicaba lo de
+    /// una pieza a otra (en greenpath, la hoja de una Gulka apagada en un PC y su escupitajo encendido en el otro). Estas
+    /// van siempre como piezas de fuera, por la variable que las apunta, estén sueltas o no.
+    /// </summary>
+    private static HashSet<Transform> DetachablePieces(Enemy enemy) {
+        HashSet<Transform> pieces = null;
+        foreach (var fsm in enemy.Root.GetComponents<PlayMakerFSM>()) {
+            foreach (var state in fsm.FsmStates) {
+                foreach (var action in state.Actions) {
+                    if (action is not HutongGames.PlayMaker.Actions.SetParent { parent.Value: null } setParent ||
+                        setParent.gameObject.OwnerOption != HutongGames.PlayMaker.OwnerDefaultOption.SpecifyGameObject) {
+                        continue;
+                    }
+
+                    var piece = setParent.gameObject.GameObject.Value;
+                    if (piece != null && piece != enemy.Root && piece.transform.IsChildOf(enemy.Transform)) {
+                        (pieces ??= new HashSet<Transform>()).Add(piece.transform);
+                    }
+                }
+            }
+        }
+
+        return pieces;
+    }
+
+    private static bool IsDetachable(Enemy enemy, Transform transform) {
+        if (enemy.Detachable == null) {
+            return false;
+        }
+
+        for (var t = transform; t != null && t != enemy.Transform; t = t.parent) {
+            if (enemy.Detachable.Contains(t)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -5667,9 +5724,14 @@ internal sealed class EnemySync {
             var variables = fsm.FsmVariables.GameObjectVariables;
             for (var v = 0; v < variables.Length && v < 0xFFFF; v++) {
                 var target = variables[v].Value;
-                if (target == null || !SameRoom(target.scene, enemyScene) || target.transform.IsChildOf(enemy.Transform) ||
-                    IsEnemyObject(target.transform) ||
+                if (target == null || !SameRoom(target.scene, enemyScene) ||
                     hero != null && target.transform.IsChildOf(hero.transform)) {
+                    continue;
+                }
+
+                // Lo que su lógica suelta va aquí aunque siga colgando de él (ver DetachablePieces)
+                var detachable = enemy.Detachable != null && enemy.Detachable.Contains(target.transform);
+                if (!detachable && (target.transform.IsChildOf(enemy.Transform) || IsEnemyObject(target.transform))) {
                     continue;
                 }
 
@@ -6668,6 +6730,14 @@ internal sealed class EnemySync {
                 continue;
             }
 
+            // La cámara de este PC lo quiso despertar cuando era marioneta: ahora que lo mueve este PC, se hace
+            if (enemy.ActivationHeld) {
+                enemy.ActivationHeld = false;
+                ActivateNow(activator);
+                Log.Info($"{enemy.Root.name}: este PC lo tenía en pantalla siendo marioneta; su lógica arranca ahora que lo mueve");
+                continue;
+            }
+
             var position = enemy.Transform.position;
             foreach (var player in _session.Players) {
                 if (player.Id == _session.LocalId || player.Scene != _scene ||
@@ -6676,15 +6746,56 @@ internal sealed class EnemySync {
                     continue;
                 }
 
-                // Sin escalonar (el componente puede estar apagado y no podría llevar la corrutina)
-                var staggered = activator.activateStaggered;
-                activator.activateStaggered = false;
-                activator.Activate();
-                activator.activateStaggered = staggered;
+                ActivateNow(activator);
                 Log.Info($"{enemy.Root.name}: {player.Name} lo tiene en pantalla, su lógica arranca también en este PC");
                 break;
             }
         }
+    }
+
+    /// <summary>Enciende la lógica de un enemigo como su FSMActivator, sin escalonar (el componente puede estar apagado y
+    /// no podría llevar la corrutina).</summary>
+    private static void ActivateNow(FSMActivator activator) {
+        var staggered = activator.activateStaggered;
+        activator.activateStaggered = false;
+        _activatingNow = true;
+        try {
+            activator.Activate();
+        } finally {
+            _activatingNow = false;
+            activator.activateStaggered = staggered;
+        }
+    }
+
+    private static bool _activatingNow;
+
+    /// <summary>
+    /// La cámara de este PC (`ActiveRegion`) despierta la lógica de un enemigo que aquí es marioneta: no se deja, se apunta
+    /// para cuando lo mueva este PC. Antes se dejaba y se paraba en la siguiente comprobación (0,25 s), pero en ese rato
+    /// ya corría: una Gulka se asomaba, quitaba su hoja y encendía su escupitajo, que van sueltos de ella, y en este PC se
+    /// quedaban así con la Gulka escondida en el otro (greenpath, sala del Cargador Musgoso).
+    /// </summary>
+    private static bool HoldPuppetActivation(FSMActivator activator) {
+        var sync = _active;
+        if (sync == null || _activatingNow || activator == null) {
+            return false;
+        }
+
+        var health = activator.GetComponent<HealthManager>();
+        if (health == null || !sync._byHealth.TryGetValue(health, out var enemy) || !enemy.Puppet) {
+            return false;
+        }
+
+        if (!enemy.ActivationHeld) {
+            enemy.ActivationHeld = true;
+            Log.Info($"{enemy.Root.name}: la cámara de este PC lo despertaría siendo marioneta; se espera a moverlo");
+        }
+
+        return true;
+    }
+
+    private static System.Collections.IEnumerator NoRoutine() {
+        yield break;
     }
 
     /// <summary>La lógica propia que el juego encendió en una marioneta se para (y vuelve al retomarla).</summary>
@@ -7513,6 +7624,13 @@ internal sealed class EnemySync {
             orig(self);
             _active?.OnSpawned(self, self.storeObject?.Value, pooled: true);
         };
+        // La cámara no despierta la lógica de una marioneta (ver HoldPuppetActivation)
+        On.FSMActivator.Activate += (orig, self) => {
+            if (!HoldPuppetActivation(self)) {
+                orig(self);
+            }
+        };
+        On.FSMActivator.ActivateStaggered += (orig, self) => HoldPuppetActivation(self) ? NoRoutine() : orig(self);
         On.HealthManager.OnEnable += (orig, self) => {
             orig(self);
             _active?.NoteEnabled(self);
@@ -7968,6 +8086,23 @@ internal sealed class EnemySync {
     }
 
     /// <summary>Golpea al enemigo vivo y activo con ese nombre, como un golpe de aguijón del jugador.</summary>
+    /// <summary>Golpe de aguijón de este jugador a un enemigo concreto, por su id (el que sale en la lista de enemigos).</summary>
+    public bool TestHitId(uint id, int damage) {
+        var hero = HeroController.instance;
+        foreach (var enemy in _enemies) {
+            if (enemy.Id == id && enemy.Root != null && enemy.Root.activeInHierarchy && enemy.Health != null &&
+                !enemy.Health.isDead) {
+                enemy.Health.Hit(new HitInstance {
+                    Source = hero.gameObject, AttackType = AttackTypes.Nail, DamageDealt = damage, Multiplier = 1f,
+                    MagnitudeMultiplier = 1f, Direction = 0f
+                });
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public bool TestHit(string namePrefix, int damage, AttackTypes type = AttackTypes.Nail) {
         var hero = HeroController.instance;
         foreach (var enemy in _enemies) {

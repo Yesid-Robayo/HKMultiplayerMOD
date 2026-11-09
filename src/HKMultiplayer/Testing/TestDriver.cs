@@ -113,8 +113,16 @@ internal sealed class TestDriver : MonoBehaviour {
         Log.Info($"{Tag}modo de prueba activo; órdenes en {_commandFile}");
     }
 
+    /// <summary>Velocidad del juego pedida con <c>speed</c> (1 = normal).</summary>
+    private static float _speed = 1f;
+
     private void Update() {
         Warp.Update();
+        // El juego vuelve a 1 tras cada parón de un golpe (FreezeMoment): se reaplica entonces; en pausa (0), no
+        if (!Mathf.Approximately(_speed, 1f) && Mathf.Approximately(Time.timeScale, 1f)) {
+            Time.timeScale = _speed;
+        }
+
         if (AutoSkip && GameManager.instance != null && GameManager.instance.inputHandler is { } skipInput &&
             skipInput.skipMode is not (GlobalEnums.SkipPromptMode.NOT_SKIPPABLE or
                 GlobalEnums.SkipPromptMode.NOT_SKIPPABLE_DUE_TO_LOADING) && !skipInput.skippingCutscene) {
@@ -205,6 +213,17 @@ internal sealed class TestDriver : MonoBehaviour {
                         }
                     };
                     UnityEngine.EventSystems.ExecuteEvents.Execute(moveTarget, axis, UnityEngine.EventSystems.ExecuteEvents.moveHandler);
+                }
+
+                break;
+            case "uisubmit":
+                // uisubmit: «aceptar» sobre lo resaltado, como el botón del mando
+                var submitTarget = UnityEngine.EventSystems.EventSystem.current?.currentSelectedGameObject;
+                if (submitTarget != null) {
+                    Log.Info($"{Tag}aceptar en {PathOf(submitTarget.transform)}");
+                    UnityEngine.EventSystems.ExecuteEvents.ExecuteHierarchy(submitTarget,
+                        new UnityEngine.EventSystems.BaseEventData(UnityEngine.EventSystems.EventSystem.current),
+                        UnityEngine.EventSystems.ExecuteEvents.submitHandler);
                 }
 
                 break;
@@ -737,6 +756,13 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "hitid":
+                // hitid <id> <daño>: golpe de aguijón de este jugador a ese enemigo (id en hexadecimal, como en la lista)
+                if (!runner.Enemies.TestHitId(Convert.ToUInt32(args[1], 16), int.Parse(args[2]))) {
+                    Log.Warn($"{Tag}no hay enemigo vivo con id {args[1]}");
+                }
+
+                break;
             case "hitenemy":
                 // hitenemy <inicio del nombre> <daño>: golpe de aguijón de este jugador
                 var enemyName = string.Join(" ", args.Skip(1).Take(args.Length - 2));
@@ -1006,6 +1032,12 @@ internal sealed class TestDriver : MonoBehaviour {
                     Log.Warn($"{Tag}no existe el botón '{args[1]}'");
                 }
 
+                break;
+            case "speed":
+                // speed <factor>: el juego va así de rápido (1 = normal); para pasar pruebas largas (el Coliseo de Oro)
+                _speed = Mathf.Clamp(ParseFloat(args[1]), 0.1f, 4f);
+                Time.timeScale = _speed;
+                Log.Info($"{Tag}velocidad del juego: {_speed:0.##}×");
                 break;
             case "pressin":
                 // pressin <segundos> <botón> [segundos pulsado]: pulsa el botón pasado ese rato, medido en el juego y no entre

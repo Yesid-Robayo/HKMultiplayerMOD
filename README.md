@@ -4,7 +4,7 @@
 
 **A co-op mod for Hollow Knight: play the whole world with your friends, on your local network or over the internet.**
 
-![Version](https://img.shields.io/badge/version-0.35.1-7fb2ff)
+![Version](https://img.shields.io/badge/version-0.35.2-7fb2ff)
 ![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
@@ -80,7 +80,8 @@ API.
   the hosting page has a button to open that folder (for backups or to move a world to another PC).
 - **Host and join** from the main menu (*Multiplayer*): the host opens a world and shares their **address**, the
   **port** (26950 by default) and the **game code** (`ABCD-EFGH` format). Buttons to copy the code and show or hide the
-  IP.
+  IP. Each world keeps its code, and *Join a world › Recent games* takes you back to the last ones you joined with one
+  button, without typing anything.
 - **Through Steam, no port forwarding**: hosting opens a Steam lobby. Your friends see *Join Game* in their Steam
   friends list or your game in *Multiplayer › Join a world*, and from *Pause › Multiplayer › Invite Steam friends* you
   can invite anyone. If your friend's game is closed, Steam opens it and the mod joins on its own. In *Multiplayer* you
@@ -253,10 +254,6 @@ API.
 - 0.26.0: the whole mod was reviewed. The 172 issues found were fixed or reviewed, and checking them found and fixed
   16 more.
 
-⚠️ **Partially confirmed:**
-
-- Hive Knight and Massive Moss Charger: they die on every PC, but their attacks still need checking.
-
 ❓ **Not confirmed yet:**
 
 - A long session over the internet, also with 3 or 4 players.
@@ -321,7 +318,8 @@ installation**, how to open the port and what to do if something fails.
    friends your **IP**, the **port** (26950) and the **code** shown on screen (also in *Pause › Multiplayer*).
 2. **Guest through Steam**: accept the invite or click *Join Game* in your Steam friends list (also *Multiplayer ›
    Join a world › Join…*). If you're playing your normal game, go back to the main menu and you'll join on your own.
-3. **Guest by IP**: main menu › *Multiplayer* › *Join a world*, with the address, the port and the code.
+3. **Guest by IP**: main menu › *Multiplayer* › *Join a world*, with the address, the port and the code. The next
+   times, the *Rejoin…* button in *Recent games*.
 4. **Over the internet by IP**: the host opens **UDP port 26950** on their router (or you use Radmin VPN, ZeroTier or
    Tailscale). Through Steam or on the same home network you don't need to open anything.
 

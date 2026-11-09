@@ -9,6 +9,23 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.35.2
+
+- **Partidas recientes**: el menú Multijugador recuerda las últimas partidas por IP en las que entraste y, en *Unirse a
+  un mundo*, un botón «Volver con…» te devuelve sin escribir la dirección ni el código (también con el mando). Cada mundo
+  coop conserva su código: el host lo abre siempre con el mismo.
+- **Pinchos del Coliseo que no bajaban**: a veces seguían arriba para un jugador (sobre todo con el juego en pausa, por
+  ejemplo estando caído) y no podía seguir la prueba. Ahora suben y bajan igual para todos.
+- **La prueba de Oro se puede repetir**: la segunda vez que se entraba en la arena, los Retorcedores de Almas que se
+  escondían ya no volvían a salir y la oleada 22 no acababa nunca. Ahora salen en todos los intentos.
+- **Volver a una prueba del Coliseo**: quien salía a mitad ya no podía volver andando (la puerta llevaba a la sala de
+  descanso). Ahora, si un compañero está en la arena, la puerta de la entrada lleva a ella.
+- **La reja de la arena en el PC del invitado**: tenía la arena del lado contrario, así que el invitado podía salir y no
+  volver a entrar. Además, mientras alguien la cruzaba los enemigos también podían salir por ella. Ahora nadie sale, quien
+  llega tarde entra y los enemigos se quedan dentro.
+- **Gulkas del Sendero Verde**: tras el combate del Cargador Musgoso, a una Gulka le podía faltar la hoja para un
+  jugador y quedarse su escupitajo en pantalla para el otro. Ahora la sala se ve igual para todos.
+
 ## 0.35.1
 
 - **Caídos debajo del suelo**: al morir en pinchos o espinas (las zonas de plataformas de Nido Profundo, Sendero Verde y

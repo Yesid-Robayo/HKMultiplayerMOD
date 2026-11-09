@@ -4,7 +4,7 @@
 
 **Mod cooperativo para Hollow Knight: juega el mundo entero con tus amigos, en red local o por internet.**
 
-![Versión](https://img.shields.io/badge/versión-0.35.1-7fb2ff)
+![Versión](https://img.shields.io/badge/versión-0.35.2-7fb2ff)
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
@@ -81,7 +81,8 @@ escrito desde cero sobre la Modding API de Hollow Knight.
   hostear tiene un botón para abrir esa carpeta (copias de seguridad o pasarlos a otro PC).
 - **Hostear y unirse** desde el menú principal (*Multijugador*): el host abre su mundo y comparte su **dirección**, el
   **puerto** (26950 por defecto) y el **código de la partida** (formato `ABCD-EFGH`). Botones para copiar el código y
-  mostrar u ocultar la IP.
+  mostrar u ocultar la IP. Cada mundo conserva su código, y *Unirse a un mundo › Partidas recientes* te devuelve a las
+  últimas en las que entraste con un botón, sin escribir nada.
 - **Por Steam, sin abrir puertos**: al hostear se abre una sala de Steam. Tus amigos ven *Unirse a la partida* en su
   lista de amigos de Steam o tu partida en *Multijugador › Unirse a un mundo*, y desde *Pausa › Multijugador › Invitar
   amigos de Steam* invitas a quien quieras. Si el juego del amigo está cerrado, Steam lo abre y el mod entra solo. En
@@ -257,10 +258,6 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - 0.26.0: se revisó todo el mod. Los 172 fallos encontrados se arreglaron o se revisaron, y al comprobarlos salieron y
   se arreglaron 16 más.
 
-⚠️ **Confirmado en parte:**
-
-- Caballero de la Colmena y Cargador Musgoso: mueren en todos los PCs, pero falta verlos atacar.
-
 ❓ **Aún sin confirmar:**
 
 - Una partida larga por internet, también con 3 o 4 jugadores.
@@ -328,6 +325,7 @@ Si prefieres no usarlo, instálalo a mano (más abajo).
    *Multijugador › Unirse a un mundo › Unirse a…*). Si estás jugando tu partida normal, sal al menú principal y entras
    solo.
 3. **Invitado por IP**: menú principal › *Multijugador* › *Unirse a un mundo*, con la dirección, el puerto y el código.
+   Las siguientes veces, el botón *Volver con…* de *Partidas recientes*.
 4. **Por internet por IP**: el host abre el puerto **UDP 26950** en su router (o se usa Radmin VPN, ZeroTier o
    Tailscale). Por Steam o en la misma casa no hace falta abrir nada.
 

@@ -5,6 +5,7 @@ using GlobalEnums;
 using HKMultiplayer.Game;
 using HKMultiplayer.Game.Features;
 using HKMultiplayer.Game.World;
+using HKMultiplayer.Net.Crypto;
 using HKMultiplayer.Util;
 using UnityEngine;
 using UnityEngine.UI;
@@ -33,6 +34,8 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
     private GameObject _steamList;
     private MenuOptionHorizontal _steamAccess;
     private Text _steamTitle;
+    private GameObject _recentList;
+    private Text _recentTitle;
     private Text _hostStatus;
     private GameObject _worldList;
     private MenuButton _newWorldButton;
@@ -171,6 +174,15 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         steamLayout.childControlHeight = true;
         steamLayout.childControlWidth = true;
         steamLayout.childForceExpandHeight = false;
+        AddSpace(join, 16);
+        // Partidas por IP en las que ya entró: un botón para volver sin escribir dirección ni código (issue #12)
+        _recentTitle = AddText(join, Lang.T("Partidas recientes", "Recent games"), 40, title: true);
+        _recentList = new GameObject("RecentGames", typeof(RectTransform), typeof(VerticalLayoutGroup));
+        _recentList.transform.SetParent(join.transform, false);
+        var recentLayout = _recentList.GetComponent<VerticalLayoutGroup>();
+        recentLayout.childControlHeight = true;
+        recentLayout.childControlWidth = true;
+        recentLayout.childForceExpandHeight = false;
         AddSpace(join, 16);
         AddText(join, Lang.T("Por IP: pide al host su dirección y el código de la partida.", "By IP: ask the host for their address and the game code."), 38);
         AddSpace(join, 20);
@@ -316,6 +328,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         } else if (page == HostPage) {
             RefreshWorlds();
         } else if (page == JoinPage) {
+            RefreshRecentGames();
             RefreshSteamFriends();
         }
     }
@@ -353,6 +366,39 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         }
 
         SetFirst(JoinPage, null);
+    }
+
+    /// <summary>
+    /// «Partidas recientes»: un botón por cada una (la más reciente arriba). Si el campo del código está vacío y la dirección
+    /// es la de la más reciente, se rellena con su código: el host abre ese mundo siempre con el mismo.
+    /// </summary>
+    private void RefreshRecentGames() {
+        foreach (Transform child in _recentList.transform) {
+            child.gameObject.SetActive(false);
+            Destroy(child.gameObject);
+        }
+
+        var recent = (HKMultiplayerMod.Settings.RecentGames ?? new System.Collections.Generic.List<Settings.RecentGame>())
+            .Where(g => g != null && !string.IsNullOrEmpty(g.Address) && RoomCode.IsValid(RoomCode.Normalize(g.RoomCode)))
+            .Take(Settings.GlobalSettings.MaxRecentGames).ToList();
+        _recentTitle.gameObject.SetActive(recent.Count > 0);
+        _recentList.SetActive(recent.Count > 0);
+        foreach (var game in recent) {
+            var target = game;
+            var who = string.IsNullOrEmpty(game.HostName) ? game.Address : $"{game.HostName} ({game.Address})";
+            AddButton(_recentList, Lang.T($"Volver con {who}", $"Rejoin {who}"), () => JoinRecent(target), 40);
+        }
+
+        if (recent.Count > 0 && string.IsNullOrEmpty(_code.text) && _address.text == recent[0].Address) {
+            _code.text = MultiplayerRunner.FormatCode(RoomCode.Normalize(recent[0].RoomCode));
+        }
+    }
+
+    private void JoinRecent(Settings.RecentGame game) {
+        _address.text = game.Address;
+        _port.text = game.Port.ToString();
+        _code.text = MultiplayerRunner.FormatCode(RoomCode.Normalize(game.RoomCode));
+        Join();
     }
 
     private void JoinSteam(ulong lobby) {

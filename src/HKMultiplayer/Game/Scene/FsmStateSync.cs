@@ -159,6 +159,11 @@ internal sealed class FsmStateSync {
         // en el aire o caer
         ("Colosseum Platform", "Control"),
         ("Radiant Plat", "radiant_plat"),
+        // Los pinchos del suelo del Coliseo: suben con EXPAND tras 2 s de aviso (`Antic`) y solo atienden RETRACT ya
+        // arriba (`Expand`). En el PC que copiaba el combate, un RETRACT que llegaba durante el aviso (con el juego en pausa,
+        // que para la espera, o con los avisos desfasados) se perdía y los pinchos se quedaban arriba para siempre: el
+        // invitado no podía seguir la prueba (issue #14). Ahora siguen los estados del PC que los lleva
+        ("Colosseum Spike", "Control"),
         // El orbe falso del Maestro de Almas (`Ruins1_24`): al cogerlo, un caballero falso lo levanta, el jefe vuelve,
         // rompe la ventana y el suelo (`MAGE WINDOW BREAK`, `break_ground`) y empieza la segunda fase. Todo eso iba solo en
         // el PC de quien lo cogía: los demás no veían nada y se quedaban arriba, sobre un suelo que allí seguía entero,
@@ -343,6 +348,9 @@ internal sealed class FsmStateSync {
         public BoxCollider2D Gate;
         public int InsideSign;
         public bool Passing;
+
+        /// <summary>Pared solo para los enemigos mientras el caballero de este PC cruza la reja (ver <c>RestoreGate</c>).</summary>
+        public GameObject EnemyBlocker;
 
         /// <summary>Cuándo volver a buscar el centro de la arena de la reja (ver <see cref="ArenaCenter"/>).</summary>
         public float ArenaRetryAt;
@@ -2379,7 +2387,10 @@ internal sealed class FsmStateSync {
     private void UpdateGatePassage(Tracked item) {
         var closed = item.Fsm.ActiveStateName.IndexOf("Close", StringComparison.Ordinal) >= 0;
         if (!closed) {
-            // Al abrirse, la FSM ya la deja sin colisión
+            // Al abrirse, la FSM ya la deja sin colisión; pero si este caballero la estaba cruzando, vuelve a su capa. Antes
+            // se quedaba para siempre en la de cruzar, que choca distinto con cadáveres y piezas sueltas: tras un combate
+            // cada PC tenía la sala distinta (la lanza del Centinela de Ruins2_03, las hojas de las Gulkas de Fungus1_29)
+            RemoveEnemyBlocker(item);
             item.GateWasOpen |= item.Ready;
             item.InsideSign = 0;
             item.Passing = false;
@@ -2418,16 +2429,26 @@ internal sealed class FsmStateSync {
                          $"{(vertical ? item.InsideSign > 0 ? "la derecha" : "la izquierda" : item.InsideSign > 0 ? "arriba" : "abajo")}");
             }
         } else if (item.InsideSign == 0) {
-            // Quien la cerró: su controlador o, si aún no se sabe, el dueño de la sala
-            var closerId = item.Controller != 0 ? item.Controller : _session.OwnerOf(_scene);
-            if (!_players.TryGetAvatarPosition(closerId, out var closer)) {
-                return;
+            // El lado de la arena, como en el PC que la lleva. Antes se tomaba de dónde estaba en este PC el avatar de
+            // quien la cerró, y la reja del Coliseo se cierra justo cuando entra: su avatar llegaba aquí con retraso,
+            // aún fuera, y la arena quedaba al revés. El jugador de este PC podía salir de la arena y no volver a entrar
+            if (ArenaCenter(item, center) is { } arena && Side(arena, center, vertical) is var arenaSide and not 0) {
+                item.InsideSign = arenaSide;
+            } else {
+                // Sin arena reconocible: el lado de quien la cerró (su controlador o, si aún no se sabe, el dueño de la sala)
+                var closerId = item.Controller != 0 ? item.Controller : _session.OwnerOf(_scene);
+                if (!_players.TryGetAvatarPosition(closerId, out var closer)) {
+                    return;
+                }
+
+                item.InsideSign = Side(closer, center, vertical);
+                if (item.InsideSign == 0) {
+                    return;
+                }
             }
 
-            item.InsideSign = Side(closer, center, vertical);
-            if (item.InsideSign == 0) {
-                return;
-            }
+            Log.Info($"Reja {item.Fsm.gameObject.name} cerrada por otro PC: la arena queda hacia " +
+                     $"{(vertical ? item.InsideSign > 0 ? "la derecha" : "la izquierda" : item.InsideSign > 0 ? "arriba" : "abajo")}");
         }
 
         var heroPosition = hero.transform.position;
@@ -2437,9 +2458,17 @@ internal sealed class FsmStateSync {
             // Ya dentro del todo: sólida
             RestoreGate(item);
         } else if (along * item.InsideSign < 0f || item.Passing) {
-            // Fuera (o cruzándola): no frena
+            // Fuera (o cruzándola): no frena a este caballero (se apaga, como siempre), pero sigue siendo pared para los
+            // enemigos: en su sitio, una copia de su caja en una capa que choca con los enemigos y no con el caballero (ver
+            // EnemyOnlyLayer). Antes, mientras el caballero de este PC estaba fuera, los enemigos que movía salían tras él.
+            // Ignorar el choque no basta (el caballero se para con rayos contra el terreno), y pasar la reja entera a esa
+            // capa hacía que las piezas sueltas (la lanza del Centinela de Ruins2_03) la atravesaran solo en ese PC
+            if (!item.Passing) {
+                gate.enabled = false;
+                AddEnemyBlocker(item, gate, hero.gameObject.layer);
+            }
+
             item.Passing = true;
-            gate.enabled = false;
         }
     }
 
@@ -2546,12 +2575,66 @@ internal sealed class FsmStateSync {
         return boss;
     }
 
+    private static int _enemyOnlyLayer = -2;
+
+    /// <summary>
+    /// Una capa con nombre que choca con los enemigos y no con el caballero (ni con la del terreno, la de sus rayos): la
+    /// de la pared para los enemigos mientras el caballero de este PC cruza la reja. -1 si el juego no tiene ninguna.
+    /// </summary>
+    private static int EnemyOnlyLayer(int heroLayer) {
+        if (_enemyOnlyLayer != -2) {
+            return _enemyOnlyLayer;
+        }
+
+        _enemyOnlyLayer = -1;
+        var enemies = LayerMask.NameToLayer("Enemies");
+        var terrain = LayerMask.NameToLayer("Terrain");
+        for (var layer = 0; layer < 32 && enemies >= 0; layer++) {
+            if (layer == terrain || layer == heroLayer || string.IsNullOrEmpty(LayerMask.LayerToName(layer)) ||
+                Physics2D.GetIgnoreLayerCollision(layer, enemies) || !Physics2D.GetIgnoreLayerCollision(layer, heroLayer)) {
+                continue;
+            }
+
+            _enemyOnlyLayer = layer;
+            break;
+        }
+
+        Log.Info(_enemyOnlyLayer >= 0
+            ? $"Rejas: se cruzan con la capa {LayerMask.LayerToName(_enemyOnlyLayer)} ({_enemyOnlyLayer}), que frena a los enemigos"
+            : "Rejas: el juego no tiene una capa que frene a los enemigos y no al caballero; al cruzarlas no los frenan");
+        return _enemyOnlyLayer;
+    }
+
+    private static void AddEnemyBlocker(Tracked item, BoxCollider2D gate, int heroLayer) {
+        var layer = EnemyOnlyLayer(heroLayer);
+        if (layer < 0 || item.EnemyBlocker != null) {
+            return;
+        }
+
+        var blocker = new GameObject("HKMP Gate Enemy Blocker") { layer = layer };
+        blocker.transform.SetParent(gate.transform, false);
+        var box = blocker.AddComponent<BoxCollider2D>();
+        box.size = gate.size;
+        box.offset = gate.offset;
+        item.EnemyBlocker = blocker;
+    }
+
+    private static void RemoveEnemyBlocker(Tracked item) {
+        if (item.EnemyBlocker != null) {
+            UnityEngine.Object.Destroy(item.EnemyBlocker);
+        }
+
+        item.EnemyBlocker = null;
+    }
+
     private static void RestoreGate(Tracked item) {
         if (item.Passing) {
             item.Passing = false;
             if (item.Gate != null) {
                 item.Gate.enabled = true;
             }
+
+            RemoveEnemyBlocker(item);
         }
     }
 

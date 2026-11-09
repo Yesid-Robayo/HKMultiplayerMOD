@@ -30,6 +30,12 @@ public sealed class CoopWorldInfo {
     /// <summary>Cuándo se guardó por última vez (UTC).</summary>
     public DateTime LastSaved { get; set; }
 
+    /// <summary>
+    /// Código de la partida de este mundo: se crea la primera vez que se abre y es siempre el mismo, para que los
+    /// compañeros no tengan que volver a escribirlo (el menú lo recuerda en «Partidas recientes»). Solo está en este PC.
+    /// </summary>
+    public string RoomCode { get; set; } = string.Empty;
+
     /// <summary>Si aún no se ha guardado nunca (mundo recién creado: se empieza partida nueva).</summary>
     [JsonIgnore]
     public bool IsNew { get; set; }
@@ -240,6 +246,9 @@ public static class WorldStore {
     /// <summary>La clave ya viene validada (solo hexadecimal): no puede salirse de la carpeta del mundo.</summary>
     private static string CharacterPath(string worldId, string playerKey) =>
         Path.Combine(Path.Combine(Path.Combine(Root, worldId), "players"), playerKey + ".json");
+
+    /// <summary>Guarda los datos de la lista del mundo (p. ej. su código nuevo) sin tocar la partida.</summary>
+    public static void UpdateInfo(CoopWorldInfo info) => WriteInfo(info);
 
     private static void WriteInfo(CoopWorldInfo info) {
         File.WriteAllText(Path.Combine(Path.Combine(Root, info.Id), InfoFile),

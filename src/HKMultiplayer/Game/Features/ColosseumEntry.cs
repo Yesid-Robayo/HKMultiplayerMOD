@@ -84,6 +84,14 @@ internal sealed class ColosseumEntry {
             return;
         }
 
+        // Un compañero ya está en una arena (empezó la prueba, o este jugador salió a mitad): la reja se abre hacia ella para
+        // volver andando. Antes la salida llevaba a la sala de descanso y solo se podía volver con «Ir con»
+        if (!_announced && state is "Closed" or "Close" && PartnerArena() is { } partnerArena) {
+            Log.Info($"Un compañero está en {partnerArena}: la reja se abre hacia allí");
+            OpenFor(partnerArena);
+            return;
+        }
+
         if (!_announced && state == "Open" && IsArena(_exit.targetScene) && _session.CanSend) {
             _announced = true;
             Log.Info($"Reja del Coliseo abierta hacia {_exit.targetScene}: se avisa a los de la sala");
@@ -154,6 +162,17 @@ internal sealed class ColosseumEntry {
 
         Log.Info($"{from.Name} abrió la reja del Coliseo hacia {arena}");
         _pendingArena = arena;
+    }
+
+    /// <summary>La arena en la que está otro jugador de la partida (null si nadie está en una).</summary>
+    private string PartnerArena() {
+        foreach (var player in _session.Players) {
+            if (!player.IsLocal && IsArena(player.Scene)) {
+                return player.Scene;
+            }
+        }
+
+        return null;
     }
 
     private static bool IsArena(string scene) => System.Array.IndexOf(Arenas, scene) >= 0;

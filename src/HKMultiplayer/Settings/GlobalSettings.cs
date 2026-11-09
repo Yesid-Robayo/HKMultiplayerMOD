@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace HKMultiplayer.Settings;
 
 /// <summary>
@@ -52,7 +55,34 @@ public sealed class GlobalSettings {
     /// </summary>
     public int ReviveVolume { get; set; } = 200;
 
+    /// <summary>
+    /// Últimas partidas por IP en las que entró este jugador, la más reciente primero (como mucho
+    /// <see cref="MaxRecentGames"/>): para volver con un clic sin escribir otra vez la dirección ni el código. Se guardan
+    /// solo en este PC.
+    /// </summary>
+    public List<RecentGame> RecentGames { get; set; } = new();
+
+    public const int MaxRecentGames = 3;
+
     public const int SteamAccessFriends = 0;
     public const int SteamAccessInvited = 1;
     public const int SteamAccessNobody = 2;
+}
+
+/// <summary>Una partida por IP en la que entró este jugador (ver <see cref="GlobalSettings.RecentGames"/>).</summary>
+public sealed class RecentGame {
+    /// <summary>Dirección del host.</summary>
+    public string Address { get; set; } = string.Empty;
+
+    /// <summary>Puerto del host.</summary>
+    public int Port { get; set; } = GlobalSettings.DefaultPort;
+
+    /// <summary>Código de la partida (sin guion), el mismo cada vez que el host abre ese mundo.</summary>
+    public string RoomCode { get; set; } = string.Empty;
+
+    /// <summary>Nombre del host al entrar (solo para el botón).</summary>
+    public string HostName { get; set; } = string.Empty;
+
+    /// <summary>Cuándo se entró por última vez (UTC).</summary>
+    public DateTime LastPlayed { get; set; }
 }

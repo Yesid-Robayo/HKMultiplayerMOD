@@ -132,6 +132,34 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     private const float CollectTimeout = 4f;
 
     /// <summary>Partida a la que se unió el invitado por última vez (a la que se reconecta).</summary>
+    /// <summary>
+    /// Apunta la partida por IP en la que acaba de entrar este invitado en «Partidas recientes» (la primera de la lista;
+    /// la misma dirección y puerto se sustituye). Por Steam no hace falta: los amigos salen solos.
+    /// </summary>
+    private void RememberRecentGame(GameSession session) {
+        var target = _lastJoin;
+        if (session.IsHost || target == null || target.SteamHost != 0 || string.IsNullOrEmpty(target.Address)) {
+            return;
+        }
+
+        try {
+            var host = session.Players.FirstOrDefault(p => p.Id == GameSession.HostPlayerId);
+            var list = HKMultiplayerMod.Settings.RecentGames ??= new System.Collections.Generic.List<Settings.RecentGame>();
+            list.RemoveAll(g => g == null || g.Address == target.Address && g.Port == target.Port);
+            list.Insert(0, new Settings.RecentGame {
+                Address = target.Address, Port = target.Port, RoomCode = HKMultiplayer.Net.Crypto.RoomCode.Normalize(target.RoomCode),
+                HostName = host?.Name ?? string.Empty, LastPlayed = DateTime.UtcNow
+            });
+            while (list.Count > Settings.GlobalSettings.MaxRecentGames) {
+                list.RemoveAt(list.Count - 1);
+            }
+
+            HKMultiplayerMod.SaveSettings();
+        } catch (Exception e) {
+            Log.Warn($"No se pudo apuntar la partida en las recientes: {e.Message}");
+        }
+    }
+
     private sealed class JoinTarget {
         public string Address;
         public int Port;
@@ -483,6 +511,22 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         if (!CoopSaves.CanStart) {
             SetStatus(Lang.T("Vuelve al menú principal para abrir un mundo coop", "Go back to the main menu to open a coop world"));
             return false;
+        }
+
+        // El código de este mundo, siempre el mismo (se crea la primera vez): el compañero vuelve con «Partidas recientes»
+        // sin escribirlo otra vez (issue #12). Si quien llama ya trae un código, se usa ese y el guardado no cambia
+        if (roomCode == null) {
+            roomCode = HKMultiplayer.Net.Crypto.RoomCode.Normalize(world.RoomCode);
+            if (!HKMultiplayer.Net.Crypto.RoomCode.IsValid(roomCode)) {
+                roomCode = HKMultiplayer.Net.Crypto.RoomCode.Normalize(HKMultiplayer.Net.Crypto.RoomCode.Generate());
+                world.RoomCode = roomCode;
+                try {
+                    WorldStore.UpdateInfo(world);
+                    Log.Info($"Mundo {world.Name}: código nuevo, el mismo a partir de ahora");
+                } catch (Exception e) {
+                    Log.Warn($"No se pudo guardar el código del mundo {world.Name}: {e.Message}");
+                }
+            }
         }
 
         if (!Host(name, port, roomCode)) {
@@ -952,6 +996,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         var connected = false;
         session.Connected += () => {
             connected = true;
+            RememberRecentGame(session);
             SetStatus(Lang.T($"Conectado como jugador {session.LocalId}", $"Connected as player {session.LocalId}"));
             if (_reconnectAttempts > 0) {
                 _reconnectAttempts = 0;
