@@ -513,6 +513,12 @@ internal sealed class EnemySync {
         /// </summary>
         public bool Dying => ZeroHp || DeadThere || DeathState;
         public RigidbodyType2D BodyType;
+
+        /// <summary>
+        /// Si su cuerpo estaba simulado antes de pasar a marioneta (ver SetPuppet). Un jefe dormido suele no estarlo: el
+        /// Príncipe Gris Zote lo apaga en "Dormant" y lo enciende al aparecer.
+        /// </summary>
+        public bool Simulated = true;
         public readonly SnapshotBuffer Buffer = new();
 
         // Lo último enviado (dueño)
@@ -603,6 +609,21 @@ internal sealed class EnemySync {
 
         /// <summary>Cómo iba su `Walker` en el PC que lo soltó (null si no tiene).</summary>
         public WalkerData? Walker;
+
+        /// <summary>
+        /// Su etiqueta en el PC que lo movía. El Príncipe Gris Zote cuenta los Zotelings libres (`Boss`) y los que atacan
+        /// (`Boss Attack`) por ella y escupe uno libre; la cambia la lógica de cada Zoteling, solo en el PC que lo mueve.
+        /// Sin esto, el que los tomaba podía escupir uno que ya volaba o creer que había 3 fuera y no escupir ninguno.
+        /// </summary>
+        public string Tag;
+
+        /// <summary>
+        /// Si su caja era un trigger (atraviesa el suelo). El Príncipe Gris Zote la vuelve trigger para hundirse en el suelo
+        /// ("FT Through") y la devuelve al caer desde arriba ("FT Fall"), solo en el PC que lo mueve: si cambiaba de PC
+        /// entre medias, el que lo había soltado se quedaba con la caja de atravesar y, al retomarlo, Zote se hundía.
+        /// </summary>
+        public bool Trigger;
+
         public int[] Ints;
         public float[] Floats;
         public bool[] Bools;
@@ -618,6 +639,13 @@ internal sealed class EnemySync {
         public Vector2 Velocity;
         public float Gravity;
         public RigidbodyType2D BodyType;
+
+        /// <summary>
+        /// Si su cuerpo estaba simulado en el PC que lo movía. El Príncipe Gris Zote lo apaga en "Dormant" y lo enciende al
+        /// aparecer, pero solo en el PC que lo mueve: el que lo tomaba después lo tenía apagado y se quedaba quieto en el
+        /// aire para siempre, saltando sin moverse (issue #15).
+        /// </summary>
+        public bool Simulated;
 
         /// <summary>Lo que llevaba su estado esperando (Wait o WaitRandom; 0 si no espera).</summary>
         public float Waited;
@@ -3491,7 +3519,27 @@ internal sealed class EnemySync {
 
     private const int MaxParentChecks = 20;
 
-    /// <summary>Enemigo vivo del que cuelga este en la jerarquía (se busca hasta encontrarlo, unas pocas veces).</summary>
+    /// <summary>
+    /// Enemigos de la sala que saca otro con su lógica sin colgar de él (nombre sin el " (n)" → nombre del que los saca).
+    /// Los mueve el mismo PC que a él: el Príncipe Gris Zote escupe un Zoteling poniéndolo en su boca, dándole velocidad y
+    /// mandándole SPAWN. Si el Zoteling lo movía el otro PC, allí solo llegaba el SPAWN y salía desde donde espera, bajo
+    /// el suelo y fuera de la arena: a veces no salía ninguno y la cabeza escupida aparecía en otro sitio (issue #15).
+    /// </summary>
+    private static readonly Dictionary<string, string> Summoners = new() {
+        ["Zoteling"] = "Grey Prince",
+        ["Zote Balloon"] = "Grey Prince"
+    };
+
+    /// <summary>Nombre sin el " (n)" que Unity pone a las copias de un objeto en la sala ("Zoteling (2)" → "Zoteling").</summary>
+    private static string BaseName(string name) {
+        var cut = name.LastIndexOf(" (", StringComparison.Ordinal);
+        return cut > 0 && name.EndsWith(")", StringComparison.Ordinal) ? name.Substring(0, cut) : name;
+    }
+
+    /// <summary>
+    /// Enemigo vivo del que cuelga este en la jerarquía, o el que lo saca (ver <see cref="Summoners"/>). Se busca hasta
+    /// encontrarlo, unas pocas veces.
+    /// </summary>
     private Enemy ParentOf(Enemy enemy) {
         if (enemy.Parent == null && enemy.ParentChecks < MaxParentChecks) {
             enemy.ParentChecks++;
@@ -3500,6 +3548,15 @@ internal sealed class EnemySync {
                 if (health != null && _byHealth.TryGetValue(health, out var parent) && parent != enemy) {
                     enemy.Parent = parent;
                     break;
+                }
+            }
+
+            if (enemy.Parent == null && Summoners.TryGetValue(BaseName(enemy.Root.name), out var summoner)) {
+                foreach (var other in _enemies) {
+                    if (other != enemy && other.Root != null && other.Root.name == summoner) {
+                        enemy.Parent = other;
+                        break;
+                    }
                 }
             }
         }
@@ -3803,6 +3860,7 @@ internal sealed class EnemySync {
                 writer.WriteByte((byte) (body.bodyType == RigidbodyType2D.Kinematic && enemy.Puppet
                     ? enemy.BodyType
                     : body.bodyType));
+                writer.WriteBool(enemy.Puppet ? enemy.Simulated : body.simulated);
             }
 
             // Si está encendido, si se dibuja, si choca, si es invencible y cuánto daña (la marioneta del que lo recibe
@@ -3834,6 +3892,10 @@ internal sealed class EnemySync {
 
             writer.WriteUShort(heldWake);
             WriteWalker(writer, enemy);
+            // Su etiqueta: la cambia su lógica solo en el PC que lo mueve, y otro enemigo puede buscarlo por ella (ver
+            // HandoverFsm.Tag)
+            writer.WriteString(enemy.Root != null ? enemy.Root.tag : string.Empty);
+            writer.WriteBool(enemy.Collider != null && enemy.Collider.isTrigger);
             _session.End();
         }
     }
@@ -3877,10 +3939,12 @@ internal sealed class EnemySync {
         var velocity = Vector2.zero;
         var gravity = 0f;
         var bodyType = RigidbodyType2D.Dynamic;
+        var simulated = true;
         if (hasBody) {
             velocity = new Vector2(reader.ReadFloat(), reader.ReadFloat());
             gravity = reader.ReadFloat();
             bodyType = (RigidbodyType2D) reader.ReadByte();
+            simulated = reader.ReadBool();
         }
 
         var active = reader.ReadBool();
@@ -3890,6 +3954,8 @@ internal sealed class EnemySync {
         var awake = reader.ReadBool();
         var heldWake = reader.ReadUShort();
         var walker = ReadWalker(reader);
+        var tag = reader.ReadString(MaxHandoverString);
+        var trigger = reader.ReadBool();
         // También uno que aún no es marioneta porque este PC acaba de entrar en la sala (se toma igual, ver Update)
         if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var enemy) || index >= count ||
             !enemy.Puppet && Time.unscaledTime - enemy.ScannedAt > PuppetDelay + 1f) {
@@ -3907,8 +3973,8 @@ internal sealed class EnemySync {
 
         enemy.Handover[index] = new HandoverFsm {
             State = state, Ints = ints, Floats = floats, Bools = bools, Strings = strings, Objects = objects, HasBody = hasBody, Velocity = velocity, Gravity = gravity,
-            BodyType = bodyType, Active = active, Look = look, Damage = damage, Detached = detached, Waited = waited,
-            Awake = awake, HeldWake = heldWake, Walker = walker
+            BodyType = bodyType, Simulated = simulated, Active = active, Look = look, Damage = damage, Detached = detached, Waited = waited,
+            Awake = awake, HeldWake = heldWake, Walker = walker, Tag = tag, Trigger = trigger
         };
         if (index == count - 1) {
             enemy.HandoverReady = true;
@@ -4058,8 +4124,24 @@ internal sealed class EnemySync {
         var last = handover[handover.Length - 1];
         if (enemy.Body != null && last != null && last.HasBody) {
             enemy.Body.bodyType = last.BodyType;
+            enemy.Body.simulated = last.Simulated;
             enemy.Body.gravityScale = last.Gravity;
             enemy.Body.velocity = last.Velocity;
+        }
+
+        if (last != null && enemy.Collider != null && enemy.Collider.isTrigger != last.Trigger) {
+            Log.Info($"{enemy.Root.name}: al retomarlo su caja {(last.Trigger ? "atraviesa" : "deja de atravesar")} el suelo como en el otro PC");
+            enemy.Collider.isTrigger = last.Trigger;
+        }
+
+        if (last != null && !string.IsNullOrEmpty(last.Tag) && enemy.Root != null) {
+            try {
+                if (!enemy.Root.CompareTag(last.Tag)) {
+                    enemy.Root.tag = last.Tag;
+                }
+            } catch (UnityException e) {
+                Log.Warn($"{enemy.Root.name}: no se pudo poner su etiqueta '{last.Tag}' al retomarlo ({e.Message})");
+            }
         }
 
         RestartWalkers(enemy);
@@ -6456,6 +6538,11 @@ internal sealed class EnemySync {
                 enemy.BodyType = enemy.Body.bodyType;
                 enemy.Body.velocity = Vector2.zero;
                 enemy.Body.bodyType = RigidbodyType2D.Kinematic;
+                // Simulado mientras es marioneta: sin simular, sus colliders no reciben golpes ni tocan al caballero. Su
+                // lógica parada no lo vuelve a encender (el Príncipe Gris Zote lo apaga dormido y solo lo enciende el PC
+                // que lo mueve). Cinemático, no se mueve solo, y si debe chocar lo dice su estado continuo
+                enemy.Simulated = enemy.Body.simulated;
+                enemy.Body.simulated = true;
             }
 
             enemy.Buffer.Clear();
@@ -6476,6 +6563,8 @@ internal sealed class EnemySync {
             enemy.PausedFsms.Clear();
             if (enemy.Body != null) {
                 enemy.Body.bodyType = enemy.BodyType;
+                // (al retomarlo, como lo tenía el PC que lo movía: ver TakeOverUnguarded)
+                enemy.Body.simulated = enemy.Simulated;
             }
 
             // (al retomarlo, después de poner su velocidad: ver TakeOverUnguarded)

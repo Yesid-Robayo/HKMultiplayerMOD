@@ -1844,7 +1844,8 @@ internal sealed class TestDriver : MonoBehaviour {
                 var body = found.GetComponent<Rigidbody2D>();
                 var physics = body == null ? string.Empty :
                     $" vel=({body.velocity.x:0.0};{body.velocity.y:0.0}) giro={found.transform.eulerAngles.z:0} " +
-                    $"angvel={body.angularVelocity:0} {body.bodyType} grav={body.gravityScale:0.0} rest={body.constraints}" +
+                    $"angvel={body.angularVelocity:0} {body.bodyType}{(body.simulated ? "" : " sin simular")} " +
+                    $"grav={body.gravityScale:0.0} rest={body.constraints}" +
                     $" retroceso={(found.GetComponent<Recoil>() is { } recoil ? recoil.freezeInPlace ? "congelado" : "normal" : "-")}";
                 Log.Info($"{Tag}trazaobj {DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()} {found.name} " +
                          $"pos=({position.x:0.00};{position.y:0.00}){physics} {states}");
