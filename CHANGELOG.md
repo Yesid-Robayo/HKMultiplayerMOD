@@ -9,6 +9,13 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.36.0
+
+- **Grey Prince Zote stuck mid-fight**: after a few hits he could freeze in place, in the air, and the fight couldn't be
+  finished. Now he keeps fighting, in his dream and in Godhome.
+- **Zotelings that didn't come out**: when Zote spat, sometimes no Zoteling came out, or it appeared somewhere else for
+  one of the players. Now they come out of his mouth for everyone.
+
 ## 0.35.2
 
 - **Recent games**: the Multiplayer menu remembers the last IP games you joined, and in *Join a world* a "Rejoin…"

@@ -9,6 +9,13 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.36.0
+
+- **Príncipe Gris Zote atascado a mitad del combate**: tras unos golpes podía quedarse quieto en el aire y el combate no
+  se podía terminar. Ahora sigue peleando, en su sueño y en Godhome.
+- **Zotelings que no salían**: cuando Zote escupía, a veces no salía ningún Zoteling, o salía en otro sitio para uno de
+  los jugadores. Ahora salen de su boca para todos.
+
 ## 0.35.2
 
 - **Partidas recientes**: el menú Multijugador recuerda las últimas partidas por IP en las que entraste y, en *Unirse a
