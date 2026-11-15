@@ -96,8 +96,16 @@ public abstract class NetPeer : IDisposable {
 
             try {
                 if (now - connection.LastReceive > NetConstants.TimeoutSeconds) {
+                    LogWarning($"Se corta por tiempo la conexión con {Describe(connection)}: {connection.DescribeStats(now)}");
                     CloseConnection(connection, DisconnectReason.Timeout, false);
                     continue;
+                }
+
+                // Un silencio largo queda en el registro aunque luego no se corte: dice cuándo y con qué estado de red
+                if (!connection.SilenceReported && connection.State == ConnectionState.Connected &&
+                    now - connection.LastReceive > SilenceWarningSeconds) {
+                    connection.SilenceReported = true;
+                    LogWarning($"No llega nada de {Describe(connection)}: {connection.DescribeStats(now)}");
                 }
 
                 if (CanSend(connection)) {
@@ -256,6 +264,13 @@ public abstract class NetPeer : IDisposable {
     }
 
     internal void LogWarning(string message) => Listener.Log(message);
+
+    /// <summary>Segundos sin recibir nada a partir de los que se avisa en el registro (el corte llega a los 10).</summary>
+    private const double SilenceWarningSeconds = 3;
+
+    /// <summary>Quién es el otro extremo, para el registro, sin su dirección.</summary>
+    internal string Describe(NetConnection connection) =>
+        this is NetServer ? $"el jugador {connection.Id}" : "el host";
 
     public virtual void Dispose() {
         _iteration.Clear();

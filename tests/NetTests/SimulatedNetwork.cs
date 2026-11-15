@@ -21,6 +21,21 @@ public sealed class SimulatedNetwork {
     public double Latency = 0.02;
     public double Jitter = 0.01;
 
+    /// <summary>
+    /// Ancho de banda de cada sentido, en bytes por segundo (0 = sin límite). Simula un enlace estrecho, como una VPN que
+    /// pasa por un relé: los datagramas esperan en una cola de <see cref="QueueBytes"/> y, si no caben, se pierden.
+    /// </summary>
+    public double Bandwidth;
+
+    /// <summary>Bytes que caben en la cola de cada sentido cuando hay límite de ancho de banda.</summary>
+    public int QueueBytes = 64 * 1024;
+
+    /// <summary>Datagramas perdidos por cola llena.</summary>
+    public int QueueDrops;
+
+    // Momento en que cada sentido (origen → destino) termina de enviar lo que tiene en cola
+    private readonly Dictionary<(int From, int To), double> _busyUntil = new();
+
     /// <summary>Si se guardan los datagramas enviados (para la prueba de repetición).</summary>
     public bool Capture;
 
@@ -45,9 +60,23 @@ public sealed class SimulatedNetwork {
             return;
         }
 
+        var now = NetPeer.Now;
+        var departure = now;
+        if (Bandwidth > 0) {
+            var link = (from.Port, to.Port);
+            var busy = _busyUntil.TryGetValue(link, out var until) ? Math.Max(until, now) : now;
+            if ((busy - now) * Bandwidth + length > QueueBytes) {
+                QueueDrops++;
+                return;
+            }
+
+            departure = busy + length / Bandwidth;
+            _busyUntil[link] = departure;
+        }
+
         var data = Pool.Rent();
         System.Buffer.BlockCopy(buffer, offset, data, 0, length);
-        var at = NetPeer.Now + Latency + _random.NextDouble() * Jitter;
+        var at = departure + Latency + _random.NextDouble() * Jitter;
         target.Inbox.Add(new Pending { At = at, Data = data, Length = length, From = from });
     }
 

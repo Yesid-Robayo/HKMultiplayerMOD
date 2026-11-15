@@ -143,6 +143,21 @@ public sealed class NetConnection : ReliableReceiver.ISink {
 
     internal double LastReceive => _lastReceive;
 
+    /// <summary>Si ya se avisó en el registro de que no llega nada (para avisar también cuando vuelva a llegar).</summary>
+    internal bool SilenceReported;
+
+    /// <summary>
+    /// Estado de la conexión para el registro: con él, un corte o un silencio se puede diagnosticar con solo el
+    /// ModLog.txt (red saturada, el otro dejó de enviar o el juego se paró).
+    /// </summary>
+    internal string DescribeStats(double now) {
+        var min = _minRtt == double.MaxValue ? 0 : _minRtt;
+        return $"latencia {_smoothedRtt * 1000:0} ms (mínima {min * 1000:0} ms), sin recibir desde hace " +
+               $"{now - _lastReceive:0.0} s, fiables sin confirmar {_reliableSender.InFlight}, datos grandes pendientes " +
+               $"{LargeBytesPending / 1024} KB, reenvíos {_reliableSender.Resends}, enviado {_bytesSent / 1024} KB, " +
+               $"recibido {_bytesReceived / 1024} KB";
+    }
+
     /// <summary>Si ya llegó algún paquete auténtico (cifrado con las claves del código).</summary>
     internal bool ReceivedAny => _receivedAny;
 
@@ -354,7 +369,12 @@ public sealed class NetConnection : ReliableReceiver.ISink {
         _sentTime[sequence % 1024] = now;
         _sentSequence[sequence % 1024] = sequence;
         _peer.Transport.Send(datagram, 0, NetConstants.DataHeaderSize + cipherLength, EndPoint);
+        _bytesSent += NetConstants.DataHeaderSize + cipherLength;
     }
+
+    // Bytes de datos enviados y recibidos en total (para el registro)
+    private long _bytesSent;
+    private long _bytesReceived;
 
     private static void WriteHeader(byte[] datagram, uint sequence) {
         var magic = NetConstants.Magic;
@@ -394,7 +414,13 @@ public sealed class NetConnection : ReliableReceiver.ISink {
             return true;
         }
 
+        if (SilenceReported) {
+            SilenceReported = false;
+            _peer.LogWarning($"Vuelve a llegar la red de {_peer.Describe(this)} tras {now - _lastReceive:0.0} s sin nada");
+        }
+
         _lastReceive = now;
+        _bytesReceived += length;
         reader.Reset(plain, 0, plainLength);
         try {
             var ack = reader.ReadUInt();

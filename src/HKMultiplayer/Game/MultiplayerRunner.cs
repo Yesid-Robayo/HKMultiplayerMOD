@@ -131,6 +131,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Lo más que espera el host los personajes de los invitados antes de cerrar.</summary>
     private const float CollectTimeout = 4f;
 
+    /// <summary>Duración de un frame a partir de la que se registra que el juego estuvo parado.</summary>
+    private const float LongFrameSeconds = 1.5f;
+
     /// <summary>Partida a la que se unió el invitado por última vez (a la que se reconecta).</summary>
     /// <summary>
     /// Apunta la partida por IP en la que acaba de entrar este invitado en «Partidas recientes» (la primera de la lista;
@@ -314,6 +317,11 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
         var scene = _sceneReloaded ? string.Empty : CurrentScene();
         _sceneReloaded = false;
+        // Un frame muy largo (carga lenta, ventana congelada) también para la red: queda en el registro para distinguirlo
+        // de un corte de la conexión
+        if (Time.unscaledDeltaTime > LongFrameSeconds) {
+            Log.Warn($"El juego estuvo parado {Time.unscaledDeltaTime:0.0} s (sala {(scene.Length > 0 ? scene : "cargando")})");
+        }
         if (_announceCode && scene.Length > 0 && session.IsHost) {
             _announceCode = false;
             Notice.Show(Lang.T($"Partida abierta  ·  Código {FormatCode(session.RoomCode)}\n", $"Game open  ·  Code {FormatCode(session.RoomCode)}\n") +

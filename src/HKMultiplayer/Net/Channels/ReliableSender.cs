@@ -45,6 +45,9 @@ internal sealed class ReliableSender {
     /// <summary>Mensajes en vuelo o en espera.</summary>
     public int InFlight => (ushort) (_nextId - _oldest) + _backlog.Count;
 
+    /// <summary>Mensajes que se volvieron a enviar porque no llegó su acuse a tiempo (para el registro).</summary>
+    public long Resends { get; private set; }
+
     /// <summary>Sitio libre en la ventana.</summary>
     public int FreeSlots => Window - (ushort) (_nextId - _oldest);
 
@@ -95,6 +98,10 @@ internal sealed class ReliableSender {
             writer.WriteUShort(id);
             writer.WriteVarUInt((uint) _length[slot]);
             writer.WriteBytes(_data[slot], 0, _length[slot]);
+            if (_lastSent[slot] != double.MinValue) {
+                Resends++;
+            }
+
             _lastSent[slot] = now;
             _packetMessages[record][count++] = id;
         }
