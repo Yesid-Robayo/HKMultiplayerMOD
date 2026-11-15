@@ -9,6 +9,14 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.36.1
+
+- **Co-op worlds missing after a sudden shutdown**: if the PC turned off while saving (a power cut, for example), the
+  world could disappear from the list even though its files were still there. Now it shows up again on its own, and
+  worlds are saved so that a sudden shutdown can't damage them.
+- **More detailed log of disconnections**: `ModLog.txt` now records when the connection goes quiet, when it comes back
+  and why it drops, to help find the cause of disconnections.
+
 ## 0.36.0
 
 - **Grey Prince Zote stuck mid-fight**: after a few hits he could freeze in place, in the air, and the fight couldn't be

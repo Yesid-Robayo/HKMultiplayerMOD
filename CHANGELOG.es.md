@@ -9,6 +9,14 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.36.1
+
+- **Mundos coop que desaparecían tras un apagado de golpe**: si el PC se apagaba mientras guardaba (por un corte de luz,
+  por ejemplo), el mundo podía dejar de salir en la lista aunque sus archivos siguieran ahí. Ahora vuelve a salir solo, y
+  los mundos se guardan de forma que un apagado de golpe no los daña.
+- **Registro más detallado de las desconexiones**: el `ModLog.txt` anota cuándo deja de llegar la conexión, cuándo
+  vuelve y por qué se corta, para encontrar la causa de las desconexiones.
+
 ## 0.36.0
 
 - **Príncipe Gris Zote atascado a mitad del combate**: tras unos golpes podía quedarse quieto en el aire y el combate no
