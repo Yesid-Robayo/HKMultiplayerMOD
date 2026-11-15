@@ -362,25 +362,25 @@ internal sealed class HostSettings {
         _loadedWorld = world;
         ResetToDefaults();
         if (world.Length > 0) {
-            var path = PathFor(world);
-            // Si se cerró justo entre borrar el viejo y mover el nuevo, queda el nuevo como .tmp
-            if (!File.Exists(path) && File.Exists(path + ".tmp")) {
-                path += ".tmp";
-            }
+            // El último, su copia anterior o el .tmp: un apagón puede dejar el último vacío (issue #19)
+            foreach (var candidate in SafeFile.Candidates(PathFor(world))) {
+                try {
+                    if (!File.Exists(candidate)) {
+                        continue;
+                    }
 
-            try {
-                if (File.Exists(path)) {
-                    var json = JObject.Parse(File.ReadAllText(path));
+                    var json = JObject.Parse(File.ReadAllText(candidate));
                     foreach (var option in Options) {
                         if (json[option.Key] is JValue { Type: JTokenType.Float or JTokenType.Integer } value) {
                             _index[option.Index] = option.Nearest((float) value);
                         }
                     }
 
-                    Log.Info($"Ajustes de la partida leídos del mundo {CoopSaves.ActiveWorld.Name}");
+                    Log.Info($"Ajustes de la partida leídos del mundo {CoopSaves.ActiveWorld.Name} ({Path.GetFileName(candidate)})");
+                    break;
+                } catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) {
+                    Log.Warn($"No se pudieron leer los ajustes del mundo ({Path.GetFileName(candidate)}): {e.Message}");
                 }
-            } catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) {
-                Log.Warn($"No se pudieron leer los ajustes del mundo: {e.Message}");
             }
         }
 
@@ -400,15 +400,9 @@ internal sealed class HostSettings {
         }
 
         try {
-            // Aparte y luego en su sitio: si el juego se cerraba a mitad de escribirlo, el mundo volvía a los ajustes por
-            // defecto
-            var path = PathFor(world);
-            File.WriteAllText(path + ".tmp", json.ToString(Formatting.Indented), new UTF8Encoding(false));
-            if (File.Exists(path)) {
-                File.Delete(path);
-            }
-
-            File.Move(path + ".tmp", path);
+            // Aparte, forzado al disco y luego en su sitio: si el juego se cerraba a mitad de escribirlo, el mundo volvía a
+            // los ajustes por defecto
+            SafeFile.Write(PathFor(world), json.ToString(Formatting.Indented));
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
             Log.Warn($"No se pudieron guardar los ajustes del mundo: {e.Message}");
         }

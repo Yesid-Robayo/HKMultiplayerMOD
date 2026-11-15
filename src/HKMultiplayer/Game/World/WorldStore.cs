@@ -92,19 +92,83 @@ public static class WorldStore {
         return worlds.OrderByDescending(w => w.LastSaved).ToList();
     }
 
+    /// <summary>Mundos cuyo problema ya se escribió en el registro: la lista se vuelve a leer cada vez que se abre el menú.</summary>
+    private static readonly HashSet<string> Reported = new();
+
     public static CoopWorldInfo ReadInfo(string id) {
         var dir = Path.Combine(Root, id);
-        try {
-            var info = JsonConvert.DeserializeObject<CoopWorldInfo>(File.ReadAllText(Path.Combine(dir, InfoFile)));
-            if (info == null) {
-                return null;
-            }
+        var path = Path.Combine(dir, InfoFile);
+        foreach (var candidate in SafeFile.Candidates(path)) {
+            try {
+                if (!File.Exists(candidate)) {
+                    continue;
+                }
 
-            info.Id = id;
-            info.IsNew = !File.Exists(Path.Combine(dir, WorldFile));
-            return info;
-        } catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) {
+                // Un archivo vacío da null: tras un apagón puede quedar así
+                var info = JsonConvert.DeserializeObject<CoopWorldInfo>(File.ReadAllText(candidate));
+                if (info == null) {
+                    ReportOnce(id, $"La ficha del mundo {id} ({Path.GetFileName(candidate)}) está vacía");
+                    continue;
+                }
+
+                if (candidate != path) {
+                    ReportOnce(id, $"La ficha del mundo {id} estaba dañada: se usa {Path.GetFileName(candidate)}");
+                }
+
+                info.Id = id;
+                info.IsNew = !HasSave(dir);
+                return info;
+            } catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) {
+                ReportOnce(id, $"No se pudo leer la ficha del mundo {id} ({Path.GetFileName(candidate)}): {e.Message}");
+            }
+        }
+
+        return RebuildInfo(id);
+    }
+
+    /// <summary>
+    /// Rehace la ficha de un mundo que tiene partida pero cuya ficha falta o no se puede leer, para que no desaparezca de
+    /// la lista (issue #19: un corte de luz dejó <c>info.json</c> inservible y el mundo dejó de salir). El código de la
+    /// partida no se puede recuperar: se crea uno nuevo al abrirlo.
+    /// </summary>
+    private static CoopWorldInfo RebuildInfo(string id) {
+        var dir = Path.Combine(Root, id);
+        if (!HasSave(dir)) {
             return null;
+        }
+
+        var data = Load(id);
+        if (data == null) {
+            ReportOnce(id, $"El mundo {id} no tiene ficha ni partida legible: no se muestra");
+            return null;
+        }
+
+        var lastSaved = SafeFile.Candidates(Path.Combine(dir, WorldFile)).Where(File.Exists)
+            .Select(File.GetLastWriteTimeUtc).DefaultIfEmpty(DateTime.UtcNow).Max();
+        var info = new CoopWorldInfo {
+            Id = id,
+            Name = id,
+            PlayTime = data.playerData.playTime,
+            Area = data.playerData.mapZone.ToString(),
+            LastSaved = lastSaved
+        };
+
+        try {
+            WriteInfo(info);
+            Log.Warn($"Ficha del mundo {id} rehecha a partir de su partida");
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+            ReportOnce(id, $"Ficha del mundo {id} rehecha, pero no se pudo guardar: {e.Message}");
+        }
+
+        return info;
+    }
+
+    /// <summary>Si el mundo ya se guardó alguna vez (el último guardado o su copia).</summary>
+    private static bool HasSave(string dir) => SafeFile.Candidates(Path.Combine(dir, WorldFile)).Any(File.Exists);
+
+    private static void ReportOnce(string id, string message) {
+        if (Reported.Add(id + "|" + message)) {
+            Log.Warn(message);
         }
     }
 
@@ -152,7 +216,7 @@ public static class WorldStore {
     /// <summary>Lee la partida de un mundo (null si es nuevo o no se pudo leer).</summary>
     public static SaveGameData Load(string id) {
         var path = Path.Combine(Path.Combine(Root, id), WorldFile);
-        foreach (var candidate in new[] { path, path + ".bak" }) {
+        foreach (var candidate in SafeFile.Candidates(path)) {
             if (!File.Exists(candidate)) {
                 continue;
             }
@@ -161,13 +225,15 @@ public static class WorldStore {
                 var data = JsonConvert.DeserializeObject<SaveGameData>(File.ReadAllText(candidate), SaveSettings);
                 if (data?.playerData != null && data.sceneData != null) {
                     if (candidate != path) {
-                        Log.Warn($"El mundo {id} estaba dañado: se cargó la copia anterior");
+                        Log.Warn($"El mundo {id} estaba dañado: se cargó {Path.GetFileName(candidate)}");
                     }
 
                     return data;
                 }
-            } catch (Exception e) when (e is IOException or JsonException) {
-                Log.Warn($"No se pudo leer {candidate}: {e.Message}");
+
+                Log.Warn($"El guardado {Path.GetFileName(candidate)} del mundo {id} está vacío");
+            } catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) {
+                Log.Warn($"No se pudo leer {Path.GetFileName(candidate)} del mundo {id}: {e.Message}");
             }
         }
 
@@ -178,21 +244,7 @@ public static class WorldStore {
     public static void Save(CoopWorldInfo info, SaveGameData data) {
         var dir = Path.Combine(Root, info.Id);
         Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, WorldFile);
-        var json = JsonConvert.SerializeObject(data, Formatting.None, SaveSettings);
-
-        // Se escribe aparte y luego se cambia: si el juego se cierra a medias, queda el guardado anterior entero
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, json, new UTF8Encoding(false));
-        if (File.Exists(path)) {
-            if (File.Exists(path + ".bak")) {
-                File.Delete(path + ".bak");
-            }
-
-            File.Move(path, path + ".bak");
-        }
-
-        File.Move(temp, path);
+        SafeFile.Write(Path.Combine(dir, WorldFile), JsonConvert.SerializeObject(data, Formatting.None, SaveSettings));
 
         info.PlayTime = data.playerData.playTime;
         info.Area = data.playerData.mapZone.ToString();
@@ -205,17 +257,17 @@ public static class WorldStore {
     public static Newtonsoft.Json.Linq.JObject LoadCharacter(string worldId, string playerKey) {
         var path = CharacterPath(worldId, playerKey);
         // El anterior (.bak) si el último no está o no se puede leer: el juego pudo cerrarse justo al guardarlo
-        foreach (var candidate in new[] { path, path + ".bak" }) {
+        foreach (var candidate in SafeFile.Candidates(path)) {
             try {
                 if (File.Exists(candidate)) {
                     var character = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(candidate));
                     if (candidate != path) {
-                        Log.Warn($"El personaje {playerKey} estaba dañado o faltaba: se cargó la copia anterior");
+                        Log.Warn($"El personaje {playerKey} estaba dañado o faltaba: se cargó {Path.GetFileName(candidate)}");
                     }
 
                     return character;
                 }
-            } catch (Exception e) when (e is IOException or JsonException) {
+            } catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) {
                 Log.Warn($"No se pudo leer el personaje {playerKey} ({Path.GetFileName(candidate)}): {e.Message}");
             }
         }
@@ -230,17 +282,7 @@ public static class WorldStore {
     public static void SaveCharacter(string worldId, string playerKey, Newtonsoft.Json.Linq.JObject character) {
         var path = CharacterPath(worldId, playerKey);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, character.ToString(Formatting.None), new UTF8Encoding(false));
-        if (File.Exists(path)) {
-            if (File.Exists(path + ".bak")) {
-                File.Delete(path + ".bak");
-            }
-
-            File.Move(path, path + ".bak");
-        }
-
-        File.Move(temp, path);
+        SafeFile.Write(path, character.ToString(Formatting.None));
     }
 
     /// <summary>La clave ya viene validada (solo hexadecimal): no puede salirse de la carpeta del mundo.</summary>
@@ -250,8 +292,9 @@ public static class WorldStore {
     /// <summary>Guarda los datos de la lista del mundo (p. ej. su código nuevo) sin tocar la partida.</summary>
     public static void UpdateInfo(CoopWorldInfo info) => WriteInfo(info);
 
+    /// <summary>Como la partida, con copia: antes se escribía encima y un apagón la dejaba vacía (issue #19).</summary>
     private static void WriteInfo(CoopWorldInfo info) {
-        File.WriteAllText(Path.Combine(Path.Combine(Root, info.Id), InfoFile),
-            JsonConvert.SerializeObject(info, Formatting.Indented), new UTF8Encoding(false));
+        SafeFile.Write(Path.Combine(Path.Combine(Root, info.Id), InfoFile),
+            JsonConvert.SerializeObject(info, Formatting.Indented));
     }
 }
