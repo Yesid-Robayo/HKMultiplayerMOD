@@ -9,6 +9,16 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.36.2
+
+- **Hechizos que quitaban muchísima vida a los jefes**: un hechizo lanzado por un jugador cuyo PC no era el que movía
+  al jefe podía golpearlo varias veces seguidas y quitarle un trozo enorme de vida. Ahora cada hechizo quita lo mismo
+  que jugando solo, lo lance quien lo lance.
+- **Teletransporte en los Panteones**: tras vencer al Defensor Blanco o al Campeón Fallido en un Panteón (también al
+  Pariente Perdido y al Tirano de Alma, y en el Salón de los Dioses), todos podían salir del Panteón a una sala del
+  mundo (como la del Defensor del Estiércol dormido), y el Defensor Blanco no desaparecía. Ahora el Panteón sigue con
+  el siguiente combate como debe.
+
 ## 0.36.1
 
 - **Mundos coop que desaparecían tras un apagado de golpe**: si el PC se apagaba mientras guardaba (por un corte de luz,

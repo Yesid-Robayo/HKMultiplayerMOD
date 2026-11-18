@@ -9,6 +9,16 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.36.2
+
+- **Spells dealing far too much damage to bosses**: a spell cast by a player whose PC wasn't the one running the boss
+  could hit it several times in a row and take off a huge chunk of its health. Now each spell deals the same damage as
+  in single player, whoever casts it.
+- **Teleported away in the Pantheons**: after beating White Defender or Failed Champion in a Pantheon (also Lost Kin and
+  Soul Tyrant, and in the Hall of Gods), everyone could be sent out of the Pantheon to a room of the world (such as
+  the sleeping Dung Defender's), and White Defender didn't fade away. Now the Pantheon goes on to the next fight as
+  normal.
+
 ## 0.36.1
 
 - **Co-op worlds missing after a sudden shutdown**: if the PC turned off while saving (a power cut, for example), the
