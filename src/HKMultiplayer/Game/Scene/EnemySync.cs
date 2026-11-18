@@ -7404,6 +7404,9 @@ internal sealed class EnemySync {
         var health = enemy.Health;
         var invincible = health.IsInvincible;
         health.IsInvincible = false;
+        // La ventana sin golpes de la marioneta es la de los golpes de este jugador: los de otro, que solo se ven aquí, no la
+        // abren (un golpe bloqueado la abría y se perdía el siguiente de este jugador, que no llegaba al PC que lo mueve)
+        var evasion = EvasionField != null ? (float) EvasionField.GetValue(health) : 0f;
         _playingFx = true;
         _applyingRemoteHit = true;
         try {
@@ -7416,6 +7419,7 @@ internal sealed class EnemySync {
             _playingFx = false;
             _applyingRemoteHit = false;
             health.IsInvincible = invincible;
+            EvasionField?.SetValue(health, evasion);
         }
     }
 
@@ -7602,12 +7606,20 @@ internal sealed class EnemySync {
                 return;
             }
 
-            sync.SendHit(enemy, hit);
+            // Como el juego: tras un golpe, el enemigo no recibe otro durante 0,2 s (0,15 si lo bloqueó). Un hechizo que
+            // sigue tocándolo lo golpea cada frame y el juego descarta esos golpes; en la marioneta se enviaban todos al PC
+            // que lo mueve, que quita esa ventana a los golpes de otros y los contaba todos: una bola de fuego quitaba
+            // varias veces su daño (issue #21). La ventana de la marioneta solo la abren los golpes de este PC (ver OnHitFx)
+            var evaded = EvasionField != null && (float) EvasionField.GetValue(self) > 0f;
+            if (!evaded) {
+                sync.SendHit(enemy, hit);
+            }
+
             if (hit.AttackType == AttackTypes.Nail) {
                 sync.ForwardNailTriggers(enemy, self.gameObject);
             }
 
-            if (self.hp > 0) {
+            if (!evaded && self.hp > 0) {
                 // Efectos del golpe y alma para quien golpea, sin quitar vida aquí (la quita el dueño)
                 HitWithoutDamage(self, hit, orig);
             }

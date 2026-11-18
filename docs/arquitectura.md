@@ -181,7 +181,11 @@ propio. Objetivos de diseño, por orden:
     Mantis de la segunda fase eligen pared y guardan hacia dónde lanzar (`Shot Event`, "WIDE L"...) antes de lanzar, y
     retomados entre medias lanzarían con el texto de su lanzamiento anterior. También al salir de la sala o morir (aún
     dentro, al empezar el cambio de sala): un jefe no repite su presentación.
-  - Los golpes del jugador local a una marioneta van al PC que la mueve, que los aplica al enemigo real. Cualquier
+  - Los golpes del jugador local a una marioneta van al PC que la mueve, que los aplica al enemigo real. Se envían con
+    la misma ventana que usa el juego tras un golpe (0,2 s sin recibir otro, `evasionByHitRemaining`): un hechizo que
+    sigue tocando al enemigo lo golpea cada frame, y el PC que lo mueve quita esa ventana a los golpes de otros
+    jugadores, así que sin ella cada frame contaba como un golpe. La ventana de la marioneta solo la abren los golpes del
+    jugador local; los de otros, que solo se ven, la dejan como estaba. Cualquier
     aviso de fuera que llegue a una marioneta (el de daño del ataque, la zona de la arena en la que entró el caballero,
     la escena de batalla) también va al PC que la mueve: con esos avisos despiertan o reaccionan muchos jefes. Los
     avisos a todos de un objeto de la sala no llegan a la lógica parada de una marioneta: si en su estado de ahora
@@ -724,7 +728,9 @@ frame solo se mueven o se encienden, y los textos se rehacen solo al cambiar.
   del llevado. Si la entrada no está encendida en ese PC (la de la Radiancia pide el Corazón del Vacío), se entra directo al
   mismo sueño. Al salir de un sueño con jefe sin caer al vacío (`Dream Fall Catcher`) ni morir, se avisa a la sala y los
   que siguen dentro salen como el juego, por el estado `Leave Dream` de la FSM `Dream Nail` del caballero (quedan
-  tendidos y se levantan al pulsar); las demás salidas son de cada uno.
+  tendidos y se levantan al pulsar); las demás salidas son de cada uno. En las salas de Godhome (`GG_*`) no se buscan
+  entradas: los jefes de sueño de los Panteones y del Salón de los Dioses conservan en su cadáver la vuelta al mundo del
+  sueño original, que allí no se usa, y tomada por una entrada mandaba a todos a la sala del cuerpo dormido.
 - **Grimmchild** (`GrimmchildGift`, mensaje 95): el amuleto es de cada jugador pero su nivel y la Compañía son del
   mundo; si uno lo recibe, los demás también.
 - **Entrar juntos en un Panteón** (`PantheonTogether`, mensaje 113, fiable, a la sala): al pulsar empezar en el cuadro

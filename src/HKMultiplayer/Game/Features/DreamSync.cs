@@ -242,8 +242,9 @@ internal sealed class DreamSync {
 
     /// <summary>FSM de la sala con un cambio de sala de tipo sueño (entradas a un sueño).</summary>
     private void Scan() {
-        // Dentro de un sueño no se busca: sus cambios de sala son salidas (van por el gancho del cambio de sala)
-        if (InDream) {
+        // Dentro de un sueño no se busca: sus cambios de sala son salidas (van por el gancho del cambio de sala). En Godhome
+        // tampoco: ver InGodhome
+        if (InDream || InGodhome(_scene)) {
             return;
         }
 
@@ -265,6 +266,18 @@ internal sealed class DreamSync {
             Log.Info($"Entrada a un sueño: {fsm.gameObject.name}/{fsm.FsmName} → {transition.sceneName.Value}");
         }
     }
+
+    /// <summary>
+    /// Las salas de Godhome no tienen entradas a un sueño. Los jefes de sueño del Panteón y del Salón de los Dioses
+    /// (Defensor Blanco, Campeón Fallido, Pariente Perdido, Tirano de Alma) conservan en su cadáver la vuelta al mundo del
+    /// sueño original, que allí no se usa (su FSM sigue el camino "GG BOSS"), y la que recoge al que cae es de cada uno.
+    /// Tomado por una entrada, el cadáver del Defensor Blanco avisaba al pasar de estado y los compañeros viajaban a la
+    /// sala de su cuerpo dormido (Waterways_15) en mitad del Panteón (issue #20). Entrar juntos en un Panteón lo lleva
+    /// <see cref="PantheonTogether"/>.
+    /// </summary>
+    private static bool InGodhome(string scene) => scene.StartsWith(GodhomePrefix, StringComparison.Ordinal);
+
+    private const string GodhomePrefix = "GG_";
 
     private bool Contains(PlayMakerFSM fsm) {
         foreach (var entry in _entries) {
@@ -370,8 +383,9 @@ internal sealed class DreamSync {
         var preventFade = reader.ReadBool();
         var gm = GameManager.instance;
         var hero = HeroController.instance;
+        // En Godhome no hay entradas (ver InGodhome): el aviso es de un compañero con una versión anterior del mod
         if (sceneHash != _sceneHash || _scene.Length == 0 || gm == null || hero == null || gm.IsInSceneTransition ||
-            hero.cState.dead || _revive != null && _revive.IsDowned || InDream) {
+            hero.cState.dead || _revive != null && _revive.IsDowned || InDream || InGodhome(_scene)) {
             return;
         }
 
