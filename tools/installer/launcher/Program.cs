@@ -50,6 +50,38 @@ internal static class Program {
     private const uint FileTypeDisk = 1;
     private const uint FileTypePipe = 3;
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FileInfo {
+        internal uint Attributes;
+        internal long CreationTime;
+        internal long LastAccessTime;
+        internal long LastWriteTime;
+        internal uint VolumeSerialNumber;
+        internal uint SizeHigh;
+        internal uint SizeLow;
+        internal uint Links;
+        internal uint IndexHigh;
+        internal uint IndexLow;
+    }
+
+    [DllImport("kernel32.dll")]
+    private static extern bool GetFileInformationByHandle(IntPtr handle, out FileInfo info);
+
+    /// <summary>
+    /// Si la salida normal y la de errores van al mismo archivo ("> registro.txt 2>&amp;1"): entonces se escribe todo con un
+    /// solo escritor. Con dos, cada uno llevaba su posición en el archivo y .NET cortaba el programa al escribir un error.
+    /// </summary>
+    private static bool SameFile(int first, int second) {
+        var a = GetStdHandle(first);
+        var b = GetStdHandle(second);
+        if (GetFileType(a) != FileTypeDisk || GetFileType(b) != FileTypeDisk) {
+            return false;
+        }
+
+        return GetFileInformationByHandle(a, out var x) && GetFileInformationByHandle(b, out var y) &&
+               x.VolumeSerialNumber == y.VolumeSerialNumber && x.IndexHigh == y.IndexHigh && x.IndexLow == y.IndexLow;
+    }
+
     [STAThread]
     private static int Main(string[] args) {
         var root = AppDomain.CurrentDomain.BaseDirectory;
@@ -101,7 +133,7 @@ internal static class Program {
         // Si la salida va a un archivo o a una tubería ("> registro.txt"), se escribe ahí: un
         // programa de ventana unido a la consola escribiría en la consola y el archivo se quedaba vacío
         var output = Redirected(StdOutput);
-        var error = Redirected(StdError);
+        var error = output != null && SameFile(StdOutput, StdError) ? output : Redirected(StdError);
         var own = !AttachConsole(AttachParentProcess);
         if (own && output == null) {
             AllocConsole();
