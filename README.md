@@ -226,9 +226,16 @@ API.
 - **Skins** compatible with CustomKnight (*Pause › Multiplayer › Skin & sound*): body, spells and effects; sent through the
   mod's own network in the background without delaying hits (the first time; then they're kept in a cache and load
   instantly), and you can turn off seeing other players' skins.
-- **Partners** (*Pause › Multiplayer › Partners*): each partner's health, soul and location, **give geo**, **go to**
-  them (you appear next to them, even in another room), **unstuck** (back to the last safe ground) and **reload the
-  room**.
+- **Partners** (*Pause › Multiplayer › Partners*): each partner's health, soul and location, their nail, notches and
+  equipped charms, **give geo**, **go to** them (you appear next to them, even in another room), **unstuck** (back to
+  the last safe ground) and **reload the room**. The host can also **kick** a player (press twice): they can't rejoin
+  that game.
+- **Quick messages**: hold the quick map button and press a direction. Up, "Over here!", marks your spot; right, "Get
+  it!", marks the nearest enemy (the mark follows it); down, "Help!", and left, "Wait!". Works with keyboard and
+  controller.
+- **Chat**: press **T** to type and Enter to send (Esc cancels), also while sitting on a bench. Keyboard only; with a
+  controller, use quick messages.
+- **Shared map pins**: with "Shared map" on, the pins each player places on their map also show on their partners'.
 
 </details>
 

@@ -228,9 +228,17 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - **Skins** compatibles con CustomKnight (*Pausa › Multijugador › Skin y sonido*): cuerpo, hechizos y efectos; se envían por la
   red del mod en segundo plano sin retrasar los golpes (la primera vez; luego quedan en una caché y cargan al
   momento), y se puede desactivar ver las de los demás.
-- **Compañeros** (*Pausa › Multijugador › Compañeros*): la vida y el alma de cada uno y dónde está, **dar geo**, **ir
-  con él** (apareces a su lado, también en otra sala), **desatascarse** (al último suelo seguro) y **recargar la
-  sala**.
+- **Compañeros** (*Pausa › Multijugador › Compañeros*): la vida y el alma de cada uno y dónde está, su aguijón, sus
+  muescas y los amuletos que lleva, **dar geo**, **ir con él** (apareces a su lado, también en otra sala),
+  **desatascarse** (al último suelo seguro) y **recargar la sala**. El host puede además **expulsar** a un jugador
+  (pulsando dos veces): ya no puede volver a esa partida.
+- **Mensajes rápidos**: con el botón del mapa rápido pulsado, una dirección. Arriba, «¡Aquí!», marca tu sitio;
+  derecha, «¡A por él!», marca el enemigo más cercano (la marca lo sigue); abajo, «¡Ayuda!», e izquierda, «¡Espera!».
+  Con teclado y con mando.
+- **Chat**: pulsa **T** para escribir y Enter para enviar (Esc cancela), también sentado en un banco. Solo con
+  teclado; con mando, los mensajes rápidos.
+- **Chinchetas del mapa compartidas**: con «Mapa compartido», las chinchetas que cada uno pone en su mapa salen
+  también en el de los compañeros.
 
 </details>
 
