@@ -147,6 +147,11 @@ internal static class CoopSaves {
             return false;
         }
 
+        if (world.Lost) {
+            Log.Warn($"El mundo {world.Name} se perdió en Alma de Acero: no se puede abrir");
+            return false;
+        }
+
         var gm = GameManager.instance;
         _enteredGame = false;
         IsHostWorld = true;
@@ -155,8 +160,8 @@ internal static class CoopSaves {
             gm.playerData.Reset();
             gm.sceneData.Reset();
             gm.profileID = CoopSlot;
-            Log.Info($"Mundo coop nuevo: {world.Name}");
-            gm.StartNewGame();
+            Log.Info($"Mundo coop nuevo: {world.Name} ({world.Mode})");
+            gm.StartNewGame(world.Mode == CoopWorldMode.SteelSoul, world.Mode == CoopWorldMode.Godseeker);
             return true;
         }
 

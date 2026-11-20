@@ -169,9 +169,11 @@ internal sealed class TestDriver : MonoBehaviour {
                 runner.Host(args[1], int.Parse(args[2]), args.Length > 3 ? args[3] : null);
                 break;
             case "hostworld":
-                // hostworld <mundo> <nombre> <puerto> [código]: hostea ese mundo coop (lo crea si no existe)
+                // hostworld <mundo> <nombre> <puerto> [código] [modo 0 clásico|1 Alma de Acero|2 Buscador de Dioses]: hostea
+                // ese mundo coop (lo crea si no existe, con ese modo)
                 var world = HKMultiplayer.Game.World.WorldStore.List().FirstOrDefault(w => w.Name == args[1]) ??
-                            HKMultiplayer.Game.World.WorldStore.Create(args[1]);
+                            HKMultiplayer.Game.World.WorldStore.Create(args[1],
+                                (HKMultiplayer.Game.World.CoopWorldMode) (args.Length > 5 ? int.Parse(args[5]) : 0));
                 runner.HostWorld(world, args[2], int.Parse(args[3]), args.Length > 4 ? args[4] : null);
                 break;
             case "mkworld":

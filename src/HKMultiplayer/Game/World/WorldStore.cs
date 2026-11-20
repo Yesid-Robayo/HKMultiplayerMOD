@@ -36,9 +36,29 @@ public sealed class CoopWorldInfo {
     /// </summary>
     public string RoomCode { get; set; } = string.Empty;
 
+    /// <summary>Modo del mundo: <see cref="CoopWorldMode.Classic"/>, Alma de Acero o Buscador de Dioses.</summary>
+    public CoopWorldMode Mode { get; set; }
+
+    /// <summary>
+    /// Mundo de Alma de Acero en el que cayeron todos a la vez: se perdió, como la partida de ese modo jugando solo. No se
+    /// puede volver a hostear; solo borrar.
+    /// </summary>
+    public bool Lost { get; set; }
+
     /// <summary>Si aún no se ha guardado nunca (mundo recién creado: se empieza partida nueva).</summary>
     [JsonIgnore]
     public bool IsNew { get; set; }
+}
+
+/// <summary>Modo de juego de un mundo coop, como los de una partida nueva del juego.</summary>
+public enum CoopWorldMode {
+    Classic = 0,
+
+    /// <summary>Alma de Acero: si caen todos a la vez, el mundo se pierde.</summary>
+    SteelSoul = 1,
+
+    /// <summary>Buscador de Dioses: solo Dios Hogar, con todo el equipo desde el principio.</summary>
+    Godseeker = 2
 }
 
 /// <summary>
@@ -227,7 +247,7 @@ public static class WorldStore {
     }
 
     /// <summary>Crea un mundo vacío (se empezará con partida nueva). Null si ya hay el máximo.</summary>
-    public static CoopWorldInfo Create(string name) {
+    public static CoopWorldInfo Create(string name, CoopWorldMode mode = CoopWorldMode.Classic) {
         if (List().Count >= MaxWorlds) {
             Log.Warn($"No se crea el mundo: ya hay {MaxWorlds}");
             return null;
@@ -253,7 +273,7 @@ public static class WorldStore {
         }
 
         Directory.CreateDirectory(Path.Combine(Root, id));
-        var info = new CoopWorldInfo { Id = id, Name = name, LastSaved = DateTime.UtcNow, IsNew = true };
+        var info = new CoopWorldInfo { Id = id, Name = name, LastSaved = DateTime.UtcNow, IsNew = true, Mode = mode };
         WriteInfo(info);
         return info;
     }
@@ -295,6 +315,12 @@ public static class WorldStore {
         info.Area = data.playerData.mapZone.ToString();
         info.LastSaved = DateTime.UtcNow;
         info.IsNew = false;
+        // Alma de Acero: el juego guarda la muerte de verdad con permadeathMode = 2 antes de llevar a su pantalla final
+        if (data.playerData.permadeathMode == 2 && !info.Lost) {
+            info.Lost = true;
+            Log.Info($"Mundo de Alma de Acero perdido: {info.Name}");
+        }
+
         WriteInfo(info);
     }
 

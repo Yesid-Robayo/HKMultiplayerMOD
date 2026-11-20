@@ -153,9 +153,15 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         AddText(newWorld, Lang.T("Un mundo coop empieza como una partida nueva y lo guarda tu PC.", "A coop world starts like a new game and is saved on your PC."), 38);
         AddSpace(newWorld, 20);
         _newWorldName = AddInput(newWorld, Lang.T("Nombre del mundo", "World name"), string.Empty, 40, InputField.ContentType.Standard);
-        AddSpace(newWorld, 30);
+        AddSpace(newWorld, 10);
+        AddOption(newWorld, Lang.T("Modo", "Mode"), ModeNames(), 0, index => {
+            _newWorldMode = (CoopWorldMode) index;
+            _modeHelp.text = ModeHelp(_newWorldMode);
+        });
+        _modeHelp = AddText(newWorld, ModeHelp(CoopWorldMode.Classic), 30);
+        AddSpace(newWorld, 20);
         AddButton(newWorld, Lang.T("Crear y hostear", "Create and host"), () => {
-            var world = WorldStore.Create(_newWorldName.text);
+            var world = WorldStore.Create(_newWorldName.text, _newWorldMode);
             if (world == null) {
                 ShowPage(HostPage);
                 return;
@@ -411,6 +417,31 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         MultiplayerRunner.Instance.JoinSteamLobby(lobby, _name.text);
     }
 
+    /// <summary>Modo elegido para el mundo nuevo y su explicación bajo el selector.</summary>
+    private CoopWorldMode _newWorldMode;
+
+    private Text _modeHelp;
+
+    private static string[] ModeNames() => new[] {
+        Lang.T("Clásico", "Classic"), Lang.T("Alma de Acero", "Steel Soul"), Lang.T("Buscador de Dioses", "Godseeker")
+    };
+
+    private static string ModeHelp(CoopWorldMode mode) => mode switch {
+        CoopWorldMode.SteelSoul => Lang.T("Quien cae se puede levantar; si caen todos a la vez, el mundo se pierde.",
+            "Downed players can be revived; if everyone goes down at once, the world is lost."),
+        CoopWorldMode.Godseeker => Lang.T("Solo Dios Hogar, con todo el equipo desde el principio.",
+            "Only Godhome, with all the gear from the start."),
+        _ => Lang.T("La partida normal.", "The normal game.")
+    };
+
+    /// <summary>Lo que se ve del modo en la lista de mundos.</summary>
+    private static string ModeLabel(CoopWorldInfo world) => world.Lost ? Lang.T("  ·  perdido", "  ·  lost")
+        : world.Mode switch {
+            CoopWorldMode.SteelSoul => Lang.T("  ·  Alma de Acero", "  ·  Steel Soul"),
+            CoopWorldMode.Godseeker => Lang.T("  ·  Buscador de Dioses", "  ·  Godseeker"),
+            _ => string.Empty
+        };
+
     private void RefreshWorlds() {
         foreach (Transform child in _worldList.transform) {
             child.gameObject.SetActive(false);
@@ -419,12 +450,14 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
 
         var worlds = WorldStore.List();
         foreach (var world in worlds) {
-            var label = world.IsNew
+            var label = (world.IsNew
                 ? Lang.T($"{world.Name}  ·  nuevo", $"{world.Name}  ·  new")
-                : $"{world.Name}  ·  {FormatTime(world.PlayTime)}  ·  {AreaName(world.Area)}";
+                : $"{world.Name}  ·  {FormatTime(world.PlayTime)}  ·  {AreaName(world.Area)}") + ModeLabel(world);
             var target = world;
             var row = AddRow(_worldList, world.Name, 84, 10);
-            AddButton(row, label, () => UIManager.instance.StartCoroutine(HostRoutine(target)), 40, 1080);
+            var host = AddButton(row, label, () => UIManager.instance.StartCoroutine(HostRoutine(target)), 40, 1080);
+            // Un mundo de Alma de Acero perdido ya no se juega: solo se puede borrar
+            host.interactable = !world.Lost;
             AddButton(row, Lang.T("Borrar", "Delete"), () => {
                 _pendingDelete = target;
                 _deleteQuestion.text = Lang.T($"¿Borrar el mundo «{target.Name}»?", $"Delete the world \"{target.Name}\"?");

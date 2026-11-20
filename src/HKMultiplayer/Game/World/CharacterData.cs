@@ -395,6 +395,11 @@ internal static class CharacterData {
     public static JObject CreateNew(PlayerData host) {
         var fresh = (PlayerData) Activator.CreateInstance(typeof(PlayerData), true);
         fresh.Reset();
+        // En un mundo de Buscador de Dioses se empieza con lo que da ese modo (habilidades, amuletos, aguijón...), como el host
+        if (host != null && host.bossRushMode) {
+            fresh.AddGGPlayerDataOverrides();
+        }
+
         var data = Extract(fresh, null);
         var serializer = Serializer;
         foreach (var name in FromHostForNew) {
