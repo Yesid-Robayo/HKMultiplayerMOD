@@ -1135,6 +1135,17 @@ internal sealed class TestDriver : MonoBehaviour {
             case "frametime":
                 StartCoroutine(MeasureFrames(ParseFloat(args[1])));
                 break;
+            case "chatopen":
+            case "chatclose":
+                // Abre o cierra el campo del chat como la T y Esc
+                runner.Chat.TestToggle(args[0] == "chatopen");
+                Log.Info($"{Tag}chat abierto={runner.Chat.IsOpen} caballero acepta teclas={hero.acceptingInput}");
+                break;
+            case "chat":
+                // chat <texto>: envía ese mensaje de chat como si se escribiera
+                Log.Info($"{Tag}chat {(runner.Chat.Send(string.Join(" ", args.Skip(1))) ? "enviado" : "no enviado")} " +
+                         $"abierto={runner.Chat.IsOpen} recibidos={runner.Chat.Received}");
+                break;
             case "quickmsg":
                 // quickmsg <0 aquí|1 ayuda|2 espera|3 a por él>: envía ese mensaje rápido como con el mapa rápido
                 Log.Info($"{Tag}mensaje rápido {(runner.QuickChat.Send(byte.Parse(args[1])) ? "enviado" : "no enviado")} " +

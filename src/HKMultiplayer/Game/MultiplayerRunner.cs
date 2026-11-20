@@ -107,6 +107,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Mensajes rápidos y marcas para el compañero.</summary>
     public Features.QuickChat QuickChat { get; } = new();
 
+    /// <summary>Chat de texto (tecla T).</summary>
+    public Features.PartyChat Chat { get; } = new();
+
     /// <summary>El Portal Onírico de cada compañero, visible en su sala.</summary>
     public Features.PartnerDreamGates DreamGates { get; } = new();
 
@@ -402,6 +405,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Colosseum.Update(scene);
             PartnerMap.Update(scene);
             QuickChat.Update(scene);
+            Chat.Update();
             DreamGates.Update(scene);
             PartyAbilities.Update();
             Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene
@@ -846,6 +850,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         // su hilo y el puerto se quedaban abiertos)
         Safely(() => { PartnerMap.Detach(); }, "PartnerMap.Detach");
         Safely(() => { QuickChat.Detach(); }, "QuickChat.Detach");
+        Safely(() => { Chat.Detach(); }, "Chat.Detach");
         Safely(() => { DreamGates.Detach(); }, "DreamGates.Detach");
         Safely(() => { PartyAbilities.Detach(); }, "PartyAbilities.Detach");
         Safely(() => { Skins.Detach(); }, "Skins.Detach");
@@ -1017,6 +1022,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Skins.Attach(session, Players);
         PartnerMap.Attach(session, Revive);
         QuickChat.Attach(session, Enemies);
+        Chat.Attach(session);
         DreamGates.Attach(session);
         PartyAbilities.Attach(session);
         var connected = false;
