@@ -134,7 +134,7 @@ internal sealed class StagTogether {
             : Vector2.Distance(hero.transform.position, fromPosition) > NearDistance ? "lejos de él"
             : PartyState.IsDown(_session.LocalId) ? "caído"
             : hero.cState.dead || hero.cState.transitioning ? "cambiando de sala"
-            : pd.atBench ? "sentado en un banco"
+            : pd.atBench && hero.controlReqlinquished ? "sentado en un banco"
             : GameManager.instance != null && GameManager.instance.isPaused ? "en pausa"
             // Hablando, mirando el mapa, comprando o reapareciendo tras los pinchos: el viaje le quitaba el control a mitad
             : hero.cState.hazardRespawning ? "reapareciendo"

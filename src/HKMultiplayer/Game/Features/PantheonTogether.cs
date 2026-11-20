@@ -17,6 +17,11 @@ namespace HKMultiplayer.Game.Features;
 /// estatua, y el que no la cruzaba se quedaba allí mientras el otro peleaba solo el resto del Panteón. Lo que se gana
 /// (la puerta completada, las ataduras) es de cada jugador.
 /// </para>
+/// <para>
+/// Lo mismo con las estatuas del Salón de los Dioses: quien elige un nivel en una estatua (<c>BossChallengeUI.LoadBoss</c>)
+/// avisa a la sala, y cada compañero libre entra en la misma sala del jefe como si lo hubiera elegido en su estatua: vuelve
+/// a ella al acabar y el nivel completado se apunta en la suya.
+/// </para>
 /// </summary>
 internal sealed class PantheonTogether {
     /// <summary>Un jugador empieza un Panteón en esta sala (→ la sala): puerta y ataduras.</summary>
@@ -24,6 +29,9 @@ internal sealed class PantheonTogether {
 
     /// <summary>La sala de un Panteón acabó en este PC (→ la sala): los demás pasan con él al siguiente jefe.</summary>
     public const MessageType PantheonSceneEnd = (MessageType) 114;
+
+    /// <summary>Un jugador empieza el combate de una estatua de esta sala (→ la sala): estatua, nivel, sala del jefe.</summary>
+    public const MessageType StatueStart = (MessageType) 121;
 
     /// <summary>Puerta por la que se entra en la primera sala de la secuencia (la de la FSM del desafío).</summary>
     private const string EntryGate = "door_dreamEnter";
@@ -33,6 +41,10 @@ internal sealed class PantheonTogether {
 
     private readonly MessageHandler _onStart;
     private readonly MessageHandler _onSceneEnd;
+    private readonly MessageHandler _onStatue;
+
+    /// <summary>Entrando en una estatua porque la eligió otro jugador: no se vuelve a avisar.</summary>
+    private static bool _statueFromRemote;
     private GameSession _session;
 
     /// <summary>Acabando la sala porque acabó en otro PC: no se vuelve a avisar.</summary>
@@ -41,11 +53,13 @@ internal sealed class PantheonTogether {
     static PantheonTogether() {
         MessageRoutes.Register(PantheonStart, Route.SameScene, reliable: true);
         MessageRoutes.Register(PantheonSceneEnd, Route.SameScene, reliable: true);
+        MessageRoutes.Register(StatueStart, Route.SameScene, reliable: true);
     }
 
     public PantheonTogether() {
         _onStart = OnStart;
         _onSceneEnd = OnSceneEnd;
+        _onStatue = OnStatue;
     }
 
     public void Attach(GameSession session) {
@@ -53,11 +67,13 @@ internal sealed class PantheonTogether {
         _active = this;
         session.On(PantheonStart, _onStart);
         session.On(PantheonSceneEnd, _onSceneEnd);
+        session.On(StatueStart, _onStatue);
     }
 
     public void Detach() {
         _session?.On(PantheonStart, null);
         _session?.On(PantheonSceneEnd, null);
+        _session?.On(StatueStart, null);
         _session = null;
         if (_active == this) {
             _active = null;
@@ -90,6 +106,14 @@ internal sealed class PantheonTogether {
         On.BossDoorChallengeUI.Begin += (orig, self) => {
             orig(self);
             _active?.OnLocalBegin(self);
+        };
+
+        // Elegir un nivel en una estatua del Salón de los Dioses
+        On.BossChallengeUI.LoadBoss_int_bool += (orig, self, level, doHideAnim) => {
+            orig(self, level, doHideAnim);
+            if (!_statueFromRemote) {
+                _active?.OnLocalStatue(self, level);
+            }
         };
 
         // Fin de la sala de un jefe (todos muertos)
@@ -175,6 +199,133 @@ internal sealed class PantheonTogether {
         hero.transform.position = new Vector3(center.x, center.y, hero.transform.position.z);
     }
 
+    private static readonly System.Reflection.FieldInfo StatueField =
+        typeof(BossChallengeUI).GetField("bossStatue", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+    private void OnLocalStatue(BossChallengeUI ui, int level) {
+        if (StatueField?.GetValue(ui) is not BossStatue statue || _session == null || !_session.CanSend || !AnyoneElseHere()) {
+            return;
+        }
+
+        var bossScene = StaticVariableList.GetValue<string>("bossSceneToLoad");
+        if (string.IsNullOrEmpty(bossScene)) {
+            return;
+        }
+
+        Log.Info($"Estatua {statue.name} (nivel {level}, {bossScene}): los compañeros de la sala entran también");
+        var writer = _session.Begin(StatueStart);
+        writer.WriteString(statue.gameObject.scene.name);
+        writer.WriteString(statue.name);
+        writer.WriteByte((byte) level);
+        writer.WriteBool(statue.UsingDreamVersion);
+        writer.WriteString(bossScene);
+        _session.End();
+    }
+
+    private void OnStatue(SessionPlayer from, PacketReader reader) {
+        var scene = reader.ReadString(128);
+        var statueName = reader.ReadString(128);
+        var level = reader.ReadByte();
+        var dream = reader.ReadBool();
+        var bossSceneName = reader.ReadString(128);
+        var gm = GameManager.instance;
+        var hero = HeroController.instance;
+        var pd = PlayerData.instance;
+        if (gm == null || hero == null || pd == null || gm.sceneName != scene) {
+            return;
+        }
+
+        var statue = FindStatue(scene, statueName);
+        var bossScene = statue != null ? dream ? statue.dreamBossScene : statue.bossScene : null;
+        var why = statue == null || bossScene == null || statue.dreamReturnGate == null ? "aquí no está esa estatua"
+            : level > 2 || !IsSceneOf(bossScene, bossSceneName) ? "sala de jefe que no es de esa estatua"
+            : !Application.CanStreamedLevelBeLoaded(bossSceneName) ? "no existe esa sala"
+            : BossSequenceController.IsInSequence ? "está en un Panteón"
+            : PartyState.IsDown(_session.LocalId) ? "caído"
+            : hero.cState.dead || hero.cState.transitioning || gm.IsInSceneTransition ? "cambiando de sala"
+            : pd.atBench && hero.controlReqlinquished ? "sentado en un banco"
+            : gm.isPaused ? "en pausa"
+            : hero.controlReqlinquished ? "ocupado"
+            : null;
+        if (why != null) {
+            Log.Info($"{from.Name} empezó la estatua {statueName}; este jugador no entra ({why})");
+            Notice.Show(Lang.T($"{from.Name} se enfrenta a una estatua", $"{from.Name} is fighting a statue"), 4f);
+            return;
+        }
+
+        Log.Info($"{from.Name} empezó la estatua {statueName} (nivel {level}): este jugador entra con él");
+        EnterStatue(statue, bossScene, bossSceneName, level, dream);
+        Notice.Show(Lang.T($"Estatua con {from.Name}", $"Statue with {from.Name}"), 4f);
+    }
+
+    private static bool IsSceneOf(BossScene bossScene, string sceneName) =>
+        sceneName == bossScene.sceneName || sceneName == bossScene.Tier1Scene || sceneName == bossScene.Tier2Scene ||
+        sceneName == bossScene.Tier3Scene;
+
+    private static BossStatue FindStatue(string scene, string statueName) {
+        foreach (var candidate in Object.FindObjectsByType<BossStatue>(FindObjectsSortMode.None)) {
+            if (candidate.name == statueName && candidate.gameObject.scene.name == scene) {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Lo mismo que elegir el nivel en la estatua (<c>BossChallengeUI.LoadBoss</c>) y lo que hace después su FSM
+    /// <c>GG Boss UI</c>: la sala a la que se vuelve, la puerta de la estatua, el nivel completado al ganar y el viaje.
+    /// </summary>
+    private static void EnterStatue(BossStatue statue, BossScene bossScene, string sceneName, int level, bool dream) {
+        var gm = GameManager.instance;
+        var pd = PlayerData.instance;
+        StaticVariableList.SetValue("bossSceneToLoad", sceneName);
+        BossStatueLoadManager.RecordBossScene(bossScene);
+        pd.SetString("bossReturnEntryGate", statue.dreamReturnGate.name);
+        pd.SetString("dreamReturnScene", statue.gameObject.scene.name);
+        var field = dream ? statue.dreamStatueStatePD : statue.statueStatePD;
+        BossSceneController.SetupEvent = self => {
+            self.BossLevel = level;
+            self.DreamReturnEvent = "DREAM RETURN";
+            self.OnBossesDead += () => {
+                var completion = GameManager.instance.GetPlayerDataVariable<BossStatue.Completion>(field);
+                switch (level) {
+                    case 0:
+                        completion.completedTier1 = true;
+                        break;
+                    case 1:
+                        completion.completedTier2 = true;
+                        break;
+                    case 2:
+                        completion.completedTier3 = true;
+                        break;
+                }
+
+                GameManager.instance.SetPlayerDataVariable(field, completion);
+                GameManager.instance.playerData.SetString("currentBossStatueCompletionKey", field);
+                GameManager.instance.playerData.SetInt("bossStatueTargetLevel", level);
+            };
+            self.OnBossSceneComplete += () => self.DoDreamReturn();
+        };
+
+        _statueFromRemote = true;
+        try {
+            HeroController.instance.RelinquishControl();
+            CoverWithWhite();
+            gm.BeginSceneTransition(new GameManager.SceneLoadInfo {
+                SceneName = sceneName,
+                EntryGateName = EntryGate,
+                EntryDelay = 0f,
+                Visualization = GameManager.SceneLoadVisualizations.GodsAndGlory,
+                PreventCameraFadeOut = true,
+                WaitForSceneTransitionCameraFade = true,
+                AlwaysUnloadUnusedAssets = false
+            });
+        } finally {
+            _statueFromRemote = false;
+        }
+    }
+
     private static readonly System.Reflection.FieldInfo DoorField =
         typeof(BossDoorChallengeUI).GetField("door", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
@@ -240,7 +391,7 @@ internal sealed class PantheonTogether {
             : BossSequenceController.IsInSequence ? "ya está en un Panteón"
             : PartyState.IsDown(_session.LocalId) ? "caído"
             : hero.cState.dead || hero.cState.transitioning || gm.IsInSceneTransition ? "cambiando de sala"
-            : pd.atBench ? "sentado en un banco"
+            : pd.atBench && hero.controlReqlinquished ? "sentado en un banco"
             : gm.isPaused ? "en pausa"
             : hero.controlReqlinquished ? "ocupado"
             : null;
