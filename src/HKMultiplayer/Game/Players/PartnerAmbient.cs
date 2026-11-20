@@ -42,6 +42,12 @@ internal sealed class PartnerAmbient {
     private readonly Dictionary<ushort, HashSet<Rubble>> _touching = new();
 
     private readonly Dictionary<ushort, float> _nextCheck = new();
+
+    /// <summary>Dónde estaba cada compañero en la mirada anterior.</summary>
+    private readonly Dictionary<ushort, Vector3> _lastPosition = new();
+
+    /// <summary>Más que esto entre dos miradas es un salto (teletransporte, cambio de sitio), no un recorrido.</summary>
+    private const float MaxSweep = 4f;
     private string _scene = string.Empty;
     private float _scanAt = -1f;
     private Vector2 _size = new(0.5f, 1.3f);
@@ -52,6 +58,9 @@ internal sealed class PartnerAmbient {
 
     public int Pushed { get; private set; }
 
+    /// <summary>Palomas y escombros encontrados en la sala (diagnóstico).</summary>
+    public string Describe() => $"{_pigeons.Count}/{_rubble.Count}";
+
     public void SetScene(string scene) {
         if (scene == _scene) {
             return;
@@ -61,6 +70,7 @@ internal sealed class PartnerAmbient {
         _pigeons.Clear();
         _rubble.Clear();
         _touching.Clear();
+        _lastPosition.Clear();
         _scanAt = scene.Length > 0 ? Time.unscaledTime + ScanDelay : -1f;
     }
 
@@ -78,8 +88,15 @@ internal sealed class PartnerAmbient {
 
         _nextCheck[playerId] = now + CheckInterval;
         var box = new Bounds((Vector2) position + _offset, _size);
+        // Corriendo, entre dos miradas se avanza casi un trozo entero: la caja cubre también el camino desde la anterior
+        if (_lastPosition.TryGetValue(playerId, out var last) && ((Vector2) (position - last)).sqrMagnitude < MaxSweep * MaxSweep) {
+            box.Encapsulate(new Bounds((Vector2) last + _offset, _size));
+        }
+
+        _lastPosition[playerId] = position;
         foreach (var pigeon in _pigeons) {
-            if (pigeon.Fsm == null || pigeon.Range == null || pigeon.Fsm.ActiveStateName != PigeonIdle) {
+            if (pigeon.Fsm == null || pigeon.Range == null || !pigeon.Fsm.isActiveAndEnabled ||
+                pigeon.Fsm.ActiveStateName != PigeonIdle) {
                 continue;
             }
 
@@ -96,11 +113,12 @@ internal sealed class PartnerAmbient {
         }
 
         foreach (var rubble in _rubble) {
-            if (rubble.Fsm == null || rubble.Box == null || !rubble.Box.enabled) {
+            // Los trozos de una farola están apagados hasta que se rompe
+            if (rubble.Fsm == null || rubble.Box == null || !rubble.Box.enabled || !rubble.Box.gameObject.activeInHierarchy) {
                 continue;
             }
 
-            var inside = rubble.Box.bounds.Intersects(box);
+            var inside = Bounds2D.Overlaps(rubble.Box.bounds, box);
             if (inside && touching.Add(rubble)) {
                 if (rubble.Fsm.ActiveStateName == RubbleWait) {
                     rubble.Fsm.SendEvent(RubbleHit);
@@ -114,6 +132,7 @@ internal sealed class PartnerAmbient {
 
     public void Forget(ushort playerId) {
         _touching.Remove(playerId);
+        _lastPosition.Remove(playerId);
         _nextCheck.Remove(playerId);
     }
 
@@ -121,6 +140,7 @@ internal sealed class PartnerAmbient {
         _pigeons.Clear();
         _rubble.Clear();
         _touching.Clear();
+        _lastPosition.Clear();
     }
 
     private void Scan() {
@@ -134,7 +154,8 @@ internal sealed class PartnerAmbient {
             _offset = heroBox.offset;
         }
 
-        foreach (var fsm in Object.FindObjectsByType<PlayMakerFSM>(FindObjectsSortMode.None)) {
+        // También los apagados: los trozos de cristal de las farolas se encienden al romperlas, después de buscar
+        foreach (var fsm in Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
             switch (fsm.FsmName) {
                 case PigeonFsm:
                     var range = fsm.transform.Find("Hero Range")?.GetComponent<CircleCollider2D>();

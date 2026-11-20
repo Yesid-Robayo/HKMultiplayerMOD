@@ -153,7 +153,7 @@ internal sealed class PlayerSync {
                                        $"empujes={_grass.Pushes} plataformas={_dreamPlatforms.PlatformCount} " +
                                        $"encendidas={_dreamPlatforms.Shown} agua={_water.RegionCount} " +
                                        $"salpicaduras={_water.Splashes} palomas={_ambient.Scared} " +
-                                       $"escombros={_ambient.Pushed}";
+                                       $"escombros={_ambient.Pushed} ambiente={_ambient.Describe()}";
 
     public void ResetEffectCounters() => _effects.ResetCounters();
 

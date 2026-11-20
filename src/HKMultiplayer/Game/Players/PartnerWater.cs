@@ -95,7 +95,7 @@ internal sealed class PartnerWater {
             }
 
             var inside = region.Zone.enabled && region.Zone.gameObject.activeInHierarchy &&
-                         region.Zone.bounds.Intersects(box);
+                         Bounds2D.Overlaps(region.Zone.bounds, box);
             if (inside == swimmer.Inside.Contains(region)) {
                 continue;
             }

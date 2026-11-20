@@ -147,7 +147,7 @@ internal sealed class PartnerDreamPlatforms {
 
         var bounds = zone.bounds;
         foreach (var position in _partners) {
-            if (bounds.Intersects(new Bounds((Vector2) position + _offset, _size))) {
+            if (Bounds2D.Overlaps(bounds, new Bounds((Vector2) position + _offset, _size))) {
                 return true;
             }
         }
@@ -158,7 +158,7 @@ internal sealed class PartnerDreamPlatforms {
     private static bool HeroInside(HeroController hero, DreamPlatform platform) {
         var zone = Zone(platform, outer: true);
         var box = hero != null ? hero.GetComponent<BoxCollider2D>() : null;
-        return zone != null && box != null && zone.bounds.Intersects(box.bounds);
+        return zone != null && box != null && Bounds2D.Overlaps(zone.bounds, box.bounds);
     }
 
     private static Collider2D Zone(DreamPlatform platform, bool outer) {
