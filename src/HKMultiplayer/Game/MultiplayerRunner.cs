@@ -86,6 +86,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Viajar juntos en ciervo desde la misma estación.</summary>
     public Features.StagTogether Stag { get; } = new();
 
+    /// <summary>Viajar juntos con el Portal Onírico.</summary>
+    public Features.DreamGateTogether DreamGateTravel { get; } = new();
+
     /// <summary>Entrar juntos a una prueba del Coliseo: la reja se abre para todos los de la entrada.</summary>
     public Features.ColosseumEntry Colosseum { get; } = new();
 
@@ -392,6 +395,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             MenderBug.Update(scene);
             Grimmchild.Update(scene);
             Stag.Update(scene);
+            DreamGateTravel.Update(scene);
             Colosseum.Update(scene);
             PartnerMap.Update(scene);
             DreamGates.Update(scene);
@@ -842,6 +846,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Safely(() => { Skins.Detach(); }, "Skins.Detach");
         Safely(() => { Grimmchild.Detach(); }, "Grimmchild.Detach");
         Safely(() => { Stag.Detach(); }, "Stag.Detach");
+        Safely(() => { DreamGateTravel.Detach(); }, "DreamGateTravel.Detach");
         Safely(() => { Colosseum.Detach(); }, "Colosseum.Detach");
         Safely(() => { Pantheons.Detach(); }, "Pantheons.Detach");
         Safely(() => { MenderBug.Detach(); }, "MenderBug.Detach");
@@ -997,6 +1002,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Travel.Attach(session, Party, Revive, Dreams, Cutscenes, Players);
         Grimmchild.Attach(session);
         Stag.Attach(session);
+        DreamGateTravel.Attach(session);
         Colosseum.Attach(session);
         Pantheons.Attach(session);
         MenderBug.Attach(session);
