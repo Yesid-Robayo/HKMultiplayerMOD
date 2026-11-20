@@ -176,13 +176,20 @@ internal sealed class HostSettings {
     public static readonly HostOption AllowMatchHostOption = new(23, "allowMatchHost", "Ponerse al nivel del host",
         "Match the host's level", YesNoValues, YesNo, YesNoEnglish, 0);
 
+    /// <summary>
+    /// Si los compañeros salen en el mapa sin llevar la Brújula Caprichosa (ver <see cref="PartnerMap"/>). No por defecto:
+    /// verlos siempre era demasiado fácil, y con el amuleto se gana como en el juego.
+    /// </summary>
+    public static readonly HostOption PartnerMapWithoutCompassOption = new(24, "partnerMapNoCompass",
+        "Compañeros en el mapa sin brújula", "Partners on the map without compass", YesNoValues, YesNo, YesNoEnglish, 1);
+
     /// <summary>Todos, en el orden del mensaje y del panel (su posición es su <see cref="HostOption.Index"/>).</summary>
     public static readonly HostOption[] Options = {
         BossHealthOption, EnemyHealthOption, PartnerInRoomOption, DamageTakenOption,
         ReviveOption, ReviveSecondsOption, ReviveSoulOption, ReviveMasksOption, ReviveInvulnerableOption, ReviveAtBenchOption,
         ShowNamesOption, ShowPartnerHealthOption, ShowArrowsOption, ShowPartnerOnMapOption, ShowNoticesOption, ShowBossBarOption,
         ShowEnemyBarsOption, GeoGiftsOption, PartnerTravelOption, SkipCutscenesOption, StagTogetherOption, SharedMapOption,
-        RespawnWithHostOption, AllowMatchHostOption
+        RespawnWithHostOption, AllowMatchHostOption, PartnerMapWithoutCompassOption
     };
 
     /// <summary>Posición elegida de cada ajuste.</summary>
@@ -248,6 +255,9 @@ internal sealed class HostSettings {
 
     /// <summary>Si los invitados pueden ponerse al nivel del host desde un banco.</summary>
     public bool AllowMatchHost => Flag(AllowMatchHostOption);
+
+    /// <summary>Si los compañeros salen en el mapa aunque no se lleve la Brújula Caprichosa.</summary>
+    public bool PartnerMapWithoutCompass => Flag(PartnerMapWithoutCompassOption);
 
     /// <summary>Si el mapa (salas visitadas y dibujadas) es del mundo; si no, de cada jugador.</summary>
     public bool SharedMap => Flag(SharedMapOption);

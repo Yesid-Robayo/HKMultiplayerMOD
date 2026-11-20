@@ -137,6 +137,24 @@ internal static class ReviveAudio {
         }
     }
 
+    private static readonly System.Reflection.FieldInfo HazardDeathVibration = typeof(HeroVibrationController).GetField(
+        "heroHazardDeathVibration", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+    /// <summary>
+    /// Vibración del mando cuando cae un compañero: la corta de morir en un peligro del propio caballero, para que se note
+    /// sin mirar la pantalla y no se confunda con la muerte propia (más larga).
+    /// </summary>
+    public static void PlayPartnerDown(HeroController hero) {
+        try {
+            var controller = hero != null ? hero.GetComponentInChildren<HeroVibrationController>() : null;
+            if (controller != null && HazardDeathVibration?.GetValue(controller) is VibrationDataAsset vibration) {
+                VibrationManager.PlayVibrationClipOneShot(vibration);
+            }
+        } catch (Exception e) {
+            Log.Warn($"No se pudo hacer vibrar el mando por la caída del compañero: {e.Message}");
+        }
+    }
+
     /// <summary>Corta la carga al momento (al terminar de revivir o al cerrar la partida).</summary>
     public static void StopCharge() {
         _fade = 0f;

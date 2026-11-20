@@ -2210,6 +2210,7 @@ internal sealed class Revive {
         if (member.Status == PlayerStatus.Downed && previous != PlayerStatus.Downed) {
             var entry = _vitals?.Get(member.Id);
             var zone = entry != null ? Zones.Name(entry.Zone) : member.BodyScene;
+            ReviveAudio.PlayPartnerDown(HeroController.instance);
             if (HostSettings.Current.ShowNotices) {
                 Notice.Show(Lang.T($"{member.Name} cayó en {zone}\nVe a su cuerpo y mantén Focus para revivirlo", $"{member.Name} went down in {zone}\nGo to their body and hold Focus to revive them"), 6f);
             }

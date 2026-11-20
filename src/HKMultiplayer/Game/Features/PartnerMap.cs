@@ -268,8 +268,12 @@ internal sealed class PartnerMap {
     /// <summary>Amuleto del Wayward Compass.</summary>
     private const string CompassCharm = "equippedCharm_2";
 
-    /// <summary>Si este jugador lleva el Wayward Compass: sin él tampoco ve su propia brújula.</summary>
-    private static bool HasCompass() => PlayerData.instance != null && PlayerData.instance.GetBool(CompassCharm);
+    /// <summary>
+    /// Si este jugador lleva el Wayward Compass (sin él tampoco ve su propia brújula), o si el host deja ver a los
+    /// compañeros sin ella.
+    /// </summary>
+    private static bool HasCompass() => HostSettings.Current.PartnerMapWithoutCompass ||
+                                        PlayerData.instance != null && PlayerData.instance.GetBool(CompassCharm);
 
     private void UpdateIcons(float now) {
         var gm = GameManager.instance;
