@@ -85,7 +85,7 @@ API.
 - **From a save file**: a world can start as a copy of one of your 4 save slots (the original isn't touched). A guest
   who joins from scratch can, sitting on a bench, **match the host's level** (*Partners*): they get the abilities,
   masks, vessels, nail, notches and charms the host has and they don't, after a summary to confirm, and they can undo
-  it. It's optional: whoever wants the full challenge just doesn't use it.
+  it. It's optional, and the host can turn it off for their world.
 - **Host and join** from the main menu (*Multiplayer*): the host opens a world and shares their **address**, the
   **port** (26950 by default) and the **game code** (`ABCD-EFGH` format). Buttons to copy the code and show or hide the
   IP. Each world keeps its code, and *Join a world › Recent games* takes you back to the last ones you joined with one
@@ -366,6 +366,7 @@ away without being able to change them.
 | Travel together (stag and Dreamgate) | Yes · No | Yes |
 | Shared map (with No, each player has their own map) | Yes · No | Yes |
 | Respawn with the host (when everyone goes down) | Yes · No | Yes |
+| Match the host's level (guests, from a bench) | Yes · No | Yes |
 
 The boss and enemy health is the extra health with one partner: each additional partner standing in the room adds the
 same again (1.5× is 2× with three players and 2.5× with four). Bosses that get stunned after a number of hits (Hornet,

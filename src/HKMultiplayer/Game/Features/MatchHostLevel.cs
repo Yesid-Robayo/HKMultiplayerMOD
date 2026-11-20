@@ -109,6 +109,11 @@ internal sealed class MatchHostLevel {
             return;
         }
 
+        if (!HostSettings.Current.AllowMatchHost) {
+            Status = Lang.T("El host no lo permite en este mundo", "The host doesn't allow it in this world");
+            return;
+        }
+
         if (!Sitting()) {
             Status = Lang.T("Siéntate en un banco para cambiar tu personaje", "Sit on a bench to change your character");
             return;
@@ -124,6 +129,12 @@ internal sealed class MatchHostLevel {
     private void OnRequest(SessionPlayer from, PacketReader reader) {
         var pd = PlayerData.instance;
         if (_session == null || !_session.IsHost || pd == null || from.IsLocal) {
+            return;
+        }
+
+        // Apagado por el host: no se responde (el invitado ya no ve el botón; esto es por si llega igual)
+        if (!HostSettings.Current.AllowMatchHost) {
+            Log.Info($"{from.Name} pide el nivel del host, pero el host no lo permite");
             return;
         }
 
@@ -252,6 +263,12 @@ internal sealed class MatchHostLevel {
     public void Confirm() {
         var pd = PlayerData.instance;
         var hero = HeroController.instance;
+        if (!HostSettings.Current.AllowMatchHost) {
+            _pending = null;
+            Status = Lang.T("El host no lo permite en este mundo", "The host doesn't allow it in this world");
+            return;
+        }
+
         if (!WaitingConfirm || pd == null || hero == null) {
             Status = Lang.T("Vuelve a pedirlo: el resumen caducó", "Ask again: the summary expired");
             _pending = null;

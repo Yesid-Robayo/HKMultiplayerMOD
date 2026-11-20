@@ -169,13 +169,20 @@ internal sealed class HostSettings {
     public static readonly HostOption RespawnWithHostOption = new(22, "respawnWithHost", "Reaparecer con el host",
         "Respawn with the host", YesNoValues, YesNo, YesNoEnglish, 0);
 
+    /// <summary>
+    /// Si los invitados pueden ponerse al nivel del host desde un banco (<see cref="MatchHostLevel"/>). Sí por defecto; con
+    /// No, el host juega su mundo sin esa ayuda para nadie.
+    /// </summary>
+    public static readonly HostOption AllowMatchHostOption = new(23, "allowMatchHost", "Ponerse al nivel del host",
+        "Match the host's level", YesNoValues, YesNo, YesNoEnglish, 0);
+
     /// <summary>Todos, en el orden del mensaje y del panel (su posición es su <see cref="HostOption.Index"/>).</summary>
     public static readonly HostOption[] Options = {
         BossHealthOption, EnemyHealthOption, PartnerInRoomOption, DamageTakenOption,
         ReviveOption, ReviveSecondsOption, ReviveSoulOption, ReviveMasksOption, ReviveInvulnerableOption, ReviveAtBenchOption,
         ShowNamesOption, ShowPartnerHealthOption, ShowArrowsOption, ShowPartnerOnMapOption, ShowNoticesOption, ShowBossBarOption,
         ShowEnemyBarsOption, GeoGiftsOption, PartnerTravelOption, SkipCutscenesOption, StagTogetherOption, SharedMapOption,
-        RespawnWithHostOption
+        RespawnWithHostOption, AllowMatchHostOption
     };
 
     /// <summary>Posición elegida de cada ajuste.</summary>
@@ -238,6 +245,9 @@ internal sealed class HostSettings {
 
     /// <summary>Si, al caer todos, los invitados reaparecen en el banco del host.</summary>
     public bool RespawnWithHost => Flag(RespawnWithHostOption);
+
+    /// <summary>Si los invitados pueden ponerse al nivel del host desde un banco.</summary>
+    public bool AllowMatchHost => Flag(AllowMatchHostOption);
 
     /// <summary>Si el mapa (salas visitadas y dibujadas) es del mundo; si no, de cada jugador.</summary>
     public bool SharedMap => Flag(SharedMapOption);

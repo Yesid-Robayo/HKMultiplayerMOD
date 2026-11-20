@@ -86,7 +86,7 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - **Desde una partida**: un mundo puede empezar como copia de una de tus 4 partidas (la original no se toca). Un
   invitado que entra de cero puede, sentado en un banco, **ponerse al nivel del host** (*Compañeros*): gana las
   habilidades, máscaras, vasijas, aguijón, muescas y amuletos que el host tiene y él no, tras un resumen que hay que
-  confirmar, y puede deshacerlo. Es opcional: quien quiera el reto completo no lo usa.
+  confirmar, y puede deshacerlo. Es opcional, y el host puede desactivarlo en su mundo.
 - **Hostear y unirse** desde el menú principal (*Multijugador*): el host abre su mundo y comparte su **dirección**, el
   **puerto** (26950 por defecto) y el **código de la partida** (formato `ABCD-EFGH`). Botones para copiar el código y
   mostrar u ocultar la IP. Cada mundo conserva su código, y *Unirse a un mundo › Partidas recientes* te devuelve a las
@@ -373,6 +373,7 @@ al momento sin poder cambiarlos.
 | Viajar juntos (ciervo y Portal Onírico) | Sí · No | Sí |
 | Mapa compartido (con No, cada jugador tiene su propio mapa) | Sí · No | Sí |
 | Reaparecer con el host (cuando caen todos) | Sí · No | Sí |
+| Ponerse al nivel del host (invitados, desde un banco) | Sí · No | Sí |
 
 La vida de los jefes y de los enemigos es la vida extra con un compañero: cada compañero más en pie en la sala suma lo
 mismo otra vez (1,5× es 2× con tres jugadores y 2,5× con cuatro). Los jefes que se aturden tras unos golpes (Hornet,

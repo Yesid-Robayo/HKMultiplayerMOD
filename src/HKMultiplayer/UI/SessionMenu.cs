@@ -605,11 +605,14 @@ internal sealed class SessionMenu : GameStyledMenu {
 
     private void RefreshLevelRow(Session.GameSession session) {
         var match = MultiplayerRunner.Instance.MatchHost;
-        _levelRow.SetActive(!session.IsHost);
-        if (session.IsHost) {
+        // Sin el permiso del host y sin nada que deshacer, la fila no tiene nada que ofrecer
+        var show = !session.IsHost && (HostSettings.Current.AllowMatchHost || match.CanUndo);
+        _levelRow.SetActive(show);
+        if (!show) {
             return;
         }
 
+        _matchButton.gameObject.SetActive(HostSettings.Current.AllowMatchHost);
         SetButtonText(_matchButton, match.WaitingConfirm ? Lang.T("Confirmar", "Confirm")
             : Lang.T("Ponerme al nivel del host", "Match the host's level"));
         _undoMatchButton.gameObject.SetActive(match.CanUndo);
