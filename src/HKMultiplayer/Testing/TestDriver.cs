@@ -296,8 +296,10 @@ internal sealed class TestDriver : MonoBehaviour {
 
                 break;
             case "pdset":
-                // pdset <campo> <true|false|entero|texto>: cambia un dato de la partida como lo haría el juego
-                if (bool.TryParse(args[2], out var boolValue)) {
+                // pdset <campo> <true|false|entero|decimal|texto>: cambia un dato de la partida como lo haría el juego
+                if (typeof(PlayerData).GetField(args[1])?.FieldType == typeof(float)) {
+                    PlayerData.instance.SetFloat(args[1], ParseFloat(args[2]));
+                } else if (bool.TryParse(args[2], out var boolValue)) {
                     PlayerData.instance.SetBool(args[1], boolValue);
                 } else if (int.TryParse(args[2], out var intValue)) {
                     PlayerData.instance.SetInt(args[1], intValue);

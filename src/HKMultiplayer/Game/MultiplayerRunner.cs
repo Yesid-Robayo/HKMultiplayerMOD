@@ -101,6 +101,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Compañeros en el mapa abierto.</summary>
     public Features.PartnerMap PartnerMap { get; } = new();
 
+    /// <summary>El Portal Onírico de cada compañero, visible en su sala.</summary>
+    public Features.PartnerDreamGates DreamGates { get; } = new();
+
     public PartyAbilities PartyAbilities { get; } = new();
 
     /// <summary>El jugador salió de un mundo ajeno: al llegar al menú se deja la partida.</summary>
@@ -391,6 +394,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Stag.Update(scene);
             Colosseum.Update(scene);
             PartnerMap.Update(scene);
+            DreamGates.Update(scene);
             PartyAbilities.Update();
             Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene
                 : Dreams.InDream ? Features.PlayerStatus.Dream
@@ -833,6 +837,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         // Cada parte por separado: si una fallaba, las de detrás no se soltaban y session.Dispose() no llegaba (el socket,
         // su hilo y el puerto se quedaban abiertos)
         Safely(() => { PartnerMap.Detach(); }, "PartnerMap.Detach");
+        Safely(() => { DreamGates.Detach(); }, "DreamGates.Detach");
         Safely(() => { PartyAbilities.Detach(); }, "PartyAbilities.Detach");
         Safely(() => { Skins.Detach(); }, "Skins.Detach");
         Safely(() => { Grimmchild.Detach(); }, "Grimmchild.Detach");
@@ -1000,6 +1005,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Scene.ScenePaths.RememberLoaded();
         Skins.Attach(session, Players);
         PartnerMap.Attach(session, Revive);
+        DreamGates.Attach(session);
         PartyAbilities.Attach(session);
         var connected = false;
         session.Connected += () => {

@@ -31,6 +31,12 @@ internal sealed class PlayerSync {
     /// <summary>El agua y el ácido en los que se nada, que salpican al paso de los avatares (sin red).</summary>
     private readonly PartnerWater _water = new();
 
+    /// <summary>El banco trampa de la Aldea Distante con un compañero atrapado (sin red).</summary>
+    private readonly PartnerSpiderBench _spiderBench = new();
+
+    /// <summary>Palomas y escombros que reaccionan al paso de los avatares (sin red).</summary>
+    private readonly PartnerAmbient _ambient = new();
+
     /// <summary>En las salas oscuras, un agujero de luz alrededor de cada compañero (como el del caballero local).</summary>
     private readonly PartnerDarkness _darkness = new();
 
@@ -94,6 +100,7 @@ internal sealed class PlayerSync {
         _effects.Detach();
         _grass.Destroy();
         _water.Destroy();
+        _ambient.Destroy();
         _darkness.Destroy();
         _dreamPlatforms.Detach();
         foreach (var remote in _remotes.Values) {
@@ -145,7 +152,8 @@ internal sealed class PlayerSync {
                                        $"amuletos: {_effects.DescribeCharms()} pasto={_grass.GrassCount} " +
                                        $"empujes={_grass.Pushes} plataformas={_dreamPlatforms.PlatformCount} " +
                                        $"encendidas={_dreamPlatforms.Shown} agua={_water.RegionCount} " +
-                                       $"salpicaduras={_water.Splashes}";
+                                       $"salpicaduras={_water.Splashes} palomas={_ambient.Scared} " +
+                                       $"escombros={_ambient.Pushed}";
 
     public void ResetEffectCounters() => _effects.ResetCounters();
 
@@ -191,6 +199,8 @@ internal sealed class PlayerSync {
         _shifted = false;
         _grass.SetScene(scene);
         _water.SetScene(scene);
+        _spiderBench.SetScene(scene);
+        _ambient.SetScene(scene);
         _dreamPlatforms.SetScene(scene);
         foreach (var remote in _remotes.Values) {
             remote.Buffer.Clear();
@@ -448,6 +458,7 @@ internal sealed class PlayerSync {
         // En el final de la Radiancia Absoluta cada PC sigue su propia escena (el caballero se parte en la suya): los de
         // los compañeros, que en sus PCs van por otro momento de la escena, se veían de pie en medio de ella
         var finale = Scene.EnemySync.FinaleRunning;
+        _spiderBench.Begin();
         foreach (var (remote, sampled) in _sampled) {
             var state = sampled;
             if (finale) {
@@ -461,14 +472,17 @@ internal sealed class PlayerSync {
             remote.Avatar.Apply(state, _sprites, z);
             remote.Avatar.UpdateLight(_hero);
             _effects.UpdateRemote(remote.Player, remote.Avatar, remote.Buffer.RenderTick);
+            _spiderBench.Touch(remote.Avatar.Position, state.Visible);
             if (state.Visible) {
                 _grass.Touch(remote.Player.Id, remote.Avatar.Position);
                 _water.Touch(remote.Player.Id, remote.Avatar.Position);
+                _ambient.Touch(remote.Player.Id, remote.Avatar.Position);
                 _darknessPartners.Add(remote.Avatar.Position);
             }
             visible++;
         }
 
+        _spiderBench.End();
         _darkness.Update(heroReady ? _hero : null, _darknessPartners);
         _dreamPlatforms.Update(heroReady ? _hero : null, _darknessPartners);
 
@@ -494,6 +508,7 @@ internal sealed class PlayerSync {
         _effects.Release(remote.Player.Id);
         _grass.Forget(remote.Player.Id);
         _water.Forget(remote.Player.Id);
+        _ambient.Forget(remote.Player.Id);
         remote.Avatar?.Destroy();
         remote.Avatar = null;
     }
