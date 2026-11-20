@@ -160,6 +160,10 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         });
         _modeHelp = AddText(newWorld, ModeHelp(CoopWorldMode.Classic), 30);
         AddSpace(newWorld, 20);
+        AddButton(newWorld, Lang.T("Desde una partida", "From a save file"), () => {
+            ShowPage(FromSavePage);
+            RefreshSaves();
+        });
         AddButton(newWorld, Lang.T("Crear y hostear", "Create and host"), () => {
             var world = WorldStore.Create(_newWorldName.text, _newWorldMode);
             if (world == null) {
@@ -170,6 +174,8 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
             _newWorldName.text = string.Empty;
             UIManager.instance.StartCoroutine(HostRoutine(world));
         });
+
+        BuildFromSavePage();
 
         var join = NewPage(JoinPage);
         // Amigos de Steam con una partida abierta: un botón para cada uno (se rellena al abrir la página)
@@ -313,6 +319,9 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
             case DeletePage:
                 ShowPage(HostPage);
                 break;
+            case FromSavePage:
+                ShowPage(NewWorldPage);
+                break;
             default:
                 ShowPage(StartPage);
                 break;
@@ -415,6 +424,75 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         }
 
         MultiplayerRunner.Instance.JoinSteamLobby(lobby, _name.text);
+    }
+
+    private const int FromSavePage = 5;
+
+    /// <summary>Lista de las ranuras del juego en la página «Desde una partida» (se rellena al abrirla).</summary>
+    private GameObject _saveList;
+
+    private Text _saveStatus;
+
+    private void BuildFromSavePage() {
+        var page = NewPage(FromSavePage);
+        AddText(page, Lang.T("Se copia la partida elegida: la original no cambia y lo que juegues en coop se queda en el mundo.",
+            "The chosen save is copied: the original doesn't change and what you play in co-op stays in the world."), 34);
+        AddSpace(page, 10);
+        _saveList = new GameObject("Saves", typeof(RectTransform), typeof(VerticalLayoutGroup));
+        _saveList.transform.SetParent(page.transform, false);
+        var layout = _saveList.GetComponent<VerticalLayoutGroup>();
+        layout.childControlHeight = true;
+        layout.childControlWidth = true;
+        layout.childForceExpandHeight = false;
+        _saveStatus = AddText(page, string.Empty, 32);
+    }
+
+    /// <summary>Las 4 ranuras del juego, cada una con su botón (las vacías o perdidas en Alma de Acero no se ofrecen).</summary>
+    private void RefreshSaves() {
+        foreach (Transform child in _saveList.transform) {
+            child.gameObject.SetActive(false);
+            Destroy(child.gameObject);
+        }
+
+        _saveStatus.text = Lang.T("Leyendo las partidas…", "Reading the save files…");
+        var pending = 4;
+        for (var slot = 1; slot <= 4; slot++) {
+            var number = slot;
+            WorldStore.ReadSlot(slot, data => {
+                AddSaveButton(number, data);
+                if (--pending == 0) {
+                    _saveStatus.text = _saveList.transform.childCount == 0
+                        ? Lang.T("No hay partidas que copiar.", "There are no save files to copy.")
+                        : string.Empty;
+                    SetFirst(FromSavePage, null);
+                }
+            });
+        }
+    }
+
+    private void AddSaveButton(int slot, SaveGameData data) {
+        var pd = data?.playerData;
+        if (pd == null || pd.permadeathMode == 2) {
+            return;
+        }
+
+        var mode = pd.bossRushMode ? Lang.T("  ·  Buscador de Dioses", "  ·  Godseeker")
+            : pd.permadeathMode == 1 ? Lang.T("  ·  Alma de Acero", "  ·  Steel Soul")
+            : string.Empty;
+        var label = Lang.T($"Partida {slot}", $"Save {slot}") +
+                    $"  ·  {FormatTime(pd.playTime)}  ·  {AreaName(pd.mapZone.ToString())}{mode}";
+        var button = AddButton(_saveList, label, () => {
+            var name = _newWorldName.text.Trim().Length > 0 ? _newWorldName.text : Lang.T($"Partida {slot}", $"Save {slot}");
+            var world = WorldStore.CreateFromSave(name, data);
+            if (world == null) {
+                ShowPage(HostPage);
+                return;
+            }
+
+            _newWorldName.text = string.Empty;
+            UIManager.instance.StartCoroutine(HostRoutine(world));
+        }, 38, 1080);
+        button.transform.SetSiblingIndex(Mathf.Min(slot - 1, _saveList.transform.childCount - 1));
     }
 
     /// <summary>Modo elegido para el mundo nuevo y su explicación bajo el selector.</summary>

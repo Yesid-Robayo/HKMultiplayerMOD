@@ -176,6 +176,25 @@ internal sealed class TestDriver : MonoBehaviour {
                                 (HKMultiplayer.Game.World.CoopWorldMode) (args.Length > 5 ? int.Parse(args[5]) : 0));
                 runner.HostWorld(world, args[2], int.Parse(args[3]), args.Length > 4 ? args[4] : null);
                 break;
+            case "writeslot":
+                // writeslot <ranura> <id del mundo>: escribe ese mundo en una ranura normal vacía, cifrado como lo guarda el
+                // juego (para probar «Desde una partida» en copias sin partidas). No toca una ranura que ya tenga partida
+                var slotNumber = int.Parse(args[1]);
+                var worldJson = System.IO.File.ReadAllText(System.IO.Path.Combine(System.IO.Path.Combine(
+                    HKMultiplayer.Game.World.WorldStore.Root, args[2]), "world.json"));
+                Platform.Current.IsSaveSlotInUse(slotNumber, inUse => {
+                    if (inUse) {
+                        Log.Warn($"{Tag}la ranura {slotNumber} ya tiene partida: no se toca");
+                        return;
+                    }
+
+                    using var stream = new System.IO.MemoryStream();
+                    new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter().Serialize(stream,
+                        StringEncrypt.EncryptData(worldJson));
+                    Platform.Current.WriteSaveSlot(slotNumber, stream.ToArray(),
+                        ok => Log.Info($"{Tag}ranura {slotNumber} escrita: {ok}"));
+                });
+                break;
             case "mkworld":
                 // mkworld <nombre>: crea un mundo coop sin abrirlo
                 HKMultiplayer.Game.World.WorldStore.Create(string.Join(" ", args.Skip(1)));

@@ -329,6 +329,11 @@ internal sealed class SessionMenu : GameStyledMenu {
         }
 
         AddSpace(page, 6);
+        // Solo invitados: igualar su personaje al del host (sentados en un banco) y deshacerlo
+        var level = AddRow(page, "Nivel", 84, 10);
+        _matchButton = AddButton(level, Lang.T("Ponerme al nivel del host", "Match the host's level"), MatchLevel, 34, 620);
+        _undoMatchButton = AddButton(level, Lang.T("Deshacer", "Undo"), UndoMatch, 34, 300);
+        _levelRow = level;
         var help = AddRow(page, "Ayuda", 84, 10);
         AddButton(help, Lang.T("Desatascar", "Unstuck"), () => Resume(MultiplayerRunner.Instance.Actions.RequestUnstuck()), 36, 420);
         AddButton(help, Lang.T("Recargar sala", "Reload room"), () => Resume(MultiplayerRunner.Instance.Actions.RequestReload()), 36, 420);
@@ -345,6 +350,28 @@ internal sealed class SessionMenu : GameStyledMenu {
         var error = MultiplayerRunner.Instance.Actions.TryGiftGeo(_partnerIds[row], amount);
         var name = PartyState.Current?.Get(_partnerIds[row])?.Name ?? "?";
         _partnersMessage.text = error ?? Lang.T($"Le diste {amount} geo a {name}", $"You gave {amount} geo to {name}");
+        Refresh();
+    }
+
+    private GameObject _levelRow;
+    private string _lastMatchStatus = string.Empty;
+    private UnityEngine.UI.MenuButton _matchButton;
+    private UnityEngine.UI.MenuButton _undoMatchButton;
+
+    /// <summary>Pide el nivel del host o, con el resumen a la vista, lo aplica.</summary>
+    private void MatchLevel() {
+        var match = MultiplayerRunner.Instance.MatchHost;
+        if (match.WaitingConfirm) {
+            match.Confirm();
+        } else {
+            match.Request();
+        }
+
+        Refresh();
+    }
+
+    private void UndoMatch() {
+        MultiplayerRunner.Instance.MatchHost.Undo();
         Refresh();
     }
 
@@ -576,7 +603,25 @@ internal sealed class SessionMenu : GameStyledMenu {
         }
     }
 
+    private void RefreshLevelRow(Session.GameSession session) {
+        var match = MultiplayerRunner.Instance.MatchHost;
+        _levelRow.SetActive(!session.IsHost);
+        if (session.IsHost) {
+            return;
+        }
+
+        SetButtonText(_matchButton, match.WaitingConfirm ? Lang.T("Confirmar", "Confirm")
+            : Lang.T("Ponerme al nivel del host", "Match the host's level"));
+        _undoMatchButton.gameObject.SetActive(match.CanUndo);
+        // Solo cuando cambia: si no, tapaba los demás mensajes del panel (dar geo, expulsar)
+        if (match.Status != _lastMatchStatus) {
+            _lastMatchStatus = match.Status;
+            _partnersMessage.text = match.Status;
+        }
+    }
+
     private void RefreshPartners(Session.GameSession session) {
+        RefreshLevelRow(session);
         var pd = PlayerData.instance;
         _ownGeo.text = pd != null ? Lang.T($"Tu geo: {pd.geo}", $"Your geo: {pd.geo}") : string.Empty;
         var party = PartyState.Current;

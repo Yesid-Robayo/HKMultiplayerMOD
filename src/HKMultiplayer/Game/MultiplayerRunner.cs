@@ -113,6 +113,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Las marcas del mapa de cada jugador, también en el de los demás.</summary>
     public Features.SharedMapMarkers MapMarkers { get; } = new();
 
+    /// <summary>«Ponerme al nivel del host» para los invitados.</summary>
+    public Features.MatchHostLevel MatchHost { get; } = new();
+
     /// <summary>El Portal Onírico de cada compañero, visible en su sala.</summary>
     public Features.PartnerDreamGates DreamGates { get; } = new();
 
@@ -856,6 +859,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Safely(() => { QuickChat.Detach(); }, "QuickChat.Detach");
         Safely(() => { Chat.Detach(); }, "Chat.Detach");
         Safely(() => { MapMarkers.Detach(); }, "MapMarkers.Detach");
+        Safely(() => { MatchHost.Detach(); }, "MatchHost.Detach");
         Safely(() => { DreamGates.Detach(); }, "DreamGates.Detach");
         Safely(() => { PartyAbilities.Detach(); }, "PartyAbilities.Detach");
         Safely(() => { Skins.Detach(); }, "Skins.Detach");
@@ -1029,6 +1033,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         QuickChat.Attach(session, Enemies);
         Chat.Attach(session);
         MapMarkers.Attach(session);
+        MatchHost.Attach(session);
         DreamGates.Attach(session);
         PartyAbilities.Attach(session);
         var connected = false;

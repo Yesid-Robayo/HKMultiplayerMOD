@@ -81,6 +81,12 @@ escrito desde cero sobre la Modding API de Hollow Knight.
   hostear tiene un botón para abrir esa carpeta (copias de seguridad o pasarlos a otro PC). Cada vez que el host abre un
   mundo se hace una copia de seguridad en su carpeta `Copias` (se guardan las 5 últimas): para volver a una, cierra el
   juego y copia sus archivos encima de los del mundo.
+- **Modos de mundo**: al crearlo se elige Clásico, Alma de Acero o Buscador de Dioses. En Alma de Acero, el que cae se
+  levanta como siempre y el mundo solo se pierde si caen todos a la vez.
+- **Desde una partida**: un mundo puede empezar como copia de una de tus 4 partidas (la original no se toca). Un
+  invitado que entra de cero puede, sentado en un banco, **ponerse al nivel del host** (*Compañeros*): gana las
+  habilidades, máscaras, vasijas, aguijón, muescas y amuletos que el host tiene y él no, tras un resumen que hay que
+  confirmar, y puede deshacerlo. Es opcional: quien quiera el reto completo no lo usa.
 - **Hostear y unirse** desde el menú principal (*Multijugador*): el host abre su mundo y comparte su **dirección**, el
   **puerto** (26950 por defecto) y el **código de la partida** (formato `ABCD-EFGH`). Botones para copiar el código y
   mostrar u ocultar la IP. Cada mundo conserva su código, y *Unirse a un mundo › Partidas recientes* te devuelve a las

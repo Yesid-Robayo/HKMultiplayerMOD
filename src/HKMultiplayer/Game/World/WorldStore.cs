@@ -193,6 +193,60 @@ public static class WorldStore {
     }
 
     /// <summary>Borra un mundo y sus copias de este PC.</summary>
+    /// <summary>
+    /// Lee una de las 4 ranuras normales del juego (sin tocarla) como lo hace el juego al cargarla: cifrada o no, y luego
+    /// JSON. Llama a <paramref name="done"/> en el hilo del juego con la partida, o null si la ranura está vacía o no se lee.
+    /// </summary>
+    public static void ReadSlot(int slot, Action<SaveGameData> done) {
+        if (Platform.Current == null || !Platform.IsSaveSlotIndexValid(slot)) {
+            done(null);
+            return;
+        }
+
+        Platform.Current.ReadSaveSlot(slot, bytes => {
+            SaveGameData data = null;
+            try {
+                if (bytes != null && bytes.Length > 0) {
+                    string text;
+                    try {
+                        var formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
+                        text = StringEncrypt.DecryptData((string) formatter.Deserialize(new MemoryStream(bytes)));
+                    } catch (Exception e) when (e is not OutOfMemoryException) {
+                        // Sin cifrar (el juego también guarda así según la plataforma)
+                        text = Encoding.UTF8.GetString(bytes);
+                    }
+
+                    data = JsonConvert.DeserializeObject<SaveGameData>(text, SaveSettings);
+                }
+            } catch (Exception e) when (e is JsonException or FormatException or IOException or ArgumentException) {
+                Log.Warn($"No se pudo leer la partida de la ranura {slot}: {e.Message}");
+                data = null;
+            }
+
+            CoreLoop.InvokeNext(() => done(data));
+        });
+    }
+
+    /// <summary>
+    /// Crea un mundo como copia de una partida del juego: su progreso y el personaje del host. La partida original no se
+    /// toca (lo jugado en coop no vuelve a ella). El modo sale de la partida (Alma de Acero, Buscador de Dioses). Null si
+    /// ya hay el máximo de mundos.
+    /// </summary>
+    public static CoopWorldInfo CreateFromSave(string name, SaveGameData data) {
+        var pd = data.playerData;
+        var mode = pd.bossRushMode ? CoopWorldMode.Godseeker
+            : pd.permadeathMode == 1 ? CoopWorldMode.SteelSoul
+            : CoopWorldMode.Classic;
+        var info = Create(name, mode);
+        if (info == null) {
+            return null;
+        }
+
+        Save(info, data);
+        Log.Info($"Mundo coop {info.Name} creado desde una partida ({mode}, {pd.playTime / 3600f:0.0} h)");
+        return info;
+    }
+
     /// <summary>Carpeta de las copias de seguridad dentro de la del mundo, y cuántas se guardan.</summary>
     public const string BackupFolder = "Copias";
 

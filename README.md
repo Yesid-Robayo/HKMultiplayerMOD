@@ -80,6 +80,12 @@ API.
   the hosting page has a button to open that folder (for backups or to move a world to another PC). Each time the host
   opens a world, a backup is made in its `Copias` folder (the last 5 are kept): to go back to one, close the game and
   copy its files over the world's.
+- **World modes**: when creating a world you pick Classic, Steel Soul or Godseeker. In Steel Soul, downed players are
+  revived as usual and the world is lost only if everyone goes down at once.
+- **From a save file**: a world can start as a copy of one of your 4 save slots (the original isn't touched). A guest
+  who joins from scratch can, sitting on a bench, **match the host's level** (*Partners*): they get the abilities,
+  masks, vessels, nail, notches and charms the host has and they don't, after a summary to confirm, and they can undo
+  it. It's optional: whoever wants the full challenge just doesn't use it.
 - **Host and join** from the main menu (*Multiplayer*): the host opens a world and shares their **address**, the
   **port** (26950 by default) and the **game code** (`ABCD-EFGH` format). Buttons to copy the code and show or hide the
   IP. Each world keeps its code, and *Join a world › Recent games* takes you back to the last ones you joined with one
