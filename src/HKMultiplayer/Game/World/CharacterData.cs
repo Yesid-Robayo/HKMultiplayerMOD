@@ -25,6 +25,16 @@ internal static class CharacterData {
     /// <summary>Propiedad del JSON del personaje con su propio mapa (ver <see cref="MapLists"/>).</summary>
     private const string MapProperty = "_map";
 
+    /// <summary>
+    /// Marca de los personajes que ya guardan sus propios fantasmas de esencia (desde la 0.37.0). Hasta entonces el
+    /// fantasma era del mundo: a un personaje sin la marca se le dejan los del mundo, para que quien ya se llevó la
+    /// esencia no lo vea otra vez y la cobre dos veces.
+    /// </summary>
+    private const string OwnGhostsProperty = "_ownGhosts";
+
+    /// <summary>Principio del nombre de los fantasmas que dan esencia con el aguijón onírico (FSM <c>ghost_npc_death</c>).</summary>
+    private const string GhostPrefix = "Ghost NPC";
+
     /// <summary>Máximo de salas por lista del mapa aceptadas de otro PC (el juego tiene unas 480).</summary>
     private const int MaxMapScenes = 2000;
 
@@ -250,7 +260,7 @@ internal static class CharacterData {
     private static readonly string[] IndividualItemPrefixes = {
         "Shiny", "Heart Piece", "Vessel Fragment", "Dream Plant", "Egg Sac",
         "Reward", "Reminder", "Interact Reminder", "Death Respawn Trigger", "Initial Fall Impact", "Force Hard Landing",
-        "Secret Sound Region", "Poo "
+        "Secret Sound Region", "Poo ", GhostPrefix
     };
 
     /// <summary>
@@ -322,6 +332,7 @@ internal static class CharacterData {
         }
 
         data[SceneItemsProperty] = items;
+        data[OwnGhostsProperty] = true;
         var map = new JObject();
         foreach (var name in MapLists) {
             map[name] = new JArray(ReadList(playerData, name).Cast<object>().ToArray());
@@ -420,6 +431,10 @@ internal static class CharacterData {
         }
 
         clean[SceneItemsProperty] = items;
+        if (OwnsGhosts(character)) {
+            clean[OwnGhostsProperty] = true;
+        }
+
         if (character[MapProperty] is JObject map) {
             var cleanMap = new JObject();
             foreach (var name in MapLists) {
@@ -456,8 +471,10 @@ internal static class CharacterData {
             return;
         }
 
+        var ownGhosts = OwnsGhosts(character);
         for (var i = sceneItems.Count - 1; i >= 0; i--) {
-            if (IsIndividualItem((string) sceneItems[i]["id"])) {
+            var id = (string) sceneItems[i]["id"];
+            if (IsIndividualItem(id) && (ownGhosts || !id.StartsWith(GhostPrefix, StringComparison.Ordinal))) {
                 sceneItems.RemoveAt(i);
             }
         }
@@ -489,6 +506,10 @@ internal static class CharacterData {
             }
         }
     }
+
+    /// <summary>Si el personaje ya guarda sus propios fantasmas de esencia (ver <see cref="OwnGhostsProperty"/>).</summary>
+    private static bool OwnsGhosts(JObject character) =>
+        character[OwnGhostsProperty] is JValue { Type: JTokenType.Boolean } marker && (bool) marker;
 
     private static JObject ItemJson(string scene, string id, bool activated) =>
         new() { ["sceneName"] = scene, ["id"] = id, ["activated"] = activated };

@@ -295,6 +295,12 @@ internal sealed class EnemySync {
         /// <summary>Daño al tocarlo: su lógica lo cambia (p. ej. 0 durante la presentación de un jefe).</summary>
         public DamageHero Damage;
 
+        /// <summary>Amuleto que lo hace amistoso (<see cref="CharmFriendship"/>), su daño normal y la vida más alta vista.</summary>
+        public byte CharmFriend;
+
+        public int BaseDamage;
+        public int MaxHp;
+
         /// <summary>FSM del enemigo y sus hijos, en el mismo orden en todos los PCs (para los sonidos).</summary>
         public PlayMakerFSM[] Fsms;
 
@@ -1716,7 +1722,7 @@ internal sealed class EnemySync {
             // Cuánto daña al tocarlo lo decide su lógica (parada aquí): sin esto, un jefe que empieza sin dañar no
             // dañaría nunca al jugador de este PC
             if (enemy.Damage != null) {
-                enemy.Damage.damageDealt = state.Damage;
+                enemy.Damage.damageDealt = FriendlyDamage(enemy, state.Damage);
             }
 
             var animator = enemy.Animator;
@@ -1901,6 +1907,26 @@ internal sealed class EnemySync {
         return hash & ~SpawnedIdFlag;
     }
 
+    /// <summary>
+    /// El daño al tocarlo que manda la lógica del dueño, ajustado al amuleto del caballero de este PC si es un enemigo que
+    /// un amuleto vuelve amistoso (ver <see cref="CharmFriendship"/>).
+    /// </summary>
+    private static int FriendlyDamage(Enemy enemy, int received) {
+        if (enemy.CharmFriend == CharmFriendship.None) {
+            return received;
+        }
+
+        if (enemy.Health != null && enemy.Health.hp > enemy.MaxHp) {
+            enemy.MaxHp = enemy.Health.hp;
+        }
+
+        if (received > enemy.BaseDamage) {
+            enemy.BaseDamage = received;
+        }
+
+        return CharmFriendship.LocalDamage(enemy.CharmFriend, received, enemy.BaseDamage, enemy.Health, enemy.MaxHp);
+    }
+
     private Enemy AddEnemy(HealthManager health, uint id) {
         var enemy = new Enemy {
             Id = id,
@@ -1916,6 +1942,9 @@ internal sealed class EnemySync {
             StaysDead = health.GetComponent<PersistentBoolItem>() != null
         };
         enemy.ScannedAt = Time.unscaledTime;
+        enemy.CharmFriend = CharmFriendship.KindOf(health.gameObject);
+        enemy.BaseDamage = enemy.Damage != null ? enemy.Damage.damageDealt : 0;
+        enemy.MaxHp = health.hp;
         _enemies.Add(enemy);
         _byId[id] = enemy;
         _byHealth[health] = enemy;
@@ -4205,7 +4234,7 @@ internal sealed class EnemySync {
         }
 
         if (enemy.Damage != null) {
-            enemy.Damage.damageDealt = damage;
+            enemy.Damage.damageDealt = FriendlyDamage(enemy, damage);
         }
 
         // Los Mage del Coliseo cuelgan de su oleada hasta despertar, que los suelta; luego se teletransportan con

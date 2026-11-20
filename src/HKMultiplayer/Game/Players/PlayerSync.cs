@@ -28,8 +28,14 @@ internal sealed class PlayerSync {
     /// <summary>El pasto y las telas que se mueven al paso de los avatares (sin red).</summary>
     private readonly PartnerGrass _grass = new();
 
+    /// <summary>El agua y el ácido en los que se nada, que salpican al paso de los avatares (sin red).</summary>
+    private readonly PartnerWater _water = new();
+
     /// <summary>En las salas oscuras, un agujero de luz alrededor de cada compañero (como el del caballero local).</summary>
     private readonly PartnerDarkness _darkness = new();
+
+    /// <summary>Las plataformas de los sueños que se encienden también bajo los compañeros (sin red).</summary>
+    private readonly PartnerDreamPlatforms _dreamPlatforms = new();
 
     private readonly List<Vector3> _darknessPartners = new();
     private GameSession _session;
@@ -67,6 +73,7 @@ internal sealed class PlayerSync {
         session.PlayerLeft += OnPlayerLeft;
         session.PlayerSceneChanged += OnPlayerSceneChanged;
         _effects.Attach(session, this);
+        _dreamPlatforms.Attach();
         foreach (var player in session.Players) {
             if (!player.IsLocal) {
                 OnPlayerJoined(player);
@@ -86,7 +93,9 @@ internal sealed class PlayerSync {
         // Antes que los avatares: sus efectos van pegados a ellos
         _effects.Detach();
         _grass.Destroy();
+        _water.Destroy();
         _darkness.Destroy();
+        _dreamPlatforms.Detach();
         foreach (var remote in _remotes.Values) {
             remote.Avatar?.Destroy();
         }
@@ -134,7 +143,9 @@ internal sealed class PlayerSync {
     public string DescribeEffects() => $"efectos enviados={_effects.Sent} recibidos={_effects.Received} reproducidos={_effects.Played} " +
                                        $"descartados={_effects.Discarded} esperando={_effects.Waiting} " +
                                        $"amuletos: {_effects.DescribeCharms()} pasto={_grass.GrassCount} " +
-                                       $"empujes={_grass.Pushes}";
+                                       $"empujes={_grass.Pushes} plataformas={_dreamPlatforms.PlatformCount} " +
+                                       $"encendidas={_dreamPlatforms.Shown} agua={_water.RegionCount} " +
+                                       $"salpicaduras={_water.Splashes}";
 
     public void ResetEffectCounters() => _effects.ResetCounters();
 
@@ -179,6 +190,8 @@ internal sealed class PlayerSync {
         _seat = null;
         _shifted = false;
         _grass.SetScene(scene);
+        _water.SetScene(scene);
+        _dreamPlatforms.SetScene(scene);
         foreach (var remote in _remotes.Values) {
             remote.Buffer.Clear();
             DestroyAvatar(remote);
@@ -450,12 +463,14 @@ internal sealed class PlayerSync {
             _effects.UpdateRemote(remote.Player, remote.Avatar, remote.Buffer.RenderTick);
             if (state.Visible) {
                 _grass.Touch(remote.Player.Id, remote.Avatar.Position);
+                _water.Touch(remote.Player.Id, remote.Avatar.Position);
                 _darknessPartners.Add(remote.Avatar.Position);
             }
             visible++;
         }
 
         _darkness.Update(heroReady ? _hero : null, _darknessPartners);
+        _dreamPlatforms.Update(heroReady ? _hero : null, _darknessPartners);
 
         VisibleCount = visible;
     }
@@ -478,6 +493,7 @@ internal sealed class PlayerSync {
         // Sus efectos se aparcan antes: si no, se destruirían con él
         _effects.Release(remote.Player.Id);
         _grass.Forget(remote.Player.Id);
+        _water.Forget(remote.Player.Id);
         remote.Avatar?.Destroy();
         remote.Avatar = null;
     }

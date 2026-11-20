@@ -50,7 +50,13 @@ internal enum EffectKind : byte {
     CarefreeShield = 14,
 
     /// <summary>Muerte de verdad (no caído: en un sueño o en el Panteón, o cuando cae el último).</summary>
-    Death = 15
+    Death = 15,
+
+    /// <summary>
+    /// Un sonido del caballero (<see cref="GlobalEnums.HeroSounds"/>) que no llega con otro efecto: salto, pasos,
+    /// deslizarse por la pared, caída, <c>backDash</c> y aterrizaje fuerte. Con <see cref="EffectEvent.SoundStop"/>, para.
+    /// </summary>
+    Sound = 16
 }
 
 /// <summary>Amuletos que cambian cómo se ve un efecto (viajan en cada evento, en un byte).</summary>
@@ -90,6 +96,9 @@ internal struct EffectEvent {
     public const byte DashShadow = 1;
     public const byte DashSharp = 2;
     public const byte DashDown = 4;
+
+    /// <summary>En <see cref="EffectKind.Sound"/>: el sonido para (sin el bit, empieza).</summary>
+    public const byte SoundStop = 0x80;
 
     public EffectKind Kind;
 
@@ -174,6 +183,7 @@ internal struct EffectEvent {
             case EffectKind.NailCharge:
             case EffectKind.Run:
             case EffectKind.Hit:
+            case EffectKind.Sound:
                 writer.WriteByte(A);
                 break;
         }
@@ -235,6 +245,7 @@ internal struct EffectEvent {
             case EffectKind.NailCharge:
             case EffectKind.Run:
             case EffectKind.Hit:
+            case EffectKind.Sound:
                 A = reader.ReadByte();
                 break;
         }
@@ -298,6 +309,9 @@ internal sealed class PlayerEffects {
     private bool _shieldShown;
 
     private bool _deathShown;
+
+    /// <summary>Sonidos que se repiten (pasos, deslizarse, caída) cuyo comienzo se envió y su final aún no (un bit por sonido).</summary>
+    private int _loopsSent;
 
     private readonly GameObject[] _pendingObjects = new GameObject[PendingSize];
     private readonly CharmTemplates.SpawnKind[] _pendingKinds = new CharmTemplates.SpawnKind[PendingSize];
@@ -517,6 +531,81 @@ internal sealed class PlayerEffects {
             }
 
             return;
+        }
+    }
+
+    /// <summary>Si un sonido del caballero se envía con <see cref="EffectKind.Sound"/> (los demás ya llegan con su efecto).</summary>
+    internal static bool IsRelayedSound(GlobalEnums.HeroSounds sound) => sound is GlobalEnums.HeroSounds.JUMP or
+        GlobalEnums.HeroSounds.BACKDASH or GlobalEnums.HeroSounds.HARD_LANDING or GlobalEnums.HeroSounds.FOOTSTEPS_RUN or
+        GlobalEnums.HeroSounds.FOOTSTEPS_WALK or GlobalEnums.HeroSounds.WALLSLIDE or GlobalEnums.HeroSounds.FALLING;
+
+    /// <summary>Si es un sonido que sigue hasta que se para (o que el juego vuelve a pedir cada frame, como los pasos).</summary>
+    internal static bool IsLoopSound(GlobalEnums.HeroSounds sound) => sound is GlobalEnums.HeroSounds.FOOTSTEPS_RUN or
+        GlobalEnums.HeroSounds.FOOTSTEPS_WALK or GlobalEnums.HeroSounds.WALLSLIDE or GlobalEnums.HeroSounds.FALLING;
+
+    /// <summary>La fuente de audio de un sonido del caballero (la que toca <see cref="HeroAudioController.PlaySound"/>).</summary>
+    internal static AudioSource SourceOf(HeroAudioController audio, GlobalEnums.HeroSounds sound) {
+        if (audio == null) {
+            return null;
+        }
+
+        return sound switch {
+            GlobalEnums.HeroSounds.JUMP => audio.jump,
+            GlobalEnums.HeroSounds.BACKDASH => audio.backDash,
+            GlobalEnums.HeroSounds.HARD_LANDING => audio.hardLanding,
+            GlobalEnums.HeroSounds.FOOTSTEPS_RUN => audio.footStepsRun,
+            GlobalEnums.HeroSounds.FOOTSTEPS_WALK => audio.footStepsWalk,
+            GlobalEnums.HeroSounds.WALLSLIDE => audio.wallslide,
+            GlobalEnums.HeroSounds.FALLING => audio.falling,
+            _ => null
+        };
+    }
+
+    /// <summary>La fuente de un sonido si es del caballero local y se envía; si no, null.</summary>
+    private AudioSource LocalSource(HeroAudioController audio, GlobalEnums.HeroSounds sound) {
+        var hero = HeroController.instance;
+        return hero != null && audio != null && audio.gameObject == hero.gameObject && IsRelayedSound(sound)
+            ? SourceOf(audio, sound)
+            : null;
+    }
+
+    /// <summary>
+    /// El juego pidió un sonido al caballero local. Los que se repiten se envían al empezar (el juego pide los pasos cada
+    /// frame y solo los toca si no sonaban); los sueltos, cada vez que suenan.
+    /// </summary>
+    private void OnHeroSound(HeroAudioController audio, GlobalEnums.HeroSounds sound, bool wasPlaying) {
+        var source = LocalSource(audio, sound);
+        if (source == null || !source.isPlaying) {
+            return;
+        }
+
+        var loop = IsLoopSound(sound);
+        if (loop && wasPlaying) {
+            return;
+        }
+
+        if (loop) {
+            _loopsSent |= 1 << (int) sound;
+        }
+
+        Send(new EffectEvent { Kind = EffectKind.Sound, A = (byte) sound });
+    }
+
+    /// <summary>El juego paró un sonido del caballero local (o todos, con <paramref name="sound"/> null).</summary>
+    private void OnHeroSoundStop(HeroAudioController audio, GlobalEnums.HeroSounds? sound) {
+        var hero = HeroController.instance;
+        if (hero == null || audio == null || audio.gameObject != hero.gameObject || _loopsSent == 0) {
+            return;
+        }
+
+        for (var i = 0; i <= (int) GlobalEnums.HeroSounds.FALLING; i++) {
+            var bit = 1 << i;
+            if ((_loopsSent & bit) == 0 || sound != null && (int) sound.Value != i) {
+                continue;
+            }
+
+            _loopsSent &= ~bit;
+            Send(new EffectEvent { Kind = EffectKind.Sound, A = (byte) (i | EffectEvent.SoundStop) });
         }
     }
 
@@ -748,6 +837,11 @@ internal sealed class PlayerEffects {
             return $"{fsm.FsmName}/{fsm.FsmStates[effect.B].Name}";
         }
 
+        if (effect.Kind == EffectKind.Sound) {
+            var sound = (GlobalEnums.HeroSounds) (effect.A & ~EffectEvent.SoundStop);
+            return $"{sound}{((effect.A & EffectEvent.SoundStop) != 0 ? " para" : string.Empty)}";
+        }
+
         return effect.Kind is EffectKind.Beam or EffectKind.Cloud or EffectKind.Fluke or EffectKind.Puff or EffectKind.HazardDeath
             ? $"#{effect.A} ({effect.X:0.0},{effect.Y:0.0}) v=({effect.VX:0.0},{effect.VY:0.0}) escala={effect.Scale:0.00}"
             : string.Empty;
@@ -842,6 +936,23 @@ internal sealed class PlayerEffects {
             if (self == HeroController.instance) {
                 _active?.Send(new EffectEvent { Kind = EffectKind.WallJump });
             }
+        };
+
+        // Sonidos del caballero que no llegan con otro efecto (ver EffectKind.Sound)
+        On.HeroAudioController.PlaySound += (orig, self, sound, vibration) => {
+            var wasPlaying = _active != null && _active.LocalSource(self, sound) is { isPlaying: true };
+            orig(self, sound, vibration);
+            _active?.OnHeroSound(self, sound, wasPlaying);
+        };
+
+        On.HeroAudioController.StopSound += (orig, self, sound) => {
+            orig(self, sound);
+            _active?.OnHeroSoundStop(self, sound);
+        };
+
+        On.HeroAudioController.StopAllSounds += (orig, self) => {
+            orig(self);
+            _active?.OnHeroSoundStop(self, null);
         };
 
         On.HeroController.TakeDamage += (orig, self, source, side, amount, hazard) => {

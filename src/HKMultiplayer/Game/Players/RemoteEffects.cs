@@ -395,6 +395,9 @@ internal sealed class RemoteEffects {
                     }
 
                     break;
+                case EffectKind.Sound:
+                    PlayHeroSound(effect.A);
+                    break;
                 case EffectKind.Hit:
                     PlayHit((effect.A & 1) != 0, (effect.A & 2) != 0, (effect.A & 4) != 0);
                     break;
@@ -1449,6 +1452,38 @@ internal sealed class RemoteEffects {
         }
 
         Component<AudioSource>(Resolve(heroSource.gameObject))?.Play();
+    }
+
+    /// <summary>
+    /// Un sonido del caballero del compañero (<see cref="EffectKind.Sound"/>): su copia empieza o para. El salto con el
+    /// tono algo cambiado cada vez, como en el juego.
+    /// </summary>
+    private void PlayHeroSound(byte value) {
+        var sound = (GlobalEnums.HeroSounds) (value & ~EffectEvent.SoundStop);
+        if (!PlayerEffects.IsRelayedSound(sound)) {
+            return;
+        }
+
+        var heroSource = PlayerEffects.SourceOf(_templates.HeroAudio, sound);
+        var source = heroSource != null ? Component<AudioSource>(Resolve(heroSource.gameObject)) : null;
+        if (source == null) {
+            return;
+        }
+
+        if ((value & EffectEvent.SoundStop) != 0) {
+            source.Stop();
+            return;
+        }
+
+        if (!Audible()) {
+            return;
+        }
+
+        if (sound == GlobalEnums.HeroSounds.JUMP) {
+            source.pitch = Random.Range(0.9f, 1.1f);
+        }
+
+        source.Play();
     }
 
     /// <summary>Como AudioPlayerOneShotSingle: un reproductor del pool del juego que suena una vez y se recicla.</summary>
