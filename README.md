@@ -112,6 +112,8 @@ API.
   - **Pantheons together**: when a player starts a Pantheon at its door, everyone in the Atrium goes in with the same
     bindings, and the group moves on to each boss together (also out of the rest room). A player who falls is revived
     next to the group in the next boss's room.
+  - **Hall of Gods statues together**: when a player picks a level at a statue, everyone in the hall goes into that
+    fight with them, and each player gets the level completed on their own statue.
   - **The Pantheon of Hallownest ending is each player's own**: every player strikes the final blows with their own
     attack button and sees the ending cutscene when they finish theirs, without partners' knights or names on screen.
   - The Radiance's climb: the abyss rises for everyone when anyone climbs, and everyone respawns on the last platform
@@ -173,8 +175,8 @@ API.
 - **Abilities are per player** (movement abilities, spells, Dream Nail): each player gets their own and sees the
   pickup scene. Characters saved with an earlier version keep the abilities they already had.
 - **Loot lands in the same place** on every PC: geo from enemies, geo rocks and chests.
-- **Stag travel together** (host option): when one player picks a destination, partners standing near them at that
-  station ride along.
+- **Travel together** (host option): when one player rides the stag or warps to their Dreamgate, partners standing
+  near them go along. In the big lift between the Crossroads and the City, everyone inside rides it.
 - **Shared benches**: up to 4 players sit side by side on the same bench, never inside a wall.
 - **Version notices**: the main menu tells you when a new version is out (and *Multiplayer* offers to download it)
   or when the mod was just updated (with what's new). It is one request to GitHub's public release list when the game
@@ -203,7 +205,7 @@ API.
 - **Revive**: if you die while a partner is standing, you don't die, you go down. Your body lies on the floor with
   "† Name" and your camera follows your partner. They get a notice and an arrow to your body; next to it, **holding
   Focus for 2 s** and spending 33 soul revives you with 1 mask. If your partner sits at a bench, downed players revive
-  next to them with full health. If everyone goes down, each player dies normally. If you die where nobody could
+  next to them with full health. If everyone goes down, each player dies normally and guests respawn at the host's bench (host option). If you die where nobody could
   stand next to you (in the air over a pit, on spikes or in acid), your body lies on the last safe ground, where the
   game respawns you after a hazard. While reviving you hear the Focus charge; each player picks its volume in *Pause ›
   Multiplayer › Skin & sound*.
@@ -346,8 +348,9 @@ away without being able to change them.
 | Enemy bars | Yes · No | No |
 | Gift geo · Allow going to a partner | Yes · No | Yes |
 | Skip cutscenes | Vote · Anyone | Vote |
-| Ride the stag together | Yes · No | Yes |
+| Travel together (stag and Dreamgate) | Yes · No | Yes |
 | Shared map (with No, each player has their own map) | Yes · No | Yes |
+| Respawn with the host (when everyone goes down) | Yes · No | Yes |
 
 The boss and enemy health is the extra health with one partner: each additional partner standing in the room adds the
 same again (1.5× is 2× with three players and 2.5× with four). Bosses that get stunned after a number of hits (Hornet,

@@ -148,10 +148,10 @@ internal sealed class HostSettings {
         new[] { 0f, 1f }, new[] { "Votación", "Cualquiera" }, new[] { "Vote", "Anyone" }, 0);
 
     /// <summary>
-    /// Quien elige destino en una estación del ciervo se lleva a los compañeros que están cerca de él en esa estación (ver
-    /// <see cref="StagTogether"/>).
+    /// Quien viaja se lleva a los compañeros que están cerca: en ciervo (<see cref="StagTogether"/>) y con el Portal Onírico
+    /// (<see cref="DreamGateTogether"/>). Se llamaba «Viajar juntos en ciervo»; la clave sigue siendo la misma.
     /// </summary>
-    public static readonly HostOption StagTogetherOption = new(20, "stagTogether", "Viajar juntos en ciervo", "Ride the stag together",
+    public static readonly HostOption StagTogetherOption = new(20, "stagTogether", "Viajar juntos", "Travel together",
         YesNoValues, YesNo, YesNoEnglish, 0);
 
     /// <summary>
@@ -162,12 +162,20 @@ internal sealed class HostSettings {
     public static readonly HostOption SharedMapOption = new(21, "sharedMap", "Mapa compartido", "Shared map",
         YesNoValues, YesNo, YesNoEnglish, 0);
 
+    /// <summary>
+    /// Cuando caen todos, los invitados reaparecen en el banco del host en vez de cada uno en el suyo: el grupo no queda
+    /// repartido por el mapa (ver <see cref="Revive"/>). Sí por defecto.
+    /// </summary>
+    public static readonly HostOption RespawnWithHostOption = new(22, "respawnWithHost", "Reaparecer con el host",
+        "Respawn with the host", YesNoValues, YesNo, YesNoEnglish, 0);
+
     /// <summary>Todos, en el orden del mensaje y del panel (su posición es su <see cref="HostOption.Index"/>).</summary>
     public static readonly HostOption[] Options = {
         BossHealthOption, EnemyHealthOption, PartnerInRoomOption, DamageTakenOption,
         ReviveOption, ReviveSecondsOption, ReviveSoulOption, ReviveMasksOption, ReviveInvulnerableOption, ReviveAtBenchOption,
         ShowNamesOption, ShowPartnerHealthOption, ShowArrowsOption, ShowPartnerOnMapOption, ShowNoticesOption, ShowBossBarOption,
-        ShowEnemyBarsOption, GeoGiftsOption, PartnerTravelOption, SkipCutscenesOption, StagTogetherOption, SharedMapOption
+        ShowEnemyBarsOption, GeoGiftsOption, PartnerTravelOption, SkipCutscenesOption, StagTogetherOption, SharedMapOption,
+        RespawnWithHostOption
     };
 
     /// <summary>Posición elegida de cada ajuste.</summary>
@@ -225,8 +233,11 @@ internal sealed class HostSettings {
     /// <summary>Una cinemática compartida se salta en cuanto la salta cualquiera (si no, votan todos).</summary>
     public bool AnyoneSkipsCutscenes => Flag(SkipCutscenesOption);
 
-    /// <summary>Si quien viaja en ciervo se lleva a los compañeros que están cerca en la estación.</summary>
+    /// <summary>Si quien viaja (ciervo, Portal Onírico) se lleva a los compañeros que están cerca.</summary>
     public bool StagTogether => Flag(StagTogetherOption);
+
+    /// <summary>Si, al caer todos, los invitados reaparecen en el banco del host.</summary>
+    public bool RespawnWithHost => Flag(RespawnWithHostOption);
 
     /// <summary>Si el mapa (salas visitadas y dibujadas) es del mundo; si no, de cada jugador.</summary>
     public bool SharedMap => Flag(SharedMapOption);

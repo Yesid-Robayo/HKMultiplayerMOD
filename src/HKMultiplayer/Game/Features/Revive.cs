@@ -892,8 +892,47 @@ internal sealed class Revive {
                 _party.SetStatus(member.Id, PlayerStatus.Standing);
             }
 
-            SendTo(member.Id, Wipe);
+            SendWipe(member.Id);
         }
+    }
+
+    /// <summary>
+    /// Avisa de que caen todos. Con «Reaparecer con el host», el aviso lleva el banco del host (lo que el juego guarda al
+    /// descansar) y el invitado lo toma como suyo antes de morir: así el grupo vuelve junto.
+    /// </summary>
+    private void SendWipe(ushort id) {
+        if (id == _session.LocalId) {
+            HandleWipe(null);
+            return;
+        }
+
+        var target = _party.Get(id)?.Player;
+        var pd = PlayerData.instance;
+        if (target?.Connection == null) {
+            return;
+        }
+
+        var withHost = HostSettings.Current.RespawnWithHost && pd != null;
+        var writer = _session.BeginTo(target, Wipe);
+        writer.WriteBool(withHost);
+        if (withHost) {
+            writer.WriteString(pd.GetString("respawnScene") ?? string.Empty);
+            writer.WriteString(pd.GetString("respawnMarkerName") ?? string.Empty);
+            writer.WriteInt(pd.GetInt("respawnType"));
+            writer.WriteBool(pd.GetBool("respawnFacingRight"));
+            writer.WriteInt((int) pd.mapZone);
+        }
+
+        _session.EndTo();
+    }
+
+    /// <summary>El banco del host al que vuelve un invitado tras caer todos.</summary>
+    private sealed class HostRespawn {
+        public string Scene;
+        public string Marker;
+        public int Type;
+        public bool FacingRight;
+        public int MapZone;
     }
 
     private void OnReviveRequest(SessionPlayer from, PacketReader reader) {
@@ -1120,7 +1159,7 @@ internal sealed class Revive {
     private void SendTo(ushort id, MessageType type) {
         if (id == _session.LocalId) {
             if (type == Wipe) {
-                HandleWipe();
+                HandleWipe(null);
             }
 
             return;
@@ -1151,9 +1190,41 @@ internal sealed class Revive {
     }
 
     private void OnWipe(SessionPlayer from, PacketReader reader) {
-        if (_session != null && !_session.IsHost && from.Id == GameSession.HostPlayerId) {
-            HandleWipe();
+        if (_session == null || _session.IsHost || from.Id != GameSession.HostPlayerId) {
+            return;
         }
+
+        HostRespawn respawn = null;
+        if (reader.ReadBool()) {
+            respawn = new HostRespawn {
+                Scene = reader.ReadString(128), Marker = reader.ReadString(128), Type = reader.ReadInt(),
+                FacingRight = reader.ReadBool(), MapZone = reader.ReadInt()
+            };
+        }
+
+        HandleWipe(respawn);
+    }
+
+    /// <summary>Pone el banco del host como el de este jugador (como al descansar en él), si es válido.</summary>
+    private static void UseHostRespawn(HostRespawn respawn) {
+        var pd = PlayerData.instance;
+        if (pd == null || respawn == null) {
+            return;
+        }
+
+        var mapZone = typeof(PlayerData).GetField("mapZone");
+        if (string.IsNullOrEmpty(respawn.Scene) || respawn.Scene.Length > 128 || string.IsNullOrEmpty(respawn.Marker) ||
+            respawn.Type is < 0 or > 16 || mapZone == null || !Enum.IsDefined(mapZone.FieldType, respawn.MapZone)) {
+            Log.Warn("Banco del host no válido: se reaparece en el propio");
+            return;
+        }
+
+        pd.SetString("respawnScene", respawn.Scene);
+        pd.SetString("respawnMarkerName", respawn.Marker);
+        pd.SetInt("respawnType", respawn.Type);
+        pd.SetBool("respawnFacingRight", respawn.FacingRight);
+        mapZone.SetValue(pd, Enum.ToObject(mapZone.FieldType, respawn.MapZone));
+        Log.Info($"Todos caídos: se reaparece en el banco del host ({respawn.Scene}, {respawn.Marker})");
     }
 
     private void HandleRevived(string scene, float x, float y, bool full, string by) {
@@ -1177,11 +1248,13 @@ internal sealed class Revive {
         GoToBodyThen(Arrival.Revive);
     }
 
-    private void HandleWipe() {
+    private void HandleWipe(HostRespawn respawn) {
         // Un aviso que llega cuando ya no está caído (p. ej. justo después de revivir) se ignora
         if (!_downed) {
             return;
         }
+
+        UseHostRespawn(respawn);
 
         Log.Info("Todos caídos: muerte normal");
         GoToBodyThen(Arrival.RealDeath);

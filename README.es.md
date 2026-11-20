@@ -112,6 +112,8 @@ escrito desde cero sobre la Modding API de Hollow Knight.
   - **Panteones juntos**: cuando un jugador empieza un Panteón en su puerta, los que están en el Atrio entran con él,
     con las mismas ataduras, y el grupo pasa junto a cada jefe (también al salir de la sala de descanso). El que cae
     revive junto al grupo en la sala del siguiente jefe.
+  - **Estatuas del Salón de los Dioses juntos**: cuando un jugador elige un nivel en una estatua, los que están en el
+    salón entran con él en ese combate, y cada uno se apunta el nivel completado en su propia estatua.
   - **El final del Panteón de Hallownest es de cada jugador**: cada uno da los golpes finales con su propio botón de
     atacar y ve la cinemática del final al acabar el suyo, sin los caballeros ni los nombres de los compañeros.
   - La subida de la Radiancia: el abismo sube para todos cuando sube cualquiera, y cada uno reaparece en la última
@@ -174,8 +176,8 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - **Habilidades de cada jugador** (de movimiento, hechizos, aguijón onírico): cada uno consigue las suyas y ve la
   escena de recogerlas. Los personajes guardados con una versión anterior conservan las que ya tenían.
 - **El botín cae en el mismo sitio** en todos los PCs: el geo de los enemigos, de las rocas y de los cofres.
-- **Viaje en ciervo juntos** (opción del host): cuando uno elige destino, los compañeros que están cerca de él en la
-  estación viajan con él.
+- **Viajar juntos** (opción del host): cuando uno viaja en ciervo o a su Portal Onírico, los compañeros que están cerca
+  de él van con él. En el ascensor grande entre Cruces y la Ciudad viajan todos los que van dentro.
 - **Bancos compartidos**: hasta 4 jugadores sentados uno al lado del otro en el mismo banco, nunca dentro de la
   pared.
 - **Avisos de versión**: en el menú principal sale un aviso si hay una versión nueva (y *Multijugador* ofrece
@@ -205,7 +207,7 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - **Revivir**: al morir con un compañero en pie no se muere, se cae. El cuerpo queda tendido con "† Nombre" y la
   cámara del caído sigue a su compañero. El compañero recibe un aviso y una flecha hacia el cuerpo; junto a él,
   **manteniendo Focus 2 s** y gastando 33 de alma, lo revive con 1 máscara. Si el compañero se sienta en un banco, los
-  caídos reviven a su lado con toda la vida. Si caen todos, cada uno muere de forma normal. Si mueres donde nadie
+  caídos reviven a su lado con toda la vida. Si caen todos, cada uno muere de forma normal y los invitados reaparecen en el banco del host (opción del host). Si mueres donde nadie
   podría ponerse a tu lado (en el aire sobre un pozo, en pinchos o en ácido), el cuerpo queda en el último suelo
   seguro, donde el juego te hace reaparecer tras un peligro. Mientras se revive suena la carga de Focus; su volumen lo
   elige cada uno en *Pausa › Multijugador › Skin y sonido*.
@@ -352,8 +354,9 @@ al momento sin poder cambiarlos.
 | Barras de enemigos | Sí · No | No |
 | Regalar geo · Permitir ir con un compañero | Sí · No | Sí |
 | Saltar cinemáticas | Votación · Cualquiera | Votación |
-| Viajar juntos en ciervo | Sí · No | Sí |
+| Viajar juntos (ciervo y Portal Onírico) | Sí · No | Sí |
 | Mapa compartido (con No, cada jugador tiene su propio mapa) | Sí · No | Sí |
+| Reaparecer con el host (cuando caen todos) | Sí · No | Sí |
 
 La vida de los jefes y de los enemigos es la vida extra con un compañero: cada compañero más en pie en la sala suma lo
 mismo otra vez (1,5× es 2× con tres jugadores y 2,5× con cuatro). Los jefes que se aturden tras unos golpes (Hornet,
