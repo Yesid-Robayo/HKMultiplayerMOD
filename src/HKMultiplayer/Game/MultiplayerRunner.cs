@@ -1090,6 +1090,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         DisconnectReason.WrongCode => Lang.T("Código incorrecto o host no encontrado", "Wrong code or host not found"),
         DisconnectReason.VersionMismatch => Lang.T("El host tiene otra versión del mod", "The host has a different version of the mod"),
         DisconnectReason.Full => Lang.T("La partida está llena", "The game is full"),
+        DisconnectReason.Kicked => Lang.T("El host te expulsó de la partida", "The host kicked you from the game"),
         _ => Lang.T("El host rechazó la conexión", "The host refused the connection")
     };
 

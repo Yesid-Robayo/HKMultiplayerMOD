@@ -73,5 +73,8 @@ public enum DisconnectReason : byte {
     Full = 4,
 
     /// <summary>El host rechazó la conexión por otro motivo.</summary>
-    Rejected = 5
+    Rejected = 5,
+
+    /// <summary>El host expulsó a este jugador de la partida.</summary>
+    Kicked = 6
 }

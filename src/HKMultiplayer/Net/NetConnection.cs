@@ -260,6 +260,9 @@ public sealed class NetConnection : ReliableReceiver.ISink {
     /// <summary>Cierra la conexión avisando al otro extremo.</summary>
     public void Disconnect() => _peer.CloseConnection(this, DisconnectReason.Closed, true);
 
+    /// <summary>Cierra la conexión avisando al otro extremo de por qué.</summary>
+    public void Disconnect(DisconnectReason reason) => _peer.CloseConnection(this, reason, true);
+
     // =====================================================================================================
     // Construcción de paquetes (llamado por el peer en cada tick)
     // =====================================================================================================

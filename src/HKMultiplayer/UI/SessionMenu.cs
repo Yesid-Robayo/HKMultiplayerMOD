@@ -67,6 +67,15 @@ internal sealed class SessionMenu : GameStyledMenu {
     private readonly MenuButton[] _partnerButtons = new MenuButton[MaxPartnerRows];
     private readonly MenuButton[] _goToButtons = new MenuButton[MaxPartnerRows];
     private readonly GameObject[] _partnerRows = new GameObject[MaxPartnerRows];
+
+    /// <summary>«Expulsar» de cada fila (solo el host) y la fila que espera la segunda pulsación para confirmar.</summary>
+    private readonly UnityEngine.UI.MenuButton[] _kickButtons = new UnityEngine.UI.MenuButton[MaxPartnerRows];
+
+    private int _kickArmed = -1;
+    private float _kickArmedUntil;
+
+    /// <summary>Tiempo para pulsar «Expulsar» por segunda vez.</summary>
+    private const float KickConfirmSeconds = 5f;
     private readonly ushort[] _partnerIds = new ushort[MaxPartnerRows];
     private Text _partnersMessage;
     private Text _ownGeo;
@@ -310,6 +319,7 @@ internal sealed class SessionMenu : GameStyledMenu {
             _partnerRows[i] = AddRow(page, $"Compañero {i + 1}", 84, 10);
             _partnerButtons[i] = AddButton(_partnerRows[i], Lang.T("Dar geo", "Give geo"), () => GiveGeo(row), 34, 520);
             _goToButtons[i] = AddButton(_partnerRows[i], Lang.T("Ir con", "Go to"), () => GoTo(row), 34, 520);
+            _kickButtons[i] = AddButton(_partnerRows[i], Lang.T("Expulsar", "Kick"), () => Kick(row), 34, 300);
         }
 
         AddSpace(page, 6);
@@ -329,6 +339,30 @@ internal sealed class SessionMenu : GameStyledMenu {
         var error = MultiplayerRunner.Instance.Actions.TryGiftGeo(_partnerIds[row], amount);
         var name = PartyState.Current?.Get(_partnerIds[row])?.Name ?? "?";
         _partnersMessage.text = error ?? Lang.T($"Le diste {amount} geo a {name}", $"You gave {amount} geo to {name}");
+        Refresh();
+    }
+
+    /// <summary>El host expulsa a ese compañero: la primera pulsación pide confirmar y la segunda lo expulsa.</summary>
+    private void Kick(int row) {
+        var session = MultiplayerRunner.Instance?.Session;
+        var id = _partnerIds[row];
+        var name = PartyState.Current?.Get(id)?.Name ?? "?";
+        if (session == null || !session.IsHost) {
+            return;
+        }
+
+        if (_kickArmed != row || Time.unscaledTime > _kickArmedUntil) {
+            _kickArmed = row;
+            _kickArmedUntil = Time.unscaledTime + KickConfirmSeconds;
+            _partnersMessage.text = Lang.T($"Pulsa «Expulsar» otra vez para expulsar a {name}",
+                $"Press «Kick» again to kick {name}");
+            return;
+        }
+
+        _kickArmed = -1;
+        _partnersMessage.text = session.Kick(id)
+            ? Lang.T($"Expulsaste a {name}: no podrá volver a esta partida", $"You kicked {name}: they can't rejoin this game")
+            : Lang.T($"No se pudo expulsar a {name}", $"Couldn't kick {name}");
         Refresh();
     }
 
@@ -555,6 +589,7 @@ internal sealed class SessionMenu : GameStyledMenu {
                 SetButtonEnabled(_partnerButtons[row], HostSettings.Current.AllowGeoGifts);
                 SetButtonText(_goToButtons[row], Lang.T($"Ir con {member.Name}", $"Go to {member.Name}"));
                 SetButtonEnabled(_goToButtons[row], HostSettings.Current.AllowPartnerTravel);
+                _kickButtons[row].gameObject.SetActive(MultiplayerRunner.Instance?.Session?.IsHost == true);
                 row++;
             }
         }

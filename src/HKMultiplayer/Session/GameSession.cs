@@ -148,8 +148,31 @@ public sealed class GameSession : INetListener, IDisposable {
     /// <summary>Versión del mod: el host solo acepta la misma.</summary>
     private readonly string _version;
 
+    /// <summary>Nombres de los jugadores que el host expulsó: no vuelven a entrar mientras dure esta partida.</summary>
+    private readonly HashSet<string> _kicked = new();
+
     private DisconnectReason? ApproveConnection(NetConnection connection) {
-        return connection.RemoteVersion == _version ? null : DisconnectReason.VersionMismatch;
+        if (connection.RemoteVersion != _version) {
+            return DisconnectReason.VersionMismatch;
+        }
+
+        return _kicked.Contains(CleanName(connection.Name)) ? DisconnectReason.Kicked : null;
+    }
+
+    /// <summary>
+    /// El host expulsa a un jugador: se cierra su conexión diciéndole por qué y no puede volver a entrar con ese nombre
+    /// mientras dure esta partida. False si no se puede (no es el host, es él mismo o ya no está).
+    /// </summary>
+    public bool Kick(ushort playerId) {
+        if (_server == null || playerId == LocalId || !_players.TryGetValue(playerId, out var player) ||
+            player.Connection == null) {
+            return false;
+        }
+
+        _kicked.Add(player.Name);
+        _log($"{player} expulsado por el host");
+        player.Connection.Disconnect(DisconnectReason.Kicked);
+        return true;
     }
 
     /// <summary>Procesa la red. Llamar una vez por frame.</summary>
