@@ -173,6 +173,51 @@ public static class WorldStore {
     }
 
     /// <summary>Borra un mundo y sus copias de este PC.</summary>
+    /// <summary>Carpeta de las copias de seguridad dentro de la del mundo, y cuántas se guardan.</summary>
+    public const string BackupFolder = "Copias";
+
+    private const int MaxBackups = 5;
+
+    /// <summary>
+    /// Copia de seguridad del mundo al abrirlo (cada sesión): sus archivos (mundo, datos, ajustes y personajes) en
+    /// <c>Copias/&lt;fecha y hora&gt;/</c> dentro de su carpeta. Se guardan las últimas <see cref="MaxBackups"/>. Para volver
+    /// a una, se copian sus archivos encima de los del mundo con el juego cerrado. Un fallo no impide abrir el mundo.
+    /// </summary>
+    public static void Backup(string id) {
+        try {
+            var dir = Path.Combine(Root, id);
+            if (!HasSave(dir)) {
+                return;
+            }
+
+            var backups = Path.Combine(dir, BackupFolder);
+            var target = Path.Combine(backups, DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss"));
+            Directory.CreateDirectory(target);
+            foreach (var file in Directory.GetFiles(dir, "*.json")) {
+                File.Copy(file, Path.Combine(target, Path.GetFileName(file)), true);
+            }
+
+            var players = Path.Combine(dir, "players");
+            if (Directory.Exists(players)) {
+                var playersTarget = Path.Combine(target, "players");
+                Directory.CreateDirectory(playersTarget);
+                foreach (var file in Directory.GetFiles(players, "*.json")) {
+                    File.Copy(file, Path.Combine(playersTarget, Path.GetFileName(file)), true);
+                }
+            }
+
+            // Solo las últimas: los nombres son la fecha, así que el orden alfabético es el del tiempo
+            var old = Directory.GetDirectories(backups).OrderBy(d => d, StringComparer.Ordinal).ToList();
+            for (var i = 0; i < old.Count - MaxBackups; i++) {
+                Directory.Delete(old[i], true);
+            }
+
+            Log.Info($"Copia de seguridad del mundo en {BackupFolder}/{Path.GetFileName(target)}");
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+            Log.Warn($"No se pudo hacer la copia de seguridad del mundo: {e.Message}");
+        }
+    }
+
     public static void Delete(string id) {
         var dir = Path.Combine(Root, id);
         if (Directory.Exists(dir)) {

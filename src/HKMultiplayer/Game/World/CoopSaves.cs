@@ -160,6 +160,7 @@ internal static class CoopSaves {
             return true;
         }
 
+        WorldStore.Backup(world.Id);
         var data = WorldStore.Load(world.Id);
         if (data == null) {
             Log.Error($"No se pudo cargar el mundo {world.Name}");

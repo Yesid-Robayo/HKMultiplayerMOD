@@ -4,7 +4,7 @@
 
 **Mod cooperativo para Hollow Knight: juega el mundo entero con tus amigos, en red local o por internet.**
 
-![Versión](https://img.shields.io/badge/versión-0.39.0-7fb2ff)
+![Versión](https://img.shields.io/badge/versión-0.40.0-7fb2ff)
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
@@ -78,7 +78,9 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - **Mundos coop** propios: hasta 4, guardados en el PC del host, en
   `C:\Users\<usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\HKMultiplayer\Mundos` (una carpeta por mundo). Son
   aparte de las 4 ranuras del juego, que nunca se tocan. Desde el menú se crean, se hostean y se borran, y la página de
-  hostear tiene un botón para abrir esa carpeta (copias de seguridad o pasarlos a otro PC).
+  hostear tiene un botón para abrir esa carpeta (copias de seguridad o pasarlos a otro PC). Cada vez que el host abre un
+  mundo se hace una copia de seguridad en su carpeta `Copias` (se guardan las 5 últimas): para volver a una, cierra el
+  juego y copia sus archivos encima de los del mundo.
 - **Hostear y unirse** desde el menú principal (*Multijugador*): el host abre su mundo y comparte su **dirección**, el
   **puerto** (26950 por defecto) y el **código de la partida** (formato `ABCD-EFGH`). Botones para copiar el código y
   mostrar u ocultar la IP. Cada mundo conserva su código, y *Unirse a un mundo › Partidas recientes* te devuelve a las

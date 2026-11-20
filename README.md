@@ -4,7 +4,7 @@
 
 **A co-op mod for Hollow Knight: play the whole world with your friends, on your local network or over the internet.**
 
-![Version](https://img.shields.io/badge/version-0.39.0-7fb2ff)
+![Version](https://img.shields.io/badge/version-0.40.0-7fb2ff)
 ![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
@@ -77,7 +77,9 @@ API.
 - **Coop worlds** of your own: up to 4, saved on the host's PC in
   `C:\Users\<user>\AppData\LocalLow\Team Cherry\Hollow Knight\HKMultiplayer\Mundos` (one folder per world). They are
   separate from the game's 4 save slots, which are never touched. You create, host and delete them from the menu, and
-  the hosting page has a button to open that folder (for backups or to move a world to another PC).
+  the hosting page has a button to open that folder (for backups or to move a world to another PC). Each time the host
+  opens a world, a backup is made in its `Copias` folder (the last 5 are kept): to go back to one, close the game and
+  copy its files over the world's.
 - **Host and join** from the main menu (*Multiplayer*): the host opens a world and shares their **address**, the
   **port** (26950 by default) and the **game code** (`ABCD-EFGH` format). Buttons to copy the code and show or hide the
   IP. Each world keeps its code, and *Join a world › Recent games* takes you back to the last ones you joined with one
