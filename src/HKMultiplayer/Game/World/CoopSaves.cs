@@ -30,6 +30,9 @@ internal static class CoopSaves {
     /// <summary>Se está viendo esa introducción (al acabar se entra al mundo).</summary>
     private static bool _introPlaying;
 
+    /// <summary>El personaje de este invitado es nuevo en el mundo del host (se acaba de crear al entrar).</summary>
+    public static bool GuestIsNew { get; private set; }
+
     /// <summary>Un invitado nuevo está viendo la introducción (aún no entró en el mundo).</summary>
     public static bool IntroPlaying => _introPlaying;
 
@@ -193,6 +196,7 @@ internal static class CoopSaves {
         _pendingLoad = world;
         // Un personaje nuevo empieza sin tiempo jugado (el tiempo es de cada personaje)
         _introPending = world.playerData.playTime < 1f;
+        GuestIsNew = _introPending;
         _introPlaying = false;
         Log.Info("Entrando en el mundo del host");
         GameManager.instance.LoadGameFromUI(1);

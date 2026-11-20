@@ -80,12 +80,53 @@ internal sealed class MatchHostLevel {
     /// <summary>Hay una copia de antes del cambio en este mundo, que se puede devolver.</summary>
     public bool CanUndo => File.Exists(BackupPath());
 
+    /// <summary>Ya se avisó en esta partida de que existe la opción (sale una vez, al entrar con un personaje nuevo).</summary>
+    private bool _noticeShown;
+
+    private float _noticeAt = -1f;
+
+    /// <summary>Espera tras poder jugar antes del aviso (que no se pierda entre los avisos de entrada).</summary>
+    private const float NoticeDelay = 4f;
+
+    /// <summary>
+    /// Cada frame: la primera vez que un invitado entra con un personaje nuevo (y el host lo permite), un aviso de que
+    /// puede ponerse a su nivel desde un banco, para que no se quede sin saberlo.
+    /// </summary>
+    public void Update() {
+        if (_noticeShown || _session == null || _session.IsHost || !World.CoopSaves.GuestIsNew ||
+            World.CoopSaves.IntroPlaying || !HostSettings.Current.AllowMatchHost) {
+            return;
+        }
+
+        var hero = HeroController.instance;
+        if (hero == null || hero.cState.transitioning || GameManager.instance == null || !GameManager.instance.IsGameplayScene()) {
+            _noticeAt = -1f;
+            return;
+        }
+
+        if (_noticeAt < 0f) {
+            _noticeAt = Time.unscaledTime + NoticeDelay;
+            return;
+        }
+
+        if (Time.unscaledTime < _noticeAt) {
+            return;
+        }
+
+        _noticeShown = true;
+        Log.Info("Aviso al invitado nuevo: puede ponerse al nivel del host desde un banco");
+        Notice.Show(Lang.T("Puedes ponerte al nivel del host desde un banco: Pausa › Multijugador › Compañeros",
+            "You can match the host's level from a bench: Pause › Multiplayer › Partners"), 10f);
+    }
+
     public void Attach(GameSession session) {
         _session = session;
         session.On(LevelRequest, _onRequest);
         session.On(LevelData, _onData);
         _pending = null;
         _waiting = false;
+        _noticeShown = false;
+        _noticeAt = -1f;
         Status = string.Empty;
     }
 
@@ -358,7 +399,17 @@ internal sealed class MatchHostLevel {
         }
     }
 
-    private static void SaveBackup(PlayerData pd) {
+    private string FindHostName() {
+        foreach (var player in _session.Players) {
+            if (player.Id == GameSession.HostPlayerId) {
+                return player.Name;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private void SaveBackup(PlayerData pd) {
         var backup = new JObject();
         foreach (var field in BoolFields) {
             backup[field] = pd.GetBool(field);
@@ -374,12 +425,19 @@ internal sealed class MatchHostLevel {
         SafeFile.Write(path, backup.ToString());
     }
 
-    /// <summary>La copia de antes del cambio, por mundo (el del host en el que se juega).</summary>
-    private static string BackupPath() {
-        var world = World.CoopSaves.ActiveWorld?.Id;
-        var name = string.IsNullOrEmpty(world) ? "mundo" : world;
+    /// <summary>
+    /// La copia de antes del cambio, por mundo: el invitado no sabe el identificador del mundo del host, así que se usa el
+    /// nombre del host y el código de la partida, que es fijo para cada mundo.
+    /// </summary>
+    private string BackupPath() {
+        var host = _session?.Players != null ? FindHostName() : string.Empty;
+        var name = $"{host}_{_session?.RoomCode}";
         foreach (var c in Path.GetInvalidFileNameChars()) {
             name = name.Replace(c, '-');
+        }
+
+        if (name.Trim('_', '-').Length == 0) {
+            name = "mundo";
         }
 
         return Path.Combine(Path.Combine(Path.Combine(Application.persistentDataPath, "HKMultiplayer"), "Personajes"),

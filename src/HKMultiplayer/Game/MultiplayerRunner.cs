@@ -413,6 +413,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             QuickChat.Update(scene);
             Chat.Update();
             MapMarkers.Update();
+            MatchHost.Update();
             DreamGates.Update(scene);
             PartyAbilities.Update();
             Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene
