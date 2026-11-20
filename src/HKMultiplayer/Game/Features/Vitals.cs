@@ -7,7 +7,8 @@ using UnityEngine;
 namespace HKMultiplayer.Game.Features;
 
 /// <summary>
-/// Vida y alma de cada jugador para el HUD del compañero. Cada uno envía las suyas al host cuando cambian (como mucho 4
+/// Vida y alma de cada jugador para el HUD del compañero, y su equipo para el panel *Compañeros* (amuletos equipados,
+/// muescas y mejora del aguijón). Cada uno envía las suyas al host cuando cambian (como mucho 4
 /// veces por segundo, fiable); el host las guarda y las reenvía a los demás, y a quien entra le da las últimas de cada
 /// uno. Sin memoria nueva por mensaje.
 /// </summary>
@@ -16,6 +17,9 @@ internal sealed class Vitals {
     public const MessageType VitalsMessage = (MessageType) 81;
 
     private const float MinInterval = 0.25f;
+
+    /// <summary>Amuletos que hay en el juego.</summary>
+    public const int MaxCharms = 40;
 
     /// <summary>Lo que se sabe de un jugador.</summary>
     public sealed class Entry {
@@ -30,6 +34,16 @@ internal sealed class Vitals {
         /// <summary>Zona del mapa en la que está (<see cref="GlobalEnums.MapZone"/>).</summary>
         public byte Zone;
 
+        /// <summary>Mejoras del aguijón en el herrero (0 a 4) y muescas de amuleto.</summary>
+        public byte NailLevel;
+
+        public byte CharmSlots;
+
+        /// <summary>Amuletos equipados (su número en el juego), los <see cref="CharmCount"/> primeros.</summary>
+        public readonly byte[] Charms = new byte[MaxCharms];
+
+        public byte CharmCount;
+
         /// <summary>Cuándo cambió su vida por última vez (para mostrar sus máscaras sobre su cabeza un rato).</summary>
         public float HealthChangedAt = -100f;
 
@@ -37,7 +51,22 @@ internal sealed class Vitals {
 
         public bool SameAs(Entry other) =>
             Health == other.Health && MaxHealth == other.MaxHealth && Blue == other.Blue && Soul == other.Soul &&
-            MaxSoul == other.MaxSoul && Reserve == other.Reserve && Zone == other.Zone;
+            MaxSoul == other.MaxSoul && Reserve == other.Reserve && Zone == other.Zone && NailLevel == other.NailLevel &&
+            CharmSlots == other.CharmSlots && SameCharms(other);
+
+        private bool SameCharms(Entry other) {
+            if (CharmCount != other.CharmCount) {
+                return false;
+            }
+
+            for (var i = 0; i < CharmCount; i++) {
+                if (Charms[i] != other.Charms[i]) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
 
         public void CopyFrom(Entry other) {
             Health = other.Health;
@@ -47,6 +76,10 @@ internal sealed class Vitals {
             MaxSoul = other.MaxSoul;
             Reserve = other.Reserve;
             Zone = other.Zone;
+            NailLevel = other.NailLevel;
+            CharmSlots = other.CharmSlots;
+            CharmCount = other.CharmCount;
+            Array.Copy(other.Charms, Charms, CharmCount);
         }
 
         public void Write(PacketWriter writer) {
@@ -57,6 +90,12 @@ internal sealed class Vitals {
             writer.WriteByte(MaxSoul);
             writer.WriteByte(Reserve);
             writer.WriteByte(Zone);
+            writer.WriteByte(NailLevel);
+            writer.WriteByte(CharmSlots);
+            writer.WriteByte(CharmCount);
+            for (var i = 0; i < CharmCount; i++) {
+                writer.WriteByte(Charms[i]);
+            }
         }
 
         public void Read(PacketReader reader) {
@@ -67,6 +106,17 @@ internal sealed class Vitals {
             MaxSoul = reader.ReadByte();
             Reserve = reader.ReadByte();
             Zone = reader.ReadByte();
+            NailLevel = reader.ReadByte();
+            CharmSlots = reader.ReadByte();
+            var count = reader.ReadByte();
+            CharmCount = 0;
+            for (var i = 0; i < count; i++) {
+                var charm = reader.ReadByte();
+                // Solo números de amuleto del juego (1 a 40) y como mucho los que caben
+                if (charm is >= 1 and <= MaxCharms && CharmCount < MaxCharms) {
+                    Charms[CharmCount++] = charm;
+                }
+            }
         }
     }
 
@@ -153,6 +203,16 @@ internal sealed class Vitals {
         _sample.MaxSoul = (byte) Mathf.Clamp(pd.maxMP, 0, 255);
         _sample.Reserve = (byte) Mathf.Clamp(pd.MPReserve, 0, 255);
         _sample.Zone = CurrentZone();
+        _sample.NailLevel = (byte) Mathf.Clamp(pd.nailSmithUpgrades, 0, 255);
+        _sample.CharmSlots = (byte) Mathf.Clamp(pd.charmSlots, 0, 255);
+        _sample.CharmCount = 0;
+        if (pd.equippedCharms != null) {
+            foreach (var charm in pd.equippedCharms) {
+                if (charm is >= 1 and <= MaxCharms && _sample.CharmCount < MaxCharms) {
+                    _sample.Charms[_sample.CharmCount++] = (byte) charm;
+                }
+            }
+        }
         if (_sentOnce && _sample.SameAs(_local)) {
             return;
         }

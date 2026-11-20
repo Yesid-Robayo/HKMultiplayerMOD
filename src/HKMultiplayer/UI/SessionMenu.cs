@@ -64,6 +64,11 @@ internal sealed class SessionMenu : GameStyledMenu {
     private Text _settingsNote;
     private Text _moreSettingsNote;
     private readonly Text[] _partnerTexts = new Text[MaxPartnerRows];
+
+    /// <summary>El equipo de cada compañero (aguijón, muescas y amuletos), bajo su línea.</summary>
+    private readonly Text[] _partnerGear = new Text[MaxPartnerRows];
+
+    private readonly StringBuilder _gear = new();
     private readonly MenuButton[] _partnerButtons = new MenuButton[MaxPartnerRows];
     private readonly MenuButton[] _goToButtons = new MenuButton[MaxPartnerRows];
     private readonly GameObject[] _partnerRows = new GameObject[MaxPartnerRows];
@@ -316,6 +321,7 @@ internal sealed class SessionMenu : GameStyledMenu {
         for (var i = 0; i < MaxPartnerRows; i++) {
             var row = i;
             _partnerTexts[i] = AddText(page, string.Empty, 32);
+            _partnerGear[i] = AddText(page, string.Empty, 26);
             _partnerRows[i] = AddRow(page, $"Compañero {i + 1}", 84, 10);
             _partnerButtons[i] = AddButton(_partnerRows[i], Lang.T("Dar geo", "Give geo"), () => GiveGeo(row), 34, 520);
             _goToButtons[i] = AddButton(_partnerRows[i], Lang.T("Ir con", "Go to"), () => GoTo(row), 34, 520);
@@ -547,6 +553,29 @@ internal sealed class SessionMenu : GameStyledMenu {
         _moreSettingsNote.text = note;
     }
 
+    /// <summary>
+    /// El equipo del compañero, bajo su línea: la mejora de su aguijón, las muescas usadas y sus amuletos con el
+    /// nombre que les da el juego en el idioma de este PC.
+    /// </summary>
+    private static void AppendGear(StringBuilder text, Vitals.Entry entry) {
+        text.Append(entry.NailLevel > 0 ? Lang.T($"Aguijón +{entry.NailLevel}", $"Nail +{entry.NailLevel}") : Lang.T("Aguijón", "Nail"));
+        text.Append(Lang.T($"  ·  {entry.CharmSlots} muescas  ·  ", $"  ·  {entry.CharmSlots} notches  ·  "));
+        if (entry.CharmCount == 0) {
+            text.Append(Lang.T("sin amuletos", "no charms"));
+            return;
+        }
+
+        for (var i = 0; i < entry.CharmCount; i++) {
+            if (i > 0) {
+                text.Append(", ");
+            }
+
+            var key = $"CHARM_NAME_{entry.Charms[i]}";
+            text.Append(TeamCherry.Localization.Language.Has(key, "UI") ? TeamCherry.Localization.Language.Get(key, "UI")
+                : $"#{entry.Charms[i]}");
+        }
+    }
+
     private void RefreshPartners(Session.GameSession session) {
         var pd = PlayerData.instance;
         _ownGeo.text = pd != null ? Lang.T($"Tu geo: {pd.geo}", $"Your geo: {pd.geo}") : string.Empty;
@@ -584,6 +613,13 @@ internal sealed class SessionMenu : GameStyledMenu {
                 _partnerIds[row] = member.Id;
                 _partnerTexts[row].text = text.ToString();
                 _partnerTexts[row].gameObject.SetActive(true);
+                _gear.Clear();
+                if (entry != null) {
+                    AppendGear(_gear, entry);
+                }
+
+                _partnerGear[row].text = _gear.ToString();
+                _partnerGear[row].gameObject.SetActive(entry != null);
                 _partnerRows[row].SetActive(true);
                 SetButtonText(_partnerButtons[row], Lang.T($"Dar geo a {member.Name}", $"Give geo to {member.Name}"));
                 SetButtonEnabled(_partnerButtons[row], HostSettings.Current.AllowGeoGifts);
@@ -597,6 +633,7 @@ internal sealed class SessionMenu : GameStyledMenu {
         for (var i = row; i < MaxPartnerRows; i++) {
             _partnerTexts[i].gameObject.SetActive(i == 0);
             _partnerTexts[i].text = i == 0 ? Lang.T("No hay compañeros conectados", "No partners connected") : string.Empty;
+            _partnerGear[i].gameObject.SetActive(false);
             _partnerRows[i].SetActive(false);
         }
     }
