@@ -119,6 +119,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Dónde se juega y con cuántos, en la presencia de Steam.</summary>
     public Features.SteamPresence Presence { get; } = new();
 
+    /// <summary>Resumen de la partida al acabar.</summary>
+    public Features.SessionSummary Summary { get; } = new();
+
     /// <summary>El Portal Onírico de cada compañero, visible en su sala.</summary>
     public Features.PartnerDreamGates DreamGates { get; } = new();
 
@@ -418,6 +421,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             MapMarkers.Update();
             MatchHost.Update();
             Presence.Update();
+            Summary.Update();
             DreamGates.Update(scene);
             PartyAbilities.Update();
             Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene
@@ -866,6 +870,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Safely(() => { MapMarkers.Detach(); }, "MapMarkers.Detach");
         Safely(() => { MatchHost.Detach(); }, "MatchHost.Detach");
         Safely(() => { Presence.Detach(); }, "Presence.Detach");
+        Safely(() => { Summary.Detach(); }, "Summary.Detach");
         Safely(() => { DreamGates.Detach(); }, "DreamGates.Detach");
         Safely(() => { PartyAbilities.Detach(); }, "PartyAbilities.Detach");
         Safely(() => { Skins.Detach(); }, "Skins.Detach");
@@ -1041,6 +1046,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         MapMarkers.Attach(session);
         MatchHost.Attach(session);
         Presence.Attach(session);
+        Summary.Attach(session);
         DreamGates.Attach(session);
         PartyAbilities.Attach(session);
         var connected = false;
