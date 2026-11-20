@@ -8372,6 +8372,46 @@ internal sealed class EnemySync {
         }
     }
 
+    /// <summary>
+    /// El enemigo vivo y visible más cercano a <paramref name="position"/> (a menos de <paramref name="maxDistance"/>), por
+    /// su número, que es el mismo en todos los PCs. 0 si no hay ninguno. La distancia en vertical cuenta 1,8 veces, como
+    /// la pantalla, que es más ancha que alta: así se elige el que se ve, no uno de otro piso.
+    /// </summary>
+    public uint NearestEnemyId(Vector3 position, float maxDistance) {
+        uint best = 0;
+        var bestDistance = maxDistance * maxDistance;
+        foreach (var enemy in _enemies) {
+            if (enemy.Root == null || !enemy.Root.activeInHierarchy || enemy.Health == null || enemy.Health.GetIsDead() ||
+                enemy.Renderer != null && !enemy.Renderer.enabled) {
+                continue;
+            }
+
+            var offset = enemy.Transform.position - position;
+            var distance = offset.x * offset.x + offset.y * offset.y * 3.24f;
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = enemy.Id;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>Dónde está ahora el enemigo de ese número y lo alto que llega su caja (false si ya no está o murió).</summary>
+    public bool TryGetEnemyTop(uint id, out Vector3 top) {
+        if (_byId.TryGetValue(id, out var enemy) && enemy.Root != null && enemy.Root.activeInHierarchy &&
+            enemy.Health != null && !enemy.Health.GetIsDead()) {
+            var position = enemy.Transform.position;
+            top = enemy.Collider != null
+                ? new Vector3(enemy.Collider.bounds.center.x, enemy.Collider.bounds.max.y, position.z)
+                : position;
+            return true;
+        }
+
+        top = default;
+        return false;
+    }
+
     /// <summary>Lleva a este jugador junto al primer enemigo con ese nombre.</summary>
     public bool TryGetPosition(string namePrefix, out Vector3 position) {
         foreach (var enemy in _enemies) {

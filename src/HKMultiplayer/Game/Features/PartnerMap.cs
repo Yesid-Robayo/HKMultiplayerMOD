@@ -41,6 +41,9 @@ internal sealed class PartnerMap {
 
     private static readonly Color DownedColor = new(1f, 0.35f, 0.35f, 1f);
 
+    /// <summary>El color de un jugador (el de su brújula en el mapa), el mismo en todos los PCs.</summary>
+    public static Color ColorOf(ushort playerId) => StandingColors[(playerId + StandingColors.Length - 1) % StandingColors.Length];
+
     /// <summary>Tamaño del nombre respecto a los textos del propio mapa (los nombres de las zonas).</summary>
     private const float LabelScale = 0.6f;
 

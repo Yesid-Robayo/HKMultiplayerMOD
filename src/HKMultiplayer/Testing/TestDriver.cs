@@ -1135,6 +1135,11 @@ internal sealed class TestDriver : MonoBehaviour {
             case "frametime":
                 StartCoroutine(MeasureFrames(ParseFloat(args[1])));
                 break;
+            case "quickmsg":
+                // quickmsg <0 aquí|1 ayuda|2 espera|3 a por él>: envía ese mensaje rápido como con el mapa rápido
+                Log.Info($"{Tag}mensaje rápido {(runner.QuickChat.Send(byte.Parse(args[1])) ? "enviado" : "no enviado")} " +
+                         $"(enviados={runner.QuickChat.Sent} recibidos={runner.QuickChat.Received} marcas={runner.QuickChat.MarkersShown})");
+                break;
             case "trackpartner":
                 StartCoroutine(Track(ParseFloat(args[1]), self: false));
                 break;
