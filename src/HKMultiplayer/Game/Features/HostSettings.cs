@@ -183,13 +183,21 @@ internal sealed class HostSettings {
     public static readonly HostOption PartnerMapWithoutCompassOption = new(24, "partnerMapNoCompass",
         "Compañeros en el mapa sin brújula", "Partners on the map without compass", YesNoValues, YesNo, YesNoEnglish, 1);
 
+    /// <summary>
+    /// Si abrir la pausa para el juego en el PC de quien la abre (como jugando solo). Con No, el mundo sigue: el caballero
+    /// se queda quieto con el menú abierto, pero los enemigos lo alcanzan, así que pausar en combate ya no deja a salvo.
+    /// Sí por defecto (como hasta ahora).
+    /// </summary>
+    public static readonly HostOption PauseStopsGameOption = new(25, "pauseStopsGame", "La pausa para el juego",
+        "Pause stops the game", YesNoValues, YesNo, YesNoEnglish, 0);
+
     /// <summary>Todos, en el orden del mensaje y del panel (su posición es su <see cref="HostOption.Index"/>).</summary>
     public static readonly HostOption[] Options = {
         BossHealthOption, EnemyHealthOption, PartnerInRoomOption, DamageTakenOption,
         ReviveOption, ReviveSecondsOption, ReviveSoulOption, ReviveMasksOption, ReviveInvulnerableOption, ReviveAtBenchOption,
         ShowNamesOption, ShowPartnerHealthOption, ShowArrowsOption, ShowPartnerOnMapOption, ShowNoticesOption, ShowBossBarOption,
         ShowEnemyBarsOption, GeoGiftsOption, PartnerTravelOption, SkipCutscenesOption, StagTogetherOption, SharedMapOption,
-        RespawnWithHostOption, AllowMatchHostOption, PartnerMapWithoutCompassOption
+        RespawnWithHostOption, AllowMatchHostOption, PartnerMapWithoutCompassOption, PauseStopsGameOption
     };
 
     /// <summary>Posición elegida de cada ajuste.</summary>
@@ -258,6 +266,9 @@ internal sealed class HostSettings {
 
     /// <summary>Si los compañeros salen en el mapa aunque no se lleve la Brújula Caprichosa.</summary>
     public bool PartnerMapWithoutCompass => Flag(PartnerMapWithoutCompassOption);
+
+    /// <summary>Si abrir la pausa para el juego en ese PC.</summary>
+    public bool PauseStopsGame => Flag(PauseStopsGameOption);
 
     /// <summary>Si el mapa (salas visitadas y dibujadas) es del mundo; si no, de cada jugador.</summary>
     public bool SharedMap => Flag(SharedMapOption);

@@ -262,6 +262,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Features.BossPresentation.InstallHooks();
         Features.DreamSync.InstallHooks();
         Features.PantheonTogether.InstallHooks();
+        Features.PauseKeepsRunning.Install();
         Scene.DropSeeds.InstallHooks();
         Scene.ScenePaths.InstallHooks();
         QuestNpcSync.InstallHooks();
