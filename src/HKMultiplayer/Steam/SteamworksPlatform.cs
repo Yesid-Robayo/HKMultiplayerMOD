@@ -273,6 +273,12 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
         }
     }
 
+    public void SetPresence(string status, string group, int groupSize) {
+        SteamFriends.SetRichPresence("status", status ?? string.Empty);
+        SteamFriends.SetRichPresence("steam_player_group", group ?? string.Empty);
+        SteamFriends.SetRichPresence("steam_player_group_size", string.IsNullOrEmpty(group) ? string.Empty : groupSize.ToString());
+    }
+
     public void SetLobbyData(string key, string value) {
         if (Lobby != 0) {
             SteamMatchmaking.SetLobbyData(new CSteamID(Lobby), key, value);

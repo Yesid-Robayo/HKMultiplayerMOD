@@ -52,6 +52,12 @@ internal interface ISteamPlatform : IPeerNetwork, IDisposable {
     /// <summary>Guarda un dato en la sala (solo su dueño). Los que entran lo leen con <see cref="GetLobbyData"/>.</summary>
     void SetLobbyData(string key, string value);
 
+    /// <summary>
+    /// La presencia que ven los amigos: un texto (<c>status</c>, en la ficha del juego) y el grupo de la partida
+    /// (<c>steam_player_group</c> y su tamaño, que juntan en la lista a los que juegan juntos). Null o vacío la quita.
+    /// </summary>
+    void SetPresence(string status, string group, int groupSize);
+
     /// <summary>Un dato de la sala en la que está (vacío si no lo tiene).</summary>
     string GetLobbyData(string key);
 

@@ -156,6 +156,14 @@ internal sealed class SimulatedSteamPlatform : ISteamPlatform {
         }
     }
 
+    /// <summary>Última presencia puesta (no hay amigos que la vean: solo se apunta para comprobarla).</summary>
+    public string Presence { get; private set; } = string.Empty;
+
+    public void SetPresence(string status, string group, int groupSize) {
+        Presence = string.IsNullOrEmpty(status) ? string.Empty : $"{status} [{group} x{groupSize}]";
+        Log.Info($"Steam simulado: presencia «{Presence}»");
+    }
+
     public void SetLobbyData(string key, string value) {
         if (Lobby != LobbyOf(_index)) {
             return;
