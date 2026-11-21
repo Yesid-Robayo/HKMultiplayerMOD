@@ -122,6 +122,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Resumen de la partida al acabar.</summary>
     public Features.SessionSummary Summary { get; } = new();
 
+    /// <summary>Los pensamientos del aguijón onírico de los compañeros.</summary>
+    public Features.PartnerDreamThoughts DreamThoughts { get; } = new();
+
     /// <summary>El Portal Onírico de cada compañero, visible en su sala.</summary>
     public Features.PartnerDreamGates DreamGates { get; } = new();
 
@@ -423,6 +426,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             MatchHost.Update();
             Presence.Update();
             Summary.Update();
+            DreamThoughts.Update(scene);
             DreamGates.Update(scene);
             PartyAbilities.Update();
             Party.ReportLocal(Cutscenes.Watching ? Features.PlayerStatus.Cutscene
@@ -872,6 +876,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Safely(() => { MatchHost.Detach(); }, "MatchHost.Detach");
         Safely(() => { Presence.Detach(); }, "Presence.Detach");
         Safely(() => { Summary.Detach(); }, "Summary.Detach");
+        Safely(() => { DreamThoughts.Detach(); }, "DreamThoughts.Detach");
         Safely(() => { DreamGates.Detach(); }, "DreamGates.Detach");
         Safely(() => { PartyAbilities.Detach(); }, "PartyAbilities.Detach");
         Safely(() => { Skins.Detach(); }, "Skins.Detach");
@@ -1048,6 +1053,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         MatchHost.Attach(session);
         Presence.Attach(session);
         Summary.Attach(session);
+        DreamThoughts.Attach(session);
         DreamGates.Attach(session);
         PartyAbilities.Attach(session);
         var connected = false;
