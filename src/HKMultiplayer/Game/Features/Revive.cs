@@ -1234,7 +1234,7 @@ internal sealed class Revive {
 
         Log.Info(full ? $"Revivido en el banco de {by}" : $"Revivido por {by}");
         if (full) {
-            Notice.Show(Lang.T($"{by} se sentó en un banco: has revivido a su lado", $"{by} sat on a bench: you were revived next to them"), 5f);
+            Notice.Show(Lang.F("{0} se sentó en un banco: has revivido a su lado", "{0} sat on a bench: you were revived next to them", by), 5f);
         }
 
         _bodyScene = scene;
@@ -2212,7 +2212,7 @@ internal sealed class Revive {
             var zone = entry != null ? Zones.Name(entry.Zone) : member.BodyScene;
             ReviveAudio.PlayPartnerDown(HeroController.instance);
             if (HostSettings.Current.ShowNotices) {
-                Notice.Show(Lang.T($"{member.Name} cayó en {zone}\nVe a su cuerpo y mantén Focus para revivirlo", $"{member.Name} went down in {zone}\nGo to their body and hold Focus to revive them"), 6f);
+                Notice.Show(Lang.F("{0} cayó en {1}\nVe a su cuerpo y mantén Focus para revivirlo", "{0} went down in {1}\nGo to their body and hold Focus to revive them", member.Name, zone), 6f);
             }
         }
     }
@@ -2265,8 +2265,8 @@ internal sealed class Revive {
             _status.gameObject.SetActive(statusKey != 0);
             if (statusKey != 0) {
                 var who = _party.Get((ushort) (statusKey & 0xFFFF))?.Name ?? Lang.T("Tu compañero", "Your partner");
-                _status.text = (statusKey & 0x20000) != 0 ? Lang.T($"{who} te está reviviendo", $"{who} is reviving you")
-                    : (statusKey & 0x10000) != 0 ? Lang.T($"Caído — {who} puede revivirte", $"Down — {who} can revive you")
+                _status.text = (statusKey & 0x20000) != 0 ? Lang.F("{0} te está reviviendo", "{0} is reviving you", who)
+                    : (statusKey & 0x10000) != 0 ? Lang.F("Caído — {0} puede revivirte", "Down — {0} can revive you", who)
                     : Lang.T("Caído…", "Down…");
             }
         }
@@ -2305,9 +2305,9 @@ internal sealed class Revive {
             var kind = promptKey >> 32;
             var target = _party.Get((ushort) (promptKey & 0xFFFF))?.Name ?? "?";
             _promptText.text = kind switch {
-                2 => Lang.T($"Necesitas {ReviveCost()} de alma para revivir a {target}", $"You need {ReviveCost()} soul to revive {target}"),
-                3 => Lang.T($"{Reviver(promptKey)} está reviviendo a {target}", $"{Reviver(promptKey)} is reviving {target}"),
-                _ => Lang.T($"Mantén Focus para revivir a {target}", $"Hold Focus to revive {target}")
+                2 => Lang.F("Necesitas {0} de alma para revivir a {1}", "You need {0} soul to revive {1}", ReviveCost(), target),
+                3 => Lang.F("{0} está reviviendo a {1}", "{0} is reviving {1}", Reviver(promptKey), target),
+                _ => Lang.F("Mantén Focus para revivir a {0}", "Hold Focus to revive {0}", target)
             };
         }
 

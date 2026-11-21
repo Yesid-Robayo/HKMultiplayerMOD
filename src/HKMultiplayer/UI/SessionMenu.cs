@@ -33,7 +33,7 @@ internal sealed class SessionMenu : GameStyledMenu {
     /// Ajustes de la primera página (dificultad y revivir: 10); el resto (pantalla y permisos: 9) va en la segunda. Así
     /// las dos tienen casi las mismas filas (con 8 y 11 la segunda quedaba apretada).
     /// </summary>
-    private const int FirstPageOptions = 10;
+    private const int FirstPageOptions = 13;
 
     private const int MaxPartnerRows = 3;
 
@@ -256,7 +256,7 @@ internal sealed class SessionMenu : GameStyledMenu {
             Skins.SelectLocalSkin(index <= 0 || index >= _skinChoices.Length ? string.Empty : _skinChoices[index]);
             Refresh();
         });
-        _showSkinsOption = AddOption(page, Lang.T("Ver las skins de los demás", "Show other players' skins"), Lang.Spanish ? new[] { "Sí", "No" } : new[] { "Yes", "No" },
+        _showSkinsOption = AddOption(page, Lang.T("Ver las skins de los demás", "Show other players' skins"), Lang.Labels(new[] { "Sí", "No" }, new[] { "Yes", "No" }),
             Skins.ShowOthers ? 0 : 1, index => Skins.SetShowOthers(index == 0));
         _skinStatus = AddText(page, string.Empty, 30);
         _skinStatus.GetComponent<LayoutElement>().preferredHeight = 120;
@@ -349,7 +349,7 @@ internal sealed class SessionMenu : GameStyledMenu {
 
         var error = MultiplayerRunner.Instance.Actions.TryGiftGeo(_partnerIds[row], amount);
         var name = PartyState.Current?.Get(_partnerIds[row])?.Name ?? "?";
-        _partnersMessage.text = error ?? Lang.T($"Le diste {amount} geo a {name}", $"You gave {amount} geo to {name}");
+        _partnersMessage.text = error ?? Lang.F("Le diste {0} geo a {1}", "You gave {0} geo to {1}", amount, name);
         Refresh();
     }
 
@@ -387,15 +387,14 @@ internal sealed class SessionMenu : GameStyledMenu {
         if (_kickArmed != row || Time.unscaledTime > _kickArmedUntil) {
             _kickArmed = row;
             _kickArmedUntil = Time.unscaledTime + KickConfirmSeconds;
-            _partnersMessage.text = Lang.T($"Pulsa «Expulsar» otra vez para expulsar a {name}",
-                $"Press «Kick» again to kick {name}");
+            _partnersMessage.text = Lang.F("Pulsa «Expulsar» otra vez para expulsar a {0}", "Press «Kick» again to kick {0}", name);
             return;
         }
 
         _kickArmed = -1;
         _partnersMessage.text = session.Kick(id)
-            ? Lang.T($"Expulsaste a {name}: no podrá volver a esta partida", $"You kicked {name}: they can't rejoin this game")
-            : Lang.T($"No se pudo expulsar a {name}", $"Couldn't kick {name}");
+            ? Lang.F("Expulsaste a {0}: no podrá volver a esta partida", "You kicked {0}: they can't rejoin this game", name)
+            : Lang.F("No se pudo expulsar a {0}", "Couldn't kick {0}", name);
         Refresh();
     }
 
@@ -495,6 +494,7 @@ internal sealed class SessionMenu : GameStyledMenu {
     // =====================================================================================================
 
     private void Update() {
+        FollowLanguage();
         if (Time.unscaledTime >= _nextRefresh) {
             _nextRefresh = Time.unscaledTime + 0.5f;
             Refresh();
@@ -509,16 +509,16 @@ internal sealed class SessionMenu : GameStyledMenu {
 
         var world = CoopSaves.ActiveWorld;
         _header.text = session.IsHost
-            ? world != null ? Lang.T($"Mundo «{world.Name}»", $"World \"{world.Name}\"") : Lang.T("Partida abierta", "Game open")
+            ? world != null ? Lang.F("Mundo «{0}»", "World \"{0}\"", world.Name) : Lang.T("Partida abierta", "Game open")
             : session.IsActive ? Lang.T("Conectado a la partida", "Connected to the game") : Lang.T("Conectando...", "Connecting...");
-        _code.text = Lang.T($"Código de la partida: {MultiplayerRunner.FormatCode(session.RoomCode)}", $"Game code: {MultiplayerRunner.FormatCode(session.RoomCode)}");
+        _code.text = Lang.F("Código de la partida: {0}", "Game code: {0}", MultiplayerRunner.FormatCode(session.RoomCode));
         var byIp = session.IsHost && session.Port is > 0;
         _address.text = !session.IsHost
             ? string.Empty
             : !byIp
                 ? Lang.T("Partida solo por Steam (no se pudo abrir el puerto)", "Steam-only game (the port couldn't be opened)")
                 : _addressVisible
-                    ? Lang.T($"Tu IP: {MultiplayerRunner.LocalAddresses()}   ·   puerto {session.Port}", $"Your IP: {MultiplayerRunner.LocalAddresses()}   ·   port {session.Port}")
+                    ? Lang.F("Tu IP: {0}   ·   puerto {1}", "Your IP: {0}   ·   port {1}", MultiplayerRunner.LocalAddresses(), session.Port)
                     : Lang.T("Tu IP está oculta", "Your IP is hidden");
         _showAddress.gameObject.SetActive(byIp);
         _invite.gameObject.SetActive(Steam.SteamLink.Platform is { Lobby: not 0 });
@@ -585,8 +585,8 @@ internal sealed class SessionMenu : GameStyledMenu {
     /// nombre que les da el juego en el idioma de este PC.
     /// </summary>
     private static void AppendGear(StringBuilder text, Vitals.Entry entry) {
-        text.Append(entry.NailLevel > 0 ? Lang.T($"Aguijón +{entry.NailLevel}", $"Nail +{entry.NailLevel}") : Lang.T("Aguijón", "Nail"));
-        text.Append(Lang.T($"  ·  {entry.CharmSlots} muescas  ·  ", $"  ·  {entry.CharmSlots} notches  ·  "));
+        text.Append(entry.NailLevel > 0 ? Lang.F("Aguijón +{0}", "Nail +{0}", entry.NailLevel) : Lang.T("Aguijón", "Nail"));
+        text.Append(Lang.F("  ·  {0} muescas  ·  ", "  ·  {0} notches  ·  ", entry.CharmSlots));
         if (entry.CharmCount == 0) {
             text.Append(Lang.T("sin amuletos", "no charms"));
             return;
@@ -626,7 +626,7 @@ internal sealed class SessionMenu : GameStyledMenu {
     private void RefreshPartners(Session.GameSession session) {
         RefreshLevelRow(session);
         var pd = PlayerData.instance;
-        _ownGeo.text = pd != null ? Lang.T($"Tu geo: {pd.geo}", $"Your geo: {pd.geo}") : string.Empty;
+        _ownGeo.text = pd != null ? Lang.F("Tu geo: {0}", "Your geo: {0}", pd.geo) : string.Empty;
         var party = PartyState.Current;
         var vitals = MultiplayerRunner.Instance.Vitals;
         var row = 0;
@@ -643,13 +643,13 @@ internal sealed class SessionMenu : GameStyledMenu {
                 } else if (member.Paused) {
                     text.Append(Lang.T("  ·  en pausa", "  ·  paused"));
                 } else if (entry != null) {
-                    text.Append(Lang.T($"  ·  {entry.Health}/{entry.MaxHealth} máscaras", $"  ·  {entry.Health}/{entry.MaxHealth} masks"));
+                    text.Append(Lang.F("  ·  {0}/{1} máscaras", "  ·  {0}/{1} masks", entry.Health, entry.MaxHealth));
                     if (entry.Blue > 0) {
-                        text.Append(Lang.T($" (+{entry.Blue} azules)", $" (+{entry.Blue} blue)"));
+                        text.Append(Lang.F(" (+{0} azules)", " (+{0} blue)", entry.Blue));
                     }
 
                     // Dónde está: en una cinemática la zona es "ninguna" (salía "None"); en un sueño, se dice así
-                    text.Append(Lang.T($"  ·  {entry.Soul} de alma  ·  ", $"  ·  {entry.Soul} soul  ·  "));
+                    text.Append(Lang.F("  ·  {0} de alma  ·  ", "  ·  {0} soul  ·  ", entry.Soul));
                     text.Append(member.Status switch {
                         PlayerStatus.Cutscene => Lang.T("viendo una cinemática", "watching a cutscene"),
                         PlayerStatus.Dream => Lang.T("en un sueño", "in a dream"),
@@ -669,9 +669,9 @@ internal sealed class SessionMenu : GameStyledMenu {
                 _partnerGear[row].text = _gear.ToString();
                 _partnerGear[row].gameObject.SetActive(entry != null);
                 _partnerRows[row].SetActive(true);
-                SetButtonText(_partnerButtons[row], Lang.T($"Dar geo a {member.Name}", $"Give geo to {member.Name}"));
+                SetButtonText(_partnerButtons[row], Lang.F("Dar geo a {0}", "Give geo to {0}", member.Name));
                 SetButtonEnabled(_partnerButtons[row], HostSettings.Current.AllowGeoGifts);
-                SetButtonText(_goToButtons[row], Lang.T($"Ir con {member.Name}", $"Go to {member.Name}"));
+                SetButtonText(_goToButtons[row], Lang.F("Ir con {0}", "Go to {0}", member.Name));
                 SetButtonEnabled(_goToButtons[row], HostSettings.Current.AllowPartnerTravel);
                 _kickButtons[row].gameObject.SetActive(MultiplayerRunner.Instance?.Session?.IsHost == true);
                 row++;

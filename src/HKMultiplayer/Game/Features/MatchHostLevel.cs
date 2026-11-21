@@ -244,7 +244,7 @@ internal sealed class MatchHostLevel {
 
         _pending = clean;
         _pendingUntil = Time.unscaledTime + ConfirmSeconds;
-        Status = Lang.T($"Ganarás: {summary}. Pulsa «Confirmar» para aplicarlo.", $"You'll get: {summary}. Press «Confirm» to apply it.");
+        Status = Lang.F("Ganarás: {0}. Pulsa «Confirmar» para aplicarlo.", "You'll get: {0}. Press «Confirm» to apply it.", summary);
     }
 
     /// <summary>Lo que ganaría el personaje local con los datos del host (vacío si nada).</summary>
@@ -283,11 +283,11 @@ internal sealed class MatchHostLevel {
         }
 
         if (charms > 0) {
-            Add(charms == 1 ? Lang.T("1 amuleto", "1 charm") : Lang.T($"{charms} amuletos", $"{charms} charms"));
+            Add(charms == 1 ? Lang.T("1 amuleto", "1 charm") : Lang.F("{0} amuletos", "{0} charms", charms));
         }
 
         if (abilities > 0) {
-            Add(abilities == 1 ? Lang.T("1 habilidad", "1 ability") : Lang.T($"{abilities} habilidades", $"{abilities} abilities"));
+            Add(abilities == 1 ? Lang.T("1 habilidad", "1 ability") : Lang.F("{0} habilidades", "{0} abilities", abilities));
         }
 
         return text.ToString();

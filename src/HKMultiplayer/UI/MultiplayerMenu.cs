@@ -107,7 +107,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         AddSpace(start, 16);
         _updateText = AddText(start, string.Empty, 28);
         _updateButton = AddButton(start, string.Empty, OpenUpdatePage, 34);
-        AddOption(start, Lang.T("Buscar actualizaciones", "Check for updates"), Lang.Spanish ? YesNo : YesNoEnglish,
+        AddOption(start, Lang.T("Buscar actualizaciones", "Check for updates"), Lang.Labels(YesNo, YesNoEnglish),
             settings.CheckForUpdates ? 0 : 1, index => {
                 HKMultiplayerMod.Settings.CheckForUpdates = index == 0;
                 HKMultiplayerMod.SaveSettings();
@@ -124,14 +124,14 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
             ReviveAudio.VolumeIndex(), index => SetOptionValue(_reviveVolume, ReviveAudio.SetVolume(index)));
         // Quién entra por Steam en las partidas que hosteas (sin Steam, la opción no sale: ver OnPageShowing)
         _steamAccess = AddOption(start, Lang.T("Partidas por Steam", "Steam games"),
-            Lang.Spanish ? new[] { "Amigos", "Solo invitados", "Nadie" } : new[] { "Friends", "Invited only", "Nobody" },
+            Lang.Labels(new[] { "Amigos", "Solo invitados", "Nadie" }, new[] { "Friends", "Invited only", "Nobody" }),
             Mathf.Clamp(settings.SteamAccess, 0, 2), index => {
                 HKMultiplayerMod.Settings.SteamAccess = index;
                 HKMultiplayerMod.SaveSettings();
             });
 
         var host = NewPage(HostPage);
-        AddText(host, Lang.T($"Elige un mundo coop (hasta {WorldStore.MaxWorlds}). Tus partidas normales no se tocan.", $"Pick a coop world (up to {WorldStore.MaxWorlds}). Your normal saves are not touched."), 36);
+        AddText(host, Lang.F("Elige un mundo coop (hasta {0}). Tus partidas normales no se tocan.", "Pick a coop world (up to {0}). Your normal saves are not touched.", WorldStore.MaxWorlds), 36);
         AddSpace(host, 10);
         _worldList = new GameObject("Worlds", typeof(RectTransform), typeof(VerticalLayoutGroup));
         _worldList.transform.SetParent(host.transform, false);
@@ -141,11 +141,11 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         listLayout.childForceExpandHeight = false;
         AddSpace(host, 10);
         _newWorldButton = AddButton(host, Lang.T("Nuevo mundo", "New world"), () => ShowPage(NewWorldPage));
-        _limitText = AddText(host, Lang.T($"Ya tienes {WorldStore.MaxWorlds} mundos: borra uno para crear otro.", $"You already have {WorldStore.MaxWorlds} worlds: delete one to create another."), 34);
+        _limitText = AddText(host, Lang.F("Ya tienes {0} mundos: borra uno para crear otro.", "You already have {0} worlds: delete one to create another.", WorldStore.MaxWorlds), 34);
         _hostStatus = AddText(host, string.Empty, 34);
         AddSpace(host, 10);
         // Dónde están los mundos: para hacer copias de seguridad o pasarlos a otro PC
-        var where = AddText(host, Lang.T($"Los mundos se guardan en este PC, en:\n{WorldStore.Root.Replace('/', '\\')}", $"Worlds are saved on this PC, in:\n{WorldStore.Root.Replace('/', '\\')}"), 30);
+        var where = AddText(host, Lang.F("Los mundos se guardan en este PC, en:\n{0}", "Worlds are saved on this PC, in:\n{0}", WorldStore.Root.Replace('/', '\\')), 30);
         where.GetComponent<LayoutElement>().preferredHeight = 30 * 3.4f;
         AddButton(host, Lang.T("Abrir carpeta de los mundos", "Open worlds folder"), OpenWorldsFolder, fontSize: 34);
 
@@ -244,18 +244,17 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         string button = null;
         _updateUrl = null;
         if (UpdateCheck.NewerAvailable) {
-            text = Lang.T($"Hay una versión nueva: la {UpdateCheck.Latest} (tienes la {current}). Para jugar juntos, todos necesitan la misma.",
-                $"A new version is out: {UpdateCheck.Latest} (you have {current}). To play together, everyone needs the same one.");
-            button = Lang.T($"Descargar la {UpdateCheck.Latest}", $"Download {UpdateCheck.Latest}");
+            text = Lang.F("Hay una versión nueva: la {0} (tienes la {1}). Para jugar juntos, todos necesitan la misma.", "A new version is out: {0} (you have {1}). To play together, everyone needs the same one.", UpdateCheck.Latest, current);
+            button = Lang.F("Descargar la {0}", "Download {0}", UpdateCheck.Latest);
             _updateUrl = UpdateCheck.LatestUrl;
         } else if (UpdateCheck.JustUpdated) {
-            text = Lang.T($"Actualizado a la {current}.", $"Updated to {current}.");
-            button = Lang.T($"Novedades de la {current}", $"What's new in {current}");
+            text = Lang.F("Actualizado a la {0}.", "Updated to {0}.", current);
+            button = Lang.F("Novedades de la {0}", "What's new in {0}", current);
             _updateUrl = UpdateCheck.CurrentNotesUrl;
         } else if (UpdateCheck.Latest != null) {
-            text = Lang.T($"Tienes la versión más nueva ({current}).", $"You have the newest version ({current}).");
+            text = Lang.F("Tienes la versión más nueva ({0}).", "You have the newest version ({0}).", current);
         } else {
-            text = Lang.T($"Versión {current}", $"Version {current}");
+            text = Lang.F("Versión {0}", "Version {0}", current);
         }
 
         _updateText.text = text;
@@ -372,7 +371,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
 
         foreach (var game in games.Take(4)) {
             var lobby = game.Lobby;
-            AddButton(_steamList, Lang.T($"Unirse a {game.Name}", $"Join {game.Name}"), () => JoinSteam(lobby), 40);
+            AddButton(_steamList, Lang.F("Unirse a {0}", "Join {0}", game.Name), () => JoinSteam(lobby), 40);
         }
 
         if (games.Count == 0) {
@@ -401,7 +400,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         foreach (var game in recent) {
             var target = game;
             var who = string.IsNullOrEmpty(game.HostName) ? game.Address : $"{game.HostName} ({game.Address})";
-            AddButton(_recentList, Lang.T($"Volver con {who}", $"Rejoin {who}"), () => JoinRecent(target), 40);
+            AddButton(_recentList, Lang.F("Volver con {0}", "Rejoin {0}", who), () => JoinRecent(target), 40);
         }
 
         if (recent.Count > 0 && string.IsNullOrEmpty(_code.text) && _address.text == recent[0].Address) {
@@ -479,10 +478,10 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         var mode = pd.bossRushMode ? Lang.T("  ·  Buscador de Dioses", "  ·  Godseeker")
             : pd.permadeathMode == 1 ? Lang.T("  ·  Alma de Acero", "  ·  Steel Soul")
             : string.Empty;
-        var label = Lang.T($"Partida {slot}", $"Save {slot}") +
+        var label = Lang.F("Partida {0}", "Save {0}", slot) +
                     $"  ·  {FormatTime(pd.playTime)}  ·  {AreaName(pd.mapZone.ToString())}{mode}";
         var button = AddButton(_saveList, label, () => {
-            var name = _newWorldName.text.Trim().Length > 0 ? _newWorldName.text : Lang.T($"Partida {slot}", $"Save {slot}");
+            var name = _newWorldName.text.Trim().Length > 0 ? _newWorldName.text : Lang.F("Partida {0}", "Save {0}", slot);
             var world = WorldStore.CreateFromSave(name, data);
             if (world == null) {
                 ShowPage(HostPage);
@@ -529,7 +528,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         var worlds = WorldStore.List();
         foreach (var world in worlds) {
             var label = (world.IsNew
-                ? Lang.T($"{world.Name}  ·  nuevo", $"{world.Name}  ·  new")
+                ? Lang.F("{0}  ·  nuevo", "{0}  ·  new", world.Name)
                 : $"{world.Name}  ·  {FormatTime(world.PlayTime)}  ·  {AreaName(world.Area)}") + ModeLabel(world);
             var target = world;
             var row = AddRow(_worldList, world.Name, 84, 10);
@@ -538,7 +537,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
             host.interactable = !world.Lost;
             AddButton(row, Lang.T("Borrar", "Delete"), () => {
                 _pendingDelete = target;
-                _deleteQuestion.text = Lang.T($"¿Borrar el mundo «{target.Name}»?", $"Delete the world \"{target.Name}\"?");
+                _deleteQuestion.text = Lang.F("¿Borrar el mundo «{0}»?", "Delete the world \"{0}\"?", target.Name);
                 ShowPage(DeletePage);
             }, 32, 240);
         }
@@ -703,6 +702,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
     }
 
     private void Update() {
+        FollowLanguage();
         if (CurrentPage == JoinPage && _joinStatus != null && MultiplayerRunner.Instance != null) {
             var runner = MultiplayerRunner.Instance;
             var status = runner.Session is { IsActive: true } && runner.World.JoinStatus.Length > 0

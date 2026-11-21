@@ -652,6 +652,10 @@ internal sealed class TestDriver : MonoBehaviour {
                 }
 
                 break;
+            case "notice":
+                // notice <texto>: aviso normal del mod (abajo a la derecha); | separa líneas
+                HKMultiplayer.UI.Notice.Show(string.Join(" ", args.Skip(1)).Replace("|", System.Environment.NewLine), 10f);
+                break;
             case "say":
                 // say <segundos> <texto>: cartel grande arriba; | separa líneas
                 HKMultiplayer.UI.Banner.Show(string.Join(" ", args.Skip(2)).Replace('|', '\n'), ParseFloat(args[1]));
@@ -1364,6 +1368,31 @@ internal sealed class TestDriver : MonoBehaviour {
                     }
                 }
 
+                break;
+            case "langgiven":
+                // langgiven <texto>: si ese texto de menú tiene pareja apuntada para volver a rotularlo
+                Log.Info($"{Tag}rótulo '{string.Join(" ", args.Skip(1))}': {HKMultiplayer.UI.Lang.DescribeGiven(string.Join(" ", args.Skip(1)))}");
+                break;
+            case "langsave":
+                // langsave <código>: guarda el idioma del juego como desde Opciones (vale al volver a abrirlo)
+                GameManager.instance.gameSettings.gameLanguage = (GlobalEnums.SupportedLanguages) Enum.Parse(typeof(GlobalEnums.SupportedLanguages), args[1]);
+                GameManager.instance.gameSettings.SaveGameOptionsSettings();
+                Log.Info($"{Tag}idioma guardado {args[1]}");
+                break;
+            case "langfind":
+                // langfind <texto>: claves del juego (hoja/clave) cuyo texto, en el idioma actual, es ese (sin mayúsculas)
+                var langText = string.Join(" ", args.Skip(1)).Trim();
+                var langFound = 0;
+                foreach (var sheet in TeamCherry.Localization.Language.GetSheets()) {
+                    foreach (var key in TeamCherry.Localization.Language.GetKeys(sheet)) {
+                        var text = TeamCherry.Localization.Language.Get(key, sheet);
+                        if (text != null && string.Equals(text.Trim(), langText, StringComparison.OrdinalIgnoreCase) && langFound++ < 12) {
+                            Log.Info($"{Tag}clave {sheet} {key}");
+                        }
+                    }
+                }
+
+                Log.Info($"{Tag}claves con '{langText}': {langFound}");
                 break;
             case "langget":
                 // langget <hoja> <clave>: texto del juego en su idioma (p. ej. "Titles FALSE_KNIGHT_MAIN")

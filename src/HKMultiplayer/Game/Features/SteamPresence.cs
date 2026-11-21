@@ -50,7 +50,7 @@ internal sealed class SteamPresence {
         }
 
         var zone = Zones.Name(Vitals.CurrentZone());
-        var text = Lang.T($"Coop ({count}/4)", $"Co-op ({count}/4)") + (string.IsNullOrEmpty(zone) ? string.Empty : $" · {zone}");
+        var text = Lang.F("Coop ({0}/4)", "Co-op ({0}/4)", count) + (string.IsNullOrEmpty(zone) ? string.Empty : $" · {zone}");
         if (text == _sent) {
             return;
         }

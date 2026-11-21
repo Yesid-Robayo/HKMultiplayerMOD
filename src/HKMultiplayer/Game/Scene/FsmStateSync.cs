@@ -2266,7 +2266,7 @@ internal sealed class FsmStateSync {
         if (!EveryoneInside(item)) {
             if (now >= item.NextWaitNotice) {
                 item.NextWaitNotice = now + 4f;
-                HKMultiplayer.UI.Notice.Show(Lang.T($"{WaitNotice}{MissingNames(item)} para empezar el combate", $"{WaitNotice}{MissingNames(item)} to start the fight"), 3.5f);
+                HKMultiplayer.UI.Notice.Show(Lang.F("{0}{1} para empezar el combate", "{0}{1} to start the fight", WaitNotice, MissingNames(item)), 3.5f);
             }
 
             return;

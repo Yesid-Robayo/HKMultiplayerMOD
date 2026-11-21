@@ -204,7 +204,7 @@ internal sealed class PartnerTravel {
 
         var target = _party.Get(targetId);
         if (target == null || target.Player == null || targetId == _session.LocalId) {
-            return target != null ? Lang.T($"{target.Name} ya no está en la partida", $"{target.Name} is no longer in the game") : Lang.T("Ese compañero ya no está en la partida", "That partner is no longer in the game");
+            return target != null ? Lang.F("{0} ya no está en la partida", "{0} is no longer in the game", target.Name) : Lang.T("Ese compañero ya no está en la partida", "That partner is no longer in the game");
         }
 
         var name = target.Name;
@@ -235,15 +235,15 @@ internal sealed class PartnerTravel {
 
     private static string Describe(Refusal refusal, string name) => refusal switch {
         Refusal.Disabled => Lang.T("El host desactivó ir con un compañero", "The host disabled going to a partner"),
-        Refusal.Gone => Lang.T($"{name} ya no está en la partida", $"{name} is no longer in the game"),
-        Refusal.Downed => Lang.T($"No se puede ir con {name}: está caído", $"Can't go to {name}: they're down"),
-        Refusal.Cutscene => Lang.T($"No se puede ir con {name}: está viendo una cinemática", $"Can't go to {name}: they're watching a cutscene"),
-        Refusal.Dream => Lang.T($"No se puede ir con {name}: está en un sueño", $"Can't go to {name}: they're in a dream"),
-        Refusal.Changing => Lang.T($"No se puede ir con {name}: está cambiando de sala (prueba en un momento)", $"Can't go to {name}: they're changing rooms (try again in a moment)"),
-        Refusal.OtherWorld => Lang.T($"No se puede ir con {name}: está en otro mundo", $"Can't go to {name}: they're in another world"),
-        Refusal.Unreachable => Lang.T($"No se puede ir con {name}: está en un sitio al que no se puede ir", $"Can't go to {name}: they're somewhere you can't go"),
+        Refusal.Gone => Lang.F("{0} ya no está en la partida", "{0} is no longer in the game", name),
+        Refusal.Downed => Lang.F("No se puede ir con {0}: está caído", "Can't go to {0}: they're down", name),
+        Refusal.Cutscene => Lang.F("No se puede ir con {0}: está viendo una cinemática", "Can't go to {0}: they're watching a cutscene", name),
+        Refusal.Dream => Lang.F("No se puede ir con {0}: está en un sueño", "Can't go to {0}: they're in a dream", name),
+        Refusal.Changing => Lang.F("No se puede ir con {0}: está cambiando de sala (prueba en un momento)", "Can't go to {0}: they're changing rooms (try again in a moment)", name),
+        Refusal.OtherWorld => Lang.F("No se puede ir con {0}: está en otro mundo", "Can't go to {0}: they're in another world", name),
+        Refusal.Unreachable => Lang.F("No se puede ir con {0}: está en un sitio al que no se puede ir", "Can't go to {0}: they're somewhere you can't go", name),
         Refusal.RequesterDowned => Lang.T("Estás caído: espera a que te revivan", "You're down: wait to be revived"),
-        _ => Lang.T($"No se puede ir con {name}", $"Can't go to {name}")
+        _ => Lang.F("No se puede ir con {0}", "Can't go to {0}", name)
     };
 
     /// <summary>
@@ -295,7 +295,7 @@ internal sealed class PartnerTravel {
 
         if (Time.unscaledTime - _sentAt > ReplyTimeout) {
             Log.Warn($"Ir con {_wantedName}: sin respuesta");
-            Notice.Show(Lang.T($"{_wantedName} no respondió: inténtalo otra vez", $"{_wantedName} didn't answer: try again"), 4f);
+            Notice.Show(Lang.F("{0} no respondió: inténtalo otra vez", "{0} didn't answer: try again", _wantedName), 4f);
             Clear();
         }
     }
@@ -361,12 +361,12 @@ internal sealed class PartnerTravel {
             }
 
             Log.Info($"Junto a {name} en la misma sala ({placed.x:0.0}, {placed.y:0.0})");
-            Notice.Show(Lang.T($"Estás junto a {name}", $"You're next to {name}"), 3f);
+            Notice.Show(Lang.F("Estás junto a {0}", "You're next to {0}", name), 3f);
             return;
         }
 
         if (!_travel.Begin(_destinationScene, target, _onArrival)) {
-            Notice.Show(Lang.T($"Ahora no se puede ir con {name}", $"Can't go to {name} right now"), 4f);
+            Notice.Show(Lang.F("Ahora no se puede ir con {0}", "Can't go to {0} right now", name), 4f);
             return;
         }
 
@@ -382,7 +382,7 @@ internal sealed class PartnerTravel {
 
         var placed = Place(hero, target, Occupied());
         Log.Info($"Junto a {_wantedName} en {_destinationScene} ({placed.x:0.0}, {placed.y:0.0})");
-        Notice.Show(Lang.T($"Estás junto a {_wantedName}", $"You're next to {_wantedName}"), 3f);
+        Notice.Show(Lang.F("Estás junto a {0}", "You're next to {0}", _wantedName), 3f);
         return placed;
     }
 

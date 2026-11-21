@@ -40,7 +40,7 @@ internal sealed class HostOption {
 
     public string Label => UI.Lang.T(_label, _labelEnglish);
 
-    public string[] Labels => UI.Lang.Spanish ? _labels : _labelsEnglish;
+    public string[] Labels => UI.Lang.Labels(_labels, _labelsEnglish);
 
     /// <summary>Posición del valor más parecido (para leer valores guardados).</summary>
     public int Nearest(float value) {

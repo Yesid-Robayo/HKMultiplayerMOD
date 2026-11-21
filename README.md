@@ -8,7 +8,7 @@
 ![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
-![Languages](https://img.shields.io/badge/languages-english%20%7C%20español-7ddc8f)
+![Languages](https://img.shields.io/badge/languages-11-7ddc8f)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-support%20the%20project-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/yesidrobayo)
 
 **English** · [Español](README.es.md) · [Changelog](CHANGELOG.md)
@@ -68,7 +68,9 @@ API.
   talking only leaves for whoever talked to them.
 - 🎨 **Skins**: CustomKnight-compatible; others see yours even if they don't have it.
 - 🛠️ **Pause panel**: host settings, your partners' health, give geo, go to a partner, unstuck and reload the room.
-- 🌐 **Languages**: the mod follows the game's language (Spanish, or English for any other language).
+- 🌐 **Languages**: the mod follows the game's language, in all 11 of them: English, Spanish, French, German, Italian,
+  Portuguese, Russian, Simplified and Traditional Chinese, Japanese and Korean. Changing the language in the options
+  changes the mod's menus too.
 - 📦 **Installer**: a window to install, update and uninstall, which leaves the game as it was.
 
 <details>

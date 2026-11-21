@@ -453,7 +453,7 @@ internal sealed class SharedCutscenes {
     /// </summary>
     private void RefreshOverlay() {
         SetOverlay(_current != null && _votes > 0 && _watchers > 1 && _votes < _watchers
-            ? Lang.T($"Esperando a {_waitingFor} para saltar {_votes}/{_watchers}", $"Waiting for {_waitingFor} to skip {_votes}/{_watchers}")
+            ? Lang.F("Esperando a {0} para saltar {1}/{2}", "Waiting for {0} to skip {1}/{2}", _waitingFor, _votes, _watchers)
             : string.Empty);
     }
 

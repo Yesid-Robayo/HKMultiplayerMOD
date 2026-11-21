@@ -290,7 +290,7 @@ internal sealed class PartnerHud {
                 1003 => Lang.T("viajando en ciervo", "riding the stag"),
                 1005 => Lang.T("entrando", "joining"),
                 1004 => Lang.T("en pausa", "paused"),
-                >= 0 => Lang.T($"en {Zones.Name((byte) statusKey)}", $"in {Zones.Name((byte) statusKey)}"),
+                >= 0 => Lang.F("en {0}", "in {0}", Zones.Name((byte) statusKey)),
                 _ => string.Empty
             };
         }

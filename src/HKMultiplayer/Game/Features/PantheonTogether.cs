@@ -249,13 +249,13 @@ internal sealed class PantheonTogether {
             : null;
         if (why != null) {
             Log.Info($"{from.Name} empezó la estatua {statueName}; este jugador no entra ({why})");
-            Notice.Show(Lang.T($"{from.Name} se enfrenta a una estatua", $"{from.Name} is fighting a statue"), 4f);
+            Notice.Show(Lang.F("{0} se enfrenta a una estatua", "{0} is fighting a statue", from.Name), 4f);
             return;
         }
 
         Log.Info($"{from.Name} empezó la estatua {statueName} (nivel {level}): este jugador entra con él");
         EnterStatue(statue, bossScene, bossSceneName, level, dream);
-        Notice.Show(Lang.T($"Estatua con {from.Name}", $"Statue with {from.Name}"), 4f);
+        Notice.Show(Lang.F("Estatua con {0}", "Statue with {0}", from.Name), 4f);
     }
 
     private static bool IsSceneOf(BossScene bossScene, string sceneName) =>
@@ -397,13 +397,13 @@ internal sealed class PantheonTogether {
             : null;
         if (why != null) {
             Log.Info($"{from.Name} empezó un Panteón; este jugador no entra ({why})");
-            Notice.Show(Lang.T($"{from.Name} entró en un Panteón", $"{from.Name} entered a Pantheon"), 4f);
+            Notice.Show(Lang.F("{0} entró en un Panteón", "{0} entered a Pantheon", from.Name), 4f);
             return;
         }
 
         Log.Info($"{from.Name} empezó el Panteón de {doorName}: este jugador entra con él (ataduras {bindings})");
         Enter(door, bindings);
-        Notice.Show(Lang.T($"Panteón con {from.Name}", $"Pantheon with {from.Name}"), 4f);
+        Notice.Show(Lang.F("Panteón con {0}", "Pantheon with {0}", from.Name), 4f);
     }
 
     private const string WhiteBlanker = "HUD Blanker White";

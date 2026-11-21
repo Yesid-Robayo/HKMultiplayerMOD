@@ -37,6 +37,8 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         screenObject.name = name;
         screenObject.SetActive(false);
         var menu = screenObject.AddComponent<T>();
+        // Sus textos se ponen ahora, en el idioma de ahora (aunque el menú no se abra hasta más tarde)
+        menu._labelledIn = Lang.Current;
         menu.Screen = screenObject.GetComponent<MenuScreen>();
         menu.TitleFont = ui.mainMenuButtons.startButton.GetComponentInChildren<Text>(true).font;
         menu.BodyFont = Resources.FindObjectsOfTypeAll<Font>().FirstOrDefault(f => f.name.Contains("Perpetua")) ??
@@ -135,6 +137,21 @@ internal abstract class GameStyledMenu : MonoBehaviour {
     /// el ancho debajo le ganaba). Se rehace cada medio segundo porque las páginas cambian (amigos, mundos, compañeros).
     /// Solo las piezas que se pueden usar: una opción de solo lectura resaltada no deja ni subir ni bajar.
     /// </summary>
+    /// <summary>Idioma con el que están rotulados los textos del menú (al cambiarlo se vuelven a rotular).</summary>
+    private TeamCherry.Localization.LanguageCode? _labelledIn;
+
+    /// <summary>Llamar cada frame desde el Update del menú: si cambió el idioma del juego, rotula el menú de nuevo.</summary>
+    protected void FollowLanguage() {
+        var language = Lang.Current;
+        if (_labelledIn == null || _labelledIn == language) {
+            _labelledIn ??= language;
+            return;
+        }
+
+        _labelledIn = language;
+        Lang.Relabel(Screen != null ? Screen : this);
+    }
+
     private void UpdateNavigation() {
         if (!_pages.TryGetValue(CurrentPage, out var pageObject) || pageObject == null || !pageObject.activeInHierarchy) {
             return;
@@ -708,7 +725,7 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         }
 
         if (!option.interactable) {
-            return Lang.T($"(no se puede cambiar) {option.optionList[option.selectedOptionIndex]}", $"(cannot be changed) {option.optionList[option.selectedOptionIndex]}");
+            return Lang.F("(no se puede cambiar) {0}", "(cannot be changed) {0}", option.optionList[option.selectedOptionIndex]);
         }
 
         for (var i = 0; i < steps; i++) {

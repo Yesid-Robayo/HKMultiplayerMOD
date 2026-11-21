@@ -88,7 +88,7 @@ internal sealed class PartyActions {
         }
 
         if (pd.geo < amount) {
-            return Lang.T($"No tienes {amount} geo (tienes {pd.geo})", $"You don't have {amount} geo (you have {pd.geo})");
+            return Lang.F("No tienes {0} geo (tienes {1})", "You don't have {0} geo (you have {1})", amount, pd.geo);
         }
 
         hero.TakeGeo(amount);
@@ -153,7 +153,7 @@ internal sealed class PartyActions {
         GiveGeo(amount);
         // La devolución responde a lo que hizo el jugador: se avisa siempre; el regalo, si el host deja los avisos
         if (refund || HostSettings.Current.ShowNotices) {
-            Notice.Show(refund ? Lang.T($"No se pudo dar el geo a {name}: se te devolvió", $"Couldn't give the geo to {name}: it was returned to you") : Lang.T($"{name} te regaló {amount} geo", $"{name} gave you {amount} geo"), 5f);
+            Notice.Show(refund ? Lang.F("No se pudo dar el geo a {0}: se te devolvió", "Couldn't give the geo to {0}: it was returned to you", name) : Lang.F("{0} te regaló {1} geo", "{0} gave you {1} geo", name, amount), 5f);
         }
         Log.Info(refund ? $"Geo devuelto ({amount})" : $"{name} regaló {amount} geo");
     }

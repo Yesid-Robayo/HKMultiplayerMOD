@@ -352,7 +352,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         }
         if (_announceCode && scene.Length > 0 && session.IsHost) {
             _announceCode = false;
-            Notice.Show(Lang.T($"Partida abierta  ·  Código {FormatCode(session.RoomCode)}\n", $"Game open  ·  Code {FormatCode(session.RoomCode)}\n") +
+            Notice.Show(Lang.F("Partida abierta  ·  Código {0}\n", "Game open  ·  Code {0}\n", FormatCode(session.RoomCode)) +
                         Lang.T("Lo tienes en Pausa › Multijugador", "It's in Pause › Multiplayer"), 12f);
         }
 
@@ -489,7 +489,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             udp.Error += message => Log.Warn($"Red: {message}");
         } catch (SocketException e) {
             if (steam == null) {
-                SetStatus(Lang.T($"No se pudo abrir el puerto {port}: {e.Message}", $"Couldn't open port {port}: {e.Message}"));
+                SetStatus(Lang.F("No se pudo abrir el puerto {0}: {1}", "Couldn't open port {0}: {1}", port, e.Message));
                 return false;
             }
 
@@ -513,8 +513,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         }
 
         SetStatus(udp != null
-            ? Lang.T($"Partida abierta en el puerto {port}. Código: {FormatCode(code)}", $"Game open on port {port}. Code: {FormatCode(code)}")
-            : Lang.T($"Partida abierta solo por Steam. Código: {FormatCode(code)}", $"Game open on Steam only. Code: {FormatCode(code)}"));
+            ? Lang.F("Partida abierta en el puerto {0}. Código: {1}", "Game open on port {0}. Code: {1}", port, FormatCode(code))
+            : Lang.F("Partida abierta solo por Steam. Código: {0}", "Game open on Steam only. Code: {0}", FormatCode(code)));
         return true;
     }
 
@@ -580,7 +580,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
         if (!CoopSaves.Start(world)) {
             Leave();
-            SetStatus(Lang.T($"No se pudo abrir el mundo {world.Name}", $"Couldn't open the world {world.Name}"));
+            SetStatus(Lang.F("No se pudo abrir el mundo {0}", "Couldn't open the world {0}", world.Name));
             return false;
         }
 
@@ -625,7 +625,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         }
 
         if (ip == null) {
-            SetStatus(Lang.T($"No se encontró la dirección '{address}'", $"Address '{address}' not found"));
+            SetStatus(Lang.F("No se encontró la dirección '{0}'", "Address '{0}' not found", address));
             return false;
         }
 
@@ -633,7 +633,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         try {
             transport = new UdpTransport(0);
         } catch (SocketException e) {
-            SetStatus(Lang.T($"No se pudo abrir la red: {e.Message}", $"Couldn't open the network: {e.Message}"));
+            SetStatus(Lang.F("No se pudo abrir la red: {0}", "Couldn't open the network: {0}", e.Message));
             return false;
         }
 
@@ -642,7 +642,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Session = GameSession.Join(WithTestNetwork(transport), new IPEndPoint(ip, port), code, SanitizeName(name),
             HKMultiplayerMod.Version, Log.Info);
         Wire(Session);
-        SetStatus(Lang.T($"Conectando con {ip}:{port}...", $"Connecting to {ip}:{port}..."));
+        SetStatus(Lang.F("Conectando con {0}:{1}...", "Connecting to {0}:{1}...", ip, port));
         return true;
     }
 
@@ -683,8 +683,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
             if (version != HKMultiplayerMod.Version) {
                 steam.LeaveLobby();
-                SetStatus(Lang.T($"El host tiene la versión {version} y tú la {HKMultiplayerMod.Version}: todos necesitan la misma",
-                    $"The host has version {version} and you have {HKMultiplayerMod.Version}: everyone needs the same one"));
+                SetStatus(Lang.F("El host tiene la versión {0} y tú la {1}: todos necesitan la misma", "The host has version {0} and you have {1}: everyone needs the same one", version, HKMultiplayerMod.Version));
                 return;
             }
 
@@ -984,8 +983,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         var target = _lastJoin;
         _nextReconnectAt = float.MaxValue;
         Log.Info($"Reconectando con el host (intento {_reconnectAttempts} de {MaxReconnectAttempts})");
-        Notice.Show(Lang.T($"Reconectando con el host (intento {_reconnectAttempts} de {MaxReconnectAttempts})...\nEsc para cancelar",
-            $"Reconnecting to the host (attempt {_reconnectAttempts} of {MaxReconnectAttempts})...\nEsc to cancel"), 12f);
+        Notice.Show(Lang.F("Reconectando con el host (intento {0} de {1})...\nEsc para cancelar", "Reconnecting to the host (attempt {0} of {1})...\nEsc to cancel", _reconnectAttempts, MaxReconnectAttempts), 12f);
         var started = target.SteamHost != 0
             ? StartJoinSteam(target.SteamHost, target.RoomCode, target.Name, target.Lobby)
             : StartJoin(target.Address, target.Port, target.RoomCode, target.Name);
@@ -1060,7 +1058,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         session.Connected += () => {
             connected = true;
             RememberRecentGame(session);
-            SetStatus(Lang.T($"Conectado como jugador {session.LocalId}", $"Connected as player {session.LocalId}"));
+            SetStatus(Lang.F("Conectado como jugador {0}", "Connected as player {0}", session.LocalId));
             if (_reconnectAttempts > 0) {
                 _reconnectAttempts = 0;
                 Notice.Show(Lang.T("Reconectado con el host: entrando en el mundo...", "Reconnected to the host: entering the world..."), 6f);
@@ -1097,7 +1095,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         session.PlayerJoined += player => {
             Log.Info($"{player.Name} se unió a la partida");
             if (Features.HostSettings.Current.ShowNotices) {
-                Notice.Show(Lang.T($"{player.Name} se unió a la partida", $"{player.Name} joined the game"));
+                Notice.Show(Lang.F("{0} se unió a la partida", "{0} joined the game", player.Name));
             }
         };
         session.PlayerLeft += player => {
@@ -1108,7 +1106,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
             Log.Info($"{player.Name} salió de la partida");
             if (Features.HostSettings.Current.ShowNotices) {
-                Notice.Show(Lang.T($"{player.Name} salió de la partida", $"{player.Name} left the game"));
+                Notice.Show(Lang.F("{0} salió de la partida", "{0} left the game", player.Name));
             }
         };
     }

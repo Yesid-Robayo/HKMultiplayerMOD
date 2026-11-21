@@ -106,7 +106,7 @@ internal sealed class GrimmchildGift {
         Grant(pd);
         Log.Info($"Grimmchild recibido gracias a {from.Name}");
         if (HostSettings.Current.ShowNotices) {
-            Notice.Show(Lang.T($"Recibiste a Grimmchild gracias a {from.Name}", $"You received Grimmchild thanks to {from.Name}"));
+            Notice.Show(Lang.F("Recibiste a Grimmchild gracias a {0}", "You received Grimmchild thanks to {0}", from.Name));
         }
     }
 }

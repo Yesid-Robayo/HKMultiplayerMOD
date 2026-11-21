@@ -168,8 +168,7 @@ internal static class UpdateCheck {
         if (!_announcedUpdate) {
             _announcedUpdate = true;
             if (JustUpdated) {
-                Notice.Show(Lang.T($"HKMultiplayer se actualizó a la {HKMultiplayerMod.Version}. Novedades en Multijugador.",
-                    $"HKMultiplayer was updated to {HKMultiplayerMod.Version}. What's new: in Multiplayer."), 8f);
+                Notice.Show(Lang.F("HKMultiplayer se actualizó a la {0}. Novedades en Multijugador.", "HKMultiplayer was updated to {0}. What's new: in Multiplayer.", HKMultiplayerMod.Version), 8f);
                 // El de la versión nueva, si lo hay, cuando acabe este
                 _atMenuSince = Time.unscaledTime + 8f;
                 return;
@@ -178,8 +177,7 @@ internal static class UpdateCheck {
 
         if (!_announcedNewer && NewerAvailable) {
             _announcedNewer = true;
-            Notice.Show(Lang.T($"Hay una versión nueva de HKMultiplayer: {Latest} (tienes la {HKMultiplayerMod.Version}). Descárgala en Multijugador.",
-                $"A new HKMultiplayer version is out: {Latest} (you have {HKMultiplayerMod.Version}). Get it in Multiplayer."), 10f);
+            Notice.Show(Lang.F("Hay una versión nueva de HKMultiplayer: {0} (tienes la {1}). Descárgala en Multijugador.", "A new HKMultiplayer version is out: {0} (you have {1}). Get it in Multiplayer.", Latest, HKMultiplayerMod.Version), 10f);
         }
     }
 

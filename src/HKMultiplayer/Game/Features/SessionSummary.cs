@@ -100,12 +100,11 @@ internal sealed class SessionSummary {
         _dying.Clear();
         var minutes = Mathf.Max(0, Mathf.RoundToInt((Time.unscaledTime - _startedAt) / 60f));
         var time = minutes >= 60 ? $"{minutes / 60} h {minutes % 60} min" : $"{minutes} min";
-        string Count(int n, string one, string many) => $"{n} {(n == 1 ? one : many)}";
-        Last = Lang.T(
-            $"Resumen de la partida: {time} · {Count(_bosses, "jefe", "jefes")} · {_geo} geo · " +
-            $"caíste {Count(_downs, "vez", "veces")} · {Count(_deaths, "muerte", "muertes")}",
-            $"Session summary: {time} · {Count(_bosses, "boss", "bosses")} · {_geo} geo · " +
-            $"went down {Count(_downs, "time", "times")} · {Count(_deaths, "death", "deaths")}");
+        Last = Lang.F("Resumen de la partida: {0} · {1} · {2} geo · caíste {3} · {4}",
+            "Session summary: {0} · {1} · {2} geo · went down {3} · {4}", time,
+            Lang.F(_bosses == 1 ? "{0} jefe" : "{0} jefes", _bosses == 1 ? "{0} boss" : "{0} bosses", _bosses), _geo,
+            Lang.F(_downs == 1 ? "{0} vez" : "{0} veces", _downs == 1 ? "{0} time" : "{0} times", _downs),
+            Lang.F(_deaths == 1 ? "{0} muerte" : "{0} muertes", _deaths == 1 ? "{0} death" : "{0} deaths", _deaths));
         Log.Info($"Resumen de la sesión: {minutes} min, jefes={_bosses}, geo={_geo}, caídas={_downs}, muertes={_deaths}");
         // Solo si se jugó algo: al fallar la conexión no hay nada que resumir
         if (minutes > 0 || _bosses > 0 || _geo > 0) {

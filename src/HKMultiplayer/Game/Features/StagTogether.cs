@@ -142,7 +142,7 @@ internal sealed class StagTogether {
             : null;
         if (why != null) {
             Log.Info($"{from.Name} viaja en ciervo a {toScene}; este jugador no va ({why})");
-            Notice.Show(Lang.T($"{from.Name} se fue en ciervo", $"{from.Name} left by stag"), 4f);
+            Notice.Show(Lang.F("{0} se fue en ciervo", "{0} left by stag", from.Name), 4f);
             return;
         }
 
@@ -159,6 +159,6 @@ internal sealed class StagTogether {
         _following = true;
         hero.RelinquishControl();
         _stag.SetState(FadeState);
-        Notice.Show(Lang.T($"Viajando en ciervo con {from.Name}", $"Riding the stag with {from.Name}"), 4f);
+        Notice.Show(Lang.F("Viajando en ciervo con {0}", "Riding the stag with {0}", from.Name), 4f);
     }
 }

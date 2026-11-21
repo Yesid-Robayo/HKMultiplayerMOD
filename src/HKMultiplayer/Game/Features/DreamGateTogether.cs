@@ -148,13 +148,13 @@ internal sealed class DreamGateTogether {
             : null;
         if (why != null) {
             Log.Info($"{from.Name} viaja a su Portal Onírico; este jugador no va ({why})");
-            Notice.Show(Lang.T($"{from.Name} viajó a su Portal Onírico", $"{from.Name} warped to their Dreamgate"), 4f);
+            Notice.Show(Lang.F("{0} viajó a su Portal Onírico", "{0} warped to their Dreamgate", from.Name), 4f);
             return;
         }
 
         Log.Info($"{from.Name} viaja a su Portal Onírico en {target}: este jugador va con él");
         if (_travel.Begin(target, new Vector3(x, y, 0f))) {
-            Notice.Show(Lang.T($"Viajando al Portal Onírico de {from.Name}", $"Warping to {from.Name}'s Dreamgate"), 4f);
+            Notice.Show(Lang.F("Viajando al Portal Onírico de {0}", "Warping to {0}'s Dreamgate", from.Name), 4f);
         }
     }
 

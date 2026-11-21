@@ -4472,7 +4472,7 @@ internal sealed class EnemySync {
             if (OthersInScene() && !EveryoneNear(enemy) && !InBattleScene(enemy)) {
                 if (now >= enemy.NextWaitNotice) {
                     enemy.NextWaitNotice = now + 4f;
-                    HKMultiplayer.UI.Notice.Show(Lang.T($"Esperando a {MissingNear(enemy)} para empezar el combate", $"Waiting for {MissingNear(enemy)} to start the fight"), 3.5f);
+                    HKMultiplayer.UI.Notice.Show(Lang.F("Esperando a {0} para empezar el combate", "Waiting for {0} to start the fight", MissingNear(enemy)), 3.5f);
                 }
 
                 continue;

@@ -23,6 +23,11 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- Traducciones a los idiomas del juego que no son español ni inglés (ver UI/Lang.cs) -->
+        <EmbeddedResource Include="Lang\*.json" LogicalName="HKMultiplayer.Lang.%(Filename).json" />
+    </ItemGroup>
+
+    <ItemGroup>
         <Reference Include="$(References)\Assembly-CSharp.dll" Private="False" />
         <!-- El Steamworks.NET del juego (Steam: salas y conexión sin abrir puertos). La versión de GOG no lo trae:
              SteamLink lo carga aparte y, si falta, la conexión es solo por IP -->

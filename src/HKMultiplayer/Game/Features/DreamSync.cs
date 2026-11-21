@@ -397,7 +397,7 @@ internal sealed class DreamSync {
             : null;
         if (busy != null) {
             Log.Info($"{from.Name} entró en un sueño; este jugador no va ({busy})");
-            Notice.Show(Lang.T($"{from.Name} entró en un sueño", $"{from.Name} entered a dream"), 4f);
+            Notice.Show(Lang.F("{0} entró en un sueño", "{0} entered a dream", from.Name), 4f);
             return;
         }
 

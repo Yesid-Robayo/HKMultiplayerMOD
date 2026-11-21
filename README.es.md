@@ -8,7 +8,7 @@
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
-![Idiomas](https://img.shields.io/badge/idiomas-español%20%7C%20english-7ddc8f)
+![Idiomas](https://img.shields.io/badge/idiomas-11-7ddc8f)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-apoya%20el%20proyecto-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/yesidrobayo)
 
 **Español** · [English](README.md) · [Cambios por versión](CHANGELOG.es.md)
@@ -69,7 +69,9 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - 🎨 **Skins**: compatibles con CustomKnight; los demás ven la tuya aunque no la tengan.
 - 🛠️ **Panel en pausa**: ajustes del host, vida de los compañeros, dar geo, ir con un compañero, desatascarse y recargar
   la sala.
-- 🌐 **Idiomas**: el mod sale en el idioma del juego (español, o inglés en cualquier otro idioma).
+- 🌐 **Idiomas**: el mod sale en el idioma del juego, en sus 11: español, inglés, francés, alemán, italiano, portugués,
+  ruso, chino simplificado y tradicional, japonés y coreano. Cambiar el idioma en las opciones cambia también los menús
+  del mod.
 - 📦 **Instalador**: una ventana para instalar, actualizar y desinstalar, que deja el juego como estaba.
 
 <details>
