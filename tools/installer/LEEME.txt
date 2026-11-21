@@ -202,6 +202,10 @@ Archivos instalados > Verificar integridad de los archivos del juego.
       C:\Users\<tu usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt
   - El invitado no conecta: comprueben la dirección, el puerto y el código; que los dos tienen la
     misma versión del mod; y, por internet, que el host abrió el puerto UDP (punto 5).
+  - Lag o tirones: cierra lo que gaste mucha CPU o tarjeta gráfica. Si el ModLog.txt dice "El juego
+    estuvo parado", fue el PC; si dice "El mod tardó ... ms", mándalo en un issue.
+  - Algo distinto en cada PC (un enemigo, una puerta): el mod lo comprueba solo cada pocos segundos
+    y lo corrige con lo del host. Si se repite, manden el ModLog.txt de los dos.
   - Si Steam actualiza Hollow Knight a otra versión, el mod puede dejar de cargar hasta que salga
     una versión del mod para la nueva. Para volver al juego sin mods: punto 8.
 

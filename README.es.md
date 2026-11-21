@@ -38,6 +38,7 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - [Estado de las pruebas](#-estado-de-las-pruebas)
 - [Instalar](#-instalar)
 - [Cómo jugar](#-cómo-jugar)
+- [Problemas frecuentes](#-problemas-frecuentes)
 - [Ajustes de la partida](#%EF%B8%8F-ajustes-de-la-partida)
 - [Tecnología](#-tecnología)
 - [Desarrollo](#-desarrollo)
@@ -351,6 +352,24 @@ Si prefieres no usarlo, instálalo a mano (más abajo).
 
 ---
 
+## 🩺 Problemas frecuentes
+
+| Qué pasa | Qué hacer |
+|---|---|
+| No sale **Multijugador** en el menú | Vuelve a instalar. Comprueba que el juego es la versión 1.5.12620. Si sigue sin salir, abre un *issue* con tu `ModLog.txt`. |
+| El invitado no puede unirse | Los dos con **la misma versión** del mod. Por IP: dirección, puerto y código bien escritos y, por internet, el puerto UDP 26950 abierto en el router del host (o Steam, que no necesita nada). |
+| Se corta la conexión | Las VPN y el Wi-Fi débil cortan a menudo; prueben por cable o por Steam. El `ModLog.txt` de los dos dice cuándo dejó de llegar la conexión y por qué se cortó. |
+| Lag o tirones | Cierra lo que gaste mucha CPU o tarjeta gráfica (otros juegos, grabación, navegador con vídeo). Si el `ModLog.txt` dice «El juego estuvo parado», fue el PC; si dice «El mod tardó … ms», es del mod: mándalo en un *issue*. |
+| Algo distinto en cada PC (un enemigo, una puerta, un objeto) | El mod lo comprueba solo cada pocos segundos y lo corrige con lo del host («Tu partida no coincidía con la del host: corregida»). Si se repite, manda el `ModLog.txt` de los dos. |
+| Otro mod deja de funcionar | El instalador aparta los demás mods a `Mods\Disabled`. Si vuelves a activar uno, necesita sus propias dependencias (CustomKnight necesita Satchel) y la versión de la Modding API de este paquete. |
+| El antivirus borra el instalador | Es un falso positivo: el instalador es de código abierto ([`tools/installer/launcher`](tools/installer/launcher)) y cada release trae su SHA256 para comprobar el zip. |
+| Steam actualizó el juego | La actualización sustituye la Modding API y el juego vuelve a ir sin mods. Espera a la versión del mod para la nueva; para dejarlo limpio, *Desinstalar* en el instalador. |
+
+Tu `ModLog.txt` está en `C:\Users\<tu usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt`. Lleva los nombres
+de jugador de la partida, pero no el de tu PC ni el de Windows, ni rutas de tu usuario.
+
+---
+
 ## ⚙️ Ajustes de la partida
 
 Los decide el host en *Pausa › Multijugador › Ajustes de la partida*, se guardan en cada mundo y los invitados los ven
@@ -376,6 +395,8 @@ al momento sin poder cambiarlos.
 | Mapa compartido (con No, cada jugador tiene su propio mapa) | Sí · No | Sí |
 | Reaparecer con el host (cuando caen todos) | Sí · No | Sí |
 | Ponerse al nivel del host (invitados, desde un banco) | Sí · No | Sí |
+| Compañeros en el mapa sin brújula | Sí · No | No |
+| La pausa para el juego (con No, abrir la pausa no te protege en combate) | Sí · No | Sí |
 
 La vida de los jefes y de los enemigos es la vida extra con un compañero: cada compañero más en pie en la sala suma lo
 mismo otra vez (1,5× es 2× con tres jugadores y 2,5× con cuatro). Los jefes que se aturden tras unos golpes (Hornet,

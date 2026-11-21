@@ -200,6 +200,11 @@ Files > Verify integrity of game files.
       C:\Users\<your user>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt
   - The guest can't connect: check the address, the port and the code; that you both have the
     same mod version; and, over the internet, that the host opened the UDP port (section 5).
+  - Lag or stutter: close whatever uses a lot of CPU or graphics card. If the ModLog.txt says "El
+    juego estuvo parado" (the game was stopped), it was the PC; if it says "El mod tardó ... ms"
+    (the mod took ... ms), send it in an issue.
+  - Something differs on each PC (an enemy, a door): the mod checks this by itself every few
+    seconds and fixes it with the host's data. If it keeps happening, send both ModLog.txt files.
   - If Steam updates Hollow Knight to another version, the mod may stop loading until a version of
     the mod for the new one is released. To go back to the game without mods: section 8.
 

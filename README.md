@@ -38,6 +38,7 @@ API.
 - [Testing status](#-testing-status)
 - [Install](#-install)
 - [How to play](#-how-to-play)
+- [Troubleshooting](#-troubleshooting)
 - [Game settings](#%EF%B8%8F-game-settings)
 - [Technology](#-technology)
 - [Development](#-development)
@@ -344,6 +345,24 @@ installation**, how to open the port and what to do if something fails.
 
 ---
 
+## 🩺 Troubleshooting
+
+| What happens | What to do |
+|---|---|
+| **Multiplayer** doesn't show up in the menu | Install again. Check that the game is version 1.5.12620. If it still doesn't show up, open an *issue* with your `ModLog.txt`. |
+| The guest can't join | You both need **the same version** of the mod. By IP: address, port and code typed right and, over the internet, UDP port 26950 open on the host's router (or Steam, which needs nothing). |
+| The connection drops | VPNs and weak Wi-Fi drop often; try a cable or Steam. Both players' `ModLog.txt` say when the connection stopped arriving and why it was closed. |
+| Lag or stutter | Close whatever uses a lot of CPU or graphics card (other games, recording, a browser playing video). If the `ModLog.txt` says "El juego estuvo parado" (the game was stopped), it was the PC; if it says "El mod tardó … ms" (the mod took … ms), it's the mod: send it in an *issue*. |
+| Something differs on each PC (an enemy, a door, an object) | The mod checks this by itself every few seconds and fixes it with the host's data ("Your game didn't match the host's: fixed"). If it keeps happening, send both players' `ModLog.txt`. |
+| Another mod stops working | The installer moves the other mods to `Mods\Disabled`. If you turn one back on, it needs its own dependencies (CustomKnight needs Satchel) and the Modding API version in this package. |
+| The antivirus deletes the installer | It's a false positive: the installer is open source ([`tools/installer/launcher`](tools/installer/launcher)) and each release lists its SHA256 to check the zip. |
+| Steam updated the game | The update replaces the Modding API and the game runs without mods again. Wait for the mod version for the new one; to leave it clean, *Uninstall* in the installer. |
+
+Your `ModLog.txt` is at `C:\Users\<your user>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt`. It contains the
+player names of the game, but not your PC's or Windows name, or paths with your user.
+
+---
+
 ## ⚙️ Game settings
 
 The host sets them in *Pause › Multiplayer › Game settings*; they are saved with each world and guests see them right
@@ -369,6 +388,8 @@ away without being able to change them.
 | Shared map (with No, each player has their own map) | Yes · No | Yes |
 | Respawn with the host (when everyone goes down) | Yes · No | Yes |
 | Match the host's level (guests, from a bench) | Yes · No | Yes |
+| Partners on the map without compass | Yes · No | No |
+| Pause stops the game (with No, opening the pause doesn't keep you safe in combat) | Yes · No | Yes |
 
 The boss and enemy health is the extra health with one partner: each additional partner standing in the room adds the
 same again (1.5× is 2× with three players and 2.5× with four). Bosses that get stunned after a number of hits (Hornet,
