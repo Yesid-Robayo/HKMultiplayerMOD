@@ -304,6 +304,15 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     }
 
     private void Update() {
+        FrameCost.Start();
+        try {
+            UpdateParts();
+        } finally {
+            FrameCost.Lap(FrameCost.Part.Update);
+        }
+    }
+
+    private void UpdateParts() {
         if (_backToMenuWhenReady) {
             if (CoopSaves.CanStart) {
                 _backToMenuWhenReady = false;
@@ -331,6 +340,15 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     }
 
     private void LateUpdate() {
+        FrameCost.Start();
+        try {
+            LateUpdateParts();
+        } finally {
+            FrameCost.EndFrame();
+        }
+    }
+
+    private void LateUpdateParts() {
         var session = Session;
         if (session == null) {
             // La skin propia se ve también jugando solo
@@ -370,6 +388,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             Log.Error($"Error en la sala: {e}");
         }
 
+        FrameCost.Lap(FrameCost.Part.Room);
+
         // En bloques: un fallo en una parte no salta las demás (antes uno solo para todo: si fallaba el estado local, ni
         // siquiera se enviaba ni recibía nada ese frame)
         try {
@@ -378,18 +398,22 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             ReportFailure("el estado local", e);
         }
 
+        FrameCost.Lap(FrameCost.Part.LocalState);
         try {
             session.Update();
         } catch (Exception e) {
             ReportFailure("la red", e);
         }
 
+        FrameCost.Lap(FrameCost.Part.Network);
         try {
             Players.UpdateAvatars();
             Enemies.Update(scene);
         } catch (Exception e) {
             ReportFailure("los jugadores y enemigos", e);
         }
+
+        FrameCost.Lap(FrameCost.Part.PlayersEnemies);
 
         try {
             Vitals.Update();
@@ -400,6 +424,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             ReportFailure("revivir y las sombras", e);
         }
 
+        FrameCost.Lap(FrameCost.Part.Revive);
+
         try {
             Hud.Update(scene);
             BossBar.Update(scene);
@@ -409,6 +435,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         } catch (Exception e) {
             ReportFailure("el HUD y las skins", e);
         }
+
+        FrameCost.Lap(FrameCost.Part.Hud);
 
         try {
             Cutscenes.Update();
@@ -439,6 +467,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         } catch (Exception e) {
             ReportFailure("las funciones del coop", e);
         }
+
+        FrameCost.Lap(FrameCost.Part.Features);
 
         if (_closing != null) {
             var closing = _closing;

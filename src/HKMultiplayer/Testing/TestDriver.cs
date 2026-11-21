@@ -1160,6 +1160,18 @@ internal sealed class TestDriver : MonoBehaviour {
             case "frametime":
                 StartCoroutine(MeasureFrames(ParseFloat(args[1])));
                 break;
+            case "desync":
+                // desync <campo> <valor>: cambia un dato compartido solo aquí, sin enviarlo
+                Log.Info($"{Tag}desync {args[1]}={args[2]}: {(runner.Progress.TestDesync(args[1], int.Parse(args[2])) ? "cambiado" : "no existe")}");
+                break;
+            case "silentkill":
+                // silentkill <nombre>: mata a un enemigo solo en este PC, sin avisar
+                Log.Info($"{Tag}silentkill {string.Join(" ", args.Skip(1))}: {runner.Enemies.TestSilentKill(string.Join(" ", args.Skip(1)))}");
+                break;
+            case "modcost":
+                // modcost <segundos>: tiempo del mod por frame y por partes (media/peor en ms) y frames del juego entero
+                StartCoroutine(MeasureModCost(ParseFloat(args[1])));
+                break;
             case "chatopen":
             case "chatclose":
                 // Abre o cierra el campo del chat como la T y Esc
@@ -2292,11 +2304,20 @@ internal sealed class TestDriver : MonoBehaviour {
     }
 
     /// <summary>Tiempo por frame (medio y peor), tirones de más de 50 ms y recolecciones de memoria.</summary>
+    private IEnumerator MeasureModCost(float seconds) {
+        FrameCost.DescribeAndReset();
+        StartCoroutine(MeasureFrames(seconds));
+        yield return new WaitForSecondsRealtime(seconds);
+        Log.Info($"{Tag}coste del mod: {FrameCost.DescribeAndReset()}");
+    }
+
     private static IEnumerator MeasureFrames(float seconds) {
         var end = Time.unscaledTime + seconds;
         int frames = 0, spikes = 0;
         float total = 0f, worst = 0f;
         var collections = GC.CollectionCount(0);
+        // Cuándo fue cada tirón (hora del reloj del PC): si otros programas se paran a la vez, es el PC, no el juego
+        var when = new StringBuilder();
         yield return null;
         while (Time.unscaledTime < end) {
             var dt = Time.unscaledDeltaTime;
@@ -2305,13 +2326,16 @@ internal sealed class TestDriver : MonoBehaviour {
             worst = Mathf.Max(worst, dt);
             if (dt > 0.05f) {
                 spikes++;
+                if (spikes <= 30) {
+                    when.Append($" {DateTime.Now:HH:mm:ss.f}({dt * 1000f:0})");
+                }
             }
 
             yield return null;
         }
 
         Log.Info($"{Tag}frames={frames} medio={total / Mathf.Max(1, frames) * 1000f:0.0} ms peor={worst * 1000f:0.0} ms " +
-                 $"tirones(>50ms)={spikes} recolecciones={GC.CollectionCount(0) - collections}");
+                 $"tirones(>50ms)={spikes} recolecciones={GC.CollectionCount(0) - collections} cuándo:{when}");
     }
 
     /// <summary>

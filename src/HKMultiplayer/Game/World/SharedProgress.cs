@@ -23,7 +23,7 @@ namespace HKMultiplayer.Game.World;
 /// Los cambios van al host, que los aplica y los reenvía a los demás. El personaje y su inventario
 /// (<see cref="CharacterData"/>) y los objetos que recoge cada uno quedan fuera.
 /// </summary>
-internal sealed class SharedProgress {
+internal sealed partial class SharedProgress {
     /// <summary>Un cambio del mundo (jugador → host → los demás).</summary>
     public const MessageType WorldChange = (MessageType) 41;
 
@@ -121,6 +121,7 @@ internal sealed class SharedProgress {
 
     static SharedProgress() {
         MessageRoutes.Register(WorldChange, Route.Server, reliable: true);
+        RegisterCheckRoutes();
         var fields = typeof(PlayerData).GetFields(BindingFlags.Public | BindingFlags.Instance)
             .Where(f => !Excluded.Contains(f.Name) && !CharacterData.IsCharacterField(f.Name))
             .OrderBy(f => f.Name, StringComparer.Ordinal)
@@ -158,6 +159,7 @@ internal sealed class SharedProgress {
     public void Attach(GameSession session) {
         _session = session;
         session.On(WorldChange, _onChange);
+        AttachCheck(session);
         _active = false;
         _snapshotOwner = null;
         _pending.Clear();
@@ -167,6 +169,7 @@ internal sealed class SharedProgress {
 
     public void Detach() {
         _session?.On(WorldChange, null);
+        DetachCheck();
         _session = null;
         _active = false;
         _snapshotOwner = null;
@@ -214,6 +217,7 @@ internal sealed class SharedProgress {
             return;
         }
 
+        UpdateCheck(playerData);
         if (Time.unscaledTime < _nextDiff) {
             return;
         }

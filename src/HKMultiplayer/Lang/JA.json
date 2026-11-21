@@ -265,6 +265,7 @@
  "Your character is back as it was": "キャラクターを元に戻しました",
  "Your character is saved in the host's world and you go back to the main menu.": "キャラクターはホストのワールドに保存され、メインメニューに戻ります。",
  "Your character is saved in the host's world, on their PC (you get it back when you join again).": "キャラクターはホストの PC のワールドに保存されます（再参加すると戻ります）。",
+ "Your game didn't match the host's: fixed": "ホストのゲームと一致していませんでした：修正済み",
  "Your geo: {0}": "所持ジオ：{0}",
  "Your name": "名前",
  "Your partner": "仲間",

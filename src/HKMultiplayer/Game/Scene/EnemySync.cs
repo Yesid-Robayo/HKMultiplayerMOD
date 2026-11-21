@@ -191,6 +191,17 @@ internal sealed class EnemySync {
     private const float BossSwitchInterval = 8f;
 
     /// <summary>
+    /// Amenaza: quien le pegó hace poco cuenta como si estuviera esto más cerca. Así el enemigo elige entre todos y no solo
+    /// por distancia: con dos jugadores casi igual de cerca iba al que no le hacía nada y daba la espalda al que le pegaba.
+    /// Con <see cref="SwitchMargin"/>, quien le pega se lo queda estando hasta 3 más lejos que uno que no le pega; si le
+    /// pegan los dos, decide la distancia. Un atacante lejano no se lo quita al que está encima.
+    /// </summary>
+    private const float ThreatBonus = 7f;
+
+    /// <summary>Lo que dura la amenaza de un golpe.</summary>
+    private const float ThreatSeconds = 3f;
+
+    /// <summary>
     /// Un jefe solo cambia de PC entre dos ataques: en un estado de reposo de su lógica ("Idle", "Move Choice"...). Si
     /// cambiaba a mitad de un ataque, el nuevo lo retomaba desde el principio de ese estado hacia su caballero y el ataque
     /// se cortaba. Si no llega a reposar en este tiempo, cambia igualmente.
@@ -395,6 +406,9 @@ internal sealed class EnemySync {
 
         /// <summary>Desde cuándo el dueño quiere pasar el jefe a otro y espera a que acabe su ataque (0: no espera).</summary>
         public float SwitchWantedSince;
+
+        /// <summary>Cuándo le pegó por última vez cada jugador (la amenaza del reparto, ver <see cref="ThreatBonus"/>).</summary>
+        public Dictionary<ushort, float> LastHitBy;
 
         /// <summary>Su zona de alerta (ver AlertZone) y si ya se buscó.</summary>
         public Collider2D AlertZone;
@@ -836,6 +850,20 @@ internal sealed class EnemySync {
     private float _nextControlResync;
 
     private const float ControlResyncInterval = 2f;
+
+    /// <summary>
+    /// Cada cuánto repite el dueño de la sala la vida y las muertes de todos (la misma foto que recibe quien entra): si un
+    /// aviso se perdió o llegó tarde, un enemigo muerto para todos seguía vivo en un PC. Se corrige y queda en el registro.
+    /// </summary>
+    private const float HealthCheckInterval = 10f;
+
+    /// <summary>Lo que lleva un enemigo en este PC antes de que una muerte de la foto cuente como desincronización.</summary>
+    private const float DesyncGrace = 5f;
+
+    private float _nextHealthCheck;
+
+    /// <summary>Enemigos que estaban vivos aquí y muertos para el dueño de la sala (desde que se abrió el juego).</summary>
+    public static int Desyncs { get; private set; }
     private readonly Action<SessionPlayer> _onPlayerScene;
 
     private GameSession _session;
@@ -1229,6 +1257,15 @@ internal sealed class EnemySync {
         }
 
         var others = OthersInScene();
+        // Solo repaso: de los que mueve otro PC se envían solo las muertes (su vida vista aquí puede ir por detrás de la
+        // que ya mandó quien lo mueve, y la pisaría)
+        var checkOnly = false;
+        if (roomOwner && others && Time.unscaledTime >= _nextHealthCheck) {
+            _nextHealthCheck = Time.unscaledTime + HealthCheckInterval;
+            checkOnly = !_sendSnapshot;
+            _sendSnapshot = true;
+        }
+
         var snapshot = _sendSnapshot && roomOwner;
 
         // Jefes atascados que mueve este PC, también a solas en la sala (ver UnstickBoss)
@@ -1279,9 +1316,11 @@ internal sealed class EnemySync {
             // Los que mueve otro PC: solo entran en la foto para quien llega
             if (enemy.Puppet) {
                 if (snapshot && enemy.Health != null) {
-                    _healthOut.Add(enemy.ReportedDead || enemy.Health.isDead
-                        ? (enemy.Id, HealthKind.AlreadyDead, 0)
-                        : (enemy.Id, HealthKind.Update, enemy.Health.hp));
+                    if (enemy.ReportedDead || enemy.Health.isDead) {
+                        _healthOut.Add((enemy.Id, HealthKind.AlreadyDead, 0));
+                    } else if (!checkOnly) {
+                        _healthOut.Add((enemy.Id, HealthKind.Update, enemy.Health.hp));
+                    }
                 }
 
                 continue;
@@ -3058,8 +3097,9 @@ internal sealed class EnemySync {
     }
 
     /// <summary>
-    /// El dueño de la sala reparte los enemigos: cada uno lo mueve el PC del jugador más cercano, porque su lógica solo
-    /// ataca al caballero de ese PC. Se cambia solo si el otro está claramente más cerca y hace un rato del último cambio.
+    /// El dueño de la sala reparte los enemigos: cada uno lo mueve el PC del jugador más cercano (contando como más cerca a
+    /// quien le pega, ver <see cref="ThreatBonus"/>), porque su lógica solo ataca al caballero de ese PC. Se cambia solo si
+    /// el otro está claramente más cerca y hace un rato del último cambio.
     /// </summary>
     private void AssignControllers() {
         var now = Time.unscaledTime;
@@ -3122,6 +3162,30 @@ internal sealed class EnemySync {
     private readonly List<Enemy> _childScratch = new();
 
     /// <summary>
+    /// Ese jugador acaba de pegarle al enemigo. Se apunta en todos los PCs de la sala (lo ven por el golpe o por sus
+    /// efectos), así lo sabe el dueño, que es quien reparte.
+    /// </summary>
+    private static void NoteHit(Enemy enemy, ushort player) {
+        if (player == 0) {
+            return;
+        }
+
+        enemy.LastHitBy ??= new Dictionary<ushort, float>();
+        // Como mucho los de una sala llena: los que se fueron no se acumulan
+        if (enemy.LastHitBy.Count >= 8 && !enemy.LastHitBy.ContainsKey(player)) {
+            enemy.LastHitBy.Clear();
+        }
+
+        enemy.LastHitBy[player] = Time.unscaledTime;
+    }
+
+    /// <summary>Lo que se le resta a la distancia de ese jugador por haberle pegado hace poco.</summary>
+    private static float ThreatOf(Enemy enemy, ushort player, float now) =>
+        enemy.LastHitBy != null && enemy.LastHitBy.TryGetValue(player, out var at) && now - at < ThreatSeconds
+            ? ThreatBonus
+            : 0f;
+
+    /// <summary>
     /// A qué PC pasa el enemigo (0: se queda con el de ahora): el del jugador más cercano, con preferencia por los que
     /// están en su zona de alerta, sin cambiar a cada momento y un jefe solo entre dos ataques. Con
     /// <paramref name="holders"/>, solo entre esos PCs (los que tienen un enemigo que el dueño de la sala no tiene).
@@ -3145,6 +3209,13 @@ internal sealed class EnemySync {
         }
 
         var currentOutside = currentHidden && now - enemy.HiddenSince >= HiddenSwitchSeconds;
+        // Un jefe en reposo no va embistiendo: la velocidad se mide desde el reparto anterior (hasta 0,5 s antes) y al
+        // llegar a "Idle" tras una embestida aún contaba como rápida. El cambio se saltaba así su ventana de reposo
+        // (Hornet, la breve tras su embestida aérea) y acababa haciéndose a la fuerza a mitad del ataque siguiente
+        if (moving && boss && IsCalm(enemy, current)) {
+            moving = false;
+        }
+
         var interval = boss ? BossSwitchInterval : SwitchInterval;
         if ((now - enemy.LastSwitch < interval || moving) && !currentDown && !currentOutside) {
             return 0;
@@ -3157,7 +3228,7 @@ internal sealed class EnemySync {
         var currentInZone = false;
         var currentDistance = float.MaxValue;
         if (hasCurrent) {
-            currentDistance = Vector2.Distance(position, currentPosition);
+            currentDistance = Vector2.Distance(position, currentPosition) - ThreatOf(enemy, current, now);
             currentInZone = InZone(zone, currentPosition);
         }
 
@@ -3190,7 +3261,8 @@ internal sealed class EnemySync {
                 continue;
             }
 
-            var distance = Vector2.Distance(position, playerPosition);
+            // Con la amenaza: quien le pega cuenta como más cerca
+            var distance = Vector2.Distance(position, playerPosition) - ThreatOf(enemy, player.Id, now);
             var inZone = InZone(zone, playerPosition);
             if (inZone && !nearestInZone || inZone == nearestInZone && distance < nearestDistance) {
                 nearest = player.Id;
@@ -3220,6 +3292,11 @@ internal sealed class EnemySync {
                 }
 
                 Log.Info($"{enemy.Root.name}: no reposó en {MaxCalmWait} s, pasa a otro PC a mitad de su ataque");
+            }
+
+            if (boss) {
+                Log.Info($"{enemy.Root.name}: pasa del jugador {current} al {nearest} (reposo={IsCalm(enemy, current)}, " +
+                         $"amenaza={ThreatOf(enemy, nearest, now) > 0f})");
             }
 
             enemy.SwitchWantedSince = 0f;
@@ -7213,7 +7290,13 @@ internal sealed class EnemySync {
                 enemy.CorpseFollows = true;
                 break;
             case HealthKind.AlreadyDead:
-                // Murió antes de entrar: no aparece
+                // Murió antes de entrar: no aparece. Si este PC ya lo tenía vivo desde hace rato, es que no le llegó su
+                // muerte (o llegó a otro sitio): para todos está muerto
+                if (Time.unscaledTime - enemy.ScannedAt > DesyncGrace) {
+                    Desyncs++;
+                    Log.Warn($"Desincronizado: {enemy.Root.name} seguía vivo en este PC y para el dueño de la sala está muerto; se quita");
+                }
+
                 health.SetIsDead(true);
                 enemy.ReportedDead = true;
                 enemy.Root.SetActive(false);
@@ -7428,6 +7511,7 @@ internal sealed class EnemySync {
             return;
         }
 
+        NoteHit(enemy, hitter);
         // Los efectos salen entre el enemigo y quien golpeó, como en su PC
         var source = _players.TryGetAvatarObject(hitter, out var avatar) ? avatar : enemy.Root;
         var health = enemy.Health;
@@ -7857,6 +7941,10 @@ internal sealed class EnemySync {
             orig(self, hit);
             var sync = _active;
             if (!_playingFx && sync?._session != null && sync._byHealth.TryGetValue(self, out var enemy) && !enemy.Puppet) {
+                if (!IsWorldHazard(hit)) {
+                    NoteHit(enemy, _applyingRemoteHit ? _remoteHitter : sync._session.LocalId);
+                }
+
                 sync.SendHitFx(enemy, hit);
             }
         };
@@ -8091,6 +8179,8 @@ internal sealed class EnemySync {
             return;
         }
 
+        NoteHit(enemy, _session.LocalId);
+
         var writer = _session.Begin(EnemyHit);
         writer.WriteUShort(_sceneHash);
         writer.WriteUInt(enemy.Id);
@@ -8217,6 +8307,21 @@ internal sealed class EnemySync {
 
     /// <summary>Golpea al enemigo vivo y activo con ese nombre, como un golpe de aguijón del jugador.</summary>
     /// <summary>Golpe de aguijón de este jugador a un enemigo concreto, por su id (el que sale en la lista de enemigos).</summary>
+    /// <summary>Lo mata solo en este PC, sin avisar a nadie (como una muerte perdida por el camino).</summary>
+    public bool TestSilentKill(string name) {
+        foreach (var enemy in _enemies) {
+            if (enemy.Root != null && enemy.Health != null && !enemy.Health.isDead &&
+                string.Equals(enemy.Root.name, name, StringComparison.OrdinalIgnoreCase)) {
+                enemy.ReportedDead = true;
+                enemy.Health.SetIsDead(true);
+                enemy.Root.SetActive(false);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public bool TestHitId(uint id, int damage) {
         var hero = HeroController.instance;
         foreach (var enemy in _enemies) {

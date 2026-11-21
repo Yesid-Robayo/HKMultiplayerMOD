@@ -265,6 +265,7 @@
  "Your character is back as it was": "캐릭터를 원래대로 되돌렸습니다",
  "Your character is saved in the host's world and you go back to the main menu.": "캐릭터는 호스트의 월드에 저장되고 메인 메뉴로 돌아갑니다.",
  "Your character is saved in the host's world, on their PC (you get it back when you join again).": "캐릭터는 호스트 PC의 월드에 저장됩니다 (다시 참가하면 되찾습니다).",
+ "Your game didn't match the host's: fixed": "호스트의 게임과 일치하지 않았습니다: 수정됨",
  "Your geo: {0}": "내 지오: {0}",
  "Your name": "내 이름",
  "Your partner": "동료",
