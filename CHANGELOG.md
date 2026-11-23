@@ -9,6 +9,72 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.42.0
+
+The biggest version so far: it brings together everything done since 0.36.2 (0.37 to 0.41 were not released on their
+own).
+
+**Travelling and playing together**
+
+- **Travel together**: the Dreamgate also takes the partners standing next to you, like the stag. The "Travel together
+  by stag" setting is now called **"Travel together"**.
+- **Hall of Gods statues together**: when someone picks a difficulty, the free partners enter the same fight, return to
+  the statue at the end and the level is completed for everyone.
+- **Respawn with the host** (new setting, on by default): if everyone goes down, you all respawn together at the host's
+  bench.
+- **Kick a player** (host only, from *Partners*, with confirmation).
+
+**Talking to your partners**
+
+- **Text chat**: **T** opens the chat (also while sitting on a bench); Enter sends and Esc cancels.
+- **Quick messages**: holding the quick map button, each direction sends a message: "Over here!" marks your spot, "Get it!"
+  marks the nearest enemy, "Help!" and "Wait!".
+- **Shared map pins**: with "Shared map", each player's pins also show up on everyone else's map.
+- **Partner's gear**: *Partners* shows their nail upgrade, notches and charms.
+- **Dream Nail thoughts**: the thought someone reveals with the Dream Nail is seen by everyone in the room.
+
+**Worlds and modes**
+
+- **Steel Soul and Godseeker**: you pick the mode when creating a world. In Steel Soul, if everyone goes down at once,
+  the world is lost.
+- **Start a world from one of your saves**: *New world › From a save file* copies one of your 4 saves (the original is left
+  untouched).
+- **Match the host's level**: a guest sitting on a bench can bring their progress up to the host's from *Partners*, see
+  first what they gain and undo it later. The host can forbid it with a setting.
+- **World backups**: every time the host opens a world, a copy is saved (the last 5, in `Copias` inside the world's
+  folder).
+
+**What your partner does looks like the real game**
+
+- Dream platforms also light up under your partners (they used to seem to float in the air).
+- Water and acid splash as they pass; pigeons fly off, rubble gets pushed, mushrooms bounce and orange scuttlers run
+  away from whoever is closest.
+- Their Dreamgate shows where they placed it, and the trap bench in Distant Village shows them caught.
+- More partner sounds: jump, footsteps, wall slide, falling and hard landing.
+- Essence ghosts are per player, and Hive bees and Abyss siblings respect each player's own charm (Hiveblood, Void
+  Heart).
+
+**Enemies and bosses**
+
+- **Enemies attack whoever hits them**: before, they went after the nearest player even while someone else was hitting
+  them.
+- **Bosses no longer switch players in the middle of an attack** (Hornet sometimes did).
+- **Dream Soul Master's second phase** no longer stays frozen and invulnerable with 3 or 4 players.
+- **Abyss shade siblings** die on every PC at once (on the others they stayed alive with 1 health).
+- **If something doesn't match between PCs** (a world value, an object in a room, an enemy alive on only one of them),
+  the mod notices and fixes it with the host's data, with a short notice.
+
+**And more**
+
+- **The mod in all 11 game languages**: French, German, Italian, Portuguese, Russian, Simplified and Traditional
+  Chinese, Japanese and Korean, besides Spanish and English. It follows the game's language when you change it.
+- **Summary when the game ends**: play time, bosses beaten, geo, times downed and deaths.
+- **Steam presence**: your friends see that you're playing co-op and in which area.
+- **The controller vibrates** when a partner goes down.
+- New host settings: **"Partners on the map without compass"** (off by default) and **"Pause stops the game"** (on by
+  default; with No, pausing in combat no longer keeps you safe).
+- If a player gets lag, the `ModLog.txt` tells whether it's the mod or the PC. Troubleshooting guide in the README.
+
 ## 0.36.2
 
 - **Spells dealing far too much damage to bosses**: a spell cast by a player whose PC wasn't the one running the boss

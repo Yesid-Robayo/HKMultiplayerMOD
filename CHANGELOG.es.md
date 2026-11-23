@@ -9,6 +9,70 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.42.0
+
+La versión más grande hasta ahora: reúne todo lo hecho desde la 0.36.2 (las 0.37 a 0.41 no se publicaron por separado).
+
+**Viajar y jugar juntos**
+
+- **Viajar juntos**: el Portal Onírico lleva también a los compañeros que estén al lado, como el ciervo. El ajuste «Viajar
+  juntos en ciervo» pasa a llamarse **«Viajar juntos»**.
+- **Estatuas del Salón de los Dioses juntos**: cuando uno elige un nivel, los compañeros libres entran con él al mismo
+  combate, vuelven a la estatua al acabar y el nivel queda completado para todos.
+- **Reaparecer con el host** (ajuste nuevo, sí por defecto): si caen todos, reaparecen juntos en el banco del host.
+- **Expulsar a un jugador** (solo el host, desde *Compañeros*, con confirmación).
+
+**Hablar con los compañeros**
+
+- **Chat de texto**: la **T** abre el chat (también sentado en un banco); Enter envía y Esc cancela.
+- **Mensajes rápidos**: con el botón del mapa rápido pulsado, cada dirección manda un aviso: «¡Aquí!» marca tu sitio,
+  «¡A por él!» marca el enemigo más cercano, «¡Ayuda!» y «¡Espera!».
+- **Chinchetas compartidas**: con «Mapa compartido», las chinchetas de cada uno salen también en el mapa de los demás.
+- **Equipo del compañero**: en *Compañeros* se ve la mejora de su aguijón, sus muescas y sus amuletos.
+- **Pensamientos del aguijón onírico**: la frase que saca uno al golpear con el aguijón onírico la ven todos los de la
+  sala.
+
+**Mundos y modos**
+
+- **Alma de Acero y Buscador de Dioses**: al crear un mundo se elige el modo. En Alma de Acero, si caen todos a la vez,
+  el mundo se pierde.
+- **Empezar un mundo desde una partida tuya**: *Nuevo mundo › Desde una partida* copia una de tus 4 partidas (la
+  original no se toca).
+- **Ponerse al nivel del host**: un invitado sentado en un banco puede igualar su avance al del host desde
+  *Compañeros*, ver antes qué gana y deshacerlo después. El host puede prohibirlo con un ajuste.
+- **Copias de seguridad del mundo**: cada vez que el host abre un mundo se guarda una copia (las 5 últimas, en
+  `Copias` dentro de la carpeta del mundo).
+
+**Lo que hace el compañero se ve como en el juego**
+
+- Las plataformas de los sueños se encienden también bajo los compañeros (antes parecían flotar en el aire).
+- El agua y el ácido salpican a su paso; las palomas salen volando, los escombros se empujan, las setas rebotan y los
+  escarabajos naranja huyen de quien esté más cerca.
+- Su Portal Onírico se ve donde lo puso, y el banco trampa de la Aldea Distante lo muestra atrapado.
+- Más sonidos del compañero: salto, pasos, deslizarse por la pared, caída y aterrizaje fuerte.
+- Los fantasmas que dan esencia son de cada jugador, y las abejas de la Colmena y los hermanos del Abismo respetan el
+  amuleto de cada uno (Sangre de Colmena, Corazón del Vacío).
+
+**Enemigos y jefes**
+
+- **Los enemigos atacan a quien les pega**: antes se iban con el jugador más cercano aunque otro les estuviera pegando.
+- **Los jefes ya no cambian de jugador a mitad de un ataque** (Hornet a veces lo hacía).
+- **La segunda fase del Señor de las Almas de sueño** ya no se queda quieta e invulnerable con 3 o 4 jugadores.
+- **Los hermanos de la sombra del Abismo** mueren en todos los PCs a la vez (en los demás seguían vivos con 1 de vida).
+- **Si algo no coincide entre los PCs** (un dato del mundo, un objeto de una sala, un enemigo vivo solo en uno), el mod
+  lo detecta solo y lo corrige con lo del host, con un aviso corto.
+
+**Más cosas**
+
+- **El mod en los 11 idiomas del juego**: francés, alemán, italiano, portugués, ruso, chino simplificado y tradicional,
+  japonés y coreano, además de español e inglés. Cambia al cambiar el idioma del juego.
+- **Resumen al acabar la partida**: tiempo, jefes vencidos, geo, caídas y muertes.
+- **Presencia de Steam**: tus amigos ven que juegas en coop y en qué zona.
+- **El mando vibra** cuando cae un compañero.
+- Ajustes nuevos del host: **«Compañeros en el mapa sin brújula»** (no por defecto) y **«La pausa para el juego»** (sí
+  por defecto; con No, pausar en combate ya no te deja a salvo).
+- Si un jugador tiene lag, el `ModLog.txt` dice si es del mod o del PC. Guía de problemas frecuentes en el README.
+
 ## 0.36.2
 
 - **Hechizos que quitaban muchísima vida a los jefes**: un hechizo lanzado por un jugador cuyo PC no era el que movía
