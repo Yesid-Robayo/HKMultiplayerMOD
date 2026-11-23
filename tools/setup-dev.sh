@@ -6,11 +6,11 @@
 #   3. Compila la Modding API modificada (modding-api/, para Hollow Knight 1.5.12620) → modding-api/OutputFinal.
 #   4. vendor/modding-api/OutputFinal: esa compilación (la usa tools/package.sh para el paquete de jugadores).
 #   5. lib/: Managed del juego + la Modding API compilada (contra esto compila el mod).
-# Uso: bash tools/setup-dev.sh ["C:/ruta/a/Hollow Knight"]   (por defecto, la carpeta de Steam)
+# Uso: bash tools/setup-dev.sh ["C:/ruta/a/Hollow Knight"]   (por defecto, $HK_STEAM_GAME o la carpeta de Steam)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-GAME="${1:-/c/Program Files (x86)/Steam/steamapps/common/Hollow Knight}"
+GAME="${1:-${HK_STEAM_GAME:-/c/Program Files (x86)/Steam/steamapps/common/Hollow Knight}}"
 GAME="$(cd "$GAME" 2>/dev/null && pwd)" || { echo "setup-dev.sh: no existe la carpeta del juego: ${1:-(Steam)}" >&2; exit 1; }
 MANAGED="$GAME/hollow_knight_Data/Managed"
 BACKUP="$GAME/HKMultiplayer-backup/files/hollow_knight_Data/Managed"

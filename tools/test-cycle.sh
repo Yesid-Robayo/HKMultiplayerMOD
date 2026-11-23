@@ -4,7 +4,8 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-GAME="/c/Program Files (x86)/Steam/steamapps/common/Hollow Knight"
+# HK_STEAM_GAME manda si el juego está en otra biblioteca de Steam
+GAME="${HK_STEAM_GAME:-/c/Program Files (x86)/Steam/steamapps/common/Hollow Knight}"
 MOD_NAME="HKMultiplayer"
 INSTALL_GAME=false
 while [ $# -gt 0 ]; do

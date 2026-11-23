@@ -43,8 +43,10 @@
     <PropertyGroup>
         <OutputDir>../OutputFinal</OutputDir>
         <!-- todo macOS -->
-        <GamePath Condition="'$(OS)' == 'Windows_NT'">C:/Program Files (x86)/Steam/steamapps/common/Hollow Knight</GamePath>
-        <GamePath Condition="'$(OS)' != 'Windows_NT'">$(HOME)/.local/share/Steam/steamapps/common/Hollow Knight</GamePath>
+        <!-- La variable de entorno HK_STEAM_GAME manda si el juego está en otra biblioteca de Steam -->
+        <GamePath Condition="'$(GamePath)' == '' and '$(HK_STEAM_GAME)' != ''">$(HK_STEAM_GAME)</GamePath>
+        <GamePath Condition="'$(GamePath)' == '' and '$(OS)' == 'Windows_NT'">C:/Program Files (x86)/Steam/steamapps/common/Hollow Knight</GamePath>
+        <GamePath Condition="'$(GamePath)' == '' and '$(OS)' != 'Windows_NT'">$(HOME)/.local/share/Steam/steamapps/common/Hollow Knight</GamePath>
         <CopyDir>$(GamePath)/hollow_knight_Data/Managed</CopyDir>
 
         <Mono Condition="$(OS) == WINDOWS_NT" />
