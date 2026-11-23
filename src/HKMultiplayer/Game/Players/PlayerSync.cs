@@ -153,7 +153,7 @@ internal sealed class PlayerSync {
                                        $"empujes={_grass.Pushes} plataformas={_dreamPlatforms.PlatformCount} " +
                                        $"encendidas={_dreamPlatforms.Shown} agua={_water.RegionCount} " +
                                        $"salpicaduras={_water.Splashes} palomas={_ambient.Scared} " +
-                                       $"escombros={_ambient.Pushed} ambiente={_ambient.Describe()}";
+                                       $"escombros={_ambient.Pushed} setas={_ambient.Bounced} escarabajos={_ambient.Startled} ambiente={_ambient.Describe()}";
 
     public void ResetEffectCounters() => _effects.ResetCounters();
 
@@ -476,7 +476,7 @@ internal sealed class PlayerSync {
             if (state.Visible) {
                 _grass.Touch(remote.Player.Id, remote.Avatar.Position);
                 _water.Touch(remote.Player.Id, remote.Avatar.Position);
-                _ambient.Touch(remote.Player.Id, remote.Avatar.Position);
+                _ambient.Touch(remote.Player.Id, remote.Avatar.Position, remote.Avatar.Root.transform);
                 _darknessPartners.Add(remote.Avatar.Position);
             }
             visible++;
