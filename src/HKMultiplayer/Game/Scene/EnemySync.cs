@@ -4471,7 +4471,7 @@ internal sealed class EnemySync {
         }
 
         if (fsm.ActiveState == null || fsm.ActiveState.Name != enemy.DormantState || !OthersInScene() || EveryoneNear(enemy) ||
-            InBattleScene(enemy) || !LocalNear(enemy)) {
+            InBattleScene(enemy) || !LocalNear(enemy) || FightStarted(enemy)) {
             WakeUp(enemy);
             return false;
         }
@@ -4485,6 +4485,23 @@ internal sealed class EnemySync {
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// El combate de la sala ya empezó: otro jefe de la sala ya despertó o murió en esta visita. La segunda fase de un jefe
+    /// que es otro objeto (el Señor de las Almas de sueño reaparece lejos de donde cayó la primera) «despierta» con el
+    /// aviso de la primera; con 4 jugadores, alguno quedaba a más de <see cref="WakeRange"/> de donde reaparece y la fase 2
+    /// se retenía para siempre, invulnerable.
+    /// </summary>
+    private bool FightStarted(Enemy enemy) {
+        foreach (var other in _enemies) {
+            if (other != enemy && other.MaxHp >= BossHp &&
+                (other.Awake || other.ReportedDead || other.Health != null && other.Health.isDead)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -4547,7 +4564,7 @@ internal sealed class EnemySync {
 
             // Sin límite de tiempo: no empieza hasta que estén todos (también quien está en pausa). No se espera a quien
             // está caído, en otra sala o sin avatar en este PC (ver EveryoneNear): nadie podría llegar nunca
-            if (OthersInScene() && !EveryoneNear(enemy) && !InBattleScene(enemy)) {
+            if (OthersInScene() && !EveryoneNear(enemy) && !InBattleScene(enemy) && !FightStarted(enemy)) {
                 if (now >= enemy.NextWaitNotice) {
                     enemy.NextWaitNotice = now + 4f;
                     HKMultiplayer.UI.Notice.Show(Lang.F("Esperando a {0} para empezar el combate", "Waiting for {0} to start the fight", MissingNear(enemy)), 3.5f);
