@@ -528,6 +528,15 @@ internal sealed class Revive {
 
     private const string NobodyStanding = "no queda nadie en pie";
 
+    /// <summary>
+    /// Si dos nombres son la misma sala. La sesión nombra las salas como el juego (<c>GameManager.sceneName</c>, sin
+    /// "_boss" al final) y aquí se guarda el nombre de la escena de Unity, que hace falta para viajar a ella. Solo
+    /// difieren en la arena de la Radiancia: "Dream_Final_Boss" es "Dream_Final" para la sesión. Comparados tal cual,
+    /// quien caía allí no veía a su compañero en la sala y moría de verdad (issue #23).
+    /// </summary>
+    private static bool SameScene(string a, string b) =>
+        a == b || a != null && b != null && GameManager.GetBaseSceneName(a) == GameManager.GetBaseSceneName(b);
+
     private bool CanBeDowned(out string reason) {
         reason = null;
         if (_session == null || !_session.CanSend || _party == null) {
@@ -553,7 +562,7 @@ internal sealed class Revive {
             }
 
             standing = true;
-            standingHere |= member.Player.Scene == scene;
+            standingHere |= SameScene(member.Player.Scene, scene);
         }
 
         if (!standing) {
@@ -822,7 +831,7 @@ internal sealed class Revive {
                 continue;
             }
 
-            var rank = (CanFollow(member.Player.Scene, scene) ? 2 : 0) + (member.Player.Scene == scene ? 1 : 0);
+            var rank = (CanFollow(member.Player.Scene, scene) ? 2 : 0) + (SameScene(member.Player.Scene, scene) ? 1 : 0);
             if (rank > bestRank) {
                 best = member;
                 bestRank = rank;
@@ -834,7 +843,7 @@ internal sealed class Revive {
 
     /// <summary>Si un caído con el cuerpo en <paramref name="bodyScene"/> puede seguir a alguien en esa sala.</summary>
     private static bool CanFollow(string scene, string bodyScene) =>
-        !string.IsNullOrEmpty(scene) && (scene == bodyScene || IsFollowedScene(scene));
+        !string.IsNullOrEmpty(scene) && (SameScene(scene, bodyScene) || IsFollowedScene(scene));
 
     private float _nextFollowCheck;
 
@@ -955,7 +964,7 @@ internal sealed class Revive {
             return;
         }
 
-        if (from.Scene != target.BodyScene) {
+        if (!SameScene(from.Scene, target.BodyScene)) {
             Log.Warn($"Petición de revivir de {from.Name} no válida: no está en la sala del cuerpo");
             return;
         }
@@ -980,8 +989,8 @@ internal sealed class Revive {
 
         var target = _party.Get(targetId);
         var sender = _party.Get(from.Id);
-        if (target == null || sender == null || target.Status != PlayerStatus.Downed || target.BodyScene != scene ||
-            sender.Status == PlayerStatus.Downed || from.Scene != scene || float.IsNaN(x) || float.IsNaN(y) ||
+        if (target == null || sender == null || target.Status != PlayerStatus.Downed || !SameScene(target.BodyScene, scene) ||
+            sender.Status == PlayerStatus.Downed || !SameScene(from.Scene, scene) || float.IsNaN(x) || float.IsNaN(y) ||
             float.IsInfinity(x) || float.IsInfinity(y)) {
             return;
         }
@@ -1101,7 +1110,7 @@ internal sealed class Revive {
             var partner = _party.Get(member.Partner);
             var partnerScene = partner?.Player?.Scene;
             if (partner == null || partner.Status == PlayerStatus.Downed || string.IsNullOrEmpty(partnerScene) ||
-                partnerScene == member.BodyScene || AnyStandingIn(member.BodyScene)) {
+                SameScene(partnerScene, member.BodyScene) || AnyStandingIn(member.BodyScene)) {
                 _leftInGodhomeSince.Remove(member.Id);
                 continue;
             }
@@ -1128,7 +1137,7 @@ internal sealed class Revive {
     /// <summary>Si algún jugador en pie está en esa sala.</summary>
     private bool AnyStandingIn(string scene) {
         foreach (var member in _party.Members) {
-            if (member.Status != PlayerStatus.Downed && member.Player != null && member.Player.Scene == scene) {
+            if (member.Status != PlayerStatus.Downed && member.Player != null && SameScene(member.Player.Scene, scene)) {
                 return true;
             }
         }
@@ -1397,10 +1406,10 @@ internal sealed class Revive {
         }
 
         foreach (var member in _party.Members) {
-            var shown = member.Status == PlayerStatus.Downed && member.BodyScene == scene;
+            var shown = member.Status == PlayerStatus.Downed && SameScene(member.BodyScene, scene);
             if (member.Id == _session.LocalId) {
                 // El propio: lo que sabe este PC (llega antes que el estado del host)
-                shown = _downed && _bodyScene == scene && _arrival != Arrival.Revive;
+                shown = _downed && SameScene(_bodyScene, scene) && _arrival != Arrival.Revive;
             }
 
             var exists = _bodies.TryGetValue(member.Id, out var body);
@@ -1585,7 +1594,7 @@ internal sealed class Revive {
         }
 
         var partnerScene = partner.Player.Scene;
-        if (partnerScene == current && _players.TryGetAvatarPosition(partner.Id, out var position)) {
+        if (SameScene(partnerScene, current) && _players.TryGetAvatarPosition(partner.Id, out var position)) {
             _partnerSeenScene = current;
             _partnerSeenAt = position;
             hero.transform.position = new Vector3(position.x, position.y, hero.transform.position.z);
@@ -1593,7 +1602,7 @@ internal sealed class Revive {
             return;
         }
 
-        if (partnerScene.Length > 0 && partnerScene != current && canTravel && IsFollowedScene(partnerScene) &&
+        if (partnerScene.Length > 0 && !SameScene(partnerScene, current) && canTravel && IsFollowedScene(partnerScene) &&
             Time.unscaledTime - _travelStartedAt > FollowCooldown) {
             TeleportToScene(partnerScene, null);
         }

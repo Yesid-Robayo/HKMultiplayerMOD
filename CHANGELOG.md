@@ -9,6 +9,14 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.42.1
+
+- **Sealed Siblings ending**: with Void Heart, finishing off the Hollow Knight without using the dream nail took
+  everyone into the Radiance fight. Now the fight ends as in single player, and only the dream nail leads to the
+  Radiance.
+- **Reviving in the Radiance fight**: a player who fell there went back to their bench, even with a partner in the
+  fight. Now they stay down and the partner can revive them, as in any other dream.
+
 ## 0.42.0
 
 The biggest version so far: it brings together everything done since 0.36.2 (0.37 to 0.41 were not released on their

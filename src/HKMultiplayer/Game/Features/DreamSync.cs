@@ -233,6 +233,15 @@ internal sealed class DreamSync {
             var from = entry.LastState;
             entry.LastState = state;
             entry.LastStateTime = now;
+            // Apagada (sin estado) o vuelta a empezar (su estado inicial): no es un golpe, y al encenderse otra vez busca
+            // su reposo de nuevo. Al morir, el Hollow Knight se apaga entero y, con el Corazón del Vacío, su entrada ya
+            // estaba en reposo desde la escena de Hornet: pasaba de "Idle" a "" y los compañeros entraban en la Radiancia
+            // al rematarlo, sin el final de los Hermanos Sellados (issue #22)
+            if (state.Length == 0 || state == entry.Fsm.Fsm.StartState) {
+                entry.RestState = null;
+                continue;
+            }
+
             // Sale del reposo: el aguijón onírico de este jugador la golpeó
             if (!_applying && entry.RestState != null && from == entry.RestState) {
                 SendEnter(entry, state);
@@ -386,6 +395,12 @@ internal sealed class DreamSync {
         // En Godhome no hay entradas (ver InGodhome): el aviso es de un compañero con una versión anterior del mod
         if (sceneHash != _sceneHash || _scene.Length == 0 || gm == null || hero == null || gm.IsInSceneTransition ||
             hero.cState.dead || _revive != null && _revive.IsDowned || InDream || InGodhome(_scene)) {
+            return;
+        }
+
+        // Sin estado al que pasar no hubo golpe: la entrada se apagó en su PC (aviso de una versión anterior del mod)
+        if (state.Length == 0) {
+            Log.Warn($"{from.Name} avisó de una entrada al sueño {target} sin estado: no se entra");
             return;
         }
 

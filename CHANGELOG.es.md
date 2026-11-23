@@ -9,6 +9,14 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.42.1
+
+- **Final de los Hermanos Sellados**: con el Corazón del Vacío, rematar al Hollow Knight sin usar el aguijón onírico
+  llevaba a todos al combate contra la Radiancia. Ahora el combate acaba como jugando solo, y solo el aguijón onírico
+  lleva a la Radiancia.
+- **Revivir en el combate contra la Radiancia**: quien caía allí volvía a su banco, aunque su compañero estuviera en el
+  combate. Ahora se queda caído y su compañero puede levantarlo, como en cualquier otro sueño.
+
 ## 0.42.0
 
 La versión más grande hasta ahora: reúne todo lo hecho desde la 0.36.2 (las 0.37 a 0.41 no se publicaron por separado).
