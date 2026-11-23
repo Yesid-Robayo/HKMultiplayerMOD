@@ -1141,8 +1141,9 @@ internal sealed class EnemySync {
                     }
                 }
 
-                // Los muertos se quedan como están (su muerte sigue su curso)
-                if (enemy.Health == null || enemy.Health.isDead) {
+                // Los muertos se quedan como están (su muerte sigue su curso), también los que murieron en otro PC: los de
+                // muerte especial no quedan muertos para el juego hasta acabarla y se volvían a hacer marioneta a mitad
+                if (enemy.Health == null || enemy.Health.isDead || enemy.DiedElsewhere) {
                     ReleaseSatellites(enemy);
                     continue;
                 }
@@ -7285,6 +7286,13 @@ internal sealed class EnemySync {
                 var killedBy = hp is >= 0 and <= (int) AttackTypes.NailBeam ? (AttackTypes) hp : AttackTypes.Nail;
                 Log.Info($"{enemy.Root.name}: murió en el PC que lo movía ({killedBy})");
                 health.Die(null, killedBy, true);
+                // Muerte especial (los hermanos de la sombra del Abismo): `Die` solo avisa a su lógica (`ZERO HP`), que
+                // hace la muerte por su cuenta, y el juego no lo da por muerto. En el PC que lo movía ya no existe: aquí
+                // se da por muerto ya (no se le puede golpear ni cuenta como vivo) y su lógica acaba la muerte igual
+                if (health.hasSpecialDeath && !health.isDead) {
+                    health.SetIsDead(true);
+                }
+
                 enemy.ReportedDead = true;
                 enemy.DiedAt = Time.unscaledTime;
                 enemy.CorpseFollows = true;
