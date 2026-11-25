@@ -7,7 +7,7 @@
 ![Versión](https://img.shields.io/badge/versión-0.43.0-7fb2ff)
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
-![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
+![Plataforma](https://img.shields.io/badge/plataforma-Windows%20%7C%20macOS%20%7C%20Linux%20%28experimental%29-2f5fb3)
 ![Idiomas](https://img.shields.io/badge/idiomas-11-7ddc8f)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-apoya%20el%20proyecto-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/yesidrobayo)
 
@@ -273,6 +273,7 @@ escrito desde cero sobre la Modding API de Hollow Knight.
   misiones y conversaciones de NPC, plataformas de liana, el Menderbug, el mod en inglés y la reconexión automática
   (también cancelarla y rendirse).
 - Instalar, actualizar y desinstalar.
+- macOS (Apple Silicon, probado por la comunidad): instalar con el paquete de macOS, y hostear y unirse por IP.
 - La historia entera con hasta 4 jugadores: todos los jefes, los sueños y los guerreros soñadores, los tres Soñadores,
   el Huevo Negro, el Hollow Knight (los dos finales) y la Radiancia, la Compañía de Grimm, Grey Prince Zote, el Coliseo
   de los Tontos, Zote y Cloth, el Panteón del Maestro de principio a fin y el Panteón de Hallownest hasta su final, que
@@ -284,6 +285,8 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 
 - Una partida larga por internet, también con 3 o 4 jugadores.
 - Jugar por Steam: crear la sala, invitar, unirse y la conexión por los relés de Steam.
+- Jugar entre un Mac y un PC con Windows, y en los Mac con Intel.
+- Linux nativo (el paquete y su instalador están listos, pero nadie los ha probado aún).
 
 Limitaciones conocidas:
 
@@ -299,9 +302,12 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md#limitaciones-conocid
 ## 📦 Instalar
 
 > [!NOTE]
-> Necesitas **Hollow Knight 1.5.12620 en Windows** (la versión actual de Steam; la de GOG también vale). Todos los
-> jugadores tienen que tener **la misma versión** de HKMultiplayer. Mac y Linux no son compatibles, y la versión de
+> Necesitas **Hollow Knight 1.5.12620 en Windows** (la versión actual de Steam; la de GOG también vale), **en macOS**
+> (Steam, probado por la comunidad) **o en Linux** (con Proton, o nativo de forma experimental). Todos los jugadores
+> tienen que tener **la misma versión** de HKMultiplayer, y los de sistemas distintos pueden jugar juntos. La versión de
 > Xbox/Game Pass no está probada.
+
+### Windows
 
 1. Descarga `HKMultiplayer-<versión>.zip` de la página de [*Releases*](../../releases).
 2. Cierra el juego, **descomprime el zip entero** y haz doble clic en **`HKMultiplayer Setup.exe`**.
@@ -334,6 +340,31 @@ Si prefieres no usarlo, instálalo a mano (más abajo).
 
 ¿Prefieres no usar el instalador? El `LEEME.txt` (español) y el `README.txt` (inglés) del paquete explican la
 **instalación a mano**, cómo abrir el puerto y qué hacer si algo falla.
+
+### macOS (probado por la comunidad)
+
+El soporte de macOS lo aportó y lo probó [Liam Murray](https://github.com/Lermatroid) en Apple Silicon.
+
+1. Descarga `HKMultiplayer-<versión>-macOS.zip` de la página de [*Releases*](../../releases).
+2. Cierra el juego, haz doble clic en el zip para descomprimirlo y luego en **`Install HKMultiplayer.command`**.
+3. Abre Hollow Knight desde Steam: en el menú principal aparece **Multijugador**.
+
+La primera vez macOS bloquea el instalador porque no está firmado: pulsa *OK* y luego *Ajustes del Sistema ›
+Privacidad y seguridad › Abrir igualmente*. El instalador es un script corto, en
+[`tools/installer/macos`](tools/installer/macos), que copia la Modding API y el mod en el juego. Para desinstalar, usa
+*Verificar integridad de los archivos del juego* de Steam. El `LEEME.txt` y el `README.txt` del paquete tienen los
+detalles.
+
+El paquete de macOS solo se puede armar en un Mac (su Modding API se compila contra el juego de macOS). Si una versión
+aún no lo tiene, puedes armarlo tú: mira [Desarrollo](#-desarrollo).
+
+### Linux
+
+- **Con Proton** (Steam Play con la versión de Windows): usa el paquete de Windows e instálalo a mano como explica su
+  `LEEME.txt`, copiando los archivos en la carpeta del juego.
+- **Nativo (experimental, aún sin probar)**: la versión de Linux del juego con `HKMultiplayer-<versión>-Linux.zip` y su
+  `install.sh`. Igual que el de macOS, se arma en Linux (`bash tools/package-linux.sh`). Si lo pruebas, cuéntanos en un
+  issue si funciona.
 
 ---
 
@@ -447,7 +478,7 @@ aturdidos cuando pegan varios a la vez.
 | `src/HKMultiplayer/Testing/` | Herramientas de desarrollo; no se activan en una partida normal. |
 | `modding-api/` | Código de la Modding API (hk-modding/api, MIT) para Unity 6: rama `hk-beta-branch-unity-6-update` de `SFGrenade/api` (PR hk-modding/api#164, commit `468f579`) con cambios propios. Sin los archivos del juego. |
 | `tests/` | Pruebas del transporte fuera del juego (`tests/NetTests`). |
-| `tools/` | Preparar el PC (`setup-dev.sh`), compilar e instalar (`test-cycle.sh`), paquete e instalador. |
+| `tools/` | Preparar el PC (`setup-dev.sh`), compilar e instalar (`test-cycle.sh`), paquetes (`package.sh`, `package-mac.sh`, `package-linux.sh`) e instaladores. |
 | `docs/` | [Arquitectura](docs/arquitectura.md): cómo funciona el mod por dentro. |
 | `lib/`, `vendor/` | *(solo local, no se suben)* DLL del juego y de la Modding API. |
 
@@ -473,6 +504,16 @@ y deja `lib/` y `vendor/`. Si el juego ya tiene la Modding API, usa los original
 (`HKMultiplayer-backup`); si no los hay, pide verificar la integridad de los archivos del juego en Steam. Para cambiar la
 Modding API se edita `modding-api/` y se vuelve a ejecutar.
 
+En macOS hacen falta el SDK de .NET y Mono (`brew install mono`, que ejecuta los parcheadores de la Modding API) en vez
+de Git Bash. `setup-dev.sh` y `test-cycle.sh` usan por defecto la carpeta de Steam en `~/Library/Application Support`,
+las pruebas del transporte corren en Mono (ahí se saltan las de memoria) y `bash tools/package-mac.sh` arma
+`out/package/HKMultiplayer-<versión>-macOS.zip`. El paquete de macOS se arma en un Mac: su Modding API se compila contra
+el juego de macOS.
+
+En Linux (experimental, aún sin probar) va igual: el SDK de .NET y Mono, `setup-dev.sh` y `test-cycle.sh` usan por
+defecto la carpeta de Steam en `~/.local/share/Steam`, y `bash tools/package-linux.sh` arma
+`out/package/HKMultiplayer-<versión>-Linux.zip` con su `install.sh`. Se arma en Linux, contra el juego de Linux.
+
 ---
 
 ## 🙏 Créditos
@@ -488,6 +529,8 @@ Modding API se edita `modding-api/` y se vuelve a ejecutar.
   **[BouncyCastle](https://www.bouncycastle.org/)** y **[Newtonsoft.Json](https://www.newtonsoft.com/json)**, todos MIT
   (avisos completos en [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)).
 - Skins compatibles con **CustomKnight**.
+- **Soporte de macOS** de [Liam Murray](https://github.com/Lermatroid) (instalador, paquete de macOS y herramientas para
+  compilar).
 - **Uso de IA:** este mod se desarrolló con ayuda de herramientas de inteligencia artificial.
 
 ---

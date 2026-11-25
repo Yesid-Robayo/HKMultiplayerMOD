@@ -6,12 +6,11 @@ you share the world, see each other in real time and fight the same enemies and 
 
 You need:
   - Hollow Knight 1.5.12620 on Windows (the current Steam version; the GOG one works too).
-    Not Mac or Linux: the package's Modding API is Windows only. The Xbox/Game Pass version is not
-    tested and the installer doesn't look for it.
+    This package is Windows only: on a Mac, use the -macOS package. Linux is not supported.
+    The Xbox/Game Pass version is not tested and the installer doesn't look for it.
   - Every player must have the SAME version of HKMultiplayer installed.
 
-The mod uses the game's language: Spanish if the game is in Spanish; English for any other
-language.
+The mod uses the game's language (the same 11 languages as the game).
 
 (Instrucciones en español: LEEME.txt)
 

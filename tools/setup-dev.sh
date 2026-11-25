@@ -6,13 +6,24 @@
 #   3. Compila la Modding API modificada (modding-api/, para Hollow Knight 1.5.12620) → modding-api/OutputFinal.
 #   4. vendor/modding-api/OutputFinal: esa compilación (la usa tools/package.sh para el paquete de jugadores).
 #   5. lib/: Managed del juego + la Modding API compilada (contra esto compila el mod).
-# Uso: bash tools/setup-dev.sh ["C:/ruta/a/Hollow Knight"]   (por defecto, $HK_STEAM_GAME o la carpeta de Steam)
+# Uso: bash tools/setup-dev.sh ["C:/ruta/a/Hollow Knight"]   (por defecto, $HK_STEAM_GAME o la carpeta de Steam: en
+#      macOS la de ~/Library/Application Support, en Linux la de ~/.local/share)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-GAME="${1:-${HK_STEAM_GAME:-/c/Program Files (x86)/Steam/steamapps/common/Hollow Knight}}"
+case "$(uname -s)" in
+  Darwin) STEAM_GAME="$HOME/Library/Application Support/Steam/steamapps/common/Hollow Knight" ;;
+  Linux) STEAM_GAME="$HOME/.local/share/Steam/steamapps/common/Hollow Knight" ;;
+  *) STEAM_GAME="/c/Program Files (x86)/Steam/steamapps/common/Hollow Knight" ;;
+esac
+GAME="${1:-${HK_STEAM_GAME:-$STEAM_GAME}}"
 GAME="$(cd "$GAME" 2>/dev/null && pwd)" || { echo "setup-dev.sh: no existe la carpeta del juego: ${1:-(Steam)}" >&2; exit 1; }
-MANAGED="$GAME/hollow_knight_Data/Managed"
+# En macOS los datos del juego van dentro de la app
+if [ -d "$GAME/hollow_knight.app" ]; then
+  MANAGED="$GAME/hollow_knight.app/Contents/Resources/Data/Managed"
+else
+  MANAGED="$GAME/hollow_knight_Data/Managed"
+fi
 BACKUP="$GAME/HKMultiplayer-backup/files/hollow_knight_Data/Managed"
 API="$ROOT/modding-api"
 
@@ -57,9 +68,19 @@ build "$API/HollowKnight.Modding.API.sln"
 [ -f "$API/OutputFinal/Assembly-CSharp.dll" ] || fail "no salió modding-api/OutputFinal/Assembly-CSharp.dll"
 # La librería nativa con la que la Modding API precarga escenas: el .csproj solo la copia compilando con
 # --runtime win-x64, que rompe otro proyecto de la solución, así que se copia del paquete NuGet
-native="$(ls "$API/Assembly-CSharp/packages/unityscenerepacker/"*/runtimes/win-x64/native/unityscenerepacker.dll 2>/dev/null | head -n1)"
-[ -n "$native" ] || fail "no está unityscenerepacker.dll en los paquetes NuGet de la Modding API"
-cp "$native" "$API/OutputFinal/"
+runtimes="$(ls -d "$API/Assembly-CSharp/packages/unityscenerepacker/"*/runtimes 2>/dev/null | head -n1)"
+[ -n "$runtimes" ] || fail "no está unityscenerepacker en los paquetes NuGet de la Modding API"
+case "$(uname -s)" in
+  Darwin)
+    # macOS: una sola librería universal (arm64 + x86_64), sirve con el juego nativo o bajo Rosetta
+    lipo -create "$runtimes/osx-arm64/native/libunityscenerepacker.dylib" \
+      "$runtimes/osx-x64/native/libunityscenerepacker.dylib" -output "$API/OutputFinal/libunityscenerepacker.dylib" ;;
+  Linux)
+    # Linux (experimental, sin probar): la del paquete para x86_64
+    cp "$runtimes/linux-x64/native/libunityscenerepacker.so" "$API/OutputFinal/" ;;
+  *)
+    cp "$runtimes/win-x64/native/unityscenerepacker.dll" "$API/OutputFinal/" ;;
+esac
 
 echo "4. modding-api/OutputFinal → vendor/modding-api/OutputFinal"
 rm -rf "$ROOT/vendor/modding-api/OutputFinal"

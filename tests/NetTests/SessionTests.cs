@@ -264,6 +264,11 @@ public static partial class Program {
     }
 
     private static void SessionRelayAllocations() {
+        if (OnMono) {
+            Console.Write("[sin medir en Mono] ");
+            return;
+        }
+
         var world = new World();
         var a = world.JoinOrFail("Ana", "Town");
         var b = world.JoinOrFail("Beto", "Town");

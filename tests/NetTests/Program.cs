@@ -19,9 +19,14 @@ public static partial class Program {
     /// <summary>Si se indica, solo se ejecutan las pruebas cuyo nombre lo contiene.</summary>
     private static string _filter;
 
+    /// <summary>Mono (macOS, Linux) no cuenta la memoria creada por AppDomain: ahí las pruebas de memoria se saltan.</summary>
+    private static readonly bool OnMono = Type.GetType("Mono.Runtime") != null;
+
     public static int Main(string[] args) {
         _filter = args.Length > 0 ? args[0] : null;
-        AppDomain.MonitoringIsEnabled = true;
+        if (!OnMono) {
+            AppDomain.MonitoringIsEnabled = true;
+        }
 
         Run("ChaCha20-Poly1305: vector del RFC 8439", AeadRfcVector);
         Run("ChaCha20-Poly1305: igual que BouncyCastle en 500 casos al azar", AeadMatchesBouncyCastle);
@@ -530,6 +535,11 @@ public static partial class Program {
     }
 
     private static void CipherAllocations() {
+        if (OnMono) {
+            Console.Write("[sin medir en Mono] ");
+            return;
+        }
+
         var key = new byte[32];
         var cipher = new PacketCipher(key);
         var header = new byte[9];
@@ -555,6 +565,11 @@ public static partial class Program {
     }
 
     private static void SteadyStateAllocations() {
+        if (OnMono) {
+            Console.Write("[sin medir en Mono] ");
+            return;
+        }
+
         var pair = new Pair();
         pair.ConnectOrFail();
         var connection = pair.Client.Connection;

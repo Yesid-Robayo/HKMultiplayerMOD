@@ -1,2 +1,5 @@
 # Instrucciones del paquete para jugadores de Windows: los .txt con CRLF en cualquier checkout
 tools/installer/*.txt text eol=crlf
+# Scripts de shell (también los instaladores de macOS y Linux): siempre LF, con CRLF fallan en Mac y Linux
+*.sh text eol=lf
+*.command text eol=lf

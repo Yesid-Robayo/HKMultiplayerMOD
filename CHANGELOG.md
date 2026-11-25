@@ -11,6 +11,11 @@ release notes.
 
 ## 0.43.0
 
+- **macOS** (tested by the community): installer and package for Mac, contributed by
+  [Liam Murray](https://github.com/Lermatroid). Mac and Windows players can play together.
+- **Native Linux (experimental, not tested yet)**: package and installer for the Linux version of the game. With
+  Proton, the Windows package keeps working.
+- **"Open worlds folder"** builds the folder path correctly on every system.
 - **Hollow Knight ending**: sometimes the Hollow Knight vanished when killed and nothing happened, so the game
   couldn't be finished. Now his body always stays in the arena and can be absorbed with Focus for the ending.
 - **Hornet in the last phase**: with Void Heart, Hornet now always shows up to hold the Hollow Knight, and when he

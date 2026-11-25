@@ -590,7 +590,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
     private static void OpenWorldsFolder() {
         try {
             System.IO.Directory.CreateDirectory(WorldStore.Root);
-            Application.OpenURL("file:///" + WorldStore.Root.Replace('\\', '/'));
+            Application.OpenURL(new Uri(WorldStore.Root).AbsoluteUri);
         } catch (Exception e) {
             Log.Warn($"No se pudo abrir la carpeta de los mundos ({WorldStore.Root}): {e.Message}");
         }

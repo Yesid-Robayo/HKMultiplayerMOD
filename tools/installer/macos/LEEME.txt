@@ -1,0 +1,113 @@
+HKMultiplayer @VERSION@ para macOS - mod cooperativo para Hollow Knight
+======================================================================
+
+Un jugador hostea un mundo coop y sus compañeros se unen con la dirección del host y el código de
+la partida (o por Steam): comparten el mundo, se ven en tiempo real y pelean juntos contra los
+mismos enemigos y jefes.
+
+Necesitas:
+  - Hollow Knight 1.5.12620 para macOS de Steam (la versión actual). Probado en Apple Silicon.
+  - Que todos los jugadores tengan la MISMA versión de HKMultiplayer (@VERSION@). Los jugadores de
+    Mac y de Windows pueden jugar juntos si la versión es la misma.
+
+El mod sale en el idioma del juego (los mismos 11 idiomas que el juego).
+
+(English instructions: README.txt)
+
+
+1. INSTALAR
+-----------
+
+  1. Cierra Hollow Knight.
+  2. Haz doble clic en el .zip para descomprimirlo, abre la carpeta y haz doble clic en
+     "Install HKMultiplayer.command". Se abre una ventana de Terminal que instala el mod.
+  3. Abre Hollow Knight desde Steam: "Multijugador" aparece en el menú principal.
+
+La primera vez macOS bloquea el instalador porque no está firmado por un desarrollador de Apple
+("Apple no ha podido verificar..."). Pulsa "OK" y abre Ajustes del Sistema > Privacidad y
+seguridad, baja hasta el final y pulsa "Abrir igualmente" junto a "Install HKMultiplayer.command".
+El instalador es un script corto: puedes abrirlo con TextEdit para leer lo que hace.
+
+O ejecútalo desde Terminal: escribe "bash " (con un espacio), arrastra
+"Install HKMultiplayer.command" a la ventana de Terminal y pulsa Intro.
+
+Si el juego no está en la carpeta habitual de Steam, el instalador te la pide: en Steam, clic
+derecho en Hollow Knight > Administrar > Ver archivos locales, y arrastra esa carpeta a la ventana
+de Terminal.
+
+Para actualizar a una versión nueva, instala el paquete nuevo encima. Si Steam actualiza Hollow
+Knight, el mod desaparece: vuelve a instalar el paquete (cuando haya una versión para la nueva
+versión del juego).
+
+
+2. HOSTEAR UN MUNDO (el que invita)
+-----------------------------------
+
+  1. Menú principal > Multijugador. Escribe tu nombre. El puerto es 26950 salvo que lo cambies.
+  2. "Hostear un mundo" > "Nuevo mundo" (o elige uno que ya tengas) > "Crear y hostear".
+  3. Pasa a tus compañeros tu dirección (IP), el puerto (26950) y el código de la partida que sale
+     en pantalla (como ABCD-EFGH). También están en Pausa > Multijugador, con un botón para copiar
+     el código.
+
+Con Steam no hace falta nada de eso: tus amigos de Steam pueden entrar directamente. Para invitar
+a alguien: Pausa > Multijugador > "Invitar amigos de Steam".
+
+Si macOS pregunta si "Hollow Knight" puede aceptar conexiones de red entrantes, pulsa "Permitir".
+
+Qué dirección dar:
+  - En la misma casa (misma red o wifi): la IP que sale en Pausa > Multijugador (suele ser
+    192.168.x.x).
+  - Por internet: tu IP pública, y hay que abrir el puerto UDP 26950 en el router ("Reenvío de
+    puertos": protocolo UDP, puerto 26950, hacia la IP local de tu Mac). Si no puedes, usa un
+    programa de red local virtual como ZeroTier o Tailscale, o jugad por Steam.
+
+
+3. UNIRSE A UN MUNDO (el invitado)
+----------------------------------
+
+  - Por Steam: acepta la invitación del host o pulsa "Unirse a la partida" en tu lista de amigos
+    de Steam.
+  - Por IP: menú principal > Multijugador > "Unirse a un mundo": escribe la dirección del host y
+    el código de la partida > "Unirse".
+
+Tu personaje se guarda en el mundo del host. Si vuelves a entrar en ese mundo, lo recuperas.
+
+
+4. DÓNDE SE GUARDA CADA COSA
+----------------------------
+
+Mundos coop (en el Mac del host), una carpeta por mundo:
+  ~/Library/Application Support/unity.Team Cherry.Hollow Knight/HKMultiplayer/Mundos
+
+Skins (compatibles con CustomKnight, una carpeta con Knight.png cada una): en Pausa >
+Multijugador > Skin > "Abrir la carpeta de skins".
+
+
+5. DESINSTALAR
+--------------
+
+En Steam: clic derecho en Hollow Knight > Propiedades > Archivos instalados > Verificar
+integridad de los archivos del juego. Así vuelven los archivos originales del juego y la Modding
+API y el mod dejan de cargarse. Tus mundos coop y tus partidas no se tocan.
+
+
+6. SI ALGO FALLA
+----------------
+
+  - "Multijugador" no aparece en el menú: vuelve a instalar. Si sigue sin salir, mira el registro
+    de la Modding API:
+      ~/Library/Application Support/unity.Team Cherry.Hollow Knight/ModLog.txt
+    (en Finder: Ir > Ir a la carpeta..., y pega la ruta).
+  - El invitado no puede conectarse: revisa la dirección, el puerto y el código; que los dos
+    tengáis la misma versión del mod; y, por internet, que el host abrió el puerto UDP
+    (sección 2).
+  - Avisa de los errores en un issue de GitHub con una captura y tu ModLog.txt.
+
+
+7. LICENCIA Y GARANTÍA
+----------------------
+
+HKMultiplayer tiene licencia MIT (LICENSE.txt). Se ofrece tal cual, SIN NINGUNA GARANTÍA: úsalo
+bajo tu responsabilidad y haz una copia de tus partidas antes de jugar. Es un proyecto de fans no
+oficial, sin relación con Team Cherry. Los componentes de terceros y sus licencias están en
+THIRD_PARTY_NOTICES.txt.

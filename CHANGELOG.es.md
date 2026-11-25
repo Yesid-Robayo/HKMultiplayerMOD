@@ -11,6 +11,11 @@ Al publicar una versión nueva, se añade aquí arriba con lo mismo que su secci
 
 ## 0.43.0
 
+- **macOS** (probado por la comunidad): instalador y paquete para Mac, aportados por
+  [Liam Murray](https://github.com/Lermatroid). Los jugadores de Mac y Windows pueden jugar juntos.
+- **Linux nativo (experimental, aún sin probar)**: paquete e instalador para la versión de Linux del juego. Con
+  Proton sigue valiendo el paquete de Windows.
+- **«Abrir la carpeta de los mundos»** arma bien la ruta de la carpeta en todos los sistemas.
 - **Final del Hollow Knight**: a veces el Hollow Knight desaparecía al matarlo y no pasaba nada más, así que no se
   podía acabar el juego. Ahora su cuerpo queda siempre en la arena y se puede absorber con Focus para ver el final.
 - **Hornet en la última fase**: con el Corazón del Vacío, Hornet aparece siempre para sujetar al Hollow Knight y,

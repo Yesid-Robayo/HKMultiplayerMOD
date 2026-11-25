@@ -7,12 +7,11 @@ jefes.
 
 Necesitas:
   - Hollow Knight 1.5.12620 en Windows (la versión actual de Steam; la de GOG también vale).
-    Mac y Linux no: la Modding API del paquete es solo para Windows. La versión de Xbox/Game Pass
-    no está probada y el instalador no la busca.
+    Este paquete es solo para Windows: en un Mac, usa el paquete -macOS. Linux no es compatible.
+    La versión de Xbox/Game Pass no está probada y el instalador no la busca.
   - Que todos los jugadores tengan instalada la MISMA versión de HKMultiplayer.
 
-El mod sale en el idioma del juego: en español si el juego está en español; en cualquier otro
-idioma, en inglés.
+El mod sale en el idioma del juego (los mismos 11 idiomas que el juego).
 
 (English instructions: README.txt)
 

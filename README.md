@@ -7,7 +7,7 @@
 ![Version](https://img.shields.io/badge/version-0.43.0-7fb2ff)
 ![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
-![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%28experimental%29-2f5fb3)
 ![Languages](https://img.shields.io/badge/languages-11-7ddc8f)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-support%20the%20project-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/yesidrobayo)
 
@@ -268,6 +268,8 @@ API.
   (also inside shops), host settings, cutscenes, skins, go to a partner, NPC quests and conversations, vine platforms,
   the Menderbug, the mod in English and automatic reconnection (also cancelling it and giving up).
 - Install, update and uninstall.
+- macOS (Apple Silicon, tested by the community): installing with the macOS package, and hosting and joining by
+  IP.
 - The whole story with up to 4 players: every boss, the dreams and the dream warriors, the three Dreamers, the Black
   Egg, the Hollow Knight (both endings) and the Radiance, the Grimm Troupe, Grey Prince Zote, the Colosseum of Fools,
   Zote and Cloth, the Pantheon of the Master from start to finish and the Pantheon of Hallownest to its ending, which
@@ -279,6 +281,8 @@ API.
 
 - A long session over the internet, also with 3 or 4 players.
 - Playing through Steam: creating the lobby, inviting, joining and connecting through Steam's relays.
+- Playing between a Mac and a Windows PC, and on Intel Macs.
+- Native Linux (the package and its installer are ready but nobody has tried them yet).
 
 Known limitations:
 
@@ -294,8 +298,12 @@ More detail (in Spanish) in [docs/arquitectura.md](docs/arquitectura.md#limitaci
 ## 📦 Install
 
 > [!NOTE]
-> You need **Hollow Knight 1.5.12620 on Windows** (the current Steam version; GOG works too). All players must have
-> **the same version** of HKMultiplayer. Mac and Linux are not supported, and the Xbox/Game Pass version is not tested.
+> You need **Hollow Knight 1.5.12620 on Windows** (the current Steam version; GOG works too), **on macOS** (Steam,
+> tested by the community) **or on Linux** (with Proton, or native as an experiment). All players must have **the same
+> version** of HKMultiplayer, and players on different systems can play together. The Xbox/Game Pass version is not
+> tested.
+
+### Windows
 
 1. Download `HKMultiplayer-<version>.zip` from the [*Releases*](../../releases) page.
 2. Close the game, **extract the whole zip** and double-click **`HKMultiplayer Setup.exe`**.
@@ -329,6 +337,30 @@ it, install by hand (below).
 
 Rather not use the installer? The package's `README.txt` (English) and `LEEME.txt` (Spanish) explain the **manual
 installation**, how to open the port and what to do if something fails.
+
+### macOS (tested by the community)
+
+macOS support was contributed and tested by [Liam Murray](https://github.com/Lermatroid) on Apple Silicon.
+
+1. Download `HKMultiplayer-<version>-macOS.zip` from the [*Releases*](../../releases) page.
+2. Close the game, double-click the zip to extract it and double-click **`Install HKMultiplayer.command`**.
+3. Open Hollow Knight from Steam: **Multiplayer** appears in the main menu.
+
+macOS blocks the installer the first time because it isn't signed: click *Done*, then *System Settings › Privacy &
+Security › Open Anyway*. The installer is a short script, in [`tools/installer/macos`](tools/installer/macos), that
+copies the Modding API and the mod into the game. To uninstall, use Steam's *Verify integrity of game files*. The
+package's `README.txt` and `LEEME.txt` have the details.
+
+The macOS package can only be built on a Mac (its Modding API is compiled against the macOS game). If a release
+doesn't have it yet, you can build it yourself: see [Development](#-development).
+
+### Linux
+
+- **With Proton** (Steam Play running the Windows version): use the Windows package and install it by hand as its
+  `README.txt` explains, copying the files into the game folder.
+- **Native (experimental, not tested yet)**: the Linux version of the game with `HKMultiplayer-<version>-Linux.zip` and
+  its `install.sh`. Like the macOS package, it has to be built on Linux (`bash tools/package-linux.sh`). If you try it,
+  please tell us in an issue whether it works.
 
 ---
 
@@ -439,7 +471,7 @@ stunned when several players hit them at once.
 | `src/HKMultiplayer/Testing/` | Development tools; inactive in a normal game. |
 | `modding-api/` | Modding API source (hk-modding/api, MIT) for Unity 6: the `hk-beta-branch-unity-6-update` branch of `SFGrenade/api` (PR hk-modding/api#164, commit `468f579`) with our own changes. No game files. |
 | `tests/` | Transport tests outside the game (`tests/NetTests`). |
-| `tools/` | PC setup (`setup-dev.sh`), build and install (`test-cycle.sh`), package and installer. |
+| `tools/` | PC setup (`setup-dev.sh`), build and install (`test-cycle.sh`), packages (`package.sh`, `package-mac.sh`, `package-linux.sh`) and installers. |
 | `docs/` | [Architecture](docs/arquitectura.md) (Spanish): how the mod works inside. |
 | `lib/`, `vendor/` | *(local only, not committed)* Game and Modding API DLLs. |
 
@@ -465,6 +497,17 @@ fills `lib/` and `vendor/`. If the game already has the Modding API, it uses the
 (`HKMultiplayer-backup`); if there are none, it asks you to verify the game files in Steam. To change the Modding API,
 edit `modding-api/` and run it again.
 
+On macOS you need the .NET SDK and Mono (`brew install mono`, it runs the Modding API's patchers) instead of Git Bash.
+`setup-dev.sh` and `test-cycle.sh` use the Steam folder in `~/Library/Application Support` by default, the transport
+tests run on Mono (the memory tests are skipped there) and `bash tools/package-mac.sh` builds
+`out/package/HKMultiplayer-<version>-macOS.zip`. The macOS package has to be built on a Mac: its Modding API is
+compiled against the macOS game.
+
+On Linux (experimental, not tested yet) it works the same way: the .NET SDK and Mono, `setup-dev.sh` and
+`test-cycle.sh` use the Steam folder in `~/.local/share/Steam` by default, and `bash tools/package-linux.sh` builds
+`out/package/HKMultiplayer-<version>-Linux.zip` with its `install.sh`. It has to be built on Linux, against the Linux
+game.
+
 ---
 
 ## 🙏 Credits
@@ -480,6 +523,7 @@ edit `modding-api/` and run it again.
   **[BouncyCastle](https://www.bouncycastle.org/)** and **[Newtonsoft.Json](https://www.newtonsoft.com/json)**, all MIT
   (full notices in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)).
 - Skins compatible with **CustomKnight**.
+- **macOS support** by [Liam Murray](https://github.com/Lermatroid) (installer, macOS package and build tools).
 - **AI disclosure:** this mod was developed with the help of AI tools.
 
 ---

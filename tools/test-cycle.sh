@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
-# Compila el mod en Release (queda en out/HKMultiplayer). Con --game lo instala también en el juego de Steam.
+# Compila el mod en Release (queda en out/HKMultiplayer). Con --game lo instala también en el juego de Steam
+# (en macOS, el de ~/Library/Application Support/Steam; en Linux, el de ~/.local/share/Steam).
 # Uso: bash tools/test-cycle.sh [--game]
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# HK_STEAM_GAME manda si el juego está en otra biblioteca de Steam
-GAME="${HK_STEAM_GAME:-/c/Program Files (x86)/Steam/steamapps/common/Hollow Knight}"
+# Carpeta del juego de Steam según el sistema; HK_STEAM_GAME manda si está en otra biblioteca
+case "$(uname -s)" in
+  Darwin) STEAM_GAME="$HOME/Library/Application Support/Steam/steamapps/common/Hollow Knight" ;;
+  Linux) STEAM_GAME="$HOME/.local/share/Steam/steamapps/common/Hollow Knight" ;;
+  *) STEAM_GAME="/c/Program Files (x86)/Steam/steamapps/common/Hollow Knight" ;;
+esac
+GAME="${HK_STEAM_GAME:-$STEAM_GAME}"
 MOD_NAME="HKMultiplayer"
 INSTALL_GAME=false
 while [ $# -gt 0 ]; do
@@ -23,7 +29,12 @@ if ! $INSTALL_GAME; then
   exit 0
 fi
 
-managed="$GAME/hollow_knight_Data/Managed"
+# En macOS los datos del juego van dentro de la app
+if [ -d "$GAME/hollow_knight.app" ]; then
+  managed="$GAME/hollow_knight.app/Contents/Resources/Data/Managed"
+else
+  managed="$GAME/hollow_knight_Data/Managed"
+fi
 if [ ! -d "$managed" ]; then
   echo "no está el juego en $GAME" >&2
   exit 1

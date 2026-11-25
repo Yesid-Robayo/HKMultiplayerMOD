@@ -1,0 +1,52 @@
+HKMultiplayer @VERSION@ para Linux (EXPERIMENTAL) - mod cooperativo para Hollow Knight
+=====================================================================================
+
+Un jugador hostea un mundo coop y sus amigos se unen con la dirección del host y el código de la
+partida (o por Steam): comparten el mundo, se ven en tiempo real y pelean juntos contra los
+mismos enemigos y jefes.
+
+ESTA VERSIÓN DE LINUX ES EXPERIMENTAL: está lista, pero nadie la ha probado aún. Si la pruebas,
+cuéntanos si funciona (apartado 3).
+
+Necesitas:
+  - Hollow Knight 1.5.12620, la versión nativa de Linux de Steam (la versión actual).
+    Si juegas con Proton (Steam Play con la versión de Windows), este paquete NO es para ti:
+    usa el paquete de Windows e instálalo a mano como explica su LEEME.txt.
+  - Todos los jugadores tienen que tener la MISMA versión de HKMultiplayer (@VERSION@). Los de
+    Linux, Windows y macOS pueden jugar juntos si la versión coincide.
+
+(Instructions in English: README.txt)
+
+
+1. INSTALAR
+-----------
+
+  1. Cierra Hollow Knight.
+  2. Descomprime el zip, abre una terminal en la carpeta descomprimida y ejecuta:  bash install.sh
+     Si el juego no está en la carpeta habitual de Steam (~/.local/share/Steam), indícala:
+       bash install.sh "/ruta/a/Hollow Knight"
+     (En Steam: clic derecho en Hollow Knight > Administrar > Ver archivos locales.)
+  3. Abre Hollow Knight desde Steam: en el menú principal aparece "Multijugador".
+
+El instalador es un script corto que puedes leer antes de ejecutarlo. Guarda una copia de cada
+archivo del juego que cambia en "<juego>/HKMultiplayer-backup".
+
+Para actualizar a una versión nueva, instala el paquete nuevo encima.
+
+
+2. DESINSTALAR
+--------------
+
+  bash install.sh --uninstall ["/ruta/a/Hollow Knight"]
+
+Devuelve los archivos del juego desde la copia. "Verificar integridad de los archivos del juego"
+de Steam también deja el juego como estaba. Tus mundos coop y partidas no se tocan.
+
+
+3. SI ALGO FALLA
+----------------
+
+Abre un issue en https://github.com/Yesid-Robayo/HKMultiplayerMOD/issues y adjunta el
+ModLog.txt, que está en ~/.config/unity3d/Team Cherry/Hollow Knight/ModLog.txt
+(cópialo justo después del problema, antes de volver a abrir el juego: se reinicia en cada
+arranque). También puedes usar "Reportar un problema" en el menú Multijugador.
