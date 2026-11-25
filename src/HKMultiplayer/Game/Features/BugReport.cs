@@ -12,7 +12,9 @@ namespace HKMultiplayer.Game.Features;
 /// <summary>
 /// «Reportar un problema» (menú Multijugador del título y de la pausa): casi nadie adjuntaba el ModLog.txt a los issues.
 /// Abre en el navegador la página para crear un issue en GitHub con la versión del mod y un resumen del registro ya
-/// puestos, y copia al portapapeles el registro completo para pegarlo debajo.
+/// puestos, guarda el registro completo como <see cref="ReportFileName"/> y abre su carpeta con él seleccionado para
+/// arrastrarlo a la página (GitHub solo acepta adjuntos que arrastra el propio jugador). También lo copia al portapapeles,
+/// por si prefiere pegarlo.
 /// <para>
 /// El mod no envía nada por su cuenta: el jugador ve el texto en su navegador y decide si lo publica. Antes se quita del
 /// registro lo que podría identificarlo: su carpeta personal, su nombre de usuario y el del PC, direcciones IP, ID de
@@ -27,6 +29,9 @@ internal static class BugReport {
     private const string VersionField = "version";
 
     private const string LogsField = "logs";
+
+    /// <summary>El registro limpio para adjuntar, junto al ModLog.txt (se sobrescribe en cada informe).</summary>
+    private const string ReportFileName = "ModLog-report.txt";
 
     /// <summary>
     /// Lo que cabe del resumen en la dirección (los navegadores y GitHub cortan las muy largas; con tildes, cada carácter
@@ -52,10 +57,12 @@ internal static class BugReport {
     public static void Open() {
         try {
             var log = Sanitize(ReadModLog());
+            var report = Path.Combine(Application.persistentDataPath, ReportFileName);
+            File.WriteAllText(report, log, new UTF8Encoding(false));
             GUIUtility.systemCopyBuffer = log.Length > MaxClipboardChars ? log.Substring(log.Length - MaxClipboardChars) : log;
             var logs = new StringBuilder()
-                .AppendLine(Lang.T("Resumen del registro. El ModLog.txt completo ya está copiado: pégalo aquí debajo (Ctrl+V).",
-                    "Log summary. The full ModLog.txt is already copied: paste it below (Ctrl+V)."))
+                .AppendLine(Lang.T("Resumen del registro. Arrastra aquí ModLog-report.txt (en la carpeta que se abrió) o pega el registro completo (Ctrl+V).",
+                    "Log summary. Drag ModLog-report.txt here (from the folder that opened) or paste the full log (Ctrl+V)."))
                 .AppendLine("```")
                 .AppendLine(Summary(log))
                 .AppendLine("```")
@@ -63,14 +70,37 @@ internal static class BugReport {
             var url = $"{NewIssueUrl}?template={Template}&{VersionField}={Uri.EscapeDataString(HKMultiplayerMod.Version)}" +
                       $"&{LogsField}={Uri.EscapeDataString(logs)}";
             Application.OpenURL(url);
-            Log.Info($"Reportar un problema: se abre la página del issue (registro limpio de {log.Length} caracteres, copiado)");
-            Notice.Show(Lang.T("Se abrió GitHub: cuenta qué pasó y pega el registro (Ctrl+V), que ya está copiado.",
-                "GitHub opened: tell us what happened and paste the log (Ctrl+V), it's already copied."), 10f);
+            RevealFile(report);
+            Log.Info($"Reportar un problema: se abre la página del issue y la carpeta de {ReportFileName} " +
+                     $"(registro limpio de {log.Length} caracteres, también copiado)");
+            Notice.Show(Lang.T("Se abrió GitHub: cuenta qué pasó y arrastra ModLog-report.txt a la página (o pega el registro con Ctrl+V).",
+                "GitHub opened: tell us what happened and drag ModLog-report.txt onto the page (or paste the log with Ctrl+V)."), 12f);
         } catch (Exception e) {
             Log.Warn($"Reportar un problema: no se pudo preparar el informe: {e.Message}");
             Notice.Show(Lang.T("No se pudo abrir GitHub. Adjunta a mano el ModLog.txt (mira el README).",
                 "Couldn't open GitHub. Attach ModLog.txt by hand (see the README)."), 10f);
         }
+    }
+
+    /// <summary>
+    /// Abre la carpeta del archivo con él seleccionado (en Windows con el Explorador, en macOS con el Finder); en Linux, la
+    /// carpeta. Si no se puede seleccionar, se abre la carpeta.
+    /// </summary>
+    private static void RevealFile(string path) {
+        try {
+            switch (Application.platform) {
+                case RuntimePlatform.WindowsPlayer:
+                    System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
+                    return;
+                case RuntimePlatform.OSXPlayer:
+                    System.Diagnostics.Process.Start("open", $"-R \"{path}\"");
+                    return;
+            }
+        } catch (Exception e) {
+            Log.Warn($"Reportar un problema: no se pudo seleccionar el archivo en su carpeta: {e.Message}");
+        }
+
+        Application.OpenURL(new Uri(Path.GetDirectoryName(path) ?? path).AbsoluteUri);
     }
 
     /// <summary>El ModLog.txt de esta sesión (lo tiene abierto la Modding API para escribir: se lee compartido).</summary>

@@ -16,8 +16,9 @@ Al publicar una versión nueva, se añade aquí arriba con lo mismo que su secci
 - **Linux nativo (experimental, aún sin probar)**: paquete e instalador para la versión de Linux del juego. Con
   Proton sigue valiendo el paquete de Windows.
 - **Reportar un problema**: botón nuevo en el menú *Multijugador* (del título y de la pausa). Abre la página de GitHub
-  para crear un issue con la versión y un resumen del registro ya puestos, y copia el registro completo (sin tu
-  carpeta de usuario, nombres, IP ni códigos de partida) para que solo tengas que pegarlo.
+  para crear un issue con la versión y un resumen del registro ya puestos, y guarda el registro completo como
+  `ModLog-report.txt` (sin tu carpeta de usuario, nombres, IP ni códigos de partida) y abre su carpeta, para que solo
+  tengas que arrastrarlo a la página.
 - **«Abrir la carpeta de los mundos»** arma bien la ruta de la carpeta en todos los sistemas.
 - **Final del Hollow Knight**: a veces el Hollow Knight desaparecía al matarlo y no pasaba nada más, así que no se
   podía acabar el juego. Ahora su cuerpo queda siempre en la arena y se puede absorber con Focus para ver el final.
