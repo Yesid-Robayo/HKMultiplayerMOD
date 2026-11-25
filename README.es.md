@@ -100,6 +100,9 @@ escrito desde cero sobre la Modding API de Hollow Knight.
   *Multijugador* eliges quién puede entrar por Steam: **amigos**, **solo invitados** o **nadie**.
 - **Steam e IP a la vez**: en la misma partida unos pueden entrar por Steam y otros por IP. Quien no tenga Steam
   entra al host por IP, en la misma red o por internet.
+- **Steam es opcional**: el mod no lo necesita. Usa solo las funciones normales de Steam (salas de amigos, invitaciones
+  y su red), sin tocar sus archivos ni nada de tu cuenta, y el juego no tiene anticheat. Aun así, si prefieres no usar
+  nada de Steam, juega por IP (red local o VPN) y en *Multijugador* elige **nadie** en quién puede entrar por Steam.
 - Funciona en **red local y por internet** (por Steam no hace falta abrir nada; por IP, en internet el host abre el
   puerto UDP en su router o se usa una VPN de red local como Radmin VPN, ZeroTier o Tailscale).
 - **Personaje de cada invitado** guardado en el mundo del host: se envía en los bancos, cada 30 segundos y al salir.

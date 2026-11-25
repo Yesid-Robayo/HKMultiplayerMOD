@@ -99,6 +99,10 @@ API.
   choose who can join through Steam: **friends**, **invited only** or **nobody**.
 - **Steam and IP at the same time**: in the same game some players can join through Steam and others by IP. Anyone
   without Steam joins the host by IP, on the same network or over the internet.
+- **Steam is optional**: the mod doesn't need it. It only uses Steam's regular features (friends lobbies, invites and
+  its network), without touching its files or anything in your account, and the game has no anti-cheat. Still, if you'd
+  rather not use Steam at all, play by IP (local network or VPN) and in *Multiplayer* set who can join through Steam to
+  **nobody**.
 - Works on a **local network and over the internet** (through Steam you don't open anything; by IP, over the internet
   the host opens the UDP port on their router, or you use a virtual LAN such as Radmin VPN, ZeroTier or Tailscale).
 - **Each guest's character** is saved in the host's world: it is sent at benches, every 30 seconds and when leaving.
