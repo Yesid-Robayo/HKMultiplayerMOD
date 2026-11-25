@@ -397,8 +397,14 @@ aún no lo tiene, puedes armarlo tú: mira [Desarrollo](#-desarrollo).
 | El antivirus borra el instalador | Es un falso positivo: el instalador es de código abierto ([`tools/installer/launcher`](tools/installer/launcher)) y cada release trae su SHA256 para comprobar el zip. |
 | Steam actualizó el juego | La actualización sustituye la Modding API y el juego vuelve a ir sin mods. Espera a la versión del mod para la nueva; para dejarlo limpio, *Desinstalar* en el instalador. |
 
-Tu `ModLog.txt` está en `C:\Users\<tu usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt`. Lleva los nombres
-de jugador de la partida, pero no el de tu PC ni el de Windows, ni rutas de tu usuario.
+Lo más fácil para avisar de un problema: **Multijugador › Reportar un problema** (en el menú principal o en la pausa).
+Abre la página de GitHub para crear un *issue* con la versión del mod y un resumen del registro ya puestos, y copia el
+registro completo para que solo tengas que pegarlo (Ctrl+V). Antes de copiarlo quita tu carpeta de usuario, tu nombre de
+usuario y el del PC, las direcciones IP y los códigos de partida. No se envía nada hasta que lo publiques tú.
+
+Tu `ModLog.txt` está en `C:\Users\<tu usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt` (en macOS,
+`~/Library/Application Support/unity.Team Cherry.Hollow Knight/`; en Linux, `~/.config/unity3d/Team Cherry/Hollow
+Knight/`). Lleva los nombres de jugador de la partida, pero no el de tu PC ni el de Windows, ni rutas de tu usuario.
 
 ---
 

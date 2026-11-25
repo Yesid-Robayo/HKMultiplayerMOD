@@ -15,6 +15,9 @@ release notes.
   [Liam Murray](https://github.com/Lermatroid). Mac and Windows players can play together.
 - **Native Linux (experimental, not tested yet)**: package and installer for the Linux version of the game. With
   Proton, the Windows package keeps working.
+- **Report a problem**: new button in the *Multiplayer* menu (main menu and pause). It opens the GitHub page to create
+  an issue with the version and a summary of the log already filled in, and copies the full log (without your user
+  folder, names, IPs or game codes) so you just paste it.
 - **"Open worlds folder"** builds the folder path correctly on every system.
 - **Hollow Knight ending**: sometimes the Hollow Knight vanished when killed and nothing happened, so the game
   couldn't be finished. Now his body always stays in the arena and can be absorbed with Focus for the ending.

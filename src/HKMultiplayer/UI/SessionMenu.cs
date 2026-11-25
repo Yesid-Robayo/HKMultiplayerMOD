@@ -232,6 +232,8 @@ internal sealed class SessionMenu : GameStyledMenu {
         AddButton(pages, Lang.T("Ajustes de la partida", "Game settings"), () => ShowPage(SettingsPage), 36, 560);
         AddButton(pages, Lang.T("Compañeros", "Partners"), () => ShowPage(PartnersPage), 36, 420);
         AddButton(pages, Lang.T("Skin y sonido", "Skin & sound"), () => ShowPage(SkinPage), 36, 420);
+        // Abre un issue en GitHub con el registro ya preparado (ver BugReport)
+        AddButton(main, Lang.T("Reportar un problema", "Report a problem"), BugReport.Open, 32);
         _leave = AddButton(main, Lang.T("Cerrar partida", "Close game"), () => ShowPage(LeavePage));
 
         var leave = NewPage(LeavePage);

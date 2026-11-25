@@ -104,6 +104,8 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         AddSpace(start, 30);
         AddButton(start, Lang.T("Hostear un mundo", "Host a world"), () => ShowPage(HostPage));
         AddButton(start, Lang.T("Unirse a un mundo", "Join a world"), () => ShowPage(JoinPage));
+        // Abre un issue en GitHub con el registro ya preparado (ver BugReport)
+        AddButton(start, Lang.T("Reportar un problema", "Report a problem"), BugReport.Open, 34);
         AddSpace(start, 16);
         _updateText = AddText(start, string.Empty, 28);
         _updateButton = AddButton(start, string.Empty, OpenUpdatePage, 34);

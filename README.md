@@ -391,8 +391,14 @@ doesn't have it yet, you can build it yourself: see [Development](#-development)
 | The antivirus deletes the installer | It's a false positive: the installer is open source ([`tools/installer/launcher`](tools/installer/launcher)) and each release lists its SHA256 to check the zip. |
 | Steam updated the game | The update replaces the Modding API and the game runs without mods again. Wait for the mod version for the new one; to leave it clean, *Uninstall* in the installer. |
 
-Your `ModLog.txt` is at `C:\Users\<your user>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt`. It contains the
-player names of the game, but not your PC's or Windows name, or paths with your user.
+The easiest way to report a problem: **Multiplayer › Report a problem** (in the main menu or the pause menu). It opens
+the GitHub page to create an *issue* with the mod version and a summary of the log already filled in, and copies the
+full log so you only have to paste it (Ctrl+V). Before copying it removes your user folder, your user and PC names, IP
+addresses and game codes. Nothing is sent until you submit it yourself.
+
+Your `ModLog.txt` is at `C:\Users\<your user>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt` (on macOS,
+`~/Library/Application Support/unity.Team Cherry.Hollow Knight/`; on Linux, `~/.config/unity3d/Team Cherry/Hollow
+Knight/`). It contains the player names of the game, but not your PC's or Windows name, or paths with your user.
 
 ---
 
