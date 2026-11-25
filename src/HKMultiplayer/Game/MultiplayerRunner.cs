@@ -113,6 +113,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
     /// <summary>Las marcas del mapa de cada jugador, también en el de los demás.</summary>
     public Features.SharedMapMarkers MapMarkers { get; } = new();
 
+    /// <summary>La sala del Hollow Knight: su presentación al entrar con el combate empezado y su cuerpo, siempre en la arena.</summary>
+    public Features.FinalBossRoom FinalBossRoom { get; } = new();
+
     /// <summary>«Ponerme al nivel del host» para los invitados.</summary>
     public Features.MatchHostLevel MatchHost { get; } = new();
 
@@ -451,6 +454,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
             QuickChat.Update(scene);
             Chat.Update();
             MapMarkers.Update();
+            FinalBossRoom.Update(scene);
             MatchHost.Update();
             Presence.Update();
             Summary.Update();

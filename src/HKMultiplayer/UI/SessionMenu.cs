@@ -90,6 +90,7 @@ internal sealed class SessionMenu : GameStyledMenu {
     private MenuOptionHorizontal _skinOption;
     private MenuOptionHorizontal _showSkinsOption;
     private MenuOptionHorizontal _reviveVolumeOption;
+    private MenuOptionHorizontal _quickMessagesOption;
     private Text _skinStatus;
     private string[] _skinChoices = { "Normal" };
 
@@ -247,7 +248,8 @@ internal sealed class SessionMenu : GameStyledMenu {
     }
 
     /// <summary>
-    /// Skin propia, si se ven las de los demás y el volumen de revivir (de este PC; se guardan en sus ajustes).
+    /// Skin propia, si se ven las de los demás, el volumen de revivir y si se envían mensajes rápidos (de este PC; se
+    /// guardan en sus ajustes).
     /// </summary>
     private void BuildSkinPage() {
         var page = NewPage(SkinPage);
@@ -265,6 +267,8 @@ internal sealed class SessionMenu : GameStyledMenu {
         AddSpace(page, 6);
         _reviveVolumeOption = AddOption(page, Lang.T("Volumen de revivir", "Revive volume"), ReviveAudio.VolumeLabels(),
             ReviveAudio.VolumeIndex(), index => SetOptionValue(_reviveVolumeOption, ReviveAudio.SetVolume(index)));
+        _quickMessagesOption = AddOption(page, Lang.T("Mensajes rápidos", "Quick messages"), Lang.Labels(new[] { "Sí", "No" }, new[] { "Yes", "No" }),
+            QuickChat.Enabled ? 0 : 1, index => QuickChat.SetEnabled(index == 0));
     }
 
     /// <summary>Lista de skins (puede cambiar con el juego abierto) y qué lleva cada uno.</summary>
@@ -289,6 +293,7 @@ internal sealed class SessionMenu : GameStyledMenu {
         SetOptionValue(_skinOption, selected > 0 ? selected : 0);
         SetOptionValue(_showSkinsOption, Skins.ShowOthers ? 0 : 1);
         SetOptionValue(_reviveVolumeOption, ReviveAudio.VolumeIndex());
+        SetOptionValue(_quickMessagesOption, QuickChat.Enabled ? 0 : 1);
         _skinStatus.text = Skins.Current?.DescribeForPanel(session) ?? string.Empty;
     }
 

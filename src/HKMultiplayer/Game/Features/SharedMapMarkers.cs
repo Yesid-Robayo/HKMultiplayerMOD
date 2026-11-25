@@ -75,6 +75,12 @@ internal sealed class SharedMapMarkers {
             orig(self);
             _active?.AddPartnerMarkers(self);
         };
+        // El juego apaga sus chinchetas al cerrar el mapa rápido (CloseQuickMap) y al cambiar de zona en él; las copias
+        // de los compañeros no son suyas y se quedaban en la pantalla con el mapa cerrado (issue #24)
+        On.GameMap.DisableMarkers += (orig, self) => {
+            orig(self);
+            _active?.DestroyCopies();
+        };
     }
 
     public void Detach() {

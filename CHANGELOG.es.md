@@ -9,6 +9,22 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.43.0
+
+- **Final del Hollow Knight**: a veces el Hollow Knight desaparecía al matarlo y no pasaba nada más, así que no se
+  podía acabar el juego. Ahora su cuerpo queda siempre en la arena y se puede absorber con Focus para ver el final.
+- **Hornet en la última fase**: con el Corazón del Vacío, Hornet aparece siempre para sujetar al Hollow Knight y,
+  cuando él se suelta, sale despedida y queda herida en el suelo, en todos los PCs.
+- **Recargar la sala del Hollow Knight en pleno combate**: había dos Hollow Knights, uno colgado de las cadenas y otro
+  peleando. Ahora quien entra con el combate en marcha lo ve tal como está.
+- **Plataformas de la Radiancia**: el invitado podía pisarlas pero no se veían. Ahora se ven en todos los PCs.
+- **Final de la Radiancia**: la escena final podía quedarse esperando para siempre. Ahora cada jugador la sigue en su
+  PC, puede dar los golpes con su botón y todos ven el final.
+- **Marcas del mapa del compañero**: las marcas del host ya no se quedan en la pantalla del invitado al cerrar el mapa.
+- **Mensajes rápidos con sus propias teclas**: ahora las teclas **1** a **4** o el **stick derecho**, que el juego no usa.
+  Antes eran el botón del mapa rápido más una dirección, y abrir el mapa mientras te movías los enviaba sin querer.
+  También se pueden apagar en *Pausa › Multijugador › Skin y sonido › Mensajes rápidos*.
+
 ## 0.42.1
 
 - **Final de los Hermanos Sellados**: con el Corazón del Vacío, rematar al Hollow Knight sin usar el aguijón onírico

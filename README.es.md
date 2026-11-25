@@ -4,7 +4,7 @@
 
 **Mod cooperativo para Hollow Knight: juega el mundo entero con tus amigos, en red local o por internet.**
 
-![Versión](https://img.shields.io/badge/versión-0.42.1-7fb2ff)
+![Versión](https://img.shields.io/badge/versión-0.43.0-7fb2ff)
 ![Estado](https://img.shields.io/badge/estado-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-2f5fb3)
@@ -243,9 +243,10 @@ escrito desde cero sobre la Modding API de Hollow Knight.
   muescas y los amuletos que lleva, **dar geo**, **ir con él** (apareces a su lado, también en otra sala),
   **desatascarse** (al último suelo seguro) y **recargar la sala**. El host puede además **expulsar** a un jugador
   (pulsando dos veces): ya no puede volver a esa partida.
-- **Mensajes rápidos**: con el botón del mapa rápido pulsado, una dirección. Arriba, «¡Aquí!», marca tu sitio;
-  derecha, «¡A por él!», marca el enemigo más cercano (la marca lo sigue); abajo, «¡Ayuda!», e izquierda, «¡Espera!».
-  Con teclado y con mando.
+- **Mensajes rápidos**: teclas **1** a **4** en el teclado o el **stick derecho** en el mando (el juego no usa ninguno de
+  los dos). 1 o arriba, «¡Aquí!», marca tu sitio; 2 o derecha, «¡A por él!», marca el enemigo más cercano (la marca lo
+  sigue); 3 o abajo, «¡Ayuda!»; 4 o izquierda, «¡Espera!». Una tecla que hayas asignado a una acción del juego no envía
+  nada. Se apagan en *Pausa › Multijugador › Skin y sonido › Mensajes rápidos* (los de tus compañeros se siguen viendo).
 - **Chat**: pulsa **T** para escribir y Enter para enviar (Esc cancela), también sentado en un banco. Solo con
   teclado; con mando, los mensajes rápidos.
 - **Chinchetas del mapa compartidas**: con «Mapa compartido», las chinchetas que cada uno pone en su mapa salen

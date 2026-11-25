@@ -4,7 +4,7 @@
 
 **A co-op mod for Hollow Knight: play the whole world with your friends, on your local network or over the internet.**
 
-![Version](https://img.shields.io/badge/version-0.42.1-7fb2ff)
+![Version](https://img.shields.io/badge/version-0.43.0-7fb2ff)
 ![Status](https://img.shields.io/badge/status-beta-f0c86a)
 ![Hollow Knight](https://img.shields.io/badge/Hollow%20Knight-1.5.12620-e8ecf3)
 ![Platform](https://img.shields.io/badge/platform-Windows-2f5fb3)
@@ -241,9 +241,10 @@ API.
   equipped charms, **give geo**, **go to** them (you appear next to them, even in another room), **unstuck** (back to
   the last safe ground) and **reload the room**. The host can also **kick** a player (press twice): they can't rejoin
   that game.
-- **Quick messages**: hold the quick map button and press a direction. Up, "Over here!", marks your spot; right, "Get
-  it!", marks the nearest enemy (the mark follows it); down, "Help!", and left, "Wait!". Works with keyboard and
-  controller.
+- **Quick messages**: keys **1** to **4** on the keyboard, or the **right stick** on a controller (the game doesn't use
+  either). 1 or up, "Over here!", marks your spot; 2 or right, "Get it!", marks the nearest enemy (the mark follows it);
+  3 or down, "Help!"; 4 or left, "Wait!". A key you bound to a game action doesn't send anything. You can turn them off
+  in *Pause › Multiplayer › Skin & sound › Quick messages* (you still see your partners' messages).
 - **Chat**: press **T** to type and Enter to send (Esc cancels), also while sitting on a bench. Keyboard only; with a
   controller, use quick messages.
 - **Shared map pins**: with "Shared map" on, the pins each player places on their map also show on their partners'.

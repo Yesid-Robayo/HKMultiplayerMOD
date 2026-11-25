@@ -9,6 +9,22 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.43.0
+
+- **Hollow Knight ending**: sometimes the Hollow Knight vanished when killed and nothing happened, so the game
+  couldn't be finished. Now his body always stays in the arena and can be absorbed with Focus for the ending.
+- **Hornet in the last phase**: with Void Heart, Hornet now always shows up to hold the Hollow Knight, and when he
+  breaks free she is thrown back and lies wounded on the ground, on every PC.
+- **Reloading the Hollow Knight's room mid-fight**: there were two Hollow Knights, one still hanging from the chains
+  and another one fighting. Now whoever enters with the fight already going sees it as it is.
+- **Radiance platforms**: the guest could stand on them but they were invisible. Now they show on every PC.
+- **Radiance ending**: the final scene could get stuck waiting forever. Now each player follows it on their own PC,
+  can strike with their own button and everyone sees the ending.
+- **Partner's map pins**: the host's pins no longer stay on the guest's screen after closing the map.
+- **Quick messages with their own keys**: now keys **1** to **4** or the **right stick**, which the game doesn't use.
+  Before, they were the quick map button plus a direction, and opening the map while moving sent them by accident.
+  They can also be turned off in *Pause › Multiplayer › Skin & sound › Quick messages*.
+
 ## 0.42.1
 
 - **Sealed Siblings ending**: with Void Heart, finishing off the Hollow Knight without using the dream nail took

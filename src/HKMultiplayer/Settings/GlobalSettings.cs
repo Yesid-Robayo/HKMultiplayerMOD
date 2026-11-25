@@ -56,6 +56,12 @@ public sealed class GlobalSettings {
     public int ReviveVolume { get; set; } = 200;
 
     /// <summary>
+    /// Si en este PC las teclas 1 a 4 y el stick derecho envían mensajes rápidos (<c>Game.Features.QuickChat</c>). Para
+    /// quien no los quiere (issue #24). Los mensajes de los demás se siguen viendo.
+    /// </summary>
+    public bool QuickMessages { get; set; } = true;
+
+    /// <summary>
     /// Últimas partidas por IP en las que entró este jugador, la más reciente primero (como mucho
     /// <see cref="MaxRecentGames"/>): para volver con un clic sin escribir otra vez la dirección ni el código. Se guardan
     /// solo en este PC.

@@ -8,13 +8,15 @@ using UnityEngine;
 namespace HKMultiplayer.Game.Features;
 
 /// <summary>
-/// Mensajes rápidos y marcas para el compañero, con teclado o mando: con el mapa rápido pulsado (que ya para al caballero),
-/// cada dirección envía un mensaje a todos.
+/// Mensajes rápidos y marcas para el compañero: en el teclado las teclas 1 a 4 y en el mando el stick derecho, que el juego
+/// no usa (solo para mover el mapa, y con el mapa abierto no cuentan). Antes eran el mapa rápido más una dirección, y
+/// quien abría el mapa mientras se movía los enviaba sin querer (issue #24).
 /// <list type="bullet">
-/// <item>Arriba, «¡Aquí!»: marca el sitio donde está quien lo envía.</item>
-/// <item>Derecha, «¡A por él!»: marca el enemigo más cercano (la marca lo sigue mientras vive).</item>
-/// <item>Abajo, «¡Ayuda!», e izquierda, «¡Espera!»: solo el aviso.</item>
+/// <item>1 o stick arriba, «¡Aquí!»: marca el sitio donde está quien lo envía.</item>
+/// <item>2 o stick a la derecha, «¡A por él!»: marca el enemigo más cercano (la marca lo sigue mientras vive).</item>
+/// <item>3 o stick abajo, «¡Ayuda!», y 4 o stick a la izquierda, «¡Espera!»: solo el aviso.</item>
 /// </list>
+/// Una tecla que el jugador asignó a una acción del juego no envía nada.
 /// Todos ven el aviso con el nombre de quien lo envía; los que están en su sala ven además la marca, una flecha del color
 /// del jugador (el de su brújula en el mapa) con el mensaje encima, que dura unos segundos.
 /// </summary>
@@ -94,7 +96,7 @@ internal sealed class QuickChat {
         _ => Lang.T("¡A por él!", "Get it!")
     };
 
-    /// <summary>Cada frame: lee la combinación del mapa rápido y mueve o quita las marcas.</summary>
+    /// <summary>Cada frame: lee las teclas y el stick derecho y mueve o quita las marcas.</summary>
     public void Update(string scene) {
         if (scene != _scene) {
             _scene = scene;
@@ -109,24 +111,94 @@ internal sealed class QuickChat {
         UpdateMarkers();
     }
 
+    /// <summary>Si este PC envía mensajes rápidos (se elige en el menú; los de los demás siempre llegan).</summary>
+    public static bool Enabled => HKMultiplayerMod.Settings.QuickMessages;
+
+    /// <summary>Activa o no los mensajes rápidos en este PC (se guarda).</summary>
+    public static void SetEnabled(bool enabled) {
+        HKMultiplayerMod.Settings.QuickMessages = enabled;
+        HKMultiplayerMod.SaveSettings();
+        Log.Info($"Mensajes rápidos: {(enabled ? "activados" : "desactivados")}");
+    }
+
+    /// <summary>Teclas de cada mensaje (fila de números y teclado numérico), en el orden 1 a 4.</summary>
+    private static readonly (KeyCode Row, InControl.Key RowKey, KeyCode Pad, InControl.Key PadKey, byte Kind)[] MessageKeys = {
+        (KeyCode.Alpha1, InControl.Key.Key1, KeyCode.Keypad1, InControl.Key.Pad1, Here),
+        (KeyCode.Alpha2, InControl.Key.Key2, KeyCode.Keypad2, InControl.Key.Pad2, Attack),
+        (KeyCode.Alpha3, InControl.Key.Key3, KeyCode.Keypad3, InControl.Key.Pad3, Help),
+        (KeyCode.Alpha4, InControl.Key.Key4, KeyCode.Keypad4, InControl.Key.Pad4, Wait)
+    };
+
+    /// <summary>
+    /// Cuánto hay que inclinar el stick derecho para enviar, y por debajo de cuánto vuelve a estar en el centro (hay que
+    /// soltarlo antes del siguiente: un roce o mantenerlo no envía varios).
+    /// </summary>
+    private const float StickPush = 0.6f;
+
+    private const float StickRest = 0.3f;
+
+    private bool _stickArmed = true;
+
     private void ReadInput() {
         var input = InputHandler.Instance;
-        var hero = HeroController.instance;
-        var gm = GameManager.instance;
-        if (input == null || hero == null || gm == null || gm.isPaused || hero.cState.transitioning ||
-            !input.inputActions.quickMap.IsPressed) {
+        var stick = input != null ? input.inputActions.rightStick.Vector : Vector2.zero;
+        if (stick.magnitude < StickRest) {
+            _stickArmed = true;
+        }
+
+        if (!Enabled || input == null || !CanSendNow(input)) {
             return;
         }
 
-        var actions = input.inputActions;
-        var kind = actions.up.WasPressed ? Here
-            : actions.right.WasPressed ? Attack
-            : actions.down.WasPressed ? Help
-            : actions.left.WasPressed ? Wait
-            : byte.MaxValue;
-        if (kind != byte.MaxValue) {
-            Send(kind);
+        foreach (var (row, rowKey, pad, padKey, kind) in MessageKeys) {
+            if (Input.GetKeyDown(row) && !BoundInGame(input, rowKey) || Input.GetKeyDown(pad) && !BoundInGame(input, padKey)) {
+                Send(kind);
+                return;
+            }
         }
+
+        // El stick derecho solo mueve el mapa: con el mapa rápido abierto no cuenta
+        if (!_stickArmed || stick.magnitude < StickPush || input.inputActions.quickMap.IsPressed) {
+            return;
+        }
+
+        _stickArmed = false;
+        Send(Mathf.Abs(stick.x) > Mathf.Abs(stick.y)
+            ? stick.x > 0f ? Attack : Wait
+            : stick.y > 0f ? Here : Help);
+    }
+
+    /// <summary>
+    /// Solo jugando con el caballero: no en pausa, ni cambiando de sala, ni sin control (inventario, mapa, cinemáticas,
+    /// diálogos, banco), ni escribiendo en el chat (un «1» en el texto no es un mensaje).
+    /// </summary>
+    private static bool CanSendNow(InputHandler input) {
+        var hero = HeroController.instance;
+        var gm = GameManager.instance;
+        var chat = MultiplayerRunner.Instance?.Chat;
+        return hero != null && gm != null && !gm.isPaused && !hero.cState.transitioning && !hero.cState.dead &&
+               hero.acceptingInput && !hero.controlReqlinquished && (chat == null || !chat.IsOpen) &&
+               input.acceptingInput;
+    }
+
+    /// <summary>Si el jugador asignó esa tecla a alguna acción del juego (entonces no es un mensaje).</summary>
+    private static bool BoundInGame(InputHandler input, InControl.Key key) {
+        foreach (var action in input.inputActions.Actions) {
+            foreach (var binding in action.Bindings) {
+                if (binding is not InControl.KeyBindingSource keys) {
+                    continue;
+                }
+
+                var combo = keys.Control;
+                for (var i = 0; i < combo.IncludeCount; i++) {
+                    if (combo.GetInclude(i) == key) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Envía un mensaje rápido del caballero local (también lo usan las órdenes de diagnóstico).</summary>

@@ -224,6 +224,20 @@ internal sealed class EnemySync {
     /// <summary>En el mensaje de estados: el enemigo está en reposo entre dos ataques.</summary>
     private const byte CalmStateFlag = 4;
 
+    /// <summary>En el mensaje de estados: el enemigo está en una escena guionizada (ver <see cref="ScriptedScenes"/>).</summary>
+    private const byte ScriptedStateFlag = 8;
+
+    /// <summary>
+    /// Escenas guionizadas de un jefe que no se cortan pasándolo a otro PC: enemigo, FSM y estado que dura toda la escena.
+    /// El Hollow Knight, con el Corazón del Vacío, espera en «Waiting for Hornet Scene» desde que llega a su última fase
+    /// hasta que se suelta de Hornet: el rugido largo, Hornet clavándolo y la entrada al sueño. Pasado a otro PC a mitad,
+    /// el nuevo lo retomaba desde «Idle»: Hornet no aparecía, el jefe seguía con todos sus ataques y, si moría en el aire,
+    /// su cuerpo salía volando fuera de la arena y no había final (issue #25).
+    /// </summary>
+    private static readonly (string Enemy, string Fsm, string State)[] ScriptedScenes = {
+        ("Hollow Knight Boss", "Phase Control", "Waiting for Hornet Scene")
+    };
+
     /// <summary>
     /// Velocidad (unidades/s, medida entre dos repartos) a partir de la cual no cambia de PC: va embistiendo o lanzándose.
     /// El Moss Charger embiste a 15 y cruzaba de un jugador al otro: pasaba al PC del otro a mitad de la embestida, su
@@ -319,6 +333,12 @@ internal sealed class EnemySync {
         public bool StartPrepared;
 
         /// <summary>
+        /// Piezas apagadas que su propia lógica suelta al encenderse (Hornet herida, que sale despedida al soltarse el Hollow
+        /// Knight): en la marioneta se sueltan cuando su efecto las enciende (ver PrepareUnstarted). Null si ninguna.
+        /// </summary>
+        public List<GameObject> PendingLaunch;
+
+        /// <summary>
         /// La cámara de este PC quiso despertar su lógica (`FSMActivator`) siendo marioneta: se despierta al pasar a moverlo
         /// este PC (ver HoldPuppetActivation).
         /// </summary>
@@ -403,6 +423,12 @@ internal sealed class EnemySync {
 
         /// <summary>Lo último enviado de si estaba en reposo (si cambia, se envía aunque no se haya movido).</summary>
         public bool LastSentCalm;
+
+        /// <summary>Si estaba en una escena guionizada según lo último que envió el PC que lo mueve.</summary>
+        public bool RemoteScripted;
+
+        /// <summary>Lo último enviado de si estaba en una escena guionizada.</summary>
+        public bool LastSentScripted;
 
         /// <summary>Desde cuándo el dueño quiere pasar el jefe a otro y espera a que acabe su ataque (0: no espera).</summary>
         public float SwitchWantedSince;
@@ -1400,14 +1426,16 @@ internal sealed class EnemySync {
 
             var state = Capture(enemy, tick);
             var calm = IsCalmHere(enemy);
+            var scripted = InScriptedSceneHere(enemy);
             if (state.SameLook(enemy.LastSent) && state.Rotation == enemy.LastSent.Rotation &&
                 state.Extra == enemy.LastSent.Extra && state.Damage == enemy.LastSent.Damage && state.Z == enemy.LastSent.Z &&
-                calm == enemy.LastSentCalm && tick - enemy.LastSentTick < KeepAliveTicks) {
+                calm == enemy.LastSentCalm && scripted == enemy.LastSentScripted && tick - enemy.LastSentTick < KeepAliveTicks) {
                 continue;
             }
 
             enemy.LastSent = state;
             enemy.LastSentCalm = calm;
+            enemy.LastSentScripted = scripted;
             enemy.LastSentTick = tick;
             // Cada enemigo ocupa 24 bytes: en salas con muchos (las jaulas del Coliseo) van en varios mensajes
             if (writer == null || count == MaxEntriesPerMessage || writer.Position > StatesMessageLimit) {
@@ -1427,7 +1455,8 @@ internal sealed class EnemySync {
             writer.WriteFloat(state.X);
             writer.WriteFloat(state.Y);
             writer.WriteFloat(state.Z);
-            writer.WriteByte((byte) ((state.FacingRight ? 1 : 0) | (state.Visible ? 2 : 0) | (calm ? CalmStateFlag : 0)));
+            writer.WriteByte((byte) ((state.FacingRight ? 1 : 0) | (state.Visible ? 2 : 0) | (calm ? CalmStateFlag : 0) |
+                                     (scripted ? ScriptedStateFlag : 0)));
             writer.WriteUShort(state.SpriteId);
             writer.WriteByte(state.Collection);
             writer.WriteUShort(state.Rotation);
@@ -1608,19 +1637,22 @@ internal sealed class EnemySync {
     }
 
     /// <summary>
-    /// El final del Panteón de Hallownest: la Radiancia Absoluta recibe el golpe final y empieza la escena del Señor de las
-    /// Sombras, con los golpes que da cada jugador con su botón. Desde ese estado, cada PC sigue el final con su propia
-    /// lógica: antes lo llevaba el PC que la movía, el jefe podía pasar a otro a mitad (su espera de esos golpes parecía
-    /// un reposo), los golpes del que la movía salían solos en los demás y su escena se veía a medias en los otros PCs.
+    /// Los finales de la Radiancia: la del Panteón de Hallownest (Radiancia Absoluta) y la del sueño del Hollow Knight
+    /// (final de Sueño Eterno). Recibe el golpe final y empieza la escena de la sombra del caballero, con los golpes que da
+    /// cada jugador con su botón. Desde ese estado, cada PC sigue el final con su propia lógica: antes lo llevaba el PC que
+    /// la movía, el jefe podía pasar a otro a mitad (su espera de esos golpes parecía un reposo), los golpes del que la
+    /// movía salían solos en los demás y su escena se veía a medias o se quedaba esperando en los otros PCs (issue #25).
     /// </summary>
-    private const string FinaleBoss = "Absolute Radiance";
+    private static readonly HashSet<string> FinaleBosses = new() { "Absolute Radiance", "Radiance" };
+
+    private static bool IsFinaleBoss(string name) => FinaleBosses.Contains(name);
 
     private const string FinaleState = "Final Impact";
 
     /// <summary>Sala en la que este PC lleva su propio final (ver <see cref="FinaleRunning"/>).</summary>
     private string _finaleScene;
 
-    /// <summary>Este PC sigue por su cuenta el final del Panteón de Hallownest (ver <see cref="FinaleBoss"/>).</summary>
+    /// <summary>Este PC sigue por su cuenta el final de la Radiancia (ver <see cref="FinaleBosses"/>).</summary>
     public static bool FinaleRunning => _active != null && _active._finaleScene != null && _active._finaleScene == _active._scene;
 
     /// <summary>
@@ -2638,6 +2670,14 @@ internal sealed class EnemySync {
             return;
         }
 
+        ReleasePart(enemy, part);
+    }
+
+    /// <summary>
+    /// Suelta una pieza de la marioneta y le devuelve su lógica: sus FSM dejan de ser de la marioneta y funcionan solas en
+    /// este PC, como en el que movía al enemigo (el cadáver del Hollow Knight, Hornet herida).
+    /// </summary>
+    private void ReleasePart(Enemy enemy, GameObject part) {
         part.transform.SetParent(null, true);
         foreach (var fsm in part.GetComponentsInChildren<PlayMakerFSM>(true)) {
             if (!enemy.Disabled.Remove(fsm)) {
@@ -2887,7 +2927,7 @@ internal sealed class EnemySync {
 
         // Solo sus efectos (sonido y arena); la lógica de la marioneta sigue parada
         var state = states[stateIndex];
-        if (state.Name == FinaleState && enemy.Root.name == FinaleBoss) {
+        if (state.Name == FinaleState && IsFinaleBoss(enemy.Root.name)) {
             StartFinale(enemy, enemy.Fsms[fsmIndex]);
             return;
         }
@@ -2942,6 +2982,14 @@ internal sealed class EnemySync {
                     action.OnEnter();
                 } finally {
                     _replaying = false;
+                }
+
+                // Una pieza que su lógica suelta al encenderse: aquí también se suelta y funciona sola
+                if (action is HutongGames.PlayMaker.Actions.ActivateGameObject activated && enemy.PendingLaunch != null) {
+                    var launched = action.Fsm.GetOwnerDefaultTarget(activated.gameObject);
+                    if (launched != null && launched.activeInHierarchy && enemy.PendingLaunch.Remove(launched)) {
+                        ReleasePart(enemy, launched);
+                    }
                 }
             } catch (Exception e) {
                 Log.Warn($"Efecto de {enemy.Root.name} ({state.Name}, {action.GetType().Name}) no reproducido: {e.Message}");
@@ -3193,9 +3241,16 @@ internal sealed class EnemySync {
     /// </summary>
     private ushort PickController(Enemy enemy, ushort current, HashSet<ushort> holders, float now) {
         var currentDown = Features.PartyState.IsInactive(current);
+
+        // Una escena guionizada no se corta: sigue en el PC que la empezó, salvo si quien lo mueve ya no juega
+        if (!currentDown && InScriptedScene(enemy, current)) {
+            enemy.SwitchWantedSince = 0f;
+            return 0;
+        }
+
         var position = enemy.Transform.position;
         var moving = MovingFast(enemy, position, now);
-        var boss = enemy.Health.hp >= BossHp;
+        var boss = IsBossToAssign(enemy);
         var currentPosition = Vector3.zero;
         var hasCurrent = !currentDown && TryGetPlayerPosition(current, out currentPosition);
 
@@ -3283,7 +3338,7 @@ internal sealed class EnemySync {
             }
 
             // Un jefe espera a acabar su ataque (salvo si quien lo mueve ya no juega)
-            if (!currentDown && enemy.Health.hp >= BossHp && !IsCalm(enemy, current)) {
+            if (!currentDown && boss && !IsCalm(enemy, current)) {
                 if (enemy.SwitchWantedSince <= 0f) {
                     enemy.SwitchWantedSince = now;
                 }
@@ -3400,6 +3455,39 @@ internal sealed class EnemySync {
     /// <summary>Si el enemigo está entre dos ataques en el PC que lo mueve (este u otro: lo que envió).</summary>
     private bool IsCalm(Enemy enemy, ushort controller) =>
         controller == _session.LocalId ? IsCalmHere(enemy) : enemy.RemoteCalm;
+
+    /// <summary>Si el enemigo, movido por este PC, está en una de sus <see cref="ScriptedScenes"/>.</summary>
+    private static bool InScriptedSceneHere(Enemy enemy) {
+        if (enemy.Puppet || enemy.Fsms == null || enemy.Root == null) {
+            return false;
+        }
+
+        foreach (var (name, fsmName, stateName) in ScriptedScenes) {
+            if (enemy.Root.name != name) {
+                continue;
+            }
+
+            foreach (var fsm in enemy.Fsms) {
+                if (fsm != null && fsm.gameObject == enemy.Root && fsm.FsmName == fsmName && fsm.ActiveStateName == stateName) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Si el enemigo está en una escena guionizada en el PC que lo mueve (este u otro: lo que envió).</summary>
+    private bool InScriptedScene(Enemy enemy, ushort controller) =>
+        controller == _session.LocalId ? InScriptedSceneHere(enemy) : enemy.RemoteScripted;
+
+    /// <summary>
+    /// Si se reparte como jefe (cambia de PC solo entre dos ataques y con más tiempo entre cambios): por la vida más alta
+    /// que tuvo, no por la de ahora. El Hollow Knight baja a 250 en su última fase y, con unos golpes, por debajo de
+    /// <see cref="BossHp"/> se repartía como un enemigo cualquiera, a mitad de sus ataques y de su escena con Hornet.
+    /// </summary>
+    private static bool IsBossToAssign(Enemy enemy) =>
+        enemy.Health.hp >= BossHp || enemy.MaxHp >= BossHp || Features.Difficulty.IsBoss(enemy.Health);
 
     /// <summary>Tiempo quieto en un estado que espera llegar a un sitio para darlo por atascado.</summary>
     private const string MageFsm = "Mage";
@@ -4774,7 +4862,15 @@ internal sealed class EnemySync {
                 if (action is HutongGames.PlayMaker.Actions.SetParent { parent.Value: null } setParent) {
                     var piece = fsm.Fsm.GetOwnerDefaultTarget(setParent.gameObject);
                     if (piece != null && piece != enemy.Root && piece.transform.IsChildOf(enemy.Transform)) {
-                        piece.transform.SetParent(null, true);
+                        // Solo las que ya están encendidas: una apagada se suelta cuando se encienda, desde donde esté el
+                        // enemigo entonces. Soltada ya, se quedaba donde estaba el enemigo al pasar a otro PC: Hornet herida
+                        // salía al final del combate desde ese sitio viejo y no se veía caer (issue #25)
+                        if (piece.activeInHierarchy) {
+                            piece.transform.SetParent(null, true);
+                        } else if (!(enemy.PendingLaunch ??= new List<GameObject>()).Contains(piece)) {
+                            enemy.PendingLaunch.Add(piece);
+                        }
+
                         found++;
                     }
 
@@ -5874,7 +5970,12 @@ internal sealed class EnemySync {
                         continue;
                     }
 
-                    var piece = setParent.gameObject.GameObject.Value;
+                    // La variable la rellena su estado inicial, que en un PC donde ya era marioneta no se ejecutó: vacía,
+                    // la pieza se buscaba como hija normal allí y como suelta en el otro, las listas no coincidían y a cada
+                    // pieza le llegaba lo de otra. El cuerpo del Hollow Knight (`Battle Corpse`) recibía la posición de
+                    // otra pieza y aparecía fuera de la arena al morir (issue #25). Vacía, se busca qué hijo le pone su FSM
+                    var piece = setParent.gameObject.GameObject.Value ??
+                                ChildStoredIn(enemy, fsm, setParent.gameObject.GameObject.Name);
                     if (piece != null && piece != enemy.Root && piece.transform.IsChildOf(enemy.Transform)) {
                         (pieces ??= new HashSet<Transform>()).Add(piece.transform);
                     }
@@ -5883,6 +5984,32 @@ internal sealed class EnemySync {
         }
 
         return pieces;
+    }
+
+    /// <summary>
+    /// El hijo del enemigo que su FSM guarda en esa variable con <c>FindChild</c> (aunque aún no lo haya hecho), o null.
+    /// </summary>
+    private static GameObject ChildStoredIn(Enemy enemy, PlayMakerFSM fsm, string variable) {
+        if (string.IsNullOrEmpty(variable)) {
+            return null;
+        }
+
+        foreach (var state in fsm.FsmStates) {
+            foreach (var action in state.Actions) {
+                if (action is not HutongGames.PlayMaker.Actions.FindChild find || find.storeResult?.Name != variable ||
+                    string.IsNullOrEmpty(find.childName?.Value) || fsm.Fsm.GetOwnerDefaultTarget(find.gameObject) != enemy.Root) {
+                    continue;
+                }
+
+                foreach (var child in enemy.Root.GetComponentsInChildren<Transform>(true)) {
+                    if (child != enemy.Transform && child.name == find.childName.Value) {
+                        return child.gameObject;
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     private static bool IsDetachable(Enemy enemy, Transform transform) {
@@ -7252,6 +7379,7 @@ internal sealed class EnemySync {
                 }
 
                 enemy.RemoteCalm = calm;
+                enemy.RemoteScripted = (flags & ScriptedStateFlag) != 0;
             }
         }
     }
@@ -7853,7 +7981,7 @@ internal sealed class EnemySync {
 
             // Ya avisado a los demás (llevan el mismo estado): desde aquí su final es de este PC
             if (sync?._session != null && toState?.Name == FinaleState && sync._enemyFsms.TryGetValue(self, out var finale) &&
-                !finale.Enemy.Puppet && finale.Enemy.Root != null && finale.Enemy.Root.name == FinaleBoss) {
+                !finale.Enemy.Puppet && finale.Enemy.Root != null && IsFinaleBoss(finale.Enemy.Root.name)) {
                 sync.StartFinale(finale.Enemy, null);
             }
         };

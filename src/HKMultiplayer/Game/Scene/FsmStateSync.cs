@@ -1456,6 +1456,7 @@ internal sealed class FsmStateSync {
         _requested = true;
         FsmExecutionStack.PushFsm(fsm);
         try {
+            ShowSkippedStep(item.Fsm, item.Fsm.ActiveStateName, state);
             fsm.SetState(state);
             fsm.UpdateStateChanges();
         } finally {
@@ -1471,6 +1472,44 @@ internal sealed class FsmStateSync {
 
         HideTakenOrb(item);
         FollowAbyssRaise(item);
+    }
+
+    /// <summary>
+    /// Un estado de paso (sale solo con FINISHED hacia el que llega) que esta copia se saltó: lo que hace visible el objeto
+    /// (<c>SetMeshRenderer</c>) se hace aquí antes de poner el que llega. Las plataformas de la Radiancia se encienden en
+    /// `Appear 1` (dura lo que su animación de aparecer) y se vuelven sólidas en `Appear 2`: llegaba ya `Appear 2` y en el
+    /// otro PC quedaban sólidas pero sin dibujarse, y no se veía dónde pisar.
+    /// </summary>
+    private static void ShowSkippedStep(PlayMakerFSM fsm, string from, string to) {
+        HutongGames.PlayMaker.FsmState step = null;
+        foreach (var state in fsm.FsmStates) {
+            if (state.Transitions.Length != 1 || state.Transitions[0].EventName != "FINISHED" ||
+                state.Transitions[0].ToState != to) {
+                continue;
+            }
+
+            // Más de uno lleva ahí: no se sabe por cuál pasó
+            if (step != null) {
+                return;
+            }
+
+            step = state;
+        }
+
+        if (step == null || step.Name == from || step.Name == to) {
+            return;
+        }
+
+        foreach (var action in step.Actions) {
+            if (action is HutongGames.PlayMaker.Actions.SetMeshRenderer && action.Enabled) {
+                try {
+                    action.Init(step);
+                    action.OnEnter();
+                } catch (Exception e) {
+                    Log.Warn($"{fsm.gameObject.name}/{fsm.FsmName}: no se pudo mostrar el paso {step.Name} ({e.Message})");
+                }
+            }
+        }
     }
 
     /// <summary>Orbe falso del Maestro de Almas y la escena de quien lo coge (su hermano en la sala).</summary>

@@ -141,13 +141,18 @@ propio. Objetivos de diseño, por orden:
     el dueño de la sala; cambia solo si el otro está claramente más cerca (4 unidades) y hace un rato del último cambio
     (5 s; 8 s en los jefes, porque cada cambio corta su ataque). Ese PC lo hace funcionar normal y envía su estado
     (transform, animación, profundidad, activo, vida, daño al tocarlo) con detección de cambios sin crear objetos.
-  - Un jefe (150 de vida o más) solo cambia de PC entre dos ataques: cuando su lógica principal (la FSM de su objeto con
+  - Un jefe (150 de vida o más, contando la más alta que tuvo: el Hollow Knight baja a 250 en su última fase y sigue
+    siendo jefe aunque le quede poca) solo cambia de PC entre dos ataques: cuando su lógica principal (la FSM de su objeto con
     más estados que tenga alguno de reposo) está en un estado de reposo, cuyo nombre lleva `Idle`, `Choice`, `Choose`,
     `Decide` o `Select`, o salió de uno hace menos de 0,15 s (los de elegir ataque duran cero fotogramas). El PC que lo
     mueve lo envía en el mensaje de estados (bit 4 de las banderas) y el dueño, si quería cambiarlo, lo cambia en cuanto
     llega, sin esperar al siguiente reparto. Si no reposa en 4 s, cambia igualmente; si quien lo mueve está caído o en
     pausa, enseguida. Así no cambia a mitad de un ataque: el nuevo PC lo retomaría desde el principio de ese estado
     hacia su caballero y el ataque se cortaría.
+  - Las escenas guionizadas de un jefe no se cortan nunca (salvo si quien lo mueve está caído o en pausa): la del Hollow
+    Knight con Hornet dura todo el estado `Waiting for Hornet Scene` de «Phase Control» (el rugido largo, Hornet
+    clavándolo y la entrada al sueño). El PC que lo mueve lo envía en el bit 8 de las banderas. Cortada, el nuevo PC lo
+    retomaba desde «Idle» y Hornet no aparecía.
   - Si quien lo mueve está fuera de su zona de alerta (la variable `Alert Range` de su lógica, o un hijo "Alert
     Range...", ampliada con el tamaño de la caja del caballero) y otro jugador está dentro, pasa a ese: su lógica solo
     ataca a un caballero dentro de la zona (si no, el Rey Vengamosca se iría a esperar a su sitio, `Lurk`, siguiendo al
@@ -205,7 +210,14 @@ propio. Objetivos de diseño, por orden:
     lo mueve (`HealthManager` muerto o su lógica atendió `ZERO HP`): son lo que sigue tras vencerlo (`GRIMM DEFEATED`
     saca al Grimm que se inclina y habla). Solo muerto de verdad: el Hollow Knight pasa por vida negativa entre fases.
     Lo que su lógica suelta de sí al morir (`SetParent` sin padre: el cadáver del Hollow Knight) se suelta también en la
-    marioneta y sus FSM pasan a funcionar solas en ese PC (allí es donde se absorbe el vacío para el final).
+    marioneta y sus FSM pasan a funcionar solas en ese PC (allí es donde se absorbe el vacío para el final). Lo mismo con
+    una pieza apagada que su propia lógica suelta al encenderse (Hornet herida, al soltarse el Hollow Knight): se suelta
+    cuando la marioneta la enciende, no antes; soltada al pasar a marioneta se quedaba donde estaba el jefe entonces.
+    Qué hijos se sueltan se decide igual en todos los PCs: si la variable del `SetParent` aún está vacía (su estado
+    inicial no se ejecutó en ese PC), se mira qué hijo le pone su `FindChild`. Si no, la lista de piezas no coincidía y
+    el cadáver del Hollow Knight recibía la posición de otra pieza y aparecía fuera de la sala. Por si acaso, si ese
+    cadáver acaba bajo el suelo o fuera de la sala, se pone en el suelo donde murió el jefe (`FinalBossRoom`, que también
+    salta la presentación a quien entra con el combate en marcha).
     Al pasar a marioneta se apagan sus FSM y PlayMaker les manda `DISABLE` (`PlayMakerFSM.OnDisable`, sin remitente):
     ese aviso no se reenvía: si llegara al PC que acaba de tomar el enemigo, su lógica viva lo atendería y el Falso
     Caballero (y cualquier enemigo con `DISABLE` en sus transiciones) se quedaría parado tras cada cambio de quién lo
