@@ -7,8 +7,9 @@ you share the world, see each other in real time and fight the same enemies and 
 You need:
   - Hollow Knight 1.5.12620 on Windows (the current Steam version; the GOG one works too).
     This package is for the Windows version of the game: on a Mac, use the -macOS package.
-    On Linux with Proton (Steam Play) it works too: install it by hand (section 2) into the game
-    folder that Proton uses.
+    On Linux with Proton (Steam Play) it works too, in the game folder that Proton uses: run the
+    installer with Wine (it needs Wine Mono, see the README on GitHub) or install by hand
+    (section 2).
     The Xbox/Game Pass version is not tested and the installer doesn't look for it.
   - Every player must have the SAME version of HKMultiplayer installed.
 

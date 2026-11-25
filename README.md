@@ -360,8 +360,13 @@ doesn't have it yet, you can build it yourself: see [Development](#-development)
 
 ### Linux
 
-- **With Proton** (Steam Play running the Windows version): use the Windows package and install it by hand as its
-  `README.txt` explains, copying the files into the game folder.
+- **With Proton** (Steam Play running the Windows version): use the Windows package. There are two ways to install it:
+  1. **With the installer, through Wine.** It needs **Wine Mono**: without it, the installer doesn't start (the terminal
+     says `Wine Mono is not installed`). Get the `wine-mono-<version>-x86.msi` that matches your Wine version from
+     [WineHQ](https://dl.winehq.org/wine/wine-mono/) and install it with `wine msiexec /i wine-mono-<version>-x86.msi`.
+     Then run `wine "HKMultiplayer Setup.exe"` and pick the game folder that Proton uses (in Wine, the Linux folders are
+     in the `Z:` drive). Tried with Wine 9.0 and Wine Mono 8.1.0.
+  2. **By hand,** copying the files into the game folder as the package's `README.txt` explains.
 - **Native (experimental, not tested yet)**: the Linux version of the game with `HKMultiplayer-<version>-Linux.zip` and
   its `install.sh`. Like the macOS package, it has to be built on Linux (`bash tools/package-linux.sh`). If you try it,
   please tell us in an issue whether it works.

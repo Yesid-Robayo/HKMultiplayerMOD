@@ -8,8 +8,9 @@ jefes.
 Necesitas:
   - Hollow Knight 1.5.12620 en Windows (la versión actual de Steam; la de GOG también vale).
     Este paquete es para la versión de Windows del juego: en un Mac, usa el paquete -macOS.
-    En Linux con Proton (Steam Play) también funciona: instálalo a mano (punto 2) en la carpeta
-    del juego que usa Proton.
+    En Linux con Proton (Steam Play) también funciona, en la carpeta del juego que usa Proton:
+    abre el instalador con Wine (necesita Wine Mono, mira el README de GitHub) o instala a mano
+    (punto 2).
     La versión de Xbox/Game Pass no está probada y el instalador no la busca.
   - Que todos los jugadores tengan instalada la MISMA versión de HKMultiplayer.
 

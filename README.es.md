@@ -363,8 +363,13 @@ aún no lo tiene, puedes armarlo tú: mira [Desarrollo](#-desarrollo).
 
 ### Linux
 
-- **Con Proton** (Steam Play con la versión de Windows): usa el paquete de Windows e instálalo a mano como explica su
-  `LEEME.txt`, copiando los archivos en la carpeta del juego.
+- **Con Proton** (Steam Play con la versión de Windows): usa el paquete de Windows. Se instala de dos formas:
+  1. **Con el instalador, a través de Wine.** Necesita **Wine Mono**: sin él, el instalador no arranca (la terminal dice
+     `Wine Mono is not installed`). Descarga de [WineHQ](https://dl.winehq.org/wine/wine-mono/) el
+     `wine-mono-<versión>-x86.msi` que corresponde a tu versión de Wine e instálalo con
+     `wine msiexec /i wine-mono-<versión>-x86.msi`. Después ejecuta `wine "HKMultiplayer Setup.exe"` y elige la carpeta del
+     juego que usa Proton (en Wine, las carpetas de Linux están en la unidad `Z:`). Probado con Wine 9.0 y Wine Mono 8.1.0.
+  2. **A mano,** copiando los archivos en la carpeta del juego como explica el `LEEME.txt` del paquete.
 - **Nativo (experimental, aún sin probar)**: la versión de Linux del juego con `HKMultiplayer-<versión>-Linux.zip` y su
   `install.sh`. Igual que el de macOS, se arma en Linux (`bash tools/package-linux.sh`). Si lo pruebas, cuéntanos en un
   issue si funciona.
