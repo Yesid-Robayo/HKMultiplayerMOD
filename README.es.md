@@ -398,10 +398,9 @@ aún no lo tiene, puedes armarlo tú: mira [Desarrollo](#-desarrollo).
 | Steam actualizó el juego | La actualización sustituye la Modding API y el juego vuelve a ir sin mods. Espera a la versión del mod para la nueva; para dejarlo limpio, *Desinstalar* en el instalador. |
 
 Lo más fácil para avisar de un problema: **Multijugador › Reportar un problema** (en el menú principal o en la pausa).
-Abre la página de GitHub para crear un *issue* con la versión del mod y un resumen del registro ya puestos, guarda el
-registro completo como `ModLog-report.txt` y abre su carpeta para que solo tengas que arrastrarlo a la página (también lo
-copia, para pegarlo con Ctrl+V). Le quita tu carpeta de usuario, tu nombre de usuario y el del PC, las direcciones IP y
-los códigos de partida. No se envía nada hasta que lo publiques tú.
+Abre la página de GitHub para crear un *issue* con la versión del mod y un resumen del registro ya puestos, y copia el
+registro completo para que solo tengas que pegarlo (Ctrl+V). Antes de copiarlo quita tu carpeta de usuario, tu nombre de
+usuario y el del PC, las direcciones IP y los códigos de partida. No se envía nada hasta que lo publiques tú.
 
 Tu `ModLog.txt` está en `C:\Users\<tu usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt` (en macOS,
 `~/Library/Application Support/unity.Team Cherry.Hollow Knight/`; en Linux, `~/.config/unity3d/Team Cherry/Hollow

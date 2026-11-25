@@ -392,10 +392,9 @@ doesn't have it yet, you can build it yourself: see [Development](#-development)
 | Steam updated the game | The update replaces the Modding API and the game runs without mods again. Wait for the mod version for the new one; to leave it clean, *Uninstall* in the installer. |
 
 The easiest way to report a problem: **Multiplayer › Report a problem** (in the main menu or the pause menu). It opens
-the GitHub page to create an *issue* with the mod version and a summary of the log already filled in, saves the full
-log as `ModLog-report.txt` and opens its folder so you just drag it onto the page (it's also copied, to paste it with
-Ctrl+V). It removes your user folder, your user and PC names, IP addresses and game codes from it. Nothing is sent until
-you submit it yourself.
+the GitHub page to create an *issue* with the mod version and a summary of the log already filled in, and copies the
+full log so you only have to paste it (Ctrl+V). Before copying it removes your user folder, your user and PC names, IP
+addresses and game codes. Nothing is sent until you submit it yourself.
 
 Your `ModLog.txt` is at `C:\Users\<your user>\AppData\LocalLow\Team Cherry\Hollow Knight\ModLog.txt` (on macOS,
 `~/Library/Application Support/unity.Team Cherry.Hollow Knight/`; on Linux, `~/.config/unity3d/Team Cherry/Hollow
