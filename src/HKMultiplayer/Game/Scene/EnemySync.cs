@@ -642,6 +642,14 @@ internal sealed class EnemySync {
         public ushort Rotation;
         public ushort Clip;
         public byte Frame;
+
+        /// <summary>
+        /// En una marioneta, pieza que hace daño a la que llegó su apagado: sigue encendida hasta esta hora (ver
+        /// <see cref="HoldDamageSeconds"/>) y luego queda como dicen <see cref="HeldActive"/> y <see cref="HeldCollider"/>.
+        /// </summary>
+        public float HoldUntil;
+        public bool HeldActive;
+        public bool HeldCollider;
     }
 
     private sealed class HandoverFsm {
@@ -1231,6 +1239,7 @@ internal sealed class EnemySync {
         UpdateRunningEffects();
         UpdateDelayedSends();
         UpdateWakeGates();
+        UpdateCreatedResends();
     }
 
     /// <summary>
@@ -1749,6 +1758,8 @@ internal sealed class EnemySync {
         var time = Time.unscaledTimeAsDouble;
         for (var i = 0; i < _enemies.Count; i++) {
             var enemy = _enemies[i];
+            // Antes de todo: una pieza retenida se apaga a su hora aunque el enemigo acabe de morir o de pasar a este PC
+            ReleaseHeldParts(enemy);
             if (!enemy.Puppet || enemy.Root == null || enemy.Health != null && enemy.Health.isDead ||
                 !enemy.Buffer.Sample(time, out var state)) {
                 continue;
@@ -2972,6 +2983,22 @@ internal sealed class EnemySync {
                 }
 
                 EffectsPlayed++;
+                // Apagar una pieza que hace daño (el tajo del Caballero Colmena en "Slash 2"): con el retraso de dibujo de
+                // la marioneta, como cuando llega por las piezas (ver HoldDamageSeconds); encenderla anula ese apagado
+                // (comparación de Unity: un objeto destruido no es null para C#)
+                var toggled = action is HutongGames.PlayMaker.Actions.ActivateGameObject activation
+                    ? action.Fsm.GetOwnerDefaultTarget(activation.gameObject)
+                    : null;
+                if (action is HutongGames.PlayMaker.Actions.ActivateGameObject toggle && toggled != null && enemy.Parts != null &&
+                    Array.Find(enemy.Parts, p => p.Transform == toggled.transform && p.Damage != null) is { } damagePart) {
+                    if (toggle.activate.Value) {
+                        damagePart.HoldUntil = 0f;
+                    } else if (HoldDamagePart(damagePart, false, damagePart.Collider == null || damagePart.Collider.enabled,
+                                   HoldDamageSeconds(enemy))) {
+                        continue;
+                    }
+                }
+
                 // Con retraso, el juego lo deja en la cola de su FSM, que en la marioneta está parada y no la atiende nunca
                 // (el cartel del Recipiente Puro, que sube a los 0,5 s del rugido): se envía desde aquí a su hora
                 if (action is HutongGames.PlayMaker.Actions.SendEventByName { everyFrame: false } delayed &&
@@ -5242,33 +5269,130 @@ internal sealed class EnemySync {
                 continue;
             }
 
-            var transform = spawned.transform;
-            var position = transform.position;
-            var angles = transform.eulerAngles;
-            var scale = transform.localScale;
             var writer = _session.Begin(EnemySpawn);
-            writer.WriteUShort(_sceneHash);
-            writer.WriteUInt(pending.CreatorId);
-            writer.WriteByte(pending.FsmIndex);
-            writer.WriteUShort(pending.StateIndex);
-            writer.WriteByte(pending.ActionIndex);
-            writer.WriteString(pending.Prefab);
-            writer.WriteUInt(pending.Id);
-            writer.WriteFloat(position.x);
-            writer.WriteFloat(position.y);
-            writer.WriteFloat(angles.x);
-            writer.WriteFloat(angles.y);
-            writer.WriteFloat(angles.z);
-            writer.WriteFloat(scale.x);
-            writer.WriteFloat(scale.y);
-            var velocity = spawned.TryGetComponent<Rigidbody2D>(out var body) ? body.velocity : Vector2.zero;
-            writer.WriteFloat(velocity.x);
-            writer.WriteFloat(velocity.y);
-            WriteSpawnVariables(writer, spawned);
+            WriteSpawn(writer, pending.CreatorId, pending.FsmIndex, pending.StateIndex, pending.ActionIndex, pending.Prefab,
+                pending.Id, spawned);
             _session.End();
             if (TestMode) {
+                var position = spawned.transform.position;
+                var angles = spawned.transform.eulerAngles;
+                var scale = spawned.transform.localScale;
                 Log.Info($"[TEST] creado {spawned.name} en ({position.x:0.0},{position.y:0.0}) giro={angles} " +
                          $"escala=({scale.x:0.00},{scale.y:0.00}) {DescribeSpawnFsms(spawned)}");
+            }
+        }
+    }
+
+    /// <summary>Lo creado, como está ahora: quién y con qué acción lo creó, su id, posición, giro, tamaño, velocidad y números.</summary>
+    private void WriteSpawn(PacketWriter writer, uint creatorId, byte fsmIndex, ushort stateIndex, byte actionIndex,
+        string prefab, uint id, GameObject spawned) {
+        var transform = spawned.transform;
+        var position = transform.position;
+        var angles = transform.eulerAngles;
+        var scale = transform.localScale;
+        writer.WriteUShort(_sceneHash);
+        writer.WriteUInt(creatorId);
+        writer.WriteByte(fsmIndex);
+        writer.WriteUShort(stateIndex);
+        writer.WriteByte(actionIndex);
+        writer.WriteString(prefab);
+        writer.WriteUInt(id);
+        writer.WriteFloat(position.x);
+        writer.WriteFloat(position.y);
+        writer.WriteFloat(angles.x);
+        writer.WriteFloat(angles.y);
+        writer.WriteFloat(angles.z);
+        writer.WriteFloat(scale.x);
+        writer.WriteFloat(scale.y);
+        var velocity = spawned.TryGetComponent<Rigidbody2D>(out var body) ? body.velocity : Vector2.zero;
+        writer.WriteFloat(velocity.x);
+        writer.WriteFloat(velocity.y);
+        WriteSpawnVariables(writer, spawned);
+    }
+
+    /// <summary>Cuánto se espera, desde que alguien entra en la sala, para enviarle lo ya creado (ver SendCreatedTo).</summary>
+    private const float CreatedResendDelay = 2.5f;
+
+    /// <summary>Quién entró en la sala y cuándo enviarle lo ya creado.</summary>
+    private readonly Dictionary<ushort, float> _createdResendAt = new();
+
+    private void UpdateCreatedResends() {
+        if (_createdResendAt.Count == 0 || _session == null) {
+            return;
+        }
+
+        List<ushort> due = null;
+        foreach (var pair in _createdResendAt) {
+            if (Time.unscaledTime >= pair.Value) {
+                (due ??= new List<ushort>()).Add(pair.Key);
+            }
+        }
+
+        if (due == null) {
+            return;
+        }
+
+        foreach (var playerId in due) {
+            _createdResendAt.Remove(playerId);
+            foreach (var player in _session.Players) {
+                if (player.Id == playerId && !player.IsLocal && player.Scene == _scene) {
+                    SendCreatedTo(player);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// A quien entra en la sala le llega como copia lo que la lógica de los enemigos que mueve este PC creó antes y sigue
+    /// en ella (lo guardado en una variable con CreateObject que daña o tiene vida: el escudo de Markoth). Lo que se crea al
+    /// prepararse el enemigo, o sin nadie más en la sala, no se envía; y en el PC de quien entra después el enemigo ya es
+    /// marioneta y su lógica no lo crea. Al llegar juntos a la sala de Markoth en un Panteón, el escudo no salía en el
+    /// invitado.
+    /// </summary>
+    private void SendCreatedTo(SessionPlayer player) {
+        if (!_session.CanSend) {
+            return;
+        }
+
+        var sent = new HashSet<GameObject>();
+        foreach (var enemy in _enemies.ToArray()) {
+            if (enemy.Puppet || enemy.Spawned || enemy.Root == null || enemy.Fsms == null || enemy.Health == null ||
+                enemy.Health.isDead) {
+                continue;
+            }
+
+            for (var f = 0; f < enemy.Fsms.Length && f <= byte.MaxValue; f++) {
+                var fsm = enemy.Fsms[f];
+                if (fsm == null) {
+                    continue;
+                }
+
+                var states = fsm.FsmStates;
+                for (var s = 0; s < states.Length && s <= ushort.MaxValue; s++) {
+                    var actions = states[s].Actions;
+                    for (var a = 0; a < actions.Length && a <= byte.MaxValue; a++) {
+                        if (actions[a] is not HutongGames.PlayMaker.Actions.CreateObject create || create.storeObject == null ||
+                            create.storeObject.IsNone) {
+                            continue;
+                        }
+
+                        // Con la comparación de Unity: lo ya destruido no es null para C# (`is { }` lo dejaba pasar y
+                        // activeInHierarchy fallaba con los Caballeros Vigía)
+                        var made = create.storeObject.Value;
+                        if (made == null || !made.activeInHierarchy || made.transform.IsChildOf(enemy.Transform) ||
+                            !IsGameplay(made) || !sent.Add(made)) {
+                            continue;
+                        }
+
+                        var tracked = _enemies.Find(e => e.Spawned && e.Root == made) ??
+                                      Track(made, NextSpawnedId(), pooled: false, puppet: false, _session.LocalId);
+                        Log.Info($"{enemy.Root.name}: {made.name} ya estaba creado; se envía a {player.Name}, que acaba de entrar");
+                        var writer = _session.BeginTo(player, EnemySpawn);
+                        WriteSpawn(writer, enemy.Id, (byte) f, (ushort) s, (byte) a, create.gameObject.Value?.name ?? string.Empty,
+                            tracked.Id, made);
+                        _session.EndTo();
+                    }
+                }
             }
         }
     }
@@ -5511,6 +5635,12 @@ internal sealed class EnemySync {
         }
 
         if (id != 0 && _byId.TryGetValue(id, out var previous)) {
+            // Ya la tiene (lo ya creado que se reenvía a quien entra, ver SendCreatedTo, y que también le llegó al crearse):
+            // se deja, en vez de quitarla y crearla otra vez (el escudo de Markoth desaparecía y aparecía de golpe)
+            if (previous.Root != null && previous.Puppet) {
+                return;
+            }
+
             RemoveSpawned(previous);
         }
 
@@ -5532,6 +5662,14 @@ internal sealed class EnemySync {
         // copia (p. ej. el Coleccionista mete el bicho en el tarro que acaba de lanzar)
         // (solo en la marioneta: si este PC ya mueve al creador, su variable es de su propia lógica)
         if (store != null && !store.IsNone && creator.Puppet) {
+            // Lo que su propia lógica creó aquí antes de ser marioneta (si los dos PCs prepararon al enemigo a la vez) se
+            // quita: la copia que sigue al original lo sustituye (si no, el escudo de Markoth salía dos veces)
+            var own = store.Value;
+            if (!pooled && own != null && own != copy && !_enemies.Exists(e => e.Root == own) &&
+                !own.transform.IsChildOf(creator.Transform) && IsGameplay(own)) {
+                UnityEngine.Object.Destroy(own);
+            }
+
             store.Value = copy;
         }
 
@@ -6119,6 +6257,7 @@ internal sealed class EnemySync {
         }
 
         HashSet<string> events = null;
+        HashSet<string> registered = null;
         HashSet<GameObject> direct = null;
         foreach (var fsm in enemy.Fsms) {
             if (fsm == null) {
@@ -6127,6 +6266,16 @@ internal sealed class EnemySync {
 
             foreach (var state in fsm.FsmStates) {
                 foreach (var action in state.Actions) {
+                    // Un aviso por registro va a los objetos de la sala que lo escuchan: Uumuu llama a su fábrica de medusas
+                    // (`Jellyfish Spawner`) con SPAWN así. Sin esto la fábrica funcionaba solo en el PC que lo movía y sus
+                    // medusas no llegaban a los demás (las veía y las sufría uno solo). Solo cuentan los que crean cosas
+                    // (ver abajo): las burbujas del Recipiente Puro escuchan BLAST y van como efecto (EffectRegisterEvents)
+                    if (action is HutongGames.PlayMaker.Actions.SendEventToRegister register &&
+                        !string.IsNullOrEmpty(register.eventName?.Value)) {
+                        (registered ??= new HashSet<string>()).Add(register.eventName.Value);
+                        continue;
+                    }
+
                     if (action is not HutongGames.PlayMaker.Actions.SendEventByName send ||
                         string.IsNullOrEmpty(send.sendEvent?.Value)) {
                         continue;
@@ -6151,7 +6300,7 @@ internal sealed class EnemySync {
             }
         }
 
-        if (events == null && direct == null) {
+        if (events == null && direct == null && registered == null) {
             return;
         }
 
@@ -6170,7 +6319,8 @@ internal sealed class EnemySync {
                 // había (el aviso de un jefe vivo no se repite)
                 !(events != null && Listens(fsm, events) &&
                   (owner.GetComponentInChildren<DamageHero>(true) != null || SpawnsGameplay(fsm)) ||
-                  direct != null && direct.Contains(owner) && SpawnsGameplay(fsm)) ||
+                  direct != null && direct.Contains(owner) && SpawnsGameplay(fsm) ||
+                  registered != null && Listens(fsm, registered) && SpawnsGameplay(fsm)) ||
                 // No los controladores de combate (el del Coliseo contiene enemigos; ya los lleva un PC para todos)
                 owner.GetComponentsInChildren<HealthManager>(true).Length > 0 || FsmStateSync.IsSharedController(fsm.Fsm)) {
                 continue;
@@ -6537,7 +6687,7 @@ internal sealed class EnemySync {
                 }
 
                 ApplyPart(enemy.Parts[index], flags, x, y, z, scaleX, scaleY, rotation,
-                    !alive && enemy.Parts[index].OwnLogic ? ushort.MaxValue : clip, frame);
+                    !alive && enemy.Parts[index].OwnLogic ? ushort.MaxValue : clip, frame, alive ? HoldDamageSeconds(enemy) : 0f);
                 if (enemy.Parts[index].Damage != null) {
                     enemy.Parts[index].Damage.damageDealt = damage;
                 }
@@ -6545,16 +6695,74 @@ internal sealed class EnemySync {
         }
     }
 
-    private static void ApplyPart(Part part, byte flags, float x, float y, float z, float scaleX, float scaleY, ushort rotation,
-        ushort clip, byte frame) {
-        var transform = part.Transform;
-        var active = (flags & 1) != 0;
-        if (part.Collider != null) {
-            part.Collider.enabled = (flags & 4) != 0;
+    /// <summary>
+    /// Cuánto sigue encendida en una marioneta una pieza que hace daño después de que llegue su apagado: lo que su
+    /// posición va por detrás (el retraso de dibujo de <see cref="SnapshotBuffer"/>, más el intervalo entre estados y un
+    /// frame: medido, el tajo del Caballero Colmena llegaba ~60 ms después en la marioneta). El encendido y el
+    /// apagado se aplican al llegar, pero la marioneta se dibuja con ese retraso: en los tajos que solo dañan unos frames
+    /// mientras el jefe embiste (el Caballero Colmena, Sly, Grimm), la pieza se apagaba antes de que la marioneta llegara
+    /// adonde el original golpeaba, y el jugador de este PC no recibía nunca el tajo.
+    /// </summary>
+    private static float HoldDamageSeconds(Enemy enemy) =>
+        enemy.Buffer.Count > 0 ? (float) ((enemy.Buffer.Delay + StateTickDivider + 2) / NetConstants.TickRate) : 0f;
+
+    /// <summary>
+    /// Apagar (o quitar la caja a) una pieza que hace daño, con <paramref name="hold"/> segundos de retraso si está
+    /// encendida (ver <see cref="HoldDamageSeconds"/>). Devuelve true si se retiene.
+    /// </summary>
+    private static bool HoldDamagePart(Part part, bool active, bool collider, float hold) {
+        if (hold <= 0f || part.Damage == null || !part.Transform.gameObject.activeSelf ||
+            part.Collider != null && !part.Collider.enabled || active && collider) {
+            return false;
         }
 
-        if (transform.gameObject.activeSelf != active) {
-            transform.gameObject.SetActive(active);
+        if (part.HoldUntil <= 0f) {
+            part.HoldUntil = Time.unscaledTime + hold;
+        }
+
+        part.HeldActive = active;
+        part.HeldCollider = collider;
+        return true;
+    }
+
+    /// <summary>Las piezas retenidas (ver <see cref="HoldDamagePart"/>) cuya hora llegó quedan como se pidió.</summary>
+    private static void ReleaseHeldParts(Enemy enemy) {
+        if (enemy.Parts == null) {
+            return;
+        }
+
+        var now = Time.unscaledTime;
+        foreach (var part in enemy.Parts) {
+            if (part.HoldUntil <= 0f || now < part.HoldUntil || part.Transform == null) {
+                continue;
+            }
+
+            part.HoldUntil = 0f;
+            if (part.Collider != null) {
+                part.Collider.enabled = part.HeldCollider;
+            }
+
+            if (part.Transform.gameObject.activeSelf != part.HeldActive) {
+                part.Transform.gameObject.SetActive(part.HeldActive);
+            }
+        }
+    }
+
+    private static void ApplyPart(Part part, byte flags, float x, float y, float z, float scaleX, float scaleY, ushort rotation,
+        ushort clip, byte frame, float hold = 0f) {
+        var transform = part.Transform;
+        var active = (flags & 1) != 0;
+        var collider = (flags & 4) != 0;
+        if (!HoldDamagePart(part, active, collider, hold)) {
+            // Encenderla otra vez anula un apagado retenido
+            part.HoldUntil = 0f;
+            if (part.Collider != null) {
+                part.Collider.enabled = collider;
+            }
+
+            if (transform.gameObject.activeSelf != active) {
+                transform.gameObject.SetActive(active);
+            }
         }
 
         // Hay piezas que su lógica suelta del enemigo al prepararse (el impacto y la bola del rayo del Guardián de
@@ -7476,9 +7684,11 @@ internal sealed class EnemySync {
             _nextControlResync = Math.Min(_nextControlResync, Time.unscaledTime + 1.5f);
         }
 
-        // Y de cada enemigo que mueve este PC, qué objetos de la arena tiene encendidos
+        // Y de cada enemigo que mueve este PC, qué objetos de la arena tiene encendidos, y en cuanto sus enemigos sean
+        // marionetas, lo que ya habían creado (ver SendCreatedTo)
         if (player.Scene == _scene && _scene.Length > 0) {
             _sendLinkedSnapshot = true;
+            _createdResendAt[player.Id] = Time.unscaledTime + CreatedResendDelay;
         }
 
         // El host le dice qué murió en esa sala antes (aunque no haya nadie en ella)

@@ -33,8 +33,35 @@ internal sealed class PantheonTogether {
     /// <summary>Un jugador empieza el combate de una estatua de esta sala (→ la sala): estatua, nivel, sala del jefe.</summary>
     public const MessageType StatueStart = (MessageType) 121;
 
+    /// <summary>
+    /// Este jugador terminó la sala de entrada de un Panteón (→ todos): ya puede pasar al primer jefe. Va a todos porque los
+    /// que esperan están en esa sala y el que lo envía puede estar en otra.
+    /// </summary>
+    public const MessageType EntranceReady = (MessageType) 131;
+
     /// <summary>Puerta por la que se entra en la primera sala de la secuencia (la de la FSM del desafío).</summary>
     private const string EntryGate = "door_dreamEnter";
+
+    /// <summary>
+    /// La sala de entrada de los Panteones (<c>GG_Boss_Door_Entrance</c>): la puerta lleva siempre allí, con el primer jefe
+    /// en la variable <c>firstBossScene</c>; esa sala pasa de largo o, la primera vez tras completar Panteones, enseña el
+    /// texto del Buscador de Dioses, y luego viaja al primer jefe.
+    /// </summary>
+    private const string EntranceScene = "GG_Boss_Door_Entrance";
+
+    private const string FirstBossVariable = "firstBossScene";
+
+    /// <summary>Lo más que se espera a los compañeros en la sala de entrada (uno que se desconectó no la deja colgada).</summary>
+    private const float EntranceMaxWait = 60f;
+
+    /// <summary>Quién empezó el Panteón en el que se entra ahora (0: ninguno).</summary>
+    private ushort _starter;
+
+    /// <summary>Los jugadores que ya acabaron su sala de entrada en este Panteón.</summary>
+    private readonly System.Collections.Generic.HashSet<ushort> _entranceReady = new();
+
+    /// <summary>Pasando ya al primer jefe tras la espera: el viaje no se retiene otra vez.</summary>
+    private static bool _leavingEntrance;
 
     private static PantheonTogether _active;
     private static bool _hooked;
@@ -42,6 +69,7 @@ internal sealed class PantheonTogether {
     private readonly MessageHandler _onStart;
     private readonly MessageHandler _onSceneEnd;
     private readonly MessageHandler _onStatue;
+    private readonly MessageHandler _onEntranceReady;
 
     /// <summary>Entrando en una estatua porque la eligió otro jugador: no se vuelve a avisar.</summary>
     private static bool _statueFromRemote;
@@ -54,12 +82,14 @@ internal sealed class PantheonTogether {
         MessageRoutes.Register(PantheonStart, Route.SameScene, reliable: true);
         MessageRoutes.Register(PantheonSceneEnd, Route.SameScene, reliable: true);
         MessageRoutes.Register(StatueStart, Route.SameScene, reliable: true);
+        MessageRoutes.Register(EntranceReady, Route.Everyone, reliable: true);
     }
 
     public PantheonTogether() {
         _onStart = OnStart;
         _onSceneEnd = OnSceneEnd;
         _onStatue = OnStatue;
+        _onEntranceReady = OnEntranceReady;
     }
 
     public void Attach(GameSession session) {
@@ -68,12 +98,14 @@ internal sealed class PantheonTogether {
         session.On(PantheonStart, _onStart);
         session.On(PantheonSceneEnd, _onSceneEnd);
         session.On(StatueStart, _onStatue);
+        session.On(EntranceReady, _onEntranceReady);
     }
 
     public void Detach() {
         _session?.On(PantheonStart, null);
         _session?.On(PantheonSceneEnd, null);
         _session?.On(StatueStart, null);
+        _session?.On(EntranceReady, null);
         _session = null;
         if (_active == this) {
             _active = null;
@@ -127,6 +159,12 @@ internal sealed class PantheonTogether {
         // La sala de descanso no acaba así: se sale por su puerta propia (customExitPoint, junto a la estatua), que el
         // juego apunta al siguiente jefe
         On.GameManager.BeginSceneTransition += (orig, self, info) => {
+            // Salir de la sala de entrada hacia el primer jefe: se espera a los compañeros que aún no acabaron la suya
+            if (!_leavingEntrance && _active != null && info != null && self.sceneName == EntranceScene &&
+                info.SceneName == StaticVariableList.GetValue<string>(FirstBossVariable) && _active.HoldEntrance(self, info)) {
+                return;
+            }
+
             var exit = BossSceneController.Instance != null ? BossSceneController.Instance.customExitPoint : null;
             if (!_endingFromRemote && BossSequenceController.IsInSequence && exit != null && info != null &&
                 info.SceneName == exit.targetScene) {
@@ -135,6 +173,84 @@ internal sealed class PantheonTogether {
 
             orig(self, info);
         };
+    }
+
+    /// <summary>
+    /// Este PC acabó su sala de entrada y va al primer jefe: avisa a todos y, si algún compañero aún no acabó la suya (lee
+    /// el texto del Buscador, o es quien empezó y todavía está en la animación de la puerta), espera en esa sala a que
+    /// acaben. Antes el compañero llegaba solo al primer jefe y peleaba sin el otro hasta que este llegaba.
+    /// </summary>
+    private bool HoldEntrance(GameManager gm, GameManager.SceneLoadInfo info) {
+        if (_session == null || !_session.CanSend) {
+            return false;
+        }
+
+        _entranceReady.Add(_session.LocalId);
+        var writer = _session.Begin(EntranceReady);
+        writer.WriteString(info.SceneName);
+        _session.End();
+        if (WaitingFor(info.SceneName) == null) {
+            return false;
+        }
+
+        gm.StartCoroutine(WaitAtEntrance(gm, info));
+        return true;
+    }
+
+    /// <summary>El compañero al que aún hay que esperar en la sala de entrada, o null.</summary>
+    private SessionPlayer WaitingFor(string firstBoss) {
+        if (_session == null) {
+            return null;
+        }
+
+        foreach (var player in _session.Players) {
+            if (player.IsLocal || _entranceReady.Contains(player.Id) || player.Scene == firstBoss) {
+                continue;
+            }
+
+            // Uno que está en su sala de entrada, o quien empezó el Panteón y aún no llegó a ella (animación de la puerta)
+            if (player.Scene == EntranceScene || player.Id == _starter) {
+                return player;
+            }
+        }
+
+        return null;
+    }
+
+    private System.Collections.IEnumerator WaitAtEntrance(GameManager gm, GameManager.SceneLoadInfo info) {
+        var since = Time.unscaledTime;
+        var shown = false;
+        SessionPlayer waiting;
+        while ((waiting = WaitingFor(info.SceneName)) != null && Time.unscaledTime - since < EntranceMaxWait &&
+               gm.sceneName == EntranceScene) {
+            if (!shown) {
+                shown = true;
+                Log.Info($"Sala de entrada del Panteón: se espera a {waiting.Name} para ir juntos al primer jefe");
+                Notice.Show(Lang.F("Esperando a {0} para empezar el combate", "Waiting for {0} to start the fight", waiting.Name), 4f);
+            }
+
+            yield return null;
+        }
+
+        if (gm.sceneName != EntranceScene) {
+            yield break;
+        }
+
+        if (waiting != null) {
+            Log.Warn($"Sala de entrada del Panteón: {waiting.Name} no llegó en {EntranceMaxWait:0} s; se pasa al primer jefe");
+        }
+
+        _leavingEntrance = true;
+        try {
+            gm.BeginSceneTransition(info);
+        } finally {
+            _leavingEntrance = false;
+        }
+    }
+
+    private void OnEntranceReady(SessionPlayer from, PacketReader reader) {
+        reader.ReadString(128);
+        _entranceReady.Add(from.Id);
     }
 
     private void SendSceneEnd() {
@@ -329,7 +445,17 @@ internal sealed class PantheonTogether {
     private static readonly System.Reflection.FieldInfo DoorField =
         typeof(BossDoorChallengeUI).GetField("door", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
+    /// <summary>Empieza un Panteón (lo empezó ese jugador): se olvida quién acabó la sala de entrada del anterior.</summary>
+    private void BeginRun(ushort starter) {
+        _starter = starter;
+        _entranceReady.Clear();
+    }
+
     private void OnLocalBegin(BossDoorChallengeUI ui) {
+        if (_session != null) {
+            BeginRun(_session.LocalId);
+        }
+
         if (DoorField?.GetValue(ui) is BossSequenceDoor door) {
             SendStart(door, (BossSequenceController.BoundNail ? BossSequenceController.ChallengeBindings.Nail : 0) |
                             (BossSequenceController.BoundShell ? BossSequenceController.ChallengeBindings.Shell : 0) |
@@ -343,6 +469,10 @@ internal sealed class PantheonTogether {
         var door = FindDoor(GameManager.instance != null ? GameManager.instance.sceneName : string.Empty, doorName);
         if (door == null || door.bossSequence == null || door.bossSequence.Count == 0) {
             return false;
+        }
+
+        if (_session != null) {
+            BeginRun(_session.LocalId);
         }
 
         SendStart(door, BossSequenceController.ChallengeBindings.None);
@@ -402,6 +532,7 @@ internal sealed class PantheonTogether {
         }
 
         Log.Info($"{from.Name} empezó el Panteón de {doorName}: este jugador entra con él (ataduras {bindings})");
+        BeginRun(from.Id);
         Enter(door, bindings);
         Notice.Show(Lang.F("Panteón con {0}", "Pantheon with {0}", from.Name), 4f);
     }
@@ -443,7 +574,11 @@ internal sealed class PantheonTogether {
         return null;
     }
 
-    /// <summary>Lo mismo que el botón de empezar: la puerta a la que se vuelve, las ataduras, la secuencia y el viaje.</summary>
+    /// <summary>
+    /// Lo mismo que el botón de empezar: la puerta a la que se vuelve, las ataduras, la secuencia y el viaje, por la sala de
+    /// entrada como la FSM de la puerta (deja el primer jefe en <c>firstBossScene</c>). Antes se iba directo al primer
+    /// jefe: se llegaba solo, antes que quien lo empezó, y sin el texto del Buscador de Dioses.
+    /// </summary>
     private static void Enter(BossSequenceDoor door, BossSequenceController.ChallengeBindings bindings) {
         var gm = GameManager.instance;
         var hero = HeroController.instance;
@@ -453,10 +588,11 @@ internal sealed class PantheonTogether {
         pd.SetString("dreamReturnScene", door.gameObject.scene.name);
         pd.SetString("bossReturnEntryGate", door.dreamReturnGate.name);
         BossSequenceController.SetupNewSequence(door.bossSequence, bindings, door.playerDataString);
+        StaticVariableList.SetValue(FirstBossVariable, door.bossSequence.GetSceneAt(0));
         hero.RelinquishControl();
         CoverWithWhite();
         gm.BeginSceneTransition(new GameManager.SceneLoadInfo {
-            SceneName = door.bossSequence.GetSceneAt(0),
+            SceneName = EntranceScene,
             EntryGateName = EntryGate,
             EntryDelay = 0f,
             Visualization = GameManager.SceneLoadVisualizations.GodsAndGlory,

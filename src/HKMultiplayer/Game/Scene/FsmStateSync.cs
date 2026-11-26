@@ -393,6 +393,12 @@ internal sealed class FsmStateSync {
         public float ClaimedAt = -100f;
 
         /// <summary>
+        /// Si el controlador que se conoce salió de una reclamación (de este PC o recibida) y no solo de que llegaran sus
+        /// estados (<see cref="AcceptFrom"/>, que da por controlador al que envía mientras no haya otro).
+        /// </summary>
+        public bool ControllerClaimed;
+
+        /// <summary>
         /// En una copia: el estado de diálogo que este jugador ya cerró (su CONVO_FINISH se avisó al controlador y no se
         /// atendió aquí). Si el controlador se va antes de seguir, este PC lo es y sigue desde ahí.
         /// </summary>
@@ -532,6 +538,7 @@ internal sealed class FsmStateSync {
         foreach (var item in _tracked) {
             if (item.Controller == player.Id) {
                 item.Controller = 0;
+                item.ControllerClaimed = false;
                 item.Positions.Clear();
             }
         }
@@ -631,15 +638,19 @@ internal sealed class FsmStateSync {
 
         Log.Info($"{item.Fsm.gameObject.name}/{item.Fsm.FsmName}: lo controla este PC (antes {item.Controller}; {reason})");
         var previous = item.Controller;
+        var previousClaimed = item.ControllerClaimed;
         item.Controller = _session.LocalId;
+        item.ControllerClaimed = true;
         item.ClaimedAt = Time.unscaledTime;
         item.Positions.Clear();
         if (_session.CanSend) {
             var writer = _session.Begin(Claim);
             writer.WriteUShort(_sceneHash);
             writer.WriteUInt(item.Id);
-            // Quién creía este PC que lo controlaba: así los demás saben si esta reclamación se cruzó con otra
+            // Quién creía este PC que lo controlaba, y si lo sabía por su reclamación: así los demás saben si esta se
+            // cruzó con otra
             writer.WriteUShort(previous);
+            writer.WriteBool(previousClaimed);
             _session.End();
         }
     }
@@ -648,6 +659,7 @@ internal sealed class FsmStateSync {
         var sceneHash = reader.ReadUShort();
         var id = reader.ReadUInt();
         var previous = reader.ReadUShort();
+        var previousClaimed = reader.ReadBool();
         if (sceneHash == _sceneHash && _byId.TryGetValue(id, out var item)) {
             // Dos reclamaciones cruzadas (la automática del dueño de la sala con la de un invitado que lo usó, o dos al
             // irse el controlador): gana el número menor en todos los PCs. Antes cada uno se quedaba con la del otro, los
@@ -655,9 +667,14 @@ internal sealed class FsmStateSync {
             // tercero que solo las recibe: antes se quedaba con la última que le llegaba y descartaba los estados del que
             // de verdad lo controlaba (el ascensor, el Coliseo o los Señores Mantis, parados solo para él). Solo es cruzada
             // si quien reclama no sabía de la otra (creía que lo controlaba otro): si ya la conocía, va después y gana
-            // ella. Si no, el que la hizo después de recibir la otra se quedaba con el control solo en su PC
+            // ella. Si no, el que la hizo después de recibir la otra se quedaba con el control solo en su PC.
+            // Conocerla es haber recibido su reclamación: creer que lo controlaba solo porque llegaban sus estados no cuenta.
+            // Al entrar juntos en los Señores Mantis de un Panteón, los dos reclamaban los tronos a la vez con MLORD CHALLENGE;
+            // el invitado creía que ya los movía el dueño (le llegaban sus estados) y su reclamación pasaba por posterior:
+            // el dueño cedía al invitado y el invitado al dueño, nadie los movía y las Mantis no salían nunca
             var now = Time.unscaledTime;
-            if (previous != item.Controller && item.Controller != 0 && item.Controller != from.Id &&
+            var knewIt = previous == item.Controller && previousClaimed;
+            if (!knewIt && item.Controller != 0 && item.Controller != from.Id &&
                 item.Controller < from.Id && now - item.ClaimedAt < ClaimCrossSeconds) {
                 var keeper = item.Controller == _session.LocalId ? "este PC" : item.Controller.ToString();
                 Log.Info($"{NameOf(item)}: {from.Id} también lo reclamó; se queda {keeper}");
@@ -666,6 +683,7 @@ internal sealed class FsmStateSync {
 
             Log.Info($"{NameOf(item)}: lo controla {from.Id}");
             item.Controller = from.Id;
+            item.ControllerClaimed = true;
             item.ClaimedAt = now;
             item.Positions.Clear();
         }
@@ -683,6 +701,7 @@ internal sealed class FsmStateSync {
 
         if (item.Controller == 0 || !ControllerPresent(item)) {
             item.Controller = from.Id;
+            item.ControllerClaimed = false;
         }
 
         return item.Controller == from.Id;
