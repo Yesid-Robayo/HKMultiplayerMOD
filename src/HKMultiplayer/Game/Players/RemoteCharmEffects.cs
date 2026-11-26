@@ -592,7 +592,8 @@ internal sealed class RemoteCharmEffects {
     }
 
     /// <summary>Un efecto suelto donde lo sacó el caballero del dueño, con su giro y escala.</summary>
-    public void SpawnPuff(int index, Vector2 position, float angle, float scaleX) {
+    /// <param name="ground">El suelo bajo quien lo creó (sin él, el de este PC)</param>
+    public void SpawnPuff(int index, Vector2 position, float angle, float scaleX, int ground = -1) {
         if (index >= _templates.Puffs.Count) {
             return;
         }
@@ -652,7 +653,7 @@ internal sealed class RemoteCharmEffects {
         puff.Active = true;
         puff.Object.SetActive(true);
         if (info.ByGround) {
-            ShowGround(puff, position);
+            ShowGround(puff, position, ground);
         }
 
         foreach (var renderer in puff.Renderers) {
@@ -673,32 +674,46 @@ internal sealed class RemoteCharmEffects {
     }
 
     /// <summary>
-    /// Polvo del salto o del aterrizaje suave: como <see cref="SoftLandEffect"/> y <see cref="JumpEffects"/>, solo el
-    /// hijo del suelo de la sala (el mismo en los dos PCs: están en la misma sala), y el sonido del aterrizaje.
+    /// Polvo del salto, del aterrizaje suave o del dash: como <see cref="SoftLandEffect"/>, <see cref="JumpEffects"/> y
+    /// <see cref="DashEffect"/>, solo el
+    /// hijo del suelo que pisaba quien lo hizo (lo manda con el efecto), y el sonido del aterrizaje.
     /// </summary>
-    private void ShowGround(Puff puff, Vector2 position) {
+    private void ShowGround(Puff puff, Vector2 position, int ground) {
         var info = puff.Info;
         var transform = puff.Transform;
         for (var i = 0; i < transform.childCount; i++) {
             transform.GetChild(i).gameObject.SetActive(false);
         }
 
-        var ground = PlayerData.instance != null ? PlayerData.instance.environmentType : 0;
-        var shown = ground switch {
-            1 => info.Grass,
-            2 => info.Bone,
-            // Agua poco profunda (salpica gotas sueltas) y sin efecto
-            3 or 5 => -1,
-            6 => info.Splash,
-            _ => info.Dust
-        };
+        if (ground < 0) {
+            ground = PlayerData.instance != null ? PlayerData.instance.environmentType : 0;
+        }
+
+        var shown = info.Dash
+            // Como DashEffect.OnEnable: en el agua solo su corte; sin efecto en el 6
+            ? ground switch {
+                1 => info.Grass,
+                2 => info.Bone,
+                3 => info.Splash,
+                6 => -1,
+                _ => info.Dust
+            }
+            : ground switch {
+                1 => info.Grass,
+                2 => info.Bone,
+                // Agua poco profunda (salpica gotas sueltas) y sin efecto
+                3 or 5 => -1,
+                6 => info.Splash,
+                _ => info.Dust
+            };
         SetChildActive(transform, shown);
         if (shown >= 0 && shown != info.Splash) {
             SetChildActive(transform, info.JumpPuff);
             SetChildActive(transform, info.Trail);
         }
 
-        var clip = ground is 3 or 6 ? info.WetClip : ground == 5 ? null : info.LandClip;
+        var clip = info.Dash ? (ground == 3 ? info.WetClip : null)
+            : ground is 3 or 6 ? info.WetClip : ground == 5 ? null : info.LandClip;
         if (puff.Audio != null && clip != null && Audible(position)) {
             puff.Audio.PlayOneShot(clip);
         }

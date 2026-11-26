@@ -129,6 +129,12 @@ internal struct EffectEvent {
 
     public float Spin;
 
+    /// <summary>
+    /// Puff: el suelo bajo quien lo creó (<c>PlayerData.environmentType</c>). La copia enciende el hijo de ese suelo y no el
+    /// del PC que la ve: si cada uno pisa uno distinto (agua dentro de la misma sala), se ve igual en los dos.
+    /// </summary>
+    public byte Ground;
+
     /// <summary>Cuándo llegó (instante local), por si su avatar no llega nunca a ese tick.</summary>
     public double Arrival;
 
@@ -154,6 +160,7 @@ internal struct EffectEvent {
                 writer.WriteFloat(Y);
                 writer.WriteFloat(Angle);
                 writer.WriteFloat(Scale);
+                writer.WriteByte(Ground);
                 break;
             case EffectKind.Fluke:
                 writer.WriteByte(A);
@@ -216,6 +223,7 @@ internal struct EffectEvent {
                 Y = reader.ReadFloat();
                 Angle = reader.ReadFloat();
                 Scale = reader.ReadFloat();
+                Ground = reader.ReadByte();
                 break;
             case EffectKind.Fluke:
                 A = reader.ReadByte();
@@ -696,6 +704,7 @@ internal sealed class PlayerEffects {
                     effect.Y = position.y;
                     effect.Angle = transform.eulerAngles.z;
                     effect.Scale = transform.localScale.x;
+                    effect.Ground = (byte) Mathf.Clamp(PlayerData.instance != null ? PlayerData.instance.environmentType : 0, 0, 255);
                     break;
                 case CharmTemplates.SpawnKind.HazardDeath:
                     // Su FSM le pone después la escala del caballero (en pinchos, al salir despedido)

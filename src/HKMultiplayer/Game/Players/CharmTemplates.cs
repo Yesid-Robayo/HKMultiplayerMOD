@@ -122,6 +122,12 @@ internal sealed class CharmTemplates {
         /// </summary>
         public bool ByGround;
 
+        /// <summary>
+        /// El efecto del dash en el suelo (<see cref="DashEffect"/>): su tabla de suelos es otra (agua: solo la salpicadura
+        /// con su sonido; 6: nada) y su nube (<see cref="JumpPuff"/>) va con el polvo, el pasto o el hueso.
+        /// </summary>
+        public bool Dash;
+
         public int Dust = -1;
         public int Grass = -1;
         public int Bone = -1;
@@ -366,6 +372,24 @@ internal sealed class CharmTemplates {
     private static void PrepareGround(PuffInfo puff, GameObject prefab) {
         var land = prefab.GetComponent<SoftLandEffect>();
         var jump = prefab.GetComponent<JumpEffects>();
+        var dash = prefab.GetComponent<DashEffect>();
+        if (dash != null) {
+            // El dash en el suelo: antes la copia encendía todos sus hijos y el compañero dejaba siempre hojas y la
+            // salpicadura del agua (issue #30)
+            var dashRoot = prefab.transform;
+            puff.ByGround = true;
+            puff.Dash = true;
+            puff.Dust = ChildIndex(dashRoot, dash.dashDust);
+            puff.Grass = ChildIndex(dashRoot, dash.dashGrass);
+            puff.Bone = ChildIndex(dashRoot, dash.dashBone);
+            puff.Splash = ChildIndex(dashRoot, dash.waterCut);
+            puff.JumpPuff = ChildIndex(dashRoot, dash.heroDashPuff);
+            puff.WetClip = dash.splashClip;
+            // Lo que tarda en reciclarse (su recycleTimer)
+            puff.Life = 1f;
+            return;
+        }
+
         if (land == null && jump == null) {
             return;
         }
