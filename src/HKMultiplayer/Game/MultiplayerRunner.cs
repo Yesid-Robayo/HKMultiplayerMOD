@@ -61,6 +61,9 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
     public Features.PartnerHud Hud { get; } = new();
 
+    /// <summary>Aviso de conexión inestable o perdida y de ping alto (ver <see cref="Features.ConnectionHud"/>).</summary>
+    public Features.ConnectionHud ConnectionHud { get; } = new();
+
     public Features.BossBar BossBar { get; } = new();
 
     /// <summary>Barras de vida sobre los enemigos heridos (si el host las activa).</summary>
@@ -431,6 +434,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
         try {
             Hud.Update(scene);
+            ConnectionHud.Update(scene);
             BossBar.Update(scene);
             EnemyBars.Update(scene);
             Skins.LateUpdate(scene);
@@ -930,6 +934,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Safely(() => { EnemyBars.Detach(); }, "EnemyBars.Detach");
         Safely(() => { BossBar.Detach(); }, "BossBar.Detach");
         Safely(() => { Hud.Detach(); }, "Hud.Detach");
+        Safely(() => { ConnectionHud.Detach(); }, "ConnectionHud.Detach");
         Safely(() => { Shades.Detach(); }, "Shades.Detach");
         Safely(() => { Revive.Detach(); }, "Revive.Detach");
         Safely(() => { Vitals.Detach(); }, "Vitals.Detach");
@@ -1061,6 +1066,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         Revive.Attach(session, Party, Players, Vitals);
         Shades.Attach(session);
         Hud.Attach(session, Party, Vitals, Players, Revive);
+        ConnectionHud.Attach(session);
         BossBar.Attach();
         EnemyBars.Attach();
         Actions.Attach(session, Revive);

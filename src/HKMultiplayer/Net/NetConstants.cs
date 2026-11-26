@@ -27,8 +27,13 @@ public static class NetConstants {
     /// <summary>Paquetes que se envían por segundo a cada conexión.</summary>
     public const int TickRate = 60;
 
-    /// <summary>Sin recibir nada durante este tiempo, la conexión se da por perdida.</summary>
-    public const float TimeoutSeconds = 10f;
+    /// <summary>
+    /// Sin recibir nada durante este tiempo, la conexión se da por perdida. Con 10 s, un microcorte de la red (wifi, Steam
+    /// cambiando de relé) echaba al invitado y tenía que volver a entrar en el mundo entero (issue #29): ahora aguanta como
+    /// los juegos en línea, con el aviso en pantalla (<c>ConnectionHud</c>), y al volver la red los mensajes fiables que
+    /// quedaron pendientes llegan en orden (no se pierde nada).
+    /// </summary>
+    public const float TimeoutSeconds = 20f;
 
     /// <summary>Mensajes fiables que pueden estar enviados sin confirmar a la vez.</summary>
     public const int ReliableWindow = 1024;

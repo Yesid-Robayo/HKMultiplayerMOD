@@ -143,6 +143,12 @@ public sealed class NetConnection : ReliableReceiver.ISink {
 
     internal double LastReceive => _lastReceive;
 
+    /// <summary>Segundos desde el último paquete auténtico del otro extremo (para el aviso de conexión inestable).</summary>
+    public double SilentSeconds => NetPeer.Now - _lastReceive;
+
+    /// <summary>Mensajes fiables pendientes de confirmar (lo que se pondrá al día cuando vuelva la red).</summary>
+    public int ReliablePending => _reliableSender.InFlight;
+
     /// <summary>Si ya se avisó en el registro de que no llega nada (para avisar también cuando vuelva a llegar).</summary>
     internal bool SilenceReported;
 
@@ -419,7 +425,9 @@ public sealed class NetConnection : ReliableReceiver.ISink {
 
         if (SilenceReported) {
             SilenceReported = false;
-            _peer.LogWarning($"Vuelve a llegar la red de {_peer.Describe(this)} tras {now - _lastReceive:0.0} s sin nada");
+            // Sin cortar la conexión: lo fiable que quedó pendiente en los dos lados se reenvía ahora, en orden
+            _peer.LogWarning($"Vuelve a llegar la red de {_peer.Describe(this)} tras {now - _lastReceive:0.0} s sin nada; " +
+                             $"se ponen al día {_reliableSender.InFlight} mensajes fiables pendientes");
         }
 
         _lastReceive = now;

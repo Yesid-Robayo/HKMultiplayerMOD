@@ -265,7 +265,7 @@ public abstract class NetPeer : IDisposable {
 
     internal void LogWarning(string message) => Listener.Log(message);
 
-    /// <summary>Segundos sin recibir nada a partir de los que se avisa en el registro (el corte llega a los 10).</summary>
+    /// <summary>Segundos sin recibir nada a partir de los que se avisa en el registro (el corte llega con <see cref="NetConstants.TimeoutSeconds"/>).</summary>
     private const double SilenceWarningSeconds = 3;
 
     /// <summary>Quién es el otro extremo, para el registro, sin su dirección.</summary>

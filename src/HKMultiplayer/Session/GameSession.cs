@@ -92,6 +92,53 @@ public sealed class GameSession : INetListener, IDisposable {
     /// <summary>Latencia con el host en segundos (0 en el host).</summary>
     public double Rtt => _client?.Connection?.Rtt ?? 0;
 
+    /// <summary>
+    /// El enlace que peor va, para el aviso de conexión de la pantalla. En el invitado, el del host (todo le llega por él;
+    /// <paramref name="player"/> es null si el host aún no está en la lista). En el host, el del invitado que lleva más
+    /// tiempo sin enviar nada o, si ninguno calla, el de más latencia. False si no hay ninguno (solo o aún sin conectar).
+    /// </summary>
+    public bool TryGetWorstLink(out SessionPlayer player, out double silentSeconds, out int pingMs) {
+        player = null;
+        silentSeconds = 0;
+        pingMs = 0;
+        if (!IsActive) {
+            return false;
+        }
+
+        if (_client != null) {
+            var connection = _client.Connection;
+            if (connection == null || connection.State != ConnectionState.Connected) {
+                return false;
+            }
+
+            _players.TryGetValue(HostPlayerId, out player);
+            silentSeconds = connection.SilentSeconds;
+            pingMs = (int) (connection.Rtt * 1000);
+            return true;
+        }
+
+        // Un silencio de medio segundo o más pesa más que cualquier latencia
+        var worst = double.MinValue;
+        foreach (var candidate in _players.Values) {
+            var connection = candidate.Connection;
+            if (connection == null || connection.State != ConnectionState.Connected) {
+                continue;
+            }
+
+            var silent = connection.SilentSeconds;
+            var ping = (int) (connection.Rtt * 1000);
+            var score = silent >= 0.5 ? 1e6 + silent : ping;
+            if (score > worst) {
+                worst = score;
+                player = candidate;
+                silentSeconds = silent;
+                pingMs = ping;
+            }
+        }
+
+        return player != null;
+    }
+
     public event Action Connected;
     public event Action<DisconnectReason> Disconnected;
     public event Action<SessionPlayer> PlayerJoined;
