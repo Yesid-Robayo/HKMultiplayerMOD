@@ -9,6 +9,27 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.44.0
+
+- **Panteones juntos**: al empezar un Panteón, todos entran por la sala de entrada (con el texto del Buscador de Dioses) y
+  nadie pasa al primer jefe hasta que los demás terminan la suya. Antes el compañero llegaba solo al primer jefe y
+  peleaba sin el otro.
+- **Campeón Fallido en un Panteón** (#28): al vencerlo, el compañero ya no vuelve al Atrio; el Panteón sigue para todos.
+- **Jefes de los Panteones iguales en todos los PCs**: los Señores Mantis salen al llegar juntos; las medusas pequeñas de
+  Uumuu salen en todos los PCs y reventarlas desde cualquiera le quita el escudo; el escudo de Markoth ataca en todos y lo
+  ve también quien llega después; la Nosk alada se transforma cuando están todos (una sola Nosk y nadie cae fuera de la
+  arena), y las espadas de Xero siguen atacando cuando pasa a moverlo otro PC.
+- **Tajos cortos**: los ataques muy rápidos de algunos jefes (el Caballero Colmena) ahora golpean también al jugador que
+  no mueve al jefe.
+- **Microcortes de la red** (#29): un corte corto ya no echa a nadie de la partida; la conexión espera hasta 20 s y al
+  volver se pone al día. Un aviso arriba en el centro dice si el ping está alto o la conexión va mal, y «Conexión
+  recuperada» al volver.
+- **Reportar un problema, dentro del juego**: enseña los pasos en el propio menú, con botones para copiar el registro,
+  abrir el *issue* en GitHub con la versión y un resumen ya puestos, y abrir la carpeta con una copia del registro sin tus
+  datos personales, para arrastrarla si el texto no cabe.
+- **El dash del compañero** (#30): se ve igual que en su pantalla. Antes dejaba siempre hojas y una salpicadura blanca,
+  aunque no hubiera hierba ni agua.
+
 ## 0.43.0
 
 - **macOS** (probado por la comunidad): instalador y paquete para Mac, aportados por

@@ -9,6 +9,27 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.44.0
+
+- **Pantheons together**: when a Pantheon starts, everyone goes through the entrance room (with the Godseeker's text) and
+  nobody moves on to the first boss until the others are done with theirs. Before, the partner reached the first boss
+  alone and fought without the other player.
+- **Failed Champion in a Pantheon** (#28): beating it no longer sends the partner back to the Atrium; the Pantheon goes on
+  for everyone.
+- **Pantheon bosses the same on every PC**: the Mantis Lords show up when you arrive together; Uumuu's small jellyfish
+  appear on every PC and popping them from any PC breaks its shield; Markoth's shield attacks on every PC and whoever
+  arrives later sees it too; the winged Nosk transforms once everyone is in (a single Nosk, and nobody falls out of the
+  arena), and Xero's swords keep attacking when another PC takes him over.
+- **Short slashes**: the very quick attacks of some bosses (Hive Knight) now also hit the player who isn't moving the boss.
+- **Short network drops** (#29): a short drop no longer kicks anyone out of the game; the connection waits up to 20 s and
+  catches up when it comes back. A notice at the top center tells you when the ping is high or the connection is unstable,
+  and "Connection restored" when it's back.
+- **Report a problem, inside the game**: it shows the steps in the menu itself, with buttons to copy the log, open the
+  GitHub *issue* with the version and a summary already filled in, and open the folder with a copy of the log without
+  your personal data, to drag it in if the text doesn't fit.
+- **Your partner's dash** (#30): it looks the same as on their screen. Before, it always left leaves and a white splash,
+  even with no grass or water around.
+
 ## 0.43.0
 
 - **macOS** (tested by the community): installer and package for Mac, contributed by
