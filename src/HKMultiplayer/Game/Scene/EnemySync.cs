@@ -644,12 +644,18 @@ internal sealed class EnemySync {
         public byte Frame;
 
         /// <summary>
-        /// En una marioneta, pieza que hace daño a la que llegó su apagado: sigue encendida hasta esta hora (ver
-        /// <see cref="HoldDamageSeconds"/>) y luego queda como dicen <see cref="HeldActive"/> y <see cref="HeldCollider"/>.
+        /// En una marioneta, los encendidos y apagados que llegaron para esta pieza que hace daño, con la hora a la que se
+        /// aplican (en ticks del PC que la mueve, ver <see cref="QueueDamagePart"/>), en orden.
         /// </summary>
-        public float HoldUntil;
-        public bool HeldActive;
-        public bool HeldCollider;
+        public List<(double Tick, float Queued, bool Active, bool Collider)> Pending;
+
+        /// <summary>Lo último que se pidió (encendida y caja), aplicado o en la cola; vale si <see cref="HasWanted"/>.</summary>
+        public bool WantedActive;
+        public bool WantedCollider;
+        public bool HasWanted;
+
+        /// <summary>Tick del PC que la mueve de lo último pedido: lo que llega con uno anterior es viejo.</summary>
+        public double WantedTick;
     }
 
     private sealed class HandoverFsm {
@@ -1759,7 +1765,7 @@ internal sealed class EnemySync {
         for (var i = 0; i < _enemies.Count; i++) {
             var enemy = _enemies[i];
             // Antes de todo: una pieza retenida se apaga a su hora aunque el enemigo acabe de morir o de pasar a este PC
-            ReleaseHeldParts(enemy);
+            ApplyQueuedParts(enemy);
             if (!enemy.Puppet || enemy.Root == null || enemy.Health != null && enemy.Health.isDead ||
                 !enemy.Buffer.Sample(time, out var state)) {
                 continue;
@@ -2867,6 +2873,9 @@ internal sealed class EnemySync {
         // creaba el orbe de la vuelta del sueño, que sacaba a los compañeros del Panteón al Atrio (issue #28)
         var cut = fsm.ActiveState != state || fsm.IsSwitchingState;
         writer.WriteUShort(cut ? (ushort) Math.Max(0, state.ActiveActionIndex) : ushort.MaxValue);
+        // Cuándo pasó, en ticks de este PC: la marioneta enciende y apaga sus piezas que dañan a la vez que dibuja su
+        // posición de ese momento (ver QueueDamagePart)
+        writer.WriteUInt((uint) (Time.unscaledTimeAsDouble * NetConstants.TickRate));
         _session.End();
     }
 
@@ -2924,6 +2933,7 @@ internal sealed class EnemySync {
 
         var deadThere = reader.ReadBool();
         var ranTo = reader.ReadUShort();
+        var sentTick = reader.ReadUInt();
         if (!valid) {
             return;
         }
@@ -2983,20 +2993,18 @@ internal sealed class EnemySync {
                 }
 
                 EffectsPlayed++;
-                // Apagar una pieza que hace daño (el tajo del Caballero Colmena en "Slash 2"): con el retraso de dibujo de
-                // la marioneta, como cuando llega por las piezas (ver HoldDamageSeconds); encenderla anula ese apagado
+                // Encender o apagar una pieza que hace daño (el tajo del Caballero Colmena en "Slash 1" y "Slash 2"): con el
+                // tick del PC que la mueve, a la vez que su posición, como cuando llega por las piezas (ver QueueDamagePart)
                 // (comparación de Unity: un objeto destruido no es null para C#)
                 var toggled = action is HutongGames.PlayMaker.Actions.ActivateGameObject activation
                     ? action.Fsm.GetOwnerDefaultTarget(activation.gameObject)
                     : null;
                 if (action is HutongGames.PlayMaker.Actions.ActivateGameObject toggle && toggled != null && enemy.Parts != null &&
-                    Array.Find(enemy.Parts, p => p.Transform == toggled.transform && p.Damage != null) is { } damagePart) {
-                    if (toggle.activate.Value) {
-                        damagePart.HoldUntil = 0f;
-                    } else if (HoldDamagePart(damagePart, false, damagePart.Collider == null || damagePart.Collider.enabled,
-                                   HoldDamageSeconds(enemy))) {
-                        continue;
-                    }
+                    Array.Find(enemy.Parts, p => p.Transform == toggled.transform && p.Damage != null) is { } damagePart &&
+                    QueueDamagePart(damagePart, toggle.activate.Value,
+                        damagePart.HasWanted ? damagePart.WantedCollider : damagePart.Collider == null || damagePart.Collider.enabled,
+                        enemy, sentTick)) {
+                    continue;
                 }
 
                 // Con retraso, el juego lo deja en la cola de su FSM, que en la marioneta está parada y no la atiende nunca
@@ -4324,15 +4332,17 @@ internal sealed class EnemySync {
                 // repetía, el enemigo atacaba dos veces cada vez que cambiaba de PC a mitad de un ataque
                 MuteSpawns(states[data.State]);
                 try {
+                    FillStartLookups(enemy, fsm);
                     fsm.Fsm.SetState(states[data.State].Name);
                 } catch (Exception e) {
                     // A medias en ese estado podría quedarse parado: vuelve al principio de su lógica
-                    Log.Warn($"No se pudo seguir {enemy.Root.name} desde {states[data.State].Name} ({e.Message}): " +
-                             "empieza de nuevo");
+                    Log.Warn($"No se pudo seguir {enemy.Root.name}/{fsm.FsmName} desde {states[data.State].Name} " +
+                             $"({e.GetType().Name} en {FirstFrame(e)}): empieza de nuevo");
                     try {
                         fsm.Fsm.SetState(fsm.Fsm.StartState);
                     } catch (Exception again) {
-                        Log.Warn($"{enemy.Root.name} tampoco pudo empezar de nuevo: {again.Message}");
+                        Log.Warn($"{enemy.Root.name}/{fsm.FsmName} tampoco pudo empezar de nuevo ({again.GetType().Name} en " +
+                                 $"{FirstFrame(again)})");
                     }
                 } finally {
                     UnmuteSpawns();
@@ -5281,6 +5291,57 @@ internal sealed class EnemySync {
                          $"escala=({scale.x:0.00},{scale.y:0.00}) {DescribeSpawnFsms(spawned)}");
             }
         }
+    }
+
+    /// <summary>
+    /// Al tomar un enemigo, las variables de objeto que una FSM aún tiene vacías y que rellena su estado inicial con
+    /// búsquedas (su dueño, su padre, un hijo) se rellenan aquí, como si ese estado hubiera corrido. Las espadas de Xero
+    /// (`xero_nail`) buscan en `Init` su punto de vuelta (`GetChild` del padre, «S1 Home») y luego se sueltan de Xero; en el
+    /// PC que lo tomaba ese `Init` no había corrido, `Home` estaba vacío y poner `Home` fallaba en `DistanceFlySmooth`: las
+    /// espadas se quedaban paradas. Si la pieza ya está suelta, su padre es el enemigo, de quien colgaba.
+    /// </summary>
+    private static void FillStartLookups(Enemy enemy, PlayMakerFSM fsm) {
+        var start = fsm.Fsm.GetState(fsm.Fsm.StartState);
+        if (start == null) {
+            return;
+        }
+
+        foreach (var action in start.Actions) {
+            if (action == null || !action.Enabled) {
+                continue;
+            }
+
+            try {
+                switch (action) {
+                    case HutongGames.PlayMaker.Actions.GetOwner owner when owner.storeGameObject != null &&
+                                                                           owner.storeGameObject.Value == null:
+                        owner.storeGameObject.Value = fsm.gameObject;
+                        break;
+                    case HutongGames.PlayMaker.Actions.GetParent parent when parent.storeResult != null &&
+                                                                             parent.storeResult.Value == null:
+                        var child = fsm.Fsm.GetOwnerDefaultTarget(parent.gameObject);
+                        parent.storeResult.Value = child == null ? null
+                            : child.transform.parent != null ? child.transform.parent.gameObject : enemy.Root;
+                        break;
+                    case HutongGames.PlayMaker.Actions.GetChild getChild when getChild.storeResult != null &&
+                                                                              getChild.storeResult.Value == null:
+                    case HutongGames.PlayMaker.Actions.FindChild findChild when findChild.storeResult != null &&
+                                                                                findChild.storeResult.Value == null:
+                        action.Init(start);
+                        action.OnEnter();
+                        break;
+                }
+            } catch (Exception e) {
+                Log.Warn($"{enemy.Root.name}/{fsm.FsmName}: no se pudo preparar {action.GetType().Name} de {start.Name} " +
+                         $"({e.GetType().Name})");
+            }
+        }
+    }
+
+    /// <summary>Dónde falló: el primer método de la pila del error (para el registro), o su mensaje si no tiene pila.</summary>
+    private static string FirstFrame(Exception e) {
+        var frame = new System.Diagnostics.StackTrace(e).GetFrame(0)?.GetMethod();
+        return frame != null ? $"{frame.DeclaringType?.Name}.{frame.Name}" : e.Message;
     }
 
     /// <summary>Lo creado, como está ahora: quién y con qué acción lo creó, su id, posición, giro, tamaño, velocidad y números.</summary>
@@ -6582,6 +6643,7 @@ internal sealed class EnemySync {
 
                     writer = _session.Begin(EnemyParts);
                     writer.WriteUShort(_sceneHash);
+                    writer.WriteUInt(tick);
                     enemyCountPosition = writer.Position;
                     writer.WriteByte(0);
                     enemyCount = 0;
@@ -6642,6 +6704,7 @@ internal sealed class EnemySync {
 
     private void OnParts(SessionPlayer from, PacketReader reader) {
         var sceneHash = reader.ReadUShort();
+        var sentTick = reader.ReadUInt();
         var enemyCount = reader.ReadByte();
         for (var e = 0; e < enemyCount; e++) {
             var id = reader.ReadUInt();
@@ -6687,7 +6750,7 @@ internal sealed class EnemySync {
                 }
 
                 ApplyPart(enemy.Parts[index], flags, x, y, z, scaleX, scaleY, rotation,
-                    !alive && enemy.Parts[index].OwnLogic ? ushort.MaxValue : clip, frame, alive ? HoldDamageSeconds(enemy) : 0f);
+                    !alive && enemy.Parts[index].OwnLogic ? ushort.MaxValue : clip, frame, alive ? enemy : null, sentTick);
                 if (enemy.Parts[index].Damage != null) {
                     enemy.Parts[index].Damage.damageDealt = damage;
                 }
@@ -6695,67 +6758,98 @@ internal sealed class EnemySync {
         }
     }
 
-    /// <summary>
-    /// Cuánto sigue encendida en una marioneta una pieza que hace daño después de que llegue su apagado: lo que su
-    /// posición va por detrás (el retraso de dibujo de <see cref="SnapshotBuffer"/>, más el intervalo entre estados y un
-    /// frame: medido, el tajo del Caballero Colmena llegaba ~60 ms después en la marioneta). El encendido y el
-    /// apagado se aplican al llegar, pero la marioneta se dibuja con ese retraso: en los tajos que solo dañan unos frames
-    /// mientras el jefe embiste (el Caballero Colmena, Sly, Grimm), la pieza se apagaba antes de que la marioneta llegara
-    /// adonde el original golpeaba, y el jugador de este PC no recibía nunca el tajo.
-    /// </summary>
-    private static float HoldDamageSeconds(Enemy enemy) =>
-        enemy.Buffer.Count > 0 ? (float) ((enemy.Buffer.Delay + StateTickDivider + 2) / NetConstants.TickRate) : 0f;
+    /// <summary>Lo más que espera en la cola un encendido o apagado (si el dibujo de la marioneta se parara).</summary>
+    private const float MaxQueuedPartSeconds = 1f;
 
     /// <summary>
-    /// Apagar (o quitar la caja a) una pieza que hace daño, con <paramref name="hold"/> segundos de retraso si está
-    /// encendida (ver <see cref="HoldDamageSeconds"/>). Devuelve true si se retiene.
+    /// Pide encender o apagar (y la caja de) una pieza que hace daño de una marioneta, como estaba en el tick
+    /// <paramref name="tick"/> del PC que la mueve: se aplica cuando la marioneta dibuja su posición de ese tick (el reloj de
+    /// <see cref="SnapshotBuffer"/>). Las piezas y los efectos se aplicaban al llegar y la posición con su retraso de dibujo:
+    /// en los tajos que solo dañan unos frames mientras el jefe embiste (el Caballero Colmena, Sly, Grimm) la pieza ya se
+    /// había apagado cuando la marioneta llegaba adonde el original golpeaba, y el jugador de este PC no recibía el tajo.
+    /// Devuelve false si no hace falta esperar (no es una pieza que daña o aún no hay posiciones): entonces se aplica ya.
     /// </summary>
-    private static bool HoldDamagePart(Part part, bool active, bool collider, float hold) {
-        if (hold <= 0f || part.Damage == null || !part.Transform.gameObject.activeSelf ||
-            part.Collider != null && !part.Collider.enabled || active && collider) {
+    private static bool QueueDamagePart(Part part, bool active, bool collider, Enemy enemy, double tick) {
+        if (enemy == null || part.Damage == null || part.Transform == null || enemy.Buffer.Count == 0) {
             return false;
         }
 
-        if (part.HoldUntil <= 0f) {
-            part.HoldUntil = Time.unscaledTime + hold;
+        if (!part.HasWanted) {
+            part.HasWanted = true;
+            part.WantedActive = part.Transform.gameObject.activeSelf;
+            part.WantedCollider = part.Collider == null || part.Collider.enabled;
+            part.WantedTick = double.MinValue;
         }
 
-        part.HeldActive = active;
-        part.HeldCollider = collider;
+        // Lo de antes de lo último pedido no cuenta: las piezas van por el canal no fiable y una muestra de justo antes del
+        // encendido («apagada») llegaba después del efecto que la encendía y la apagaba al momento
+        if (tick < part.WantedTick) {
+            return true;
+        }
+
+        part.WantedTick = tick;
+        if (part.WantedActive == active && part.WantedCollider == collider) {
+            return true;
+        }
+
+        // El apagado, unos ticks más tarde: la marioneta se dibuja entre posiciones que llegan cada StateTickDivider ticks
+        // y empieza a moverse un poco después que el original. Medido frame a frame en el tajo del Caballero Colmena: al
+        // apagarse, la marioneta iba por 59,8 y el original había llegado a 60,3, y a la caja le faltaba un pelo para llegar
+        // al caballero
+        var turningOff = part.WantedActive && part.WantedCollider && !(active && collider);
+        part.WantedActive = active;
+        part.WantedCollider = collider;
+        (part.Pending ??= new List<(double, float, bool, bool)>()).Add(
+            (tick + (turningOff ? DamageOffMarginTicks : 0), Time.unscaledTime, active, collider));
         return true;
     }
 
-    /// <summary>Las piezas retenidas (ver <see cref="HoldDamagePart"/>) cuya hora llegó quedan como se pidió.</summary>
-    private static void ReleaseHeldParts(Enemy enemy) {
+    /// <summary>Cuántos ticks más tarde se apaga en una marioneta una pieza que daña (ver QueueDamagePart).</summary>
+    private const int DamageOffMarginTicks = 3;
+
+    /// <summary>
+    /// Los encendidos y apagados pedidos (ver <see cref="QueueDamagePart"/>) cuyo tick ya dibuja la marioneta. Si el
+    /// enemigo ya no es marioneta, su lógica manda en sus piezas: lo pendiente se olvida.
+    /// </summary>
+    private static void ApplyQueuedParts(Enemy enemy) {
         if (enemy.Parts == null) {
             return;
         }
 
+        var render = enemy.Buffer.RenderTick;
         var now = Time.unscaledTime;
         foreach (var part in enemy.Parts) {
-            if (part.HoldUntil <= 0f || now < part.HoldUntil || part.Transform == null) {
+            if (part.Pending == null || part.Pending.Count == 0) {
                 continue;
             }
 
-            part.HoldUntil = 0f;
-            if (part.Collider != null) {
-                part.Collider.enabled = part.HeldCollider;
+            if (!enemy.Puppet || part.Transform == null) {
+                part.Pending.Clear();
+                part.HasWanted = false;
+                continue;
             }
 
-            if (part.Transform.gameObject.activeSelf != part.HeldActive) {
-                part.Transform.gameObject.SetActive(part.HeldActive);
+            while (part.Pending.Count > 0 &&
+                   (part.Pending[0].Tick <= render || now - part.Pending[0].Queued > MaxQueuedPartSeconds)) {
+                var (_, _, active, collider) = part.Pending[0];
+                part.Pending.RemoveAt(0);
+                if (part.Collider != null) {
+                    part.Collider.enabled = collider;
+                }
+
+                if (part.Transform.gameObject.activeSelf != active) {
+                    part.Transform.gameObject.SetActive(active);
+                }
             }
         }
     }
 
     private static void ApplyPart(Part part, byte flags, float x, float y, float z, float scaleX, float scaleY, ushort rotation,
-        ushort clip, byte frame, float hold = 0f) {
+        ushort clip, byte frame, Enemy queueFor = null, double tick = 0) {
         var transform = part.Transform;
         var active = (flags & 1) != 0;
         var collider = (flags & 4) != 0;
-        if (!HoldDamagePart(part, active, collider, hold)) {
-            // Encenderla otra vez anula un apagado retenido
-            part.HoldUntil = 0f;
+        if (!QueueDamagePart(part, active, collider, queueFor, tick)) {
             if (part.Collider != null) {
                 part.Collider.enabled = collider;
             }
@@ -6827,6 +6921,14 @@ internal sealed class EnemySync {
                     if (target == null || target == enemy.Root || target.scene != enemy.Root.scene ||
                         target.GetComponent<HealthManager>() != null ||
                         hero != null && target.transform.IsChildOf(hero.transform)) {
+                        continue;
+                    }
+
+                    // Sus piezas que dañan van con las piezas y los efectos, en el tick en que la marioneta dibuja su
+                    // posición (ver QueueDamagePart). Por aquí se encendían y apagaban al llegar, antes de tiempo: el tajo
+                    // del Caballero Colmena se apagaba en el otro PC antes de que la marioneta llegara al caballero
+                    var targetTransform = target.transform;
+                    if (enemy.Parts != null && Array.Exists(enemy.Parts, p => p.Transform == targetTransform && p.Damage != null)) {
                         continue;
                     }
 
@@ -8173,7 +8275,7 @@ internal sealed class EnemySync {
                 // cortaba su muerte antes de marcarlo muerto: Xero seguía vivo en todos menos en el PC que lo movía
                 // Sin "Exception" en el texto: es un caso previsto, no un error del mod
                 Log.Warn($"{self.GameObjectName}/{self.Name}: {toState?.Name} falló en la copia " +
-                         $"({e.GetType().Name.Replace("Exception", "")}); sigue");
+                         $"({e.GetType().Name.Replace("Exception", "")} en {FirstFrame(e)}); sigue");
             }
 
             var sync = _active;

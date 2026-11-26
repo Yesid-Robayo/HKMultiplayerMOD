@@ -1150,7 +1150,23 @@ internal sealed class FsmStateSync {
         return dialogue && battle;
     }
 
+    /// <summary>Hija de la batalla de la Nosk alada (`GG_Nosk_Hornet`) con su disfraz de Hornet.</summary>
+    private const string NoskDisguise = "Nosk Transform";
+
+    /// <summary>
+    /// La batalla de la Nosk alada: su «Battle Control» hace la transformación del disfraz (`Nosk Transform`), lo apaga y
+    /// despierta a la Nosk. Cada PC la hacía con su reloj: el jefe arrancaba con la del PC que lo movía y en el otro se
+    /// veían a la vez el disfraz y la Nosk peleando. Solo esta: «Battle Scene/Battle Control» lo usan muchas salas.
+    /// </summary>
+    private static bool IsNoskBattle(PlayMakerFSM fsm) =>
+        fsm != null && fsm.FsmName == "Battle Control" && fsm.gameObject.name == "Battle Scene" &&
+        fsm.transform.Find(NoskDisguise) != null;
+
     private static bool IsTarget(PlayMakerFSM fsm) {
+        if (IsNoskBattle(fsm)) {
+            return true;
+        }
+
         foreach (var (name, fsmName) in Targets) {
             if (name == DreamGateName && !IsDreamGate(fsm.gameObject.name)) {
                 continue;
@@ -2108,6 +2124,26 @@ internal sealed class FsmStateSync {
         // Ya esperando: las zonas que avisan mientras el caballero sigue dentro tampoco lo empiezan
         if (item.PendingStart != null) {
             return fsmEvent.Name == item.PendingStart;
+        }
+
+        // La batalla de la Nosk alada: el ENTER lo manda la zona de su disfraz (la FSM «detect» de `Nosk Transform`, a su
+        // padre) y su paso `Arena` quita la plataforma de la entrada. Compartida, el ENTER del primero que entraba la quitaba
+        // también en los demás PCs, con su caballero aún encima: caía fuera de la arena y la cámara del combate ya no lo
+        // veía. Espera a que estén todos dentro de esa zona, como los demás combates
+        if (IsNoskBattle(item.Fsm)) {
+            if (fsmEvent.Name != "ENTER" || item.Fsm.ActiveStateName != "Idle") {
+                return false;
+            }
+
+            item.Zone ??= item.Fsm.transform.Find(NoskDisguise)?.GetComponent<Collider2D>();
+            if (item.Zone == null || EveryoneInside(item)) {
+                return false;
+            }
+
+            item.PendingStart = fsmEvent.Name;
+            item.PendingFrom = item.Fsm.ActiveStateName;
+            Log.Info($"{item.Fsm.gameObject.name}: el combate espera a que entren todos");
+            return true;
         }
 
         // El tarro del Grub Mimic se rompe con un golpe, no es una zona: no espera a nadie
