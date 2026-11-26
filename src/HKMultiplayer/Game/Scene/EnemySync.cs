@@ -2849,8 +2849,13 @@ internal sealed class EnemySync {
 
         // Hasta qué acción llegó el estado: una que cambia de estado corta las siguientes. "Roar?" del Defensor del
         // Estiércol mira si ya rugió y, si es así, sale sin hacer nada; la marioneta repetía todos sus efectos y en los
-        // demás PCs rugía y salía su nombre cada vez que salía de la tierra
-        writer.WriteUShort(fsm.ActiveState != state ? (ushort) Math.Max(0, state.ActiveActionIndex) : ushort.MaxValue);
+        // demás PCs rugía y salía su nombre cada vez que salía de la tierra.
+        // El aviso que lanza una acción de la propia FSM no cambia de estado al momento: queda pendiente
+        // (IsSwitchingState) y el cambio se hace al volver. Antes solo se miraba el estado activo y ese corte no se veía:
+        // "Dream Return" del Campeón Fallido sale en Godhome por GG BOSS en su primera acción, y la marioneta seguía y
+        // creaba el orbe de la vuelta del sueño, que sacaba a los compañeros del Panteón al Atrio (issue #28)
+        var cut = fsm.ActiveState != state || fsm.IsSwitchingState;
+        writer.WriteUShort(cut ? (ushort) Math.Max(0, state.ActiveActionIndex) : ushort.MaxValue);
         _session.End();
     }
 
@@ -6492,7 +6497,9 @@ internal sealed class EnemySync {
             var id = reader.ReadUInt();
             var partCount = reader.ReadByte();
             _byId.TryGetValue(id, out var enemy);
-            var alive = enemy != null && enemy.Puppet && enemy.Health != null && !enemy.Health.isDead;
+            // Las copias de lo que crea un enemigo sin vida propia (el escudo de Markoth) también: antes solo las que tienen
+            // vida, y la hoja del escudo, que su lógica aleja en el ataque, se quedaba pegada a Markoth en los demás PCs
+            var alive = enemy != null && enemy.Puppet && (enemy.Health != null ? !enemy.Health.isDead : enemy.Root != null);
             var corpse = enemy != null && enemy.CorpseFollows && Time.unscaledTime - enemy.DiedAt <= CorpseFollowSeconds;
             var apply = sceneHash == _sceneHash && enemy?.Parts != null && (alive || corpse);
             for (var p = 0; p < partCount; p++) {
