@@ -9,7 +9,6 @@ public static partial class Program {
         Run("Resumen del registro: versiones y cortes de conexión aunque el registro sea largo", SummaryKeepsHeadAndCuts);
         Run("Resumen del registro: sin IP, ID de Steam ni código de partida", SanitizeRemovesIdentifiers);
         Run("Registro para pegar: si no cabe, versiones y final", ClipKeepsHeadAndTail);
-        Run("Página del informe: el registro no puede romper el HTML ni el script", ReportPageEscapes);
     }
 
     private static void ClipKeepsHeadAndTail() {
@@ -27,23 +26,6 @@ public static partial class Program {
         Assert(!clip.Contains("línea número 2000 "), "con el medio");
         var tailStart = clip.IndexOf("…\n", System.StringComparison.Ordinal) + 2;
         Assert(clip.Substring(tailStart).StartsWith("línea número"), "el final no empieza en una línea entera");
-    }
-
-    private static void ReportPageEscapes() {
-        var texts = new ReportPage.Texts {
-            Title = "Reportar", Intro = "Pasos", Steps = new[] { "Uno <b>", "Dos" }, Copy = "Copiar",
-            Copied = "Hecho\"</script>", CopyFailed = "Falló", OpenGitHub = "GitHub", OpenFolder = "Carpeta",
-            CopyPath = "Ruta", PathCopied = "Ruta copiada", LogLabel = "Registro", Privacy = "Privado"
-        };
-        var page = ReportPage.Build(texts, "x </textarea><script>alert(1)</script> & y",
-            "https://example.com/new?a=1&b=<2>", "HKMultiplayer 9.9.9", "file:///datos/", "datos/ModLog \"1\".txt");
-        Assert(!page.Contains("<script>alert"), "el registro abre un script");
-        Assert(!page.Contains("</textarea><script>"), "el registro cierra el cuadro de texto");
-        Assert(page.Contains("a=1&amp;b=&lt;2&gt;"), "la dirección del issue no va escapada");
-        Assert(page.Contains("Uno &lt;b&gt;"), "un paso no va escapado");
-        Assert(page.Split(new[] { "</script>" }, System.StringSplitOptions.None).Length == 2,
-            "un texto cierra el script de la página");
-        Assert(page.Contains("data-path=\"datos/ModLog &quot;1&quot;.txt\""), "la ruta del archivo no va escapada");
     }
 
     private static void SummaryKeepsHeadAndCuts() {

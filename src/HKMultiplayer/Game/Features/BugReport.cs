@@ -9,14 +9,14 @@ namespace HKMultiplayer.Game.Features;
 
 /// <summary>
 /// «Reportar un problema» (menú Multijugador del título y de la pausa): casi nadie adjuntaba el ModLog.txt a los issues, y
-/// cuando se abría GitHub directamente con el registro en el portapapeles tampoco lo pegaban (issue #29: solo llegó el
-/// resumen). Ahora abre en el navegador una página local (<see cref="ReportPage"/>) con los pasos, el registro y botones
-/// para copiarlo, abrir su carpeta, copiar la ruta del archivo (para adjuntarlo) y abrir el issue en GitHub con la versión
-/// y un resumen ya puestos. El registro además queda copiado al portapapeles.
+/// abriendo GitHub directamente con el registro en el portapapeles tampoco lo pegaban (issue #29: solo llegó el resumen).
+/// Ahora el botón lleva a una página del propio menú con los pasos (<see cref="GameStyledMenu"/>, «Reportar») y botones
+/// para copiar el registro, abrir el issue en GitHub con la versión y un resumen ya puestos y abrir la carpeta con una copia
+/// limpia del registro, para arrastrarla si el texto no cabe.
 /// <para>
 /// El mod no envía nada por su cuenta: el jugador ve el texto y decide si lo publica. Antes se quita del registro lo que
 /// podría identificarlo (su carpeta personal, su nombre de usuario y el del PC, direcciones IP, ID de Steam y códigos de
-/// partida); la página y la copia limpia del registro se guardan en <see cref="ReportFolder"/>, nunca el original.
+/// partida); la copia limpia se guarda en <see cref="ReportFolder"/>, nunca se abre el original.
 /// </para>
 /// </summary>
 internal static class BugReport {
@@ -42,95 +42,83 @@ internal static class BugReport {
     /// <summary>Lo que cabe del registro para pegarlo en GitHub (su campo admite 65 536 caracteres, con el resumen).</summary>
     private const int MaxClipboardChars = 55000;
 
-    /// <summary>Carpeta (dentro de la de datos del juego) con la página y la copia limpia del registro.</summary>
+    /// <summary>Carpeta (dentro de la de datos del juego) con la copia limpia del registro.</summary>
     private const string ReportFolder = "HKMultiplayer/BugReport";
 
-    private const string PageFile = "bug-report.html";
     private const string LogFile = "ModLog.txt";
 
-    public static void Open() {
-        string log;
-        string url;
+    /// <summary>Lo preparado al abrir la página (<see cref="Prepare"/>).</summary>
+    private static string _clip;
+
+    private static string _url;
+    private static string _folder;
+
+    /// <summary>
+    /// Al abrir la página de «Reportar»: lee y limpia el registro, guarda la copia limpia, lo copia al portapapeles y arma
+    /// la dirección del issue. False si no se pudo (el jugador tendrá que adjuntar el ModLog.txt a mano).
+    /// </summary>
+    public static bool Prepare() {
         try {
-            log = LogSummary.Sanitize(ReadModLog());
-            url = IssueUrl(log);
+            var log = LogSummary.Sanitize(ReadModLog());
+            _url = IssueUrl(log);
+            _clip = LogSummary.Clip(log, MaxClipboardChars);
+            _folder = Path.GetFullPath(Path.Combine(Application.persistentDataPath, ReportFolder));
+            Directory.CreateDirectory(_folder);
+            File.WriteAllText(Path.Combine(_folder, LogFile), log, new UTF8Encoding(false));
+            var copied = CopyLog();
+            Log.Info($"Reportar un problema: registro limpio de {log.Length} caracteres preparado{(copied ? " y copiado" : "")}");
+            return copied;
         } catch (Exception e) {
             Log.Warn($"Reportar un problema: no se pudo preparar el informe: {e.Message}");
-            Notice.Show(Lang.T("No se pudo abrir GitHub. Adjunta a mano el ModLog.txt (mira el README).",
-                "Couldn't open GitHub. Attach ModLog.txt by hand (see the README)."), 10f);
-            return;
-        }
-
-        var clip = LogSummary.Clip(log, MaxClipboardChars);
-        try {
-            GUIUtility.systemCopyBuffer = clip;
-        } catch (Exception e) {
-            Log.Warn($"Reportar un problema: no se pudo copiar el registro: {e.Message}");
-        }
-
-        try {
-            var folder = Path.Combine(Application.persistentDataPath, ReportFolder);
-            Directory.CreateDirectory(folder);
-            var logPath = Path.GetFullPath(Path.Combine(folder, LogFile));
-            File.WriteAllText(logPath, log, new UTF8Encoding(false));
-            var pagePath = Path.Combine(folder, PageFile);
-            var folderUrl = new Uri(Path.GetFullPath(folder) + Path.DirectorySeparatorChar).AbsoluteUri;
-            File.WriteAllText(pagePath, ReportPage.Build(PageTexts(), clip, url, $"HKMultiplayer {HKMultiplayerMod.Version}",
-                folderUrl, logPath), new UTF8Encoding(false));
-            Application.OpenURL(new Uri(Path.GetFullPath(pagePath)).AbsoluteUri);
-            Log.Info($"Reportar un problema: se abre la página con los pasos (registro limpio de {log.Length} caracteres)");
-            Notice.Show(Lang.T("Se abrió una página con los pasos para reportar el problema.",
-                "A page opened with the steps to report the problem."), 10f);
-        } catch (Exception e) {
-            // Sin la página, como antes: GitHub directamente con el registro ya copiado
-            Log.Warn($"Reportar un problema: no se pudo crear la página ({e.Message}); se abre GitHub");
-            Application.OpenURL(url);
-            Notice.Show(Lang.T("Se abrió GitHub: cuenta qué pasó y pega el registro (Ctrl+V), que ya está copiado.",
-                "GitHub opened: tell us what happened and paste the log (Ctrl+V), it's already copied."), 10f);
+            return false;
         }
     }
 
-    private static ReportPage.Texts PageTexts() => new() {
-        Language = Lang.Current.ToString().ToLowerInvariant().Replace('_', '-'),
-        Title = Lang.T("Reportar un problema", "Report a problem"),
-        Intro = Lang.T("Gracias por avisar. Con el registro se puede ver qué pasó; sin él casi nunca. Sigue estos pasos:",
-            "Thanks for letting us know. With the log we can see what happened; without it we almost never can. " +
-            "Follow these steps:"),
-        Steps = new[] {
-            Lang.T("Pulsa «Copiar registro» (ya se copió al abrir esta página, pero por si copiaste otra cosa después).",
-                "Press \"Copy log\" (it was already copied when this page opened, but just in case you copied something else)."),
-            Lang.T("Pulsa «Abrir GitHub». Se abre el formulario con la versión y un resumen ya puestos (hace falta una cuenta " +
-                   "de GitHub, que es gratis).",
-                "Press \"Open GitHub\". The form opens with the version and a summary already filled in (you need a GitHub " +
-                "account, which is free)."),
-            Lang.T("Rellena si eras el host o el invitado, cómo te conectaste, qué pasó y cómo repetirlo.",
-                "Fill in whether you were the host or the guest, how you connected, what happened and how to reproduce it."),
-            Lang.T("En «ModLog.txt y capturas», debajo del resumen, pega el registro (Ctrl+V).",
-                "In \"ModLog.txt and screenshots\", below the summary, paste the log (Ctrl+V)."),
-            Lang.T("Si GitHub dice que el texto es demasiado largo, adjunta el archivo: pulsa «Copiar ruta del archivo», haz " +
-                   "clic en la barra de abajo del campo («Paste, drop, or click to add files»), pega la ruta en la ventana que " +
-                   "se abre y pulsa Abrir. También puedes arrastrarlo desde «Abrir carpeta del registro».",
-                "If GitHub says the text is too long, attach the file instead: press \"Copy file path\", click the bar at " +
-                "the bottom of the field (\"Paste, drop, or click to add files\"), paste the path in the window that opens " +
-                "and press Open. You can also drag it from \"Open log folder\"."),
-            Lang.T("Añade capturas o un vídeo si ayudan y pulsa «Create».",
-                "Add screenshots or a video if they help and press \"Create\".")
-        },
-        Copy = Lang.T("Copiar registro", "Copy log"),
-        Copied = Lang.T("¡Copiado! Ahora pégalo en GitHub (Ctrl+V).", "Copied! Now paste it on GitHub (Ctrl+V)."),
-        CopyFailed = Lang.T("No se pudo copiar: haz clic en el registro de abajo, pulsa Ctrl+A y luego Ctrl+C.",
-            "Couldn't copy: click the log below, press Ctrl+A and then Ctrl+C."),
-        OpenGitHub = Lang.T("Abrir GitHub", "Open GitHub"),
-        OpenFolder = Lang.T("Abrir carpeta del registro", "Open log folder"),
-        CopyPath = Lang.T("Copiar ruta del archivo", "Copy file path"),
-        PathCopied = Lang.T("Ruta copiada: pégala en la ventana para adjuntar archivos de GitHub.",
-            "Path copied: paste it in GitHub's attach file window."),
-        LogLabel = Lang.T("Tu registro (ModLog.txt, sin datos personales)", "Your log (ModLog.txt, without personal data)"),
-        Privacy = Lang.T("Este registro ya no lleva tu carpeta personal, tu nombre de usuario ni el del PC, direcciones IP, " +
-                         "ID de Steam ni códigos de partida. Nada se envía solo: tú decides qué publicas en GitHub.",
-            "This log no longer has your user folder, your user or PC name, IP addresses, Steam IDs or room codes. " +
-            "Nothing is sent on its own: you decide what you post on GitHub.")
-    };
+    /// <summary>Vuelve a copiar el registro (por si el jugador copió otra cosa después).</summary>
+    public static bool CopyLog() {
+        if (_clip == null) {
+            return false;
+        }
+
+        try {
+            GUIUtility.systemCopyBuffer = _clip;
+            return true;
+        } catch (Exception e) {
+            Log.Warn($"Reportar un problema: no se pudo copiar el registro: {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Abre en el navegador el formulario del issue con la versión y el resumen.</summary>
+    public static bool OpenGitHub() {
+        if (_url == null) {
+            return false;
+        }
+
+        try {
+            Application.OpenURL(_url);
+            Log.Info("Reportar un problema: se abre la página del issue");
+            return true;
+        } catch (Exception e) {
+            Log.Warn($"Reportar un problema: no se pudo abrir GitHub: {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Abre la carpeta con la copia limpia del registro (como la de los mundos: en todos los sistemas).</summary>
+    public static bool OpenFolder() {
+        if (_folder == null) {
+            return false;
+        }
+
+        try {
+            Application.OpenURL(new Uri(_folder + Path.DirectorySeparatorChar).AbsoluteUri);
+            return true;
+        } catch (Exception e) {
+            Log.Warn($"Reportar un problema: no se pudo abrir la carpeta del registro: {e.Message}");
+            return false;
+        }
+    }
 
     /// <summary>La dirección del issue nuevo con la versión y el resumen más largo que quepa.</summary>
     private static string IssueUrl(string log) {

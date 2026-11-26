@@ -28,6 +28,7 @@ internal sealed class SessionMenu : GameStyledMenu {
     private const int MoreSettingsPage = 3;
     private const int PartnersPage = 4;
     private const int SkinPage = 5;
+    private const int ReportPage = 6;
 
     /// <summary>
     /// Ajustes de la primera página (dificultad y revivir: 10); el resto (pantalla y permisos: 9) va en la segunda. Así
@@ -232,9 +233,11 @@ internal sealed class SessionMenu : GameStyledMenu {
         AddButton(pages, Lang.T("Ajustes de la partida", "Game settings"), () => ShowPage(SettingsPage), 36, 560);
         AddButton(pages, Lang.T("Compañeros", "Partners"), () => ShowPage(PartnersPage), 36, 420);
         AddButton(pages, Lang.T("Skin y sonido", "Skin & sound"), () => ShowPage(SkinPage), 36, 420);
-        // Abre un issue en GitHub con el registro ya preparado (ver BugReport)
-        AddButton(main, Lang.T("Reportar un problema", "Report a problem"), BugReport.Open, 32);
+        // Los pasos para abrir un issue en GitHub con el registro ya preparado (ver BugReport)
+        AddButton(main, Lang.T("Reportar un problema", "Report a problem"), () => ShowReportPage(ReportPage), 32);
         _leave = AddButton(main, Lang.T("Cerrar partida", "Close game"), () => ShowPage(LeavePage));
+
+        BuildReportPage(ReportPage);
 
         var leave = NewPage(LeavePage);
         _leaveQuestion = AddText(leave, string.Empty, 44, title: true);

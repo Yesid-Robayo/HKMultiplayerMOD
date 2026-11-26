@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using GlobalEnums;
+using HKMultiplayer.Game.Features;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -334,6 +335,91 @@ internal abstract class GameStyledMenu : MonoBehaviour {
         label.horizontalOverflow = HorizontalWrapMode.Wrap;
         textObject.GetComponent<LayoutElement>().preferredHeight = size * 1.6f;
         return label;
+    }
+
+    /// <summary>Párrafo alineado a la izquierda que ocupa las líneas que necesite (su alto lo da el texto con el ancho de la página).</summary>
+    protected Text AddParagraph(GameObject parent, int size) {
+        var label = AddText(parent, string.Empty, size);
+        label.alignment = TextAnchor.UpperLeft;
+        label.GetComponent<LayoutElement>().preferredHeight = -1;
+        return label;
+    }
+
+    // =====================================================================================================
+    // Reportar un problema (ver BugReport): la misma página en el menú del título y en el de la pausa
+    // =====================================================================================================
+
+    private Text _reportIntro;
+    private readonly Text[] _reportSteps = new Text[5];
+    private Text _reportStatus;
+    private Text _reportPrivacy;
+
+    protected void BuildReportPage(int page) {
+        var report = NewPage(page);
+        AddText(report, Lang.T("Reportar un problema", "Report a problem"), 46, title: true);
+        _reportIntro = AddParagraph(report, 38);
+        AddSpace(report, 8);
+        for (var i = 0; i < _reportSteps.Length; i++) {
+            _reportSteps[i] = AddParagraph(report, 35);
+        }
+
+        AddSpace(report, 14);
+        var buttons = AddRow(report, "Botones", 84, 24);
+        AddButton(buttons, Lang.T("Copiar registro", "Copy log"), () => SetReportStatus(BugReport.CopyLog()
+            ? Lang.T("¡Copiado! Ahora pégalo en GitHub (Ctrl+V).", "Copied! Now paste it on GitHub (Ctrl+V).")
+            : Lang.T("No se pudo copiar el registro: arrastra el ModLog.txt desde «Abrir carpeta del registro».",
+                "Couldn't copy the log: drag ModLog.txt from \"Open log folder\"."), true), 34, 400);
+        AddButton(buttons, Lang.T("Abrir GitHub", "Open GitHub"), () => {
+            if (!BugReport.OpenGitHub()) {
+                SetReportStatus(Lang.T("No se pudo abrir GitHub. Adjunta a mano el ModLog.txt (mira el README).",
+                    "Couldn't open GitHub. Attach ModLog.txt by hand (see the README)."), false);
+            }
+        }, 34, 360);
+        AddButton(buttons, Lang.T("Abrir carpeta del registro", "Open log folder"), () => {
+            if (!BugReport.OpenFolder()) {
+                SetReportStatus(Lang.T("No se pudo abrir la carpeta. El README dice dónde está el ModLog.txt.",
+                    "Couldn't open the folder. The README says where ModLog.txt is."), false);
+            }
+        }, 34, 520);
+        _reportStatus = AddText(report, string.Empty, 36);
+        _reportPrivacy = AddParagraph(report, 29);
+        _reportPrivacy.color = new Color(1f, 1f, 1f, 0.6f);
+    }
+
+    /// <summary>Prepara el informe (copia limpia, portapapeles y dirección del issue) y enseña la página.</summary>
+    protected void ShowReportPage(int page) {
+        // Los textos se ponen al abrirla, en el idioma de ahora (los pasos llevan su número delante y Lang.Relabel no los
+        // reconoce)
+        _reportIntro.text = Lang.T("Gracias por avisar. Con el registro se puede ver qué pasó; sin él casi nunca. Sigue estos pasos:",
+            "Thanks for letting us know. With the log we can see what happened; without it we almost never can. Follow these steps:");
+        var steps = new[] {
+            Lang.T("Pulsa «Abrir GitHub»: se abre en el navegador el formulario con la versión y un resumen ya puestos (hace falta una cuenta de GitHub, que es gratis).",
+                "Press \"Open GitHub\": the form opens in your browser with the version and a summary already filled in (you need a GitHub account, which is free)."),
+            Lang.T("Rellena si eras el host o el invitado, cómo te conectaste, qué pasó y cómo repetirlo.",
+                "Fill in whether you were the host or the guest, how you connected, what happened and how to reproduce it."),
+            Lang.T("En «ModLog.txt y capturas», debajo del resumen, pega el registro (Ctrl+V): ya está copiado.",
+                "In \"ModLog.txt and screenshots\", below the summary, paste the log (Ctrl+V): it's already copied."),
+            Lang.T("Si GitHub dice que el texto es demasiado largo, pulsa «Abrir carpeta del registro» y arrastra el ModLog.txt a ese campo.",
+                "If GitHub says the text is too long, press \"Open log folder\" and drag ModLog.txt into that field."),
+            Lang.T("Añade capturas o un vídeo si ayudan y pulsa «Create».",
+                "Add screenshots or a video if they help and press \"Create\".")
+        };
+        for (var i = 0; i < _reportSteps.Length; i++) {
+            _reportSteps[i].text = $"{i + 1}. {steps[i]}";
+        }
+
+        _reportPrivacy.text = Lang.T("El registro va sin tu carpeta personal, tu nombre de usuario ni el del PC, direcciones IP, ID de Steam ni códigos de partida. Nada se envía solo: tú decides qué publicas en GitHub.",
+            "The log goes without your user folder, your user or PC name, IP addresses, Steam IDs or room codes. Nothing is sent on its own: you decide what you post on GitHub.");
+        SetReportStatus(BugReport.Prepare()
+            ? Lang.T("El registro ya está copiado.", "The log is already copied.")
+            : Lang.T("No se pudo copiar el registro: arrastra el ModLog.txt desde «Abrir carpeta del registro».",
+                "Couldn't copy the log: drag ModLog.txt from \"Open log folder\"."), true);
+        ShowPage(page);
+    }
+
+    private void SetReportStatus(string text, bool good) {
+        _reportStatus.text = text;
+        _reportStatus.color = good ? new Color(0.75f, 1f, 0.78f, 0.95f) : new Color(1f, 0.6f, 0.55f, 0.95f);
     }
 
     protected static void AddSpace(GameObject parent, float height) {

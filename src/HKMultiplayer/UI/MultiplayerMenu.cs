@@ -24,6 +24,7 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
     private const int NewWorldPage = 2;
     private const int JoinPage = 3;
     private const int DeletePage = 4;
+    private const int ReportPage = 6;
 
     private InputField _name;
     private InputField _port;
@@ -104,8 +105,8 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         AddSpace(start, 30);
         AddButton(start, Lang.T("Hostear un mundo", "Host a world"), () => ShowPage(HostPage));
         AddButton(start, Lang.T("Unirse a un mundo", "Join a world"), () => ShowPage(JoinPage));
-        // Abre un issue en GitHub con el registro ya preparado (ver BugReport)
-        AddButton(start, Lang.T("Reportar un problema", "Report a problem"), BugReport.Open, 34);
+        // Los pasos para abrir un issue en GitHub con el registro ya preparado (ver BugReport)
+        AddButton(start, Lang.T("Reportar un problema", "Report a problem"), () => ShowReportPage(ReportPage), 34);
         AddSpace(start, 16);
         _updateText = AddText(start, string.Empty, 28);
         _updateButton = AddButton(start, string.Empty, OpenUpdatePage, 34);
@@ -210,6 +211,8 @@ internal sealed class MultiplayerMenu : GameStyledMenu {
         AddButton(join, Lang.T("Unirse", "Join"), Join);
         _joinStatus = AddText(join, string.Empty, 34);
         AddText(join, Lang.T("Tu personaje se guarda en el mundo del host, en su PC (al volver a unirte lo recuperas).", "Your character is saved in the host's world, on their PC (you get it back when you join again)."), 28);
+
+        BuildReportPage(ReportPage);
 
         var delete = NewPage(DeletePage);
         _deleteQuestion = AddText(delete, string.Empty, 44, title: true);

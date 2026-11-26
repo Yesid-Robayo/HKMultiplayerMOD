@@ -14,7 +14,6 @@
         <Compile Include="..\..\src\HKMultiplayer\Game\Players\PlayerSnapshot.cs;..\..\src\HKMultiplayer\Game\Players\SnapshotBuffer.cs" Link="Game\%(Filename)%(Extension)" />
         <Compile Include="..\..\src\HKMultiplayer\Util\SafeFile.cs" Link="Util\SafeFile.cs" />
         <Compile Include="..\..\src\HKMultiplayer\Util\LogSummary.cs" Link="Util\LogSummary.cs" />
-        <Compile Include="..\..\src\HKMultiplayer\Util\ReportPage.cs" Link="Util\ReportPage.cs" />
         <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
     </ItemGroup>
 </Project>
