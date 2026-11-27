@@ -22,8 +22,8 @@ Knight skin (with its HUD). Hollow Knight belongs to Team Cherry.</sub>
 </div>
 
 > [!WARNING]
-> **Beta.** Almost everything has been tested by playing, but no long session between PCs over the internet has been
-> played yet, and some parts are not fully tested (see
+> **Beta.** Almost everything has been tested by playing, including long sessions over the internet and through Steam
+> with 3 players, but some parts are not fully tested (see
 > [Testing status](#-testing-status)). **It may have bugs.** Back up your saves before playing and, if something goes
 > wrong, open an *issue* with a screenshot and your `ModLog.txt`.
 
@@ -281,11 +281,13 @@ API.
   each player finishes on their own PC.
 - 0.26.0: the whole mod was reviewed. The 172 issues found were fixed or reviewed, and checking them found and fixed
   16 more.
+- Long sessions over the internet between real PCs, also with 3 players.
+- Playing through Steam between different accounts: creating the lobby, inviting, joining and connecting through
+  Steam's relays.
 
 ❓ **Not confirmed yet:**
 
-- A long session over the internet, also with 3 or 4 players.
-- Playing through Steam: creating the lobby, inviting, joining and connecting through Steam's relays.
+- A game with 4 players between real PCs.
 - Playing between a Mac and a Windows PC, and on Intel Macs.
 - Native Linux (the package and its installer are ready but nobody has tried them yet).
 

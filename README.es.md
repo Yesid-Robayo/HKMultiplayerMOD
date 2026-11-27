@@ -22,8 +22,8 @@ Rick Knight (con su HUD). Hollow Knight es de Team Cherry.</sub>
 </div>
 
 > [!WARNING]
-> **Versión beta.** Casi todo se ha probado jugando, pero todavía no se ha jugado una partida larga entre PCs por
-> internet, y algunas partes no se han probado del todo (ver
+> **Versión beta.** Casi todo se ha probado jugando, también partidas largas por internet y por Steam con 3
+> jugadores, pero algunas partes no se han probado del todo (ver
 > [Estado de las pruebas](#-estado-de-las-pruebas)). **Puede tener errores.** Haz una copia de tus partidas antes de
 > jugar y, si algo falla, cuéntalo en un *issue* con una captura y tu `ModLog.txt`.
 
@@ -284,11 +284,12 @@ escrito desde cero sobre la Modding API de Hollow Knight.
   cada jugador acaba en su propio PC.
 - 0.26.0: se revisó todo el mod. Los 172 fallos encontrados se arreglaron o se revisaron, y al comprobarlos salieron y
   se arreglaron 16 más.
+- Partidas largas por internet entre PCs de verdad, también con 3 jugadores.
+- Jugar por Steam entre cuentas distintas: crear la sala, invitar, unirse y la conexión por los relés de Steam.
 
 ❓ **Aún sin confirmar:**
 
-- Una partida larga por internet, también con 3 o 4 jugadores.
-- Jugar por Steam: crear la sala, invitar, unirse y la conexión por los relés de Steam.
+- Una partida con 4 jugadores entre PCs de verdad.
 - Jugar entre un Mac y un PC con Windows, y en los Mac con Intel.
 - Linux nativo (el paquete y su instalador están listos, pero nadie los ha probado aún).
 
