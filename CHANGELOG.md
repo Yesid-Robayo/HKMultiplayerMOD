@@ -9,6 +9,18 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.46.0
+
+- **Dedicated network thread** (#17, #29): packet encryption, acknowledgments, resends, keepalives, large transfers and
+  sending now run on their own background thread instead of Unity's main thread. Long room loads, frame hiccups or
+  Alt-Tab no longer freeze the connection or trigger false silence warnings, and the host has less work per frame.
+- **4 independent reliable channels**: combat (hits, enemy health/events, revives, shades), world (sessions, room
+  changes, switches, shared progress), social (chat, pings, map markers, skin metadata) and bulk transfers (world saves
+  and skins) now travel on separate channels packed by priority. A lost skin or world chunk no longer delays hits,
+  enemy deaths or room transitions.
+- **Steam networking**: `SteamNetworkingMessages` now reads messages in batches of up to 64 per call directly from the
+  network thread, reducing frame overhead when playing through Steam.
+
 ## 0.45.1
 
 - **Markoth in the Pantheon** (#31): he no longer flies out of his arena when the other player takes him over, and

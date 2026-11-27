@@ -9,6 +9,19 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.46.0
+
+- **Hilo dedicado de red** (#17, #29): el cifrado, los acuses, los reenvíos, el latido, las transferencias grandes y el
+  envío ahora corren en su propio hilo en segundo plano en lugar del hilo principal de Unity. Las cargas largas de sala,
+  los tirones o cambiar de ventana ya no congelan la conexión ni provocan falsos avisos de silencio, y el host tiene
+  menos carga por frame.
+- **4 canales fiables independientes**: combate (golpes, vida y eventos de enemigos, revivir, sombras), mundo (sesión,
+  cambios de sala, palancas, progreso compartido), social (chat, pings, marcas del mapa, metadatos de skins) y datos
+  grandes (mundo al unirse y skins) viajan ahora por canales separados y ordenados por prioridad. Un trozo perdido de
+  skin o del mundo ya no retrasa golpes, muertes de enemigos ni cambios de sala.
+- **Conexión por Steam**: `SteamNetworkingMessages` lee ahora mensajes por lotes de hasta 64 por llamada directamente
+  desde el hilo de red, reduciendo la carga en el frame al jugar por Steam.
+
 ## 0.45.1
 
 - **Markoth en el Panteón** (#31): ya no sale volando de su arena cuando lo toma el otro jugador, y recargar la sala
