@@ -1265,7 +1265,9 @@ internal sealed class Revive {
 
         UseHostRespawn(respawn);
 
-        Log.Info("Todos caídos: muerte normal");
+        // El jefe de esta sala espera al volver a que lleguen todos, no solo los que ya estén dentro
+        Scene.EnemySync.NoteWipe(_bodyScene);
+        Log.Info($"Todos caídos: muerte normal (si hay un jefe en {_bodyScene}, al volver espera a todos)");
         GoToBodyThen(Arrival.RealDeath);
     }
 

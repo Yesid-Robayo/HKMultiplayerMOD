@@ -254,6 +254,35 @@ internal sealed class EnemySync {
     /// <summary>Distancia al jefe a la que tienen que estar todos para que despierte.</summary>
     private const float WakeRange = 25f;
 
+    /// <summary>
+    /// Tras caer todos en una sala, durante este tiempo su jefe también espera a los que aún no volvieron a ella. Sin esto,
+    /// el primero que volvía del banco despertaba a Hornet (su revancha empieza en cuanto alguien entra en su zona) y los
+    /// demás llegaban con el combate empezado y las rejas cerradas: solo se esperaba a quien ya estaba en la sala.
+    /// </summary>
+    private const float RegroupWindowSeconds = 300f;
+
+    /// <summary>Lo que un jefe espera como mucho a los que vuelven tras caer todos (alguno puede no volver).</summary>
+    private const float RegroupHoldSeconds = 60f;
+
+    /// <summary>Sala donde cayeron todos la última vez y hasta cuándo su jefe espera a los que vuelven.</summary>
+    private static string _regroupScene;
+
+    private static float _regroupUntil;
+
+    /// <summary>Cayeron todos en esa sala (ver <see cref="RegroupWindowSeconds"/>).</summary>
+    public static void NoteWipe(string scene) {
+        if (string.IsNullOrEmpty(scene)) {
+            return;
+        }
+
+        _regroupScene = GameManager.GetBaseSceneName(scene);
+        _regroupUntil = Time.unscaledTime + RegroupWindowSeconds;
+    }
+
+    /// <summary>Si el grupo vuelve a esta sala tras caer en ella: su jefe espera también a los que aún no llegaron.</summary>
+    private bool Regrouping() =>
+        _regroupScene != null && Time.unscaledTime < _regroupUntil && GameManager.GetBaseSceneName(_scene) == _regroupScene;
+
     /// <summary>Batalla de arena a la que pertenece un enemigo (privado en <see cref="HealthManager"/>).</summary>
     private static readonly System.Reflection.FieldInfo BattleSceneField = typeof(HealthManager).GetField("battleScene",
         System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
@@ -463,6 +492,9 @@ internal sealed class EnemySync {
         public bool Awake;
         public HutongGames.PlayMaker.FsmState HeldWake;
         public bool WaitingWake;
+
+        /// <summary>Desde cuándo retiene su despertar (para el límite de <see cref="RegroupHoldSeconds"/>).</summary>
+        public float WaitingSince;
 
         /// <summary>Desde cuándo un `Climber` que mueve este PC no tiene pared (0: la tiene).</summary>
         public float ClimberLostAt;
@@ -693,6 +725,9 @@ internal sealed class EnemySync {
         /// guardan en `Shot Event` hacia dónde va su guadaña).
         /// </summary>
         public string[] Strings;
+
+        /// <summary>Sus vectores (la aguja de Hornet guarda en `Return Vector` adónde vuelve).</summary>
+        public Vector3[] Vectors;
 
         public ObjectRef[] Objects;
         public bool HasBody;
@@ -4131,6 +4166,19 @@ internal sealed class EnemySync {
             // HandoverFsm.Tag)
             writer.WriteString(enemy.Root != null ? enemy.Root.tag : string.Empty);
             writer.WriteBool(enemy.Collider != null && enemy.Collider.isTrigger);
+            // Sus vectores, al final y solo los que caben: la aguja de Hornet guarda en `Return Vector` adónde vuelve al
+            // lanzarse. Sin él, el que la tomaba a mitad del vuelo la mandaba al sitio de un lanzamiento anterior
+            var vectors = variables?.Vector3Variables;
+            var vectorCount = vectors == null ? 0
+                : Math.Min(Math.Min(vectors.Length, MaxHandoverVars), Math.Max(0, (writer.Remaining - 1) / 12));
+            writer.WriteByte((byte) vectorCount);
+            for (var v = 0; v < vectorCount; v++) {
+                var value = vectors[v].Value;
+                writer.WriteFloat(value.x);
+                writer.WriteFloat(value.y);
+                writer.WriteFloat(value.z);
+            }
+
             _session.End();
         }
     }
@@ -4191,6 +4239,11 @@ internal sealed class EnemySync {
         var walker = ReadWalker(reader);
         var tag = reader.ReadString(MaxHandoverString);
         var trigger = reader.ReadBool();
+        var vectors = new Vector3[Math.Min((int) reader.ReadByte(), MaxHandoverVars)];
+        for (var v = 0; v < vectors.Length; v++) {
+            vectors[v] = new Vector3(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
+        }
+
         // También uno que aún no es marioneta porque este PC acaba de entrar en la sala (se toma igual, ver Update)
         if (sceneHash != _sceneHash || !_byId.TryGetValue(id, out var enemy) || index >= count ||
             !enemy.Puppet && Time.unscaledTime - enemy.ScannedAt > PuppetDelay + 1f) {
@@ -4209,7 +4262,7 @@ internal sealed class EnemySync {
         enemy.Handover[index] = new HandoverFsm {
             State = state, Ints = ints, Floats = floats, Bools = bools, Strings = strings, Objects = objects, HasBody = hasBody, Velocity = velocity, Gravity = gravity,
             BodyType = bodyType, Simulated = simulated, Active = active, Look = look, Damage = damage, Detached = detached, Waited = waited,
-            Awake = awake, HeldWake = heldWake, Walker = walker, Tag = tag, Trigger = trigger
+            Awake = awake, HeldWake = heldWake, Walker = walker, Tag = tag, Trigger = trigger, Vectors = vectors
         };
         if (index == count - 1) {
             enemy.HandoverReady = true;
@@ -4312,6 +4365,10 @@ internal sealed class EnemySync {
                 }
 
                 variable.Value = data.Strings[v];
+            }
+
+            for (var v = 0; data.Vectors != null && v < data.Vectors.Length && v < variables.Vector3Variables.Length; v++) {
+                variables.Vector3Variables[v].Value = data.Vectors[v];
             }
 
             // Solo las vacías aquí: las que ya apuntan a algo las preparó su propia lógica en este PC
@@ -4600,8 +4657,8 @@ internal sealed class EnemySync {
             return false;
         }
 
-        if (fsm.ActiveState == null || fsm.ActiveState.Name != enemy.DormantState || !OthersInScene() || EveryoneNear(enemy) ||
-            InBattleScene(enemy) || !LocalNear(enemy) || FightStarted(enemy)) {
+        if (fsm.ActiveState == null || fsm.ActiveState.Name != enemy.DormantState || !OthersInScene() && !Regrouping() ||
+            EveryoneNear(enemy) || InBattleScene(enemy) || !LocalNear(enemy) || FightStarted(enemy)) {
             WakeUp(enemy);
             return false;
         }
@@ -4609,6 +4666,7 @@ internal sealed class EnemySync {
         enemy.HeldWake = to;
         if (!enemy.WaitingWake) {
             enemy.WaitingWake = true;
+            enemy.WaitingSince = Time.unscaledTime;
             enemy.WasInvincible = enemy.Health.IsInvincible;
             enemy.Health.IsInvincible = true;
             Log.Info($"{enemy.Root.name}: espera a que estén todos cerca para despertar");
@@ -4655,7 +4713,8 @@ internal sealed class EnemySync {
             enemy.HeldWake = fsm.Fsm.States[data.HeldWake - 1];
             if (!enemy.WaitingWake) {
                 enemy.WaitingWake = true;
-                    enemy.WasInvincible = enemy.Health.IsInvincible;
+                enemy.WaitingSince = Time.unscaledTime;
+                enemy.WasInvincible = enemy.Health.IsInvincible;
                 enemy.Health.IsInvincible = true;
             }
 
@@ -4666,6 +4725,11 @@ internal sealed class EnemySync {
 
     private void WakeUp(Enemy enemy) {
         enemy.Awake = true;
+        // Despierto el jefe de la sala donde cayeron, ya no se espera a nadie más al volver a ella
+        if (enemy.MaxHp >= BossHp && Regrouping()) {
+            _regroupScene = null;
+        }
+
         if (enemy.WaitingWake) {
             enemy.WaitingWake = false;
             if (enemy.Health != null) {
@@ -4693,8 +4757,9 @@ internal sealed class EnemySync {
             }
 
             // Sin límite de tiempo: no empieza hasta que estén todos (también quien está en pausa). No se espera a quien
-            // está caído, en otra sala o sin avatar en este PC (ver EveryoneNear): nadie podría llegar nunca
-            if (OthersInScene() && !EveryoneNear(enemy) && !InBattleScene(enemy) && !FightStarted(enemy)) {
+            // está caído, en otra sala o sin avatar en este PC (ver EveryoneNear): nadie podría llegar nunca. Salvo tras
+            // caer todos aquí: a los que vuelven del banco se les espera hasta RegroupHoldSeconds
+            if ((OthersInScene() || Regrouping()) && !EveryoneNear(enemy) && !InBattleScene(enemy) && !FightStarted(enemy)) {
                 if (now >= enemy.NextWaitNotice) {
                     enemy.NextWaitNotice = now + 4f;
                     HKMultiplayer.UI.Notice.Show(Lang.F("Esperando a {0} para empezar el combate", "Waiting for {0} to start the fight", MissingNear(enemy)), 3.5f);
@@ -4735,9 +4800,19 @@ internal sealed class EnemySync {
             return false;
         }
 
+        var awaitAway = AwaitsAway(enemy);
         foreach (var player in _session.Players) {
             // Un caído no bloquea la espera
-            if (player.IsLocal || player.Scene != _scene || Features.PartyState.IsDown(player.Id)) {
+            if (player.IsLocal || Features.PartyState.IsDown(player.Id)) {
+                continue;
+            }
+
+            // El que aún no volvió a la sala donde cayeron todos, sí
+            if (player.Scene != _scene) {
+                if (awaitAway) {
+                    return false;
+                }
+
                 continue;
             }
 
@@ -4754,10 +4829,20 @@ internal sealed class EnemySync {
         return true;
     }
 
+    /// <summary>Si el jefe espera también a los que no están en la sala (tras caer todos en ella, hasta el límite).</summary>
+    private bool AwaitsAway(Enemy enemy) =>
+        Regrouping() && (!enemy.WaitingWake || Time.unscaledTime - enemy.WaitingSince < RegroupHoldSeconds);
+
     private string MissingNear(Enemy enemy) {
         var position = enemy.Transform.position;
         var names = new List<string>();
+        var awaitAway = AwaitsAway(enemy);
         foreach (var player in _session.Players) {
+            if (awaitAway && !player.IsLocal && player.Scene != _scene && !Features.PartyState.IsDown(player.Id)) {
+                names.Add(player.Name);
+                continue;
+            }
+
             if (!player.IsLocal && player.Scene == _scene && !Features.PartyState.IsDown(player.Id) && _players != null &&
                 _players.TryGetAvatarObject(player.Id, out var avatar) &&
                 ((Vector2) (avatar.transform.position - position)).sqrMagnitude > WakeRange * WakeRange) {
@@ -6361,13 +6446,18 @@ internal sealed class EnemySync {
             }
         }
 
-        if (events == null && direct == null && registered == null) {
+        var hero = HeroController.instance;
+        var enemyScene = enemy.Root.scene;
+        var notifiers = PiecesThatNotify(enemy, hero);
+        if (events == null && direct == null && registered == null && notifiers == null) {
             return;
         }
 
-        var hero = HeroController.instance;
         List<(uint Path, PlayMakerFSM Fsm)> found = null;
-        var enemyScene = enemy.Root.scene;
+        foreach (var fsm in notifiers ?? (IEnumerable<PlayMakerFSM>) Array.Empty<PlayMakerFSM>()) {
+            (found ??= new List<(uint, PlayMakerFSM)>()).Add((ScenePaths.StableHash(fsm.transform), fsm));
+        }
+
         foreach (var fsm in PlayMakerFSM.FsmList) {
             var owner = fsm != null ? fsm.gameObject : null;
             if (owner == null || !SameRoom(owner.scene, enemyScene) || _enemyFsms.ContainsKey(fsm.Fsm) ||
@@ -6383,7 +6473,8 @@ internal sealed class EnemySync {
                   direct != null && direct.Contains(owner) && SpawnsGameplay(fsm) ||
                   registered != null && Listens(fsm, registered) && SpawnsGameplay(fsm)) ||
                 // No los controladores de combate (el del Coliseo contiene enemigos; ya los lleva un PC para todos)
-                owner.GetComponentsInChildren<HealthManager>(true).Length > 0 || FsmStateSync.IsSharedController(fsm.Fsm)) {
+                owner.GetComponentsInChildren<HealthManager>(true).Length > 0 || FsmStateSync.IsSharedController(fsm.Fsm) ||
+                found != null && found.Exists(entry => entry.Fsm == fsm)) {
                 continue;
             }
 
@@ -6420,6 +6511,83 @@ internal sealed class EnemySync {
         }
 
         Log.Info($"{enemy.Root.name}: {count} trampas de la sala van con él");
+    }
+
+    /// <summary>
+    /// Piezas sueltas del enemigo, con lógica propia, que le avisan de cuándo seguir. La aguja de Hornet vuela con su FSM
+    /// y al volver manda NEEDLE RETURN, que Hornet espera en `Thrown`. Era de la sala, así que su lógica corría en todos los
+    /// PCs: en el que no movía a Hornet volvía sola a los 0,3 s (sin la velocidad, que la pone Hornet) y encendía el hilo con
+    /// la aguja aún saliendo, que se veía estirada; y si Hornet cambiaba de PC durante el lanzamiento, la aguja del nuevo ya
+    /// había vuelto, nadie mandaba NEEDLE RETURN y Hornet se quedaba quieta para siempre. Ahora va con Hornet: solo corre en
+    /// el PC que la mueve y el que la toma sigue desde el mismo punto del vuelo.
+    /// Se buscan por las variables del enemigo que apuntan a ellas (están apagadas casi siempre, y apagadas no salen en
+    /// <see cref="PlayMakerFSM.FsmList"/>): tienen que hacer daño, no ser un enemigo y avisar a todos con un evento que
+    /// espera alguna FSM del enemigo.
+    /// </summary>
+    private List<PlayMakerFSM> PiecesThatNotify(Enemy enemy, HeroController hero) {
+        HashSet<string> waits = null;
+        List<GameObject> referenced = null;
+        var enemyScene = enemy.Root.scene;
+        foreach (var fsm in enemy.Fsms) {
+            if (fsm == null) {
+                continue;
+            }
+
+            foreach (var state in fsm.FsmStates) {
+                foreach (var transition in state.Transitions) {
+                    if (!string.IsNullOrEmpty(transition.EventName) && transition.EventName != "FINISHED") {
+                        (waits ??= new HashSet<string>()).Add(transition.EventName);
+                    }
+                }
+            }
+
+            foreach (var variable in fsm.FsmVariables.GameObjectVariables) {
+                var target = variable.Value;
+                if (target == null || !SameRoom(target.scene, enemyScene) || target.transform.IsChildOf(enemy.Transform) ||
+                    IsEnemyObject(target.transform) || hero != null && target.transform.IsChildOf(hero.transform) ||
+                    target.GetComponent<DamageHero>() == null || target.GetComponentsInChildren<HealthManager>(true).Length > 0 ||
+                    referenced != null && referenced.Contains(target)) {
+                    continue;
+                }
+
+                (referenced ??= new List<GameObject>()).Add(target);
+            }
+        }
+
+        if (waits == null || referenced == null) {
+            return null;
+        }
+
+        List<PlayMakerFSM> pieces = null;
+        foreach (var target in referenced) {
+            foreach (var fsm in target.GetComponents<PlayMakerFSM>()) {
+                // Sin iniciar (nunca encendida desde que cargó la sala) sus acciones aún no existen
+                if (fsm == null || fsm.Fsm == null || !fsm.Fsm.Initialized || _enemyFsms.ContainsKey(fsm.Fsm) ||
+                    FsmStateSync.IsSharedController(fsm.Fsm) || !BroadcastsAny(fsm, waits)) {
+                    continue;
+                }
+
+                (pieces ??= new List<PlayMakerFSM>()).Add(fsm);
+                Log.Info($"{enemy.Root.name}: {target.name}/{fsm.FsmName} le avisa de cuándo seguir: va con él");
+            }
+        }
+
+        return pieces;
+    }
+
+    /// <summary>Si la FSM manda a todos alguno de esos eventos.</summary>
+    private static bool BroadcastsAny(PlayMakerFSM fsm, HashSet<string> events) {
+        foreach (var state in fsm.FsmStates) {
+            foreach (var action in state.Actions) {
+                if (action is HutongGames.PlayMaker.Actions.SendEventByName send &&
+                    send.eventTarget?.target == HutongGames.PlayMaker.FsmEventTarget.EventTarget.BroadcastAll &&
+                    !string.IsNullOrEmpty(send.sendEvent?.Value) && events.Contains(send.sendEvent.Value)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Si la FSM crea algo que daña o tiene vida (con el pool del juego o creándolo).</summary>
