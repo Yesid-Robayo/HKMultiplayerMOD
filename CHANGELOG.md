@@ -9,6 +9,21 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.45.1
+
+- **Markoth in the Pantheon** (#31): he no longer flies out of his arena when the other player takes him over, and
+  reloading the room during a Pantheon no longer leaves you stuck after beating the boss (and the bindings are kept).
+- **Hornet's needle**: it no longer looks stretched or shows its thread at the wrong time on the partner's PC, the thread
+  no longer stays behind, and Hornet no longer freezes forever if she changes PC with the needle in the air.
+- **Rematch after everyone falls**: when you come back to a boss room where everyone fell, the fight waits for the
+  others to arrive (up to 60 s) instead of starting with the first one who walks in.
+- **Gruz Mother**: she no longer ends up dealing no damage to anyone if she changes PC right as she wakes up.
+- **Moss Knight**: you can pogo on it, and feel the recoil when you hit it, from the PC that isn't moving it too.
+- **Match the host's level**: it now also gives the maps, the quill, pins and markers, keys and items (lantern, tram
+  pass...), unbreakable fragile charms, Kingsoul or Void Heart, and essence.
+- **Network drops** (#29): the connection waits up to 30 s (it was 20) before giving up, sends less while it's down and
+  recovers faster when it comes back. Reconnecting no longer stutters while loading the partner's skin.
+
 ## 0.44.0
 
 - **Pantheons together**: when a Pantheon starts, everyone goes through the entrance room (with the Godseeker's text) and

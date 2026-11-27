@@ -9,6 +9,22 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.45.1
+
+- **Markoth en el Panteón** (#31): ya no sale volando de su arena cuando lo toma el otro jugador, y recargar la sala
+  durante un Panteón ya no deja atrapados a los jugadores tras vencer al jefe (y no se pierden las ataduras).
+- **La aguja de Hornet**: ya no se ve estirada ni con el hilo a destiempo en el PC del compañero, el hilo ya no se queda
+  sin desaparecer, y Hornet ya no se queda quieta para siempre si cambia de PC con la aguja en el aire.
+- **Revancha tras caer todos**: al volver a la sala de un jefe donde cayeron todos, el combate espera a que lleguen los
+  demás (hasta 60 s) en vez de empezar con el primero que entra.
+- **Madre Gruz**: ya no se queda sin hacer daño a nadie si pasa a otro PC justo al despertar.
+- **Caballero musgoso**: ya se le puede hacer pogo, y se nota el retroceso al pegarle, también desde el PC que no lo
+  mueve.
+- **Ponerse al nivel del host**: ahora también da los mapas, la pluma, los alfileres y marcadores, las llaves y objetos
+  (farol, pase del tranvía...), los amuletos frágiles irrompibles, el Alma de Rey o el Corazón del Vacío y la esencia.
+- **Cortes de red** (#29): la conexión espera hasta 30 s (antes 20) antes de cortarse, envía menos mientras está caída
+  y se recupera antes al volver. Reconectar ya no da un tirón al cargar la skin del compañero.
+
 ## 0.44.0
 
 - **Panteones juntos**: al empezar un Panteón, todos entran por la sala de entrada (con el texto del Buscador de Dioses) y
