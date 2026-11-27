@@ -24,7 +24,7 @@ Knight skin (with its HUD). Hollow Knight belongs to Team Cherry.</sub>
 > [!WARNING]
 > **Beta.** Almost everything has been tested by playing, including long sessions over the internet and through Steam
 > with 3 players, but some parts are not fully tested (see
-> [Testing status](#-testing-status)). **It may have bugs.** Back up your saves before playing and, if something goes
+> [Testing status](#testing-status)). **It may have bugs.** Back up your saves before playing and, if something goes
 > wrong, open an *issue* with a screenshot and your `ModLog.txt`.
 
 One player **hosts** a coop world and their friends **join** through **Steam** (with an invite or *Join Game*, no
@@ -34,48 +34,48 @@ API.
 
 ## Contents
 
-- [Features](#-features)
-- [Testing status](#-testing-status)
-- [Install](#-install)
-- [How to play](#-how-to-play)
-- [Troubleshooting](#-troubleshooting)
-- [Game settings](#%EF%B8%8F-game-settings)
-- [Technology](#-technology)
-- [Development](#-development)
-- [Credits](#-credits)
-- [Support the project](#-support-the-project)
-- [License and contributions](#-license-and-contributions)
+- [Features](#features)
+- [Testing status](#testing-status)
+- [Install](#install)
+- [How to play](#how-to-play)
+- [Troubleshooting](#troubleshooting)
+- [Game settings](#game-settings)
+- [Technology](#technology)
+- [Development](#development)
+- [Credits](#credits)
+- [Support the project](#support-the-project)
+- [License and contributions](#license-and-contributions)
 
 ---
 
-## ✨ Features
+## Features
 
-- 🎮 **The whole game and its DLCs, with up to 4 players**: the story to every ending, Hidden Dreams, The Grimm Troupe,
+- **The whole game and its DLCs, with up to 4 players**: the story to every ending, Hidden Dreams, The Grimm Troupe,
   Lifeblood and Godmaster, with its Pantheons played together up to the Pantheon of Hallownest.
-- 🌍 **Coop worlds**: up to 4 worlds of your own, saved on the host's PC, separate from your normal saves.
-- 🔒 **Connection**: through **Steam** (invites and *Join Game*, no port forwarding) or by **IP** (local network or
+- **Coop worlds**: up to 4 worlds of your own, saved on the host's PC, separate from your normal saves.
+- **Connection**: through **Steam** (invites and *Join Game*, no port forwarding) or by **IP** (local network or
   internet), both at once in the same game; with a game code and everything encrypted, no servers of our own. A guest
   who loses the connection gets back in on their own.
-- 👥 **Players**: you see your partners in real time with their name, animations, attacks, spells and charms, and on
+- **Players**: you see your partners in real time with their name, animations, attacks, spells and charms, and on
   the map.
-- ⚔️ **Enemies and bosses**: the same on every PC (same health, same hits, same death); bosses wait until everyone is
+- **Enemies and bosses**: the same on every PC (same health, same hits, same death); bosses wait until everyone is
   there.
-- 🗺️ **Shared world**: progress, levers, doors, broken walls, elevators, gates, chests and NPC quests, all at once.
-- ❤️ **Revive**: if you fall while a partner is still standing, you lie down and they revive you by holding Focus next
+- **Shared world**: progress, levers, doors, broken walls, elevators, gates, chests and NPC quests, all at once.
+- **Revive**: if you fall while a partner is still standing, you lie down and they revive you by holding Focus next
   to your body.
-- 🌙 **Dreams and cutscenes**: you enter dreams together; endings and credits play at the same time and are skipped by
+- **Dreams and cutscenes**: you enter dreams together; endings and credits play at the same time and are skipped by
   vote.
-- 🗣️ **NPCs for each player**: everyone hears every conversation from the start, and a character who leaves after
+- **NPCs for each player**: everyone hears every conversation from the start, and a character who leaves after
   talking only leaves for whoever talked to them.
-- 🎨 **Skins**: CustomKnight-compatible; others see yours even if they don't have it.
-- 🛠️ **Pause panel**: host settings, your partners' health, give geo, go to a partner, unstuck and reload the room.
-- 🌐 **Languages**: the mod follows the game's language, in all 11 of them: English, Spanish, French, German, Italian,
+- **Skins**: CustomKnight-compatible; others see yours even if they don't have it.
+- **Pause panel**: host settings, your partners' health, give geo, go to a partner, unstuck and reload the room.
+- **Languages**: the mod follows the game's language, in all 11 of them: English, Spanish, French, German, Italian,
   Portuguese, Russian, Simplified and Traditional Chinese, Japanese and Korean. Changing the language in the options
   changes the mod's menus too.
-- 📦 **Installer**: a window to install, update and uninstall, which leaves the game as it was.
+- **Installer**: a window to install, update and uninstall, which leaves the game as it was.
 
 <details>
-<summary><b>🌍 Game and connection</b></summary>
+<summary><b>Game and connection</b></summary>
 
 - **Coop worlds** of your own: up to 4, saved on the host's PC in
   `C:\Users\<user>\AppData\LocalLow\Team Cherry\Hollow Knight\HKMultiplayer\Mundos` (one folder per world). They are
@@ -119,7 +119,7 @@ API.
 </details>
 
 <details>
-<summary><b>🏛️ DLCs and Godhome</b></summary>
+<summary><b>DLCs and Godhome</b></summary>
 
 - **Hidden Dreams**: the White Defender and Grey Prince Zote, entered together with the Dream Nail.
 - **The Grimm Troupe**: the Troupe's quest, Grimm and the Nightmare King, and Grimmchild for everyone.
@@ -138,7 +138,7 @@ API.
 </details>
 
 <details>
-<summary><b>👥 Players and partner effects</b></summary>
+<summary><b>Players and partner effects</b></summary>
 
 - You see your partners in real time, with their **name above them**, their animations and facing, with smooth movement
   (interpolation that adapts to the connection).
@@ -164,7 +164,7 @@ API.
 </details>
 
 <details>
-<summary><b>⚔️ Enemies and bosses</b></summary>
+<summary><b>Enemies and bosses</b></summary>
 
 - Each enemy is run by the PC of the **nearest** player and attacks everyone. Its health, attacks and death are the
   same on every PC; anyone's hits take its health on all of them.
@@ -185,7 +185,7 @@ API.
 </details>
 
 <details>
-<summary><b>🗺️ Shared world</b></summary>
+<summary><b>Shared world</b></summary>
 
 - **Live shared progress**: defeated bosses, doors, levers, broken walls, visited rooms and maps.
 - **Abilities are per player** (movement abilities, spells, Dream Nail): each player gets their own and sees the
@@ -216,7 +216,7 @@ API.
 </details>
 
 <details>
-<summary><b>❤️ Co-op features</b></summary>
+<summary><b>Co-op features</b></summary>
 
 - **Revive**: if you die while a partner is standing, you don't die, you go down. Your body lies on the floor with
   "† Name" and your camera follows your partner. They get a notice and an arrow to your body; next to it, **holding
@@ -258,9 +258,9 @@ API.
 
 ---
 
-## 🧪 Testing status
+## Testing status
 
-✅ **Confirmed:**
+**Confirmed:**
 
 - Connection, coop worlds and guests' characters.
 - Enemies in every area.
@@ -285,7 +285,7 @@ API.
 - Playing through Steam between different accounts: creating the lobby, inviting, joining and connecting through
   Steam's relays.
 
-❓ **Not confirmed yet:**
+**Not confirmed yet:**
 
 - A game with 4 players between real PCs.
 - Playing between a Mac and a Windows PC, and on Intel Macs.
@@ -302,7 +302,7 @@ More detail (in Spanish) in [docs/arquitectura.md](docs/arquitectura.md#limitaci
 
 ---
 
-## 📦 Install
+## Install
 
 > [!NOTE]
 > You need **Hollow Knight 1.5.12620 on Windows** (the current Steam version; GOG works too), **on macOS** (Steam,
@@ -359,7 +359,7 @@ copies the Modding API and the mod into the game. To uninstall, use Steam's *Ver
 package's `README.txt` and `LEEME.txt` have the details.
 
 The macOS package can only be built on a Mac (its Modding API is compiled against the macOS game). If a release
-doesn't have it yet, you can build it yourself: see [Development](#-development).
+doesn't have it yet, you can build it yourself: see [Development](#development).
 
 ### Linux
 
@@ -376,7 +376,7 @@ doesn't have it yet, you can build it yourself: see [Development](#-development)
 
 ---
 
-## 🎮 How to play
+## How to play
 
 1. **Host**: main menu › *Multiplayer* › *Host a world* › *New world* (or pick one) › *Create and host*. With Steam,
    your friends can already join; to invite someone: *Pause › Multiplayer › Invite Steam friends*. By IP, give your
@@ -390,7 +390,7 @@ doesn't have it yet, you can build it yourself: see [Development](#-development)
 
 ---
 
-## 🩺 Troubleshooting
+## Troubleshooting
 
 | What happens | What to do |
 |---|---|
@@ -414,7 +414,7 @@ Knight/`). It contains the player names of the game, but not your PC's or Window
 
 ---
 
-## ⚙️ Game settings
+## Game settings
 
 The host sets them in *Pause › Multiplayer › Game settings*; they are saved with each world and guests see them right
 away without being able to change them.
@@ -449,7 +449,7 @@ stunned when several players hit them at once.
 
 ---
 
-## 🔧 Technology
+## Technology
 
 | Component | Used for |
 |---|---|
@@ -469,7 +469,7 @@ stunned when several players hit them at once.
 
 ---
 
-## 💻 Development
+## Development
 
 > [!NOTE]
 > Code identifiers are in English; code comments, logs and the architecture document in `docs/` are in Spanish.
@@ -528,7 +528,7 @@ game.
 
 ---
 
-## 🙏 Credits
+## Credits
 
 - **[Hollow Knight](https://www.hollowknight.com/)** is by **Team Cherry**. This mod is an unofficial fan project and is
   not affiliated with Team Cherry. The repository contains no game files; like the official Modding API releases, the
@@ -546,12 +546,12 @@ game.
 
 ---
 
-## ☕ Support the project
+## Support the project
 
 HKMultiplayer is free and made by a single person. If you like it and want to support it, you can buy me a coffee on
 **[Ko-fi](https://ko-fi.com/yesidrobayo)**. It's not required: reporting bugs with your `ModLog.txt` helps a lot too.
 
-## 📄 License and contributions
+## License and contributions
 
 - HKMultiplayer's code is licensed under the **[MIT License](LICENSE)**. It is provided **as is, without any
   warranty**: use it at your own risk and back up your saves. The Modding API in [`modding-api/`](modding-api) keeps its

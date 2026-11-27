@@ -24,7 +24,7 @@ Rick Knight (con su HUD). Hollow Knight es de Team Cherry.</sub>
 > [!WARNING]
 > **Versión beta.** Casi todo se ha probado jugando, también partidas largas por internet y por Steam con 3
 > jugadores, pero algunas partes no se han probado del todo (ver
-> [Estado de las pruebas](#-estado-de-las-pruebas)). **Puede tener errores.** Haz una copia de tus partidas antes de
+> [Estado de las pruebas](#estado-de-las-pruebas)). **Puede tener errores.** Haz una copia de tus partidas antes de
 > jugar y, si algo falla, cuéntalo en un *issue* con una captura y tu `ModLog.txt`.
 
 Un jugador **hostea** un mundo coop y sus compañeros **se unen** por **Steam** (con una invitación o con *Unirse a la
@@ -34,49 +34,49 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 
 ## Índice
 
-- [Funciones](#-funciones)
-- [Estado de las pruebas](#-estado-de-las-pruebas)
-- [Instalar](#-instalar)
-- [Cómo jugar](#-cómo-jugar)
-- [Problemas frecuentes](#-problemas-frecuentes)
-- [Ajustes de la partida](#%EF%B8%8F-ajustes-de-la-partida)
-- [Tecnología](#-tecnología)
-- [Desarrollo](#-desarrollo)
-- [Créditos](#-créditos)
-- [Apoyar el proyecto](#-apoyar-el-proyecto)
-- [Licencia y contribuciones](#-licencia-y-contribuciones)
+- [Funciones](#funciones)
+- [Estado de las pruebas](#estado-de-las-pruebas)
+- [Instalar](#instalar)
+- [Cómo jugar](#cómo-jugar)
+- [Problemas frecuentes](#problemas-frecuentes)
+- [Ajustes de la partida](#ajustes-de-la-partida)
+- [Tecnología](#tecnología)
+- [Desarrollo](#desarrollo)
+- [Créditos](#créditos)
+- [Apoyar el proyecto](#apoyar-el-proyecto)
+- [Licencia y contribuciones](#licencia-y-contribuciones)
 
 ---
 
-## ✨ Funciones
+## Funciones
 
-- 🎮 **El juego entero y sus DLC, con hasta 4 jugadores**: la historia hasta todos sus finales, Hidden Dreams, The Grimm
+- **El juego entero y sus DLC, con hasta 4 jugadores**: la historia hasta todos sus finales, Hidden Dreams, The Grimm
   Troupe, Lifeblood y Godmaster, con sus Panteones jugados juntos hasta el Panteón de Hallownest.
-- 🌍 **Mundos coop**: hasta 4 mundos propios, guardados en el PC del host, aparte de tus partidas normales.
-- 🔒 **Conexión**: por **Steam** (invitar y *Unirse a la partida*, sin abrir puertos) o por **IP** (red local o
+- **Mundos coop**: hasta 4 mundos propios, guardados en el PC del host, aparte de tus partidas normales.
+- **Conexión**: por **Steam** (invitar y *Unirse a la partida*, sin abrir puertos) o por **IP** (red local o
   internet), las dos a la vez en la misma partida; con código de partida y todo cifrado, sin servidores propios. El
   invitado que pierde la conexión vuelve a entrar solo.
-- 👥 **Jugadores**: los compañeros se ven en tiempo real con su nombre, animaciones, ataques, hechizos y amuletos, y
+- **Jugadores**: los compañeros se ven en tiempo real con su nombre, animaciones, ataques, hechizos y amuletos, y
   también en el mapa.
-- ⚔️ **Enemigos y jefes**: los mismos en todos los PCs (misma vida, mismos golpes, misma muerte); los jefes esperan a
+- **Enemigos y jefes**: los mismos en todos los PCs (misma vida, mismos golpes, misma muerte); los jefes esperan a
   que estén todos.
-- 🗺️ **Mundo compartido**: progreso, palancas, puertas, paredes rotas, ascensores, rejas, cofres y misiones de NPC, a la
+- **Mundo compartido**: progreso, palancas, puertas, paredes rotas, ascensores, rejas, cofres y misiones de NPC, a la
   vez.
-- ❤️ **Revivir**: si caes con un compañero en pie, quedas tendido y te revive manteniendo Focus junto a tu cuerpo.
-- 🌙 **Sueños y cinemáticas**: se entra juntos a los sueños; los finales y los créditos se ven a la vez y se saltan por
+- **Revivir**: si caes con un compañero en pie, quedas tendido y te revive manteniendo Focus junto a tu cuerpo.
+- **Sueños y cinemáticas**: se entra juntos a los sueños; los finales y los créditos se ven a la vez y se saltan por
   votación.
-- 🗣️ **Personajes de cada jugador**: cada uno oye cada conversación desde el principio, y el personaje que se va tras
+- **Personajes de cada jugador**: cada uno oye cada conversación desde el principio, y el personaje que se va tras
   hablar solo se va para quien habló con él.
-- 🎨 **Skins**: compatibles con CustomKnight; los demás ven la tuya aunque no la tengan.
-- 🛠️ **Panel en pausa**: ajustes del host, vida de los compañeros, dar geo, ir con un compañero, desatascarse y recargar
+- **Skins**: compatibles con CustomKnight; los demás ven la tuya aunque no la tengan.
+- **Panel en pausa**: ajustes del host, vida de los compañeros, dar geo, ir con un compañero, desatascarse y recargar
   la sala.
-- 🌐 **Idiomas**: el mod sale en el idioma del juego, en sus 11: español, inglés, francés, alemán, italiano, portugués,
+- **Idiomas**: el mod sale en el idioma del juego, en sus 11: español, inglés, francés, alemán, italiano, portugués,
   ruso, chino simplificado y tradicional, japonés y coreano. Cambiar el idioma en las opciones cambia también los menús
   del mod.
-- 📦 **Instalador**: una ventana para instalar, actualizar y desinstalar, que deja el juego como estaba.
+- **Instalador**: una ventana para instalar, actualizar y desinstalar, que deja el juego como estaba.
 
 <details>
-<summary><b>🌍 Partida y conexión</b></summary>
+<summary><b>Partida y conexión</b></summary>
 
 - **Mundos coop** propios: hasta 4, guardados en el PC del host, en
   `C:\Users\<usuario>\AppData\LocalLow\Team Cherry\Hollow Knight\HKMultiplayer\Mundos` (una carpeta por mundo). Son
@@ -118,7 +118,7 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 </details>
 
 <details>
-<summary><b>🏛️ DLC y Dios Hogar</b></summary>
+<summary><b>DLC y Dios Hogar</b></summary>
 
 - **Hidden Dreams**: el Defensor Blanco y el Príncipe Gris Zote, entrando juntos con el aguijón onírico.
 - **The Grimm Troupe**: la misión de la Compañía, Grimm y el Rey de las Pesadillas, y el Grimmchild para todos.
@@ -137,7 +137,7 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 </details>
 
 <details>
-<summary><b>👥 Jugadores y efectos del compañero</b></summary>
+<summary><b>Jugadores y efectos del compañero</b></summary>
 
 - Se ve al compañero en tiempo real, con su **nombre encima**, sus animaciones y su orientación, con movimiento suave
   (interpolación que se adapta a la conexión).
@@ -163,7 +163,7 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 </details>
 
 <details>
-<summary><b>⚔️ Enemigos y jefes</b></summary>
+<summary><b>Enemigos y jefes</b></summary>
 
 - Cada enemigo lo mueve el PC del jugador **más cercano** y ataca a todos. Su vida, sus golpes y su muerte son los
   mismos en todos los PCs; los golpes de cualquiera le quitan vida en todos.
@@ -185,7 +185,7 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 </details>
 
 <details>
-<summary><b>🗺️ Mundo compartido</b></summary>
+<summary><b>Mundo compartido</b></summary>
 
 - **Progreso compartido en directo**: jefes vencidos, puertas, palancas, paredes rotas, salas visitadas y mapas.
 - **Habilidades de cada jugador** (de movimiento, hechizos, aguijón onírico): cada uno consigue las suyas y ve la
@@ -217,7 +217,7 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 </details>
 
 <details>
-<summary><b>❤️ Funciones del coop</b></summary>
+<summary><b>Funciones del coop</b></summary>
 
 - **Revivir**: al morir con un compañero en pie no se muere, se cae. El cuerpo queda tendido con "† Nombre" y la
   cámara del caído sigue a su compañero. El compañero recibe un aviso y una flecha hacia el cuerpo; junto a él,
@@ -260,9 +260,9 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 
 ---
 
-## 🧪 Estado de las pruebas
+## Estado de las pruebas
 
-✅ **Confirmado:**
+**Confirmado:**
 
 - Conexión, mundos coop y personajes de los invitados.
 - Enemigos de todas las zonas.
@@ -287,7 +287,7 @@ escrito desde cero sobre la Modding API de Hollow Knight.
 - Partidas largas por internet entre PCs de verdad, también con 3 jugadores.
 - Jugar por Steam entre cuentas distintas: crear la sala, invitar, unirse y la conexión por los relés de Steam.
 
-❓ **Aún sin confirmar:**
+**Aún sin confirmar:**
 
 - Una partida con 4 jugadores entre PCs de verdad.
 - Jugar entre un Mac y un PC con Windows, y en los Mac con Intel.
@@ -304,7 +304,7 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md#limitaciones-conocid
 
 ---
 
-## 📦 Instalar
+## Instalar
 
 > [!NOTE]
 > Necesitas **Hollow Knight 1.5.12620 en Windows** (la versión actual de Steam; la de GOG también vale), **en macOS**
@@ -361,7 +361,7 @@ Privacidad y seguridad › Abrir igualmente*. El instalador es un script corto, 
 detalles.
 
 El paquete de macOS solo se puede armar en un Mac (su Modding API se compila contra el juego de macOS). Si una versión
-aún no lo tiene, puedes armarlo tú: mira [Desarrollo](#-desarrollo).
+aún no lo tiene, puedes armarlo tú: mira [Desarrollo](#desarrollo).
 
 ### Linux
 
@@ -378,7 +378,7 @@ aún no lo tiene, puedes armarlo tú: mira [Desarrollo](#-desarrollo).
 
 ---
 
-## 🎮 Cómo jugar
+## Cómo jugar
 
 1. **Host**: menú principal › *Multijugador* › *Hostear un mundo* › *Nuevo mundo* (o elige uno) › *Crear y hostear*.
    Con Steam, tus amigos ya pueden unirse; para invitar a alguien: *Pausa › Multijugador › Invitar amigos de Steam*.
@@ -394,7 +394,7 @@ aún no lo tiene, puedes armarlo tú: mira [Desarrollo](#-desarrollo).
 
 ---
 
-## 🩺 Problemas frecuentes
+## Problemas frecuentes
 
 | Qué pasa | Qué hacer |
 |---|---|
@@ -418,7 +418,7 @@ Knight/`). Lleva los nombres de jugador de la partida, pero no el de tu PC ni el
 
 ---
 
-## ⚙️ Ajustes de la partida
+## Ajustes de la partida
 
 Los decide el host en *Pausa › Multijugador › Ajustes de la partida*, se guardan en cada mundo y los invitados los ven
 al momento sin poder cambiarlos.
@@ -453,7 +453,7 @@ aturdidos cuando pegan varios a la vez.
 
 ---
 
-## 🔧 Tecnología
+## Tecnología
 
 | Componente | Para qué se usa |
 |---|---|
@@ -473,7 +473,7 @@ aturdidos cuando pegan varios a la vez.
 
 ---
 
-## 💻 Desarrollo
+## Desarrollo
 
 > [!NOTE]
 > Los identificadores del código están en inglés; los comentarios, los registros y el documento de arquitectura de
@@ -532,7 +532,7 @@ defecto la carpeta de Steam en `~/.local/share/Steam`, y `bash tools/package-lin
 
 ---
 
-## 🙏 Créditos
+## Créditos
 
 - **[Hollow Knight](https://www.hollowknight.com/)** es de **Team Cherry**. Este mod es un proyecto no oficial de
   aficionados y no está afiliado a Team Cherry. El repositorio no contiene archivos del juego; el paquete de jugadores,
@@ -551,12 +551,12 @@ defecto la carpeta de Steam en `~/.local/share/Steam`, y `bash tools/package-lin
 
 ---
 
-## ☕ Apoyar el proyecto
+## Apoyar el proyecto
 
 HKMultiplayer es gratis y lo hace una sola persona. Si te gusta y quieres apoyarlo, puedes invitarme a un café en
 **[Ko-fi](https://ko-fi.com/yesidrobayo)**. No es obligatorio: avisar de errores con tu `ModLog.txt` también ayuda mucho.
 
-## 📄 Licencia y contribuciones
+## Licencia y contribuciones
 
 - El código de HKMultiplayer tiene licencia **[MIT](LICENSE)**. Se entrega **tal cual, sin ninguna garantía**: úsalo
   bajo tu propia responsabilidad y haz copia de tus partidas. La Modding API de [`modding-api/`](modding-api) mantiene
