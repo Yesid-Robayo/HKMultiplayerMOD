@@ -154,6 +154,18 @@ internal sealed class Skins {
     /// <summary>Host: quién espera cada skin que aún no tiene.</summary>
     private readonly Dictionary<string, List<ushort>> _waiting = new();
 
+    /// <summary>
+    /// Segundos que se guarda la skin de quien se fue por si vuelve. Tras un corte de red, el invitado reconecta en unos
+    /// segundos: antes su skin se olvidaba al momento y al volver se leía otra vez de la caché y se rehacían sus texturas
+    /// (un frame de más de 300 ms con una de 4096x4096).
+    /// </summary>
+    private const float ForgetDelay = 120f;
+
+    /// <summary>Skins de jugadores que se fueron y cuándo se olvidan si nadie vuelve a llevarlas.</summary>
+    private readonly Dictionary<string, float> _forgetAt = new();
+
+    private readonly List<string> _forgetDue = new();
+
     // ---- Skin propia ----
     private string _localFor;
     private Skin _local;
@@ -238,6 +250,7 @@ internal sealed class Skins {
         _requested.Clear();
         _waiting.Clear();
         _unpacking.Clear();
+        _forgetAt.Clear();
         _announced = null;
         // Las de los demás se olvidan; la propia sigue (también se ve jugando solo)
         foreach (var hash in _skins.Keys.ToList()) {
@@ -617,6 +630,7 @@ internal sealed class Skins {
     public void Update() {
         UpdateLocal();
         FinishUnpacking();
+        ForgetDue();
         if (_session == null || !_session.CanSend) {
             return;
         }
@@ -737,9 +751,32 @@ internal sealed class Skins {
                     _waiting.Remove(hash);
                 }
 
-                if (!InUse(hash)) {
-                    Forget(hash);
+                // Se guarda un rato por si vuelve (reconectar tras un corte); si no, se olvida en ForgetDue
+                if (!InUse(hash) && _skins.ContainsKey(hash)) {
+                    _forgetAt[hash] = Time.unscaledTime + ForgetDelay;
                 }
+            }
+        }
+    }
+
+    /// <summary>Olvida las skins de los que se fueron cuando pasa su plazo y nadie las lleva.</summary>
+    private void ForgetDue() {
+        if (_forgetAt.Count == 0) {
+            return;
+        }
+
+        var now = Time.unscaledTime;
+        _forgetDue.Clear();
+        foreach (var pair in _forgetAt) {
+            if (InUse(pair.Key) || now >= pair.Value) {
+                _forgetDue.Add(pair.Key);
+            }
+        }
+
+        foreach (var hash in _forgetDue) {
+            _forgetAt.Remove(hash);
+            if (!InUse(hash)) {
+                Forget(hash);
             }
         }
     }

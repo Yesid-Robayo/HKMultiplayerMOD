@@ -4,12 +4,44 @@ namespace HKMultiplayer.Tests;
 
 /// <summary>
 /// Microcortes de la red (issue #29: echaba al invitado a menudo). La conexión aguanta un corte corto y al volver se pone al
-/// día sola; solo un silencio de más de <see cref="NetConstants.TimeoutSeconds"/> la corta. Van en tiempo real (unos 35 s).
+/// día sola; solo un silencio de más de <see cref="NetConstants.TimeoutSeconds"/> la corta. Van en tiempo real (cerca de
+/// un minuto).
 /// </summary>
 public static partial class Program {
     private static void RunOutageTests() {
         Run("Microcorte de 12 s: no se corta y lo enviado durante el corte llega entero y en orden", SurvivesShortOutage);
+        Run("Durante un corte, los reenvíos se espacian y al volver la red se ponen al día enseguida", BacksOffResendsDuringOutage);
         Run("Silencio más largo que el tiempo de espera: se corta en los dos lados", TimesOutAfterLongSilence);
+    }
+
+    private static void BacksOffResendsDuringOutage() {
+        var pair = new Pair();
+        pair.ConnectOrFail();
+        pair.Network.LossRate = 1;
+        const int count = 200;
+        for (uint i = 0; i < count; i++) {
+            var writer = pair.Client.Connection.BeginReliable();
+            writer.WriteByte(20);
+            writer.WriteUInt(i);
+            pair.Client.Connection.EndMessage();
+        }
+
+        // Pasados los primeros segundos del corte, cada mensaje pendiente sale como mucho una vez por segundo. Antes salían
+        // todos cada 1,5 latencias (más de 15 000 reenvíos en estos 4 s)
+        pair.Pump(() => false, 2);
+        var before = pair.Client.Connection.ReliableResends;
+        pair.Pump(() => false, 4);
+        var resends = pair.Client.Connection.ReliableResends - before;
+        Assert(resends <= count * 6, $"{resends} reenvíos en 4 s de corte con {count} mensajes pendientes");
+        Assert(pair.Client.IsConnected && pair.ServerListener.Disconnects.Count == 0, "se cortó durante el corte");
+
+        // Al volver la red, lo pendiente llega sin esperar al reenvío espaciado
+        pair.Network.LossRate = 0;
+        Assert(pair.Pump(() => pair.ServerListener.Reliable.Count >= count, 2),
+            $"tras el corte llegaron {pair.ServerListener.Reliable.Count} de {count} en 2 s");
+        for (var i = 0; i < count; i++) {
+            Assert(pair.ServerListener.Reliable[i] == i, $"fuera de orden en {i}");
+        }
     }
 
     private static void SurvivesShortOutage() {

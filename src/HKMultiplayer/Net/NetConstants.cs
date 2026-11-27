@@ -31,9 +31,10 @@ public static class NetConstants {
     /// Sin recibir nada durante este tiempo, la conexión se da por perdida. Con 10 s, un microcorte de la red (wifi, Steam
     /// cambiando de relé) echaba al invitado y tenía que volver a entrar en el mundo entero (issue #29): ahora aguanta como
     /// los juegos en línea, con el aviso en pantalla (<c>ConnectionHud</c>), y al volver la red los mensajes fiables que
-    /// quedaron pendientes llegan en orden (no se pierde nada).
+    /// quedaron pendientes llegan en orden (no se pierde nada). Con 20 s, un corte de unos 25 s de Steam echaba al
+    /// invitado justo antes de volver la red: ahora son 30.
     /// </summary>
-    public const float TimeoutSeconds = 20f;
+    public const float TimeoutSeconds = 30f;
 
     /// <summary>Mensajes fiables que pueden estar enviados sin confirmar a la vez.</summary>
     public const int ReliableWindow = 1024;

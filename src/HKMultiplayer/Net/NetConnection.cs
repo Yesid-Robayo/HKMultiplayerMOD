@@ -149,6 +149,9 @@ public sealed class NetConnection : ReliableReceiver.ISink {
     /// <summary>Mensajes fiables pendientes de confirmar (lo que se pondrá al día cuando vuelva la red).</summary>
     public int ReliablePending => _reliableSender.InFlight;
 
+    /// <summary>Mensajes fiables reenviados en total, por no llegar su acuse a tiempo (registro y pruebas).</summary>
+    public long ReliableResends => _reliableSender.Resends;
+
     /// <summary>Si ya se avisó en el registro de que no llega nada (para avisar también cuando vuelva a llegar).</summary>
     internal bool SilenceReported;
 
@@ -273,8 +276,28 @@ public sealed class NetConnection : ReliableReceiver.ISink {
     // Construcción de paquetes (llamado por el peer en cada tick)
     // =====================================================================================================
 
-    /// <summary>Retraso de reenvío de los mensajes fiables según la latencia.</summary>
-    private double ResendDelay => System.Math.Max(0.05, _smoothedRtt * 1.5);
+    /// <summary>Sin recibir nada durante este tiempo, los reenvíos se espacian (ver <see cref="ResendDelay"/>).</summary>
+    private const double ResendBackoffAfter = 1.0;
+
+    /// <summary>Reenvío más espaciado durante un corte: cada mensaje pendiente, una vez por segundo como mucho.</summary>
+    private const double MaxResendDelay = 1.0;
+
+    /// <summary>
+    /// Retraso de reenvío de los mensajes fiables según la latencia. Durante un corte (no llega nada del otro lado) se
+    /// espacia con el silencio hasta <see cref="MaxResendDelay"/>: antes se reenviaba todo lo pendiente cada 1,5 latencias
+    /// mientras durase, unas 900 veces por segundo con 270 mensajes pendientes (el triple de lo que se envía jugando), y
+    /// en una conexión débil eso dificultaba que se recuperase. En cuanto llega algo, vuelve al ritmo normal y lo
+    /// pendiente sale en el siguiente tick.
+    /// </summary>
+    private double ResendDelay(double now) {
+        var delay = System.Math.Max(0.05, _smoothedRtt * 1.5);
+        var silent = now - _lastReceive;
+        if (silent <= ResendBackoffAfter) {
+            return delay;
+        }
+
+        return System.Math.Max(delay, System.Math.Min(MaxResendDelay, silent * 0.25));
+    }
 
     /// <summary>
     /// Encola trozos de transferencias grandes mientras quede sitio en la ventana fiable. Las de baja prioridad, solo sin
@@ -355,7 +378,7 @@ public sealed class NetConnection : ReliableReceiver.ISink {
                 nextUnreliable++;
             }
 
-            var reliableLeft = _reliableSender.WriteMessages(writer, sequence, now, ResendDelay);
+            var reliableLeft = _reliableSender.WriteMessages(writer, sequence, now, ResendDelay(now));
             SendData(sequence, plain, writer.Length, datagram, now);
 
             var unreliableLeft = nextUnreliable < _unreliableCount;
@@ -604,7 +627,7 @@ public sealed class NetConnection : ReliableReceiver.ISink {
 
     /// <summary>Si hay algo pendiente de enviar fuera del tick normal.</summary>
     internal bool HasPendingReliable(double now) =>
-        _reliableSender.HasDue(now, ResendDelay) || _largeOut.Count > 0 || _largeLow.Count > 0;
+        _reliableSender.HasDue(now, ResendDelay(now)) || _largeOut.Count > 0 || _largeLow.Count > 0;
 
     internal void Release() {
         _reliableSender.Clear();
