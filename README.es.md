@@ -88,8 +88,9 @@ escrito desde cero sobre la Modding API de Hollow Knight.
   levanta como siempre y el mundo solo se pierde si caen todos a la vez.
 - **Desde una partida**: un mundo puede empezar como copia de una de tus 4 partidas (la original no se toca). Un
   invitado que entra de cero puede, sentado en un banco, **ponerse al nivel del host** (*Compañeros*): gana las
-  habilidades, máscaras, vasijas, aguijón, muescas y amuletos que el host tiene y él no, tras un resumen que hay que
-  confirmar, y puede deshacerlo. Es opcional, y el host puede desactivarlo en su mundo.
+  habilidades, máscaras, vasijas, aguijón, muescas, amuletos, mapas y alfileres, llaves y objetos (farol, pase del
+  tranvía...) y la esencia que el host tiene y él no, tras un resumen que hay que confirmar, y puede deshacerlo. Es
+  opcional, y el host puede desactivarlo en su mundo.
 - **Hostear y unirse** desde el menú principal (*Multijugador*): el host abre su mundo y comparte su **dirección**, el
   **puerto** (26950 por defecto) y el **código de la partida** (formato `ABCD-EFGH`). Botones para copiar el código y
   mostrar u ocultar la IP. Cada mundo conserva su código, y *Unirse a un mundo › Partidas recientes* te devuelve a las

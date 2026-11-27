@@ -13,7 +13,9 @@ namespace HKMultiplayer.Game.Features;
 
 /// <summary>
 /// «Ponerme al nivel del host»: un invitado, sentado en un banco, puede igualar su personaje al del host en habilidades,
-/// máscaras, vasijas, aguijón, muescas y amuletos conseguidos. Pensado para mundos que empiezan desde una partida avanzada
+/// máscaras, vasijas, aguijón, muescas y amuletos conseguidos, y desde la 0.45.0 también en mapas, pluma, alfileres y
+/// marcadores, llaves y objetos (farol, pase del tranvía...), amuletos frágiles irrompibles, el Alma de Rey o el Corazón del
+/// Vacío y la esencia. Pensado para mundos que empiezan desde una partida avanzada
 /// del host, donde un invitado nuevo empieza de cero. Nadie pierde nada: de cada número se queda el mayor y de cada
 /// habilidad o amuleto, el que tenga cualquiera de los dos.
 /// <para>
@@ -31,14 +33,41 @@ internal sealed class MatchHostLevel {
     /// <summary>Tiempo para confirmar tras ver el resumen.</summary>
     private const float ConfirmSeconds = 20f;
 
-    /// <summary>Lo que se iguala tomando lo que tenga cualquiera de los dos.</summary>
-    private static readonly string[] BoolFields = BuildBools();
-
-    /// <summary>Lo que se iguala tomando el mayor.</summary>
-    private static readonly string[] IntFields = {
-        "fireballLevel", "quakeLevel", "screamLevel", "maxHealthBase", "heartPieces", "MPReserveMax", "vesselFragments",
-        "nailSmithUpgrades", "nailDamage", "charmSlots", "charmsOwned"
+    /// <summary>
+    /// Lo que se iguala tomando el mayor, con el máximo que se acepta de cada uno (lo que llega de la red se comprueba).
+    /// </summary>
+    private static readonly (string Field, int Max)[] IntFields = {
+        ("fireballLevel", 2), ("quakeLevel", 2), ("screamLevel", 2), ("maxHealthBase", 9), ("heartPieces", 4),
+        ("MPReserveMax", 99), ("vesselFragments", 3), ("nailSmithUpgrades", 4), ("nailDamage", 21), ("charmSlots", 11),
+        ("charmsOwned", 40),
+        // Desde la 0.45.0, «todo»: llaves, el Alma de Rey o el Corazón del Vacío (1-4), la esencia y los marcadores
+        // comprados para el mapa
+        ("simpleKeys", 4), ("royalCharmState", 4), ("dreamOrbs", 2400), ("spareMarkers_r", 6), ("spareMarkers_b", 6),
+        ("spareMarkers_y", 6), ("spareMarkers_w", 6)
     };
+
+    /// <summary>Mapas, pluma, alfileres y marcadores (en este orden en el mensaje: va por posición).</summary>
+    private static readonly string[] MapFields = {
+        "hasMap", "mapDirtmouth", "mapCrossroads", "mapGreenpath", "mapFogCanyon", "mapRoyalGardens", "mapFungalWastes",
+        "mapCity", "mapWaterways", "mapMines", "mapDeepnest", "mapCliffs", "mapOutskirts", "mapRestingGrounds", "mapAbyss",
+        "hasQuill", "hasPin", "hasPinBench", "hasPinCocoon", "hasPinDreamPlant", "hasPinGuardian", "hasPinBlackEgg",
+        "hasPinShop", "hasPinSpa", "hasPinStag", "hasPinTram", "hasPinGhost", "hasPinGrub", "hasMarker", "hasMarker_r",
+        "hasMarker_b", "hasMarker_y", "hasMarker_w"
+    };
+
+    /// <summary>Llaves, pases y objetos que abren el mundo o lo dejan ver (para el resumen).</summary>
+    private static readonly string[] ItemFields = {
+        "hasLantern", "hasTramPass", "hasCityKey", "hasWhiteKey", "hasLoveKey", "hasSpaKey", "hasWaterwaysKey",
+        "hasHuntersMark", "salubraBlessing", "fragileHealth_unbreakable", "fragileGreed_unbreakable",
+        "fragileStrength_unbreakable", "gotShadeCharm"
+    };
+
+    /// <summary>
+    /// Lo que se iguala tomando lo que tenga cualquiera de los dos. Detrás de <see cref="MapFields"/> e
+    /// <see cref="ItemFields"/>: los campos estáticos se preparan en el orden en que están escritos, y antes de ellos
+    /// BuildBools los encontraba vacíos (el host no podía abrir su mundo).
+    /// </summary>
+    private static readonly string[] BoolFields = BuildBools();
 
     private static string[] BuildBools() {
         var fields = new List<string> {
@@ -51,6 +80,8 @@ internal sealed class MatchHostLevel {
             fields.Add($"gotCharm_{i}");
         }
 
+        fields.AddRange(MapFields);
+        fields.AddRange(ItemFields);
         return fields.ToArray();
     }
 
@@ -72,7 +103,19 @@ internal sealed class MatchHostLevel {
     }
 
     /// <summary>Lo último que pasó, para el panel (resumen, «hecho», o por qué no se pudo).</summary>
-    public string Status { get; private set; } = string.Empty;
+    public string Status {
+        get => _status;
+        private set {
+            // Cada paso queda en el registro (el panel solo lo enseña mientras está abierto)
+            if (value != _status && !string.IsNullOrEmpty(value)) {
+                Log.Info($"Ponerse al nivel del host: {value}");
+            }
+
+            _status = value ?? string.Empty;
+        }
+    }
+
+    private string _status = string.Empty;
 
     /// <summary>Hay un resumen esperando confirmación.</summary>
     public bool WaitingConfirm => _pending != null && Time.unscaledTime < _pendingUntil;
@@ -157,6 +200,8 @@ internal sealed class MatchHostLevel {
 
         if (!Sitting()) {
             Status = Lang.T("Siéntate en un banco para cambiar tu personaje", "Sit on a bench to change your character");
+            Log.Info($"Ponerse al nivel del host: no está sentado (atBench={PlayerData.instance?.atBench}, " +
+                     $"control cedido={HeroController.instance?.controlReqlinquished})");
             return;
         }
 
@@ -193,9 +238,10 @@ internal sealed class MatchHostLevel {
             writer.WriteByte((byte) bits);
         }
 
+        // Enteros completos: la esencia pasa de 255
         writer.WriteByte((byte) IntFields.Length);
-        foreach (var field in IntFields) {
-            writer.WriteByte((byte) Mathf.Clamp(pd.GetInt(field), 0, 255));
+        foreach (var (field, max) in IntFields) {
+            writer.WriteInt(Mathf.Clamp(pd.GetInt(field), 0, max));
         }
 
         _session.EndTo();
@@ -209,9 +255,9 @@ internal sealed class MatchHostLevel {
         }
 
         var intCount = reader.ReadByte();
-        var ints = new byte[intCount];
+        var ints = new int[intCount];
         for (var i = 0; i < intCount; i++) {
-            ints[i] = reader.ReadByte();
+            ints[i] = reader.ReadInt();
         }
 
         if (_session == null || _session.IsHost || from.Id != GameSession.HostPlayerId || !_waiting) {
@@ -231,8 +277,8 @@ internal sealed class MatchHostLevel {
 
         // Los números, dentro de lo que permite el juego
         for (var i = 0; i < IntFields.Length; i++) {
-            if (ints[i] <= 100) {
-                clean[IntFields[i]] = (int) ints[i];
+            if (ints[i] >= 0 && ints[i] <= IntFields[i].Max) {
+                clean[IntFields[i].Field] = ints[i];
             }
         }
 
@@ -266,14 +312,30 @@ internal sealed class MatchHostLevel {
         Gain("charmSlots", 1, Lang.T("muesca", "notch"), Lang.T("muescas", "notches"));
         var charms = 0;
         var abilities = 0;
+        var maps = 0;
+        var items = 0;
         foreach (var field in BoolFields) {
             if (host[field] is JValue value && (bool) value && !pd.GetBool(field)) {
                 if (field.StartsWith("gotCharm_", StringComparison.Ordinal)) {
                     charms++;
+                } else if (Array.IndexOf(MapFields, field) >= 0) {
+                    maps++;
+                } else if (Array.IndexOf(ItemFields, field) >= 0) {
+                    items++;
                 } else {
                     abilities++;
                 }
             }
+        }
+
+        foreach (var field in new[] { "simpleKeys", "royalCharmState", "spareMarkers_r", "spareMarkers_b", "spareMarkers_y", "spareMarkers_w" }) {
+            if (host[field] is JValue value && (int) value > pd.GetInt(field)) {
+                items++;
+            }
+        }
+
+        if (host["dreamOrbs"] is JValue orbs && (int) orbs > pd.GetInt("dreamOrbs")) {
+            Add(Lang.F("+{0} de esencia", "+{0} essence", (int) orbs - pd.GetInt("dreamOrbs")));
         }
 
         foreach (var field in new[] { "fireballLevel", "quakeLevel", "screamLevel" }) {
@@ -288,6 +350,14 @@ internal sealed class MatchHostLevel {
 
         if (abilities > 0) {
             Add(abilities == 1 ? Lang.T("1 habilidad", "1 ability") : Lang.F("{0} habilidades", "{0} abilities", abilities));
+        }
+
+        if (maps > 0) {
+            Add(maps == 1 ? Lang.T("1 mapa o alfiler", "1 map or pin") : Lang.F("{0} mapas y alfileres", "{0} maps and pins", maps));
+        }
+
+        if (items > 0) {
+            Add(items == 1 ? Lang.T("1 objeto", "1 item") : Lang.F("{0} objetos", "{0} items", items));
         }
 
         return text.ToString();
@@ -330,7 +400,7 @@ internal sealed class MatchHostLevel {
             }
         }
 
-        foreach (var field in IntFields) {
+        foreach (var (field, _) in IntFields) {
             if (host[field] is not JValue value || (int) value <= pd.GetInt(field)) {
                 continue;
             }
@@ -347,6 +417,11 @@ internal sealed class MatchHostLevel {
                     pd.SetInt(field, (int) value);
                     break;
             }
+        }
+
+        // El Corazón del Vacío (estado 4) cuesta 0 muescas, como cuando lo da el juego
+        if (pd.GetInt("royalCharmState") >= 4 && pd.GetInt("charmCost_36") != 0) {
+            pd.SetInt("charmCost_36", 0);
         }
 
         hero.MaxHealth();
@@ -378,10 +453,14 @@ internal sealed class MatchHostLevel {
                 }
             }
 
-            foreach (var field in IntFields) {
+            foreach (var (field, _) in IntFields) {
                 if (backup[field] is JValue { Type: JTokenType.Integer } value) {
                     pd.SetInt(field, (int) value);
                 }
+            }
+
+            if (backup["charmCost_36"] is JValue { Type: JTokenType.Integer } royalCost) {
+                pd.SetInt("charmCost_36", (int) royalCost);
             }
 
             if (backup["maxHealth"] is JValue { Type: JTokenType.Integer } maxHealth) {
@@ -415,10 +494,11 @@ internal sealed class MatchHostLevel {
             backup[field] = pd.GetBool(field);
         }
 
-        foreach (var field in IntFields) {
+        foreach (var (field, _) in IntFields) {
             backup[field] = pd.GetInt(field);
         }
 
+        backup["charmCost_36"] = pd.GetInt("charmCost_36");
         backup["maxHealth"] = pd.maxHealth;
         var path = BackupPath();
         Directory.CreateDirectory(Path.GetDirectoryName(path));

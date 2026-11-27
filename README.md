@@ -87,8 +87,9 @@ API.
   revived as usual and the world is lost only if everyone goes down at once.
 - **From a save file**: a world can start as a copy of one of your 4 save slots (the original isn't touched). A guest
   who joins from scratch can, sitting on a bench, **match the host's level** (*Partners*): they get the abilities,
-  masks, vessels, nail, notches and charms the host has and they don't, after a summary to confirm, and they can undo
-  it. It's optional, and the host can turn it off for their world.
+  masks, vessels, nail, notches, charms, maps and pins, keys and items (lantern, tram pass...) and essence the host has
+  and they don't, after a summary to confirm, and they can undo it. It's optional, and the host can turn it off for
+  their world.
 - **Host and join** from the main menu (*Multiplayer*): the host opens a world and shares their **address**, the
   **port** (26950 by default) and the **game code** (`ABCD-EFGH` format). Buttons to copy the code and show or hide the
   IP. Each world keeps its code, and *Join a world › Recent games* takes you back to the last ones you joined with one

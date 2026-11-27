@@ -228,6 +228,13 @@ internal sealed class EnemySync {
     private const byte ScriptedStateFlag = 8;
 
     /// <summary>
+    /// En el mensaje de estados: no se le puede hacer pogo (su <see cref="NonBouncer"/> está activo). El caballero musgoso lo
+    /// activa dormido (es un arbusto) y lo apaga al despertar, solo en el PC que lo mueve: en los demás seguía activo todo el
+    /// combate y el aguijón hacia abajo lo atravesaba sin rebotar.
+    /// </summary>
+    private const byte NoBounceStateFlag = 16;
+
+    /// <summary>
     /// Escenas guionizadas de un jefe que no se cortan pasándolo a otro PC: enemigo, FSM y estado que dura toda la escena.
     /// El Hollow Knight, con el Corazón del Vacío, espera en «Waiting for Hornet Scene» desde que llega a su última fase
     /// hasta que se suelta de Hornet: el rugido largo, Hornet clavándolo y la entrada al sueño. Pasado a otro PC a mitad,
@@ -458,6 +465,12 @@ internal sealed class EnemySync {
 
         /// <summary>Lo último enviado de si estaba en una escena guionizada.</summary>
         public bool LastSentScripted;
+
+        /// <summary>Lo que impide hacerle pogo (su lógica lo enciende y apaga: ver <see cref="NoBounceStateFlag"/>).</summary>
+        public NonBouncer NonBouncer;
+
+        /// <summary>Lo último enviado de si no se le podía hacer pogo.</summary>
+        public bool LastSentNoBounce;
 
         /// <summary>Desde cuándo el dueño quiere pasar el jefe a otro y espera a que acabe su ataque (0: no espera).</summary>
         public float SwitchWantedSince;
@@ -1477,15 +1490,18 @@ internal sealed class EnemySync {
             var state = Capture(enemy, tick);
             var calm = IsCalmHere(enemy);
             var scripted = InScriptedSceneHere(enemy);
+            var noBounce = enemy.NonBouncer != null && enemy.NonBouncer.active;
             if (state.SameLook(enemy.LastSent) && state.Rotation == enemy.LastSent.Rotation &&
                 state.Extra == enemy.LastSent.Extra && state.Damage == enemy.LastSent.Damage && state.Z == enemy.LastSent.Z &&
-                calm == enemy.LastSentCalm && scripted == enemy.LastSentScripted && tick - enemy.LastSentTick < KeepAliveTicks) {
+                calm == enemy.LastSentCalm && scripted == enemy.LastSentScripted && noBounce == enemy.LastSentNoBounce &&
+                tick - enemy.LastSentTick < KeepAliveTicks) {
                 continue;
             }
 
             enemy.LastSent = state;
             enemy.LastSentCalm = calm;
             enemy.LastSentScripted = scripted;
+            enemy.LastSentNoBounce = noBounce;
             enemy.LastSentTick = tick;
             // Cada enemigo ocupa 24 bytes: en salas con muchos (las jaulas del Coliseo) van en varios mensajes
             if (writer == null || count == MaxEntriesPerMessage || writer.Position > StatesMessageLimit) {
@@ -1506,7 +1522,7 @@ internal sealed class EnemySync {
             writer.WriteFloat(state.Y);
             writer.WriteFloat(state.Z);
             writer.WriteByte((byte) ((state.FacingRight ? 1 : 0) | (state.Visible ? 2 : 0) | (calm ? CalmStateFlag : 0) |
-                                     (scripted ? ScriptedStateFlag : 0)));
+                                     (scripted ? ScriptedStateFlag : 0) | (noBounce ? NoBounceStateFlag : 0)));
             writer.WriteUShort(state.SpriteId);
             writer.WriteByte(state.Collection);
             writer.WriteUShort(state.Rotation);
@@ -2062,6 +2078,7 @@ internal sealed class EnemySync {
             Renderer = health.GetComponent<Renderer>(),
             Collider = health.GetComponent<Collider2D>(),
             Damage = health.GetComponent<DamageHero>(),
+            NonBouncer = health.GetComponent<NonBouncer>(),
             LastHp = health.hp,
             StaysDead = health.GetComponent<PersistentBoolItem>() != null
         };
@@ -4972,12 +4989,13 @@ internal sealed class EnemySync {
                 continue;
             }
 
-            var start = fsm.Fsm.GetState(fsm.Fsm.StartState);
-            if (start == null) {
+            var chain = StartChain(fsm.Fsm);
+            if (chain.Count == 0) {
                 continue;
             }
 
             var found = 0;
+            foreach (var start in chain)
             foreach (var action in start.Actions) {
                 if (action == null || !action.Enabled) {
                     continue;
@@ -5019,9 +5037,61 @@ internal sealed class EnemySync {
             }
 
             if (found > 0) {
-                Log.Info($"{fsm.gameObject.name}/{fsm.FsmName}: sin arrancar en este PC, se buscan sus {found} piezas de {start.Name}");
+                Log.Info($"{fsm.gameObject.name}/{fsm.FsmName}: sin arrancar en este PC, se buscan sus {found} piezas de " +
+                         string.Join(" → ", chain.ConvertAll(state => state.Name)));
             }
         }
+    }
+
+    /// <summary>Estados de preparación que se siguen desde el inicial como mucho (ver <see cref="StartChain"/>).</summary>
+    private const int MaxStartChain = 4;
+
+    /// <summary>
+    /// El estado inicial y los que le siguen con FINISHED sin esperar nada (preparación de un solo paso). La FSM de
+    /// movimiento de Markoth empieza en `Start` (solo mira una variable) y suelta en `Init`, el siguiente, el punto al que
+    /// vuela (`Target`): mirando solo el estado inicial, en el PC donde era marioneta desde el principio `Target` seguía
+    /// colgando de él. Al tomarlo, Markoth perseguía un punto que se movía con él y salía volando de la arena (issue #31).
+    /// Se para en el primer estado que espera (un Wait, una animación) y no se cuenta: ese ya es el comportamiento.
+    /// </summary>
+    private static List<HutongGames.PlayMaker.FsmState> StartChain(HutongGames.PlayMaker.Fsm fsm) {
+        var chain = new List<HutongGames.PlayMaker.FsmState>();
+        var state = fsm.GetState(fsm.StartState);
+        while (state != null && chain.Count < MaxStartChain && !chain.Contains(state)) {
+            // El inicial siempre (como antes); los siguientes, solo si no esperan
+            if (chain.Count > 0 && Waits(state)) {
+                break;
+            }
+
+            chain.Add(state);
+            string next = null;
+            foreach (var transition in state.Transitions) {
+                if (transition.EventName == "FINISHED") {
+                    next = transition.ToState;
+                    break;
+                }
+            }
+
+            state = next != null ? fsm.GetState(next) : null;
+        }
+
+        return chain;
+    }
+
+    /// <summary>Si el estado espera algo (tiempo, una animación, un movimiento) antes de seguir: ya no es preparación.</summary>
+    private static bool Waits(HutongGames.PlayMaker.FsmState state) {
+        foreach (var action in state.Actions) {
+            if (action == null || !action.Enabled) {
+                continue;
+            }
+
+            var name = action.GetType().Name;
+            if (name.StartsWith("Wait", StringComparison.Ordinal) || name.Contains("Animation") || name.Contains("Tween") ||
+                name.Contains("Watch") || name.Contains("Chase")) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static GameObject Resolve(Enemy enemy, ObjectRef reference) {
@@ -6992,6 +7062,19 @@ internal sealed class EnemySync {
             }
 
             if (!enemy.Puppet || part.Transform == null) {
+                // Tomado por este PC con algo aún en la cola: se queda como lo dejó el PC que lo movía (lo último pedido).
+                // Antes se tiraba: la Madre Gruz enciende su daño (Hero Damager) una sola vez, al despertar, y tomada
+                // justo entonces se quedaba sin él todo el combate y no dañaba a nadie (los demás copian al que la mueve)
+                if (part.Transform != null && part.HasWanted) {
+                    if (part.Collider != null) {
+                        part.Collider.enabled = part.WantedCollider;
+                    }
+
+                    if (part.Transform.gameObject.activeSelf != part.WantedActive) {
+                        part.Transform.gameObject.SetActive(part.WantedActive);
+                    }
+                }
+
                 part.Pending.Clear();
                 part.HasWanted = false;
                 continue;
@@ -7865,6 +7948,9 @@ internal sealed class EnemySync {
 
                 enemy.RemoteCalm = calm;
                 enemy.RemoteScripted = (flags & ScriptedStateFlag) != 0;
+                if (enemy.NonBouncer != null) {
+                    enemy.NonBouncer.active = (flags & NoBounceStateFlag) != 0;
+                }
             }
         }
     }

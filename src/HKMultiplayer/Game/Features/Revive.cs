@@ -1732,6 +1732,7 @@ internal sealed class Revive {
         }
 
         Log.Info($"Viajando a {scene} (entrada {(entry.Length > 0 ? entry : "cualquiera")})");
+        RearmBossScene(scene);
         _travelStartedAt = Time.unscaledTime;
         _travelTarget = scene;
         _arrivalPosition = position;
@@ -1743,6 +1744,43 @@ internal sealed class Revive {
             WaitForSceneTransitionCameraFade = true,
             AlwaysUnloadUnusedAssets = false
         });
+    }
+
+    /// <summary>Prepara la sala de un jefe del Panteón para cuando el juego la cargue (privado en BossSequenceController).</summary>
+    private static readonly MethodInfo SetupBossSceneMethod =
+        typeof(BossSequenceController).GetMethod("SetupBossScene", BindingFlags.NonPublic | BindingFlags.Static);
+
+    /// <summary>Si la sala del jefe quita las ataduras del Panteón al destruirse (privado en BossSceneController).</summary>
+    private static readonly FieldInfo RestoreBindingsField =
+        typeof(BossSceneController).GetField("restoreBindingsOnDestroy", BindingFlags.NonPublic | BindingFlags.Instance);
+
+    /// <summary>
+    /// Volver a cargar la sala del jefe en la que se está, dentro de un Panteón (Recargar sala del panel). El Panteón deja
+    /// preparado <c>BossSceneController.SetupEvent</c> antes de cargar cada jefe, y la sala lo gasta al cargarse: es lo que
+    /// engancha la muerte del jefe al final de la sala. Recargada por el mod, la sala nueva no lo encontraba, el jefe moría y
+    /// la sala no acababa nunca: los dos se quedaban encerrados con Markoth muerto (issue #31). Se vuelve a preparar igual
+    /// que lo hace el juego, sin pasar al jefe siguiente (el índice ya apunta a esta sala).
+    /// </summary>
+    private static void RearmBossScene(string scene) {
+        if (!BossSequenceController.IsInSequence || BossSceneController.Instance == null ||
+            BossSceneController.SetupEvent != null || scene != UnitySceneManager.GetActiveScene().name) {
+            return;
+        }
+
+        if (SetupBossSceneMethod == null) {
+            Log.Warn("No se pudo preparar la sala del jefe al recargarla: falta SetupBossScene en esta versión del juego");
+            return;
+        }
+
+        try {
+            SetupBossSceneMethod.Invoke(null, null);
+            // La sala que se va no quita las ataduras (aguijón, máscaras, amuletos, alma), como al pasar al jefe siguiente:
+            // la nueva solo las pone en el primer jefe y el resto del Panteón seguía sin ellas
+            RestoreBindingsField?.SetValue(BossSceneController.Instance, false);
+            Log.Info($"Sala de jefe del Panteón recargada: se prepara su final como al entrar ({scene})");
+        } catch (Exception e) {
+            Log.Warn($"No se pudo preparar la sala del jefe al recargarla ({e.GetType().Name}: {e.InnerException?.Message ?? e.Message})");
+        }
     }
 
     /// <summary>Termina un viaje pedido por el mod. Devuelve true mientras sigue en curso.</summary>
