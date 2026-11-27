@@ -244,14 +244,14 @@ internal sealed class Revive {
     private long _promptKey = -1;
 
     static Revive() {
-        MessageRoutes.Register(Downed, Route.Server, reliable: true);
-        MessageRoutes.Register(ReviveRequest, Route.Server, reliable: true);
-        MessageRoutes.Register(Revived, Route.Server, reliable: true);
-        MessageRoutes.Register(Wipe, Route.Server, reliable: true);
-        MessageRoutes.Register(BenchRest, Route.Server, reliable: true);
+        MessageRoutes.Register(Downed, Route.Server, ReliableChannel.Combat);
+        MessageRoutes.Register(ReviveRequest, Route.Server, ReliableChannel.Combat);
+        MessageRoutes.Register(Revived, Route.Server, ReliableChannel.Combat);
+        MessageRoutes.Register(Wipe, Route.Server, ReliableChannel.Combat);
+        MessageRoutes.Register(BenchRest, Route.Server, ReliableChannel.Combat);
         MessageRoutes.Register(ReviveProgress, Route.SameScene, reliable: false);
-        MessageRoutes.Register(ReviveDenied, Route.Server, reliable: true);
-        MessageRoutes.Register(BodyMoved, Route.Server, reliable: true);
+        MessageRoutes.Register(ReviveDenied, Route.Server, ReliableChannel.Combat);
+        MessageRoutes.Register(BodyMoved, Route.Server, ReliableChannel.Combat);
     }
 
     public Revive() {

@@ -1,3 +1,5 @@
+using HKMultiplayer.Net;
+
 namespace HKMultiplayer.Session;
 
 /// <summary>
@@ -61,25 +63,39 @@ public enum Route : byte {
 }
 
 /// <summary>
-/// Cómo viaja cada tipo de mensaje: fiable o no y a quién se reenvía. Las capas de juego registran sus tipos al
-/// iniciar; los no registrados solo los procesa el servidor y van por el canal fiable.
+/// Cómo viaja cada tipo de mensaje: fiable (y por qué canal) o no fiable, y a quién se reenvía. Las capas de juego
+/// registran sus tipos al iniciar; los no registrados solo los procesa el servidor y van por el canal fiable de mundo.
 /// </summary>
 public static class MessageRoutes {
     private static readonly Route[] Routes = new Route[256];
     private static readonly bool[] Unreliable = new bool[256];
+    private static readonly ReliableChannel[] Channels = new ReliableChannel[256];
 
     static MessageRoutes() {
+        for (var i = 0; i < Channels.Length; i++) {
+            Channels[i] = ReliableChannel.World;
+        }
+
         Register(MessageType.PlayerState, Route.SameScene, reliable: false);
-        Register(MessageType.PlayerEvent, Route.SameScene, reliable: true);
+        Register(MessageType.PlayerEvent, Route.SameScene, ReliableChannel.Combat);
         Register(MessageType.PlayerCompanions, Route.SameScene, reliable: false);
     }
 
     public static void Register(MessageType type, Route route, bool reliable) {
         Routes[(byte) type] = route;
         Unreliable[(byte) type] = !reliable;
+        Channels[(byte) type] = ReliableChannel.World;
+    }
+
+    public static void Register(MessageType type, Route route, ReliableChannel channel) {
+        Routes[(byte) type] = route;
+        Unreliable[(byte) type] = false;
+        Channels[(byte) type] = channel;
     }
 
     public static Route RouteOf(byte type) => Routes[type];
 
     public static bool IsReliable(byte type) => !Unreliable[type];
+
+    public static ReliableChannel ChannelOf(byte type) => Channels[type];
 }

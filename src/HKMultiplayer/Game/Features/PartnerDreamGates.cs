@@ -54,7 +54,7 @@ internal sealed class PartnerDreamGates {
     private float _sentY;
 
     static PartnerDreamGates() {
-        MessageRoutes.Register(DreamGateInfo, Route.Everyone, reliable: true);
+        MessageRoutes.Register(DreamGateInfo, Route.Everyone, ReliableChannel.Social);
     }
 
     public PartnerDreamGates() {

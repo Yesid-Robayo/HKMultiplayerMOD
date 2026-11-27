@@ -39,7 +39,7 @@ internal sealed class PartnerDreamThoughts {
     private bool _showingRemote;
 
     static PartnerDreamThoughts() {
-        MessageRoutes.Register(DreamThought, Route.SameScene, reliable: true);
+        MessageRoutes.Register(DreamThought, Route.SameScene, ReliableChannel.Social);
     }
 
     public PartnerDreamThoughts() {

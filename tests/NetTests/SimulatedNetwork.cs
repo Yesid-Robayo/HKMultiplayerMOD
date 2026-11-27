@@ -11,6 +11,7 @@ namespace HKMultiplayer.Tests;
 /// desordena) y una parte se pierde. Reutiliza búferes para poder medir la memoria que crea el transporte.
 /// </summary>
 public sealed class SimulatedNetwork {
+    private readonly object _lock = new();
     private readonly Random _random = new(1234);
     private readonly Dictionary<int, SimulatedTransport> _endpoints = new();
 
@@ -45,46 +46,63 @@ public sealed class SimulatedNetwork {
 
     public SimulatedTransport Create(int port) {
         var transport = new SimulatedTransport(this, port);
-        _endpoints[port] = transport;
+        lock (_lock) {
+            _endpoints[port] = transport;
+        }
+
         return transport;
     }
 
     internal void Deliver(byte[] buffer, int offset, int length, IPEndPoint from, IPEndPoint to) {
-        if (Capture) {
-            var copy = new byte[length];
-            System.Buffer.BlockCopy(buffer, offset, copy, 0, length);
-            Captured.Add((copy, to.Port));
-        }
+        SimulatedTransport target;
+        double at;
+        lock (_lock) {
+            if (Capture) {
+                var copy = new byte[length];
+                System.Buffer.BlockCopy(buffer, offset, copy, 0, length);
+                Captured.Add((copy, to.Port));
+            }
 
-        if (_random.NextDouble() < LossRate || !_endpoints.TryGetValue(to.Port, out var target)) {
-            return;
-        }
-
-        var now = NetPeer.Now;
-        var departure = now;
-        if (Bandwidth > 0) {
-            var link = (from.Port, to.Port);
-            var busy = _busyUntil.TryGetValue(link, out var until) ? Math.Max(until, now) : now;
-            if ((busy - now) * Bandwidth + length > QueueBytes) {
-                QueueDrops++;
+            if (_random.NextDouble() < LossRate || !_endpoints.TryGetValue(to.Port, out target)) {
                 return;
             }
 
-            departure = busy + length / Bandwidth;
-            _busyUntil[link] = departure;
+            var now = NetPeer.Now;
+            var departure = now;
+            if (Bandwidth > 0) {
+                var link = (from.Port, to.Port);
+                var busy = _busyUntil.TryGetValue(link, out var until) ? Math.Max(until, now) : now;
+                if ((busy - now) * Bandwidth + length > QueueBytes) {
+                    QueueDrops++;
+                    return;
+                }
+
+                departure = busy + length / Bandwidth;
+                _busyUntil[link] = departure;
+            }
+
+            at = departure + Latency + _random.NextDouble() * Jitter;
         }
 
         var data = Pool.Rent();
         System.Buffer.BlockCopy(buffer, offset, data, 0, length);
-        var at = departure + Latency + _random.NextDouble() * Jitter;
-        target.Inbox.Add(new Pending { At = at, Data = data, Length = length, From = from });
+        lock (target.Inbox) {
+            target.Inbox.Add(new Pending { At = at, Data = data, Length = length, From = from });
+        }
     }
 
     /// <summary>Inyecta un datagrama tal cual (repetición de uno capturado).</summary>
     public void Inject(byte[] data, int toPort, IPEndPoint from) {
-        if (_endpoints.TryGetValue(toPort, out var target)) {
-            var buffer = Pool.Rent();
-            System.Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
+        SimulatedTransport target;
+        lock (_lock) {
+            if (!_endpoints.TryGetValue(toPort, out target)) {
+                return;
+            }
+        }
+
+        var buffer = Pool.Rent();
+        System.Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
+        lock (target.Inbox) {
             target.Inbox.Add(new Pending { At = NetPeer.Now, Data = buffer, Length = data.Length, From = from });
         }
     }
@@ -112,12 +130,14 @@ public sealed class SimulatedTransport : ITransport {
 
     public bool TryReceive(out Datagram datagram) {
         var now = NetPeer.Now;
-        for (var i = 0; i < Inbox.Count; i++) {
-            if (Inbox[i].At <= now) {
-                var pending = Inbox[i];
-                Inbox.RemoveAt(i);
-                datagram = new Datagram { Buffer = pending.Data, Length = pending.Length, From = pending.From };
-                return true;
+        lock (Inbox) {
+            for (var i = 0; i < Inbox.Count; i++) {
+                if (Inbox[i].At <= now) {
+                    var pending = Inbox[i];
+                    Inbox.RemoveAt(i);
+                    datagram = new Datagram { Buffer = pending.Data, Length = pending.Length, From = pending.From };
+                    return true;
+                }
             }
         }
 

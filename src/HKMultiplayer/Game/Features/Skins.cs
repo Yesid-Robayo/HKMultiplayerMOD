@@ -205,8 +205,8 @@ internal sealed class Skins {
     private static float _listReadAt = -999f;
 
     static Skins() {
-        MessageRoutes.Register(SkinInfo, Route.Server, reliable: true);
-        MessageRoutes.Register(SkinRequest, Route.Server, reliable: true);
+        MessageRoutes.Register(SkinInfo, Route.Server, ReliableChannel.Social);
+        MessageRoutes.Register(SkinRequest, Route.Server, ReliableChannel.Social);
     }
 
     public Skins() {

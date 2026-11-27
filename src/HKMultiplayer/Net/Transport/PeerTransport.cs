@@ -14,7 +14,7 @@ public interface IPeerNetwork {
 
     /// <summary>
     /// Copia en <paramref name="buffer"/> el siguiente datagrama recibido y devuelve su longitud, o -1 si no hay ninguno
-    /// (o no cabía y se descartó). Se llama desde el hilo principal.
+    /// (o no cabía y se descartó). Puede llamarse desde el hilo dedicado de red.
     /// </summary>
     int Receive(byte[] buffer, out ulong from);
 }
@@ -25,11 +25,12 @@ public interface IPeerNetwork {
 /// y un número de orden), siempre la misma mientras dure el transporte. El número de orden, y no el SteamID, va en la
 /// dirección: así el registro, que escribe las direcciones, no lleva nada que identifique al jugador.
 /// </summary>
-public sealed class PeerTransport : ITransport {
+public sealed class PeerTransport : ITransport, IWakeableTransport {
     private static readonly byte[] Prefix = { 0xfd, 0x48, 0x4b, 0x4d, 0x50, 0x53, 0x54, 0x4d };
 
     private readonly IPeerNetwork _network;
     private readonly BufferPool _pool;
+    private readonly object _mapLock = new();
     private readonly Dictionary<ulong, IPEndPoint> _byPeer = new();
     private readonly Dictionary<IPEndPoint, ulong> _byEndPoint = new();
 
@@ -43,30 +44,46 @@ public sealed class PeerTransport : ITransport {
     /// <summary>No escucha en ningún puerto.</summary>
     public int LocalPort => 0;
 
+    /// <summary>SteamNetworkingMessages se lee por sondeo no bloqueante.</summary>
+    public bool NeedsPolling => true;
+
+    public void SetWakeCallback(Action wake) {
+    }
+
     /// <summary>La dirección con la que el resto de la red conoce a ese par (se le da una si aún no tenía).</summary>
     public IPEndPoint EndPointOf(ulong peer) {
-        if (_byPeer.TryGetValue(peer, out var endPoint)) {
+        lock (_mapLock) {
+            if (_byPeer.TryGetValue(peer, out var endPoint)) {
+                return endPoint;
+            }
+
+            var bytes = new byte[16];
+            Array.Copy(Prefix, bytes, Prefix.Length);
+            var index = (ulong) _byPeer.Count + 1;
+            for (var i = 0; i < 8; i++) {
+                bytes[15 - i] = (byte) (index >> (i * 8));
+            }
+
+            endPoint = new IPEndPoint(new IPAddress(bytes), 1);
+            _byPeer[peer] = endPoint;
+            _byEndPoint[endPoint] = peer;
             return endPoint;
         }
-
-        var bytes = new byte[16];
-        Array.Copy(Prefix, bytes, Prefix.Length);
-        var index = (ulong) _byPeer.Count + 1;
-        for (var i = 0; i < 8; i++) {
-            bytes[15 - i] = (byte) (index >> (i * 8));
-        }
-
-        endPoint = new IPEndPoint(new IPAddress(bytes), 1);
-        _byPeer[peer] = endPoint;
-        _byEndPoint[endPoint] = peer;
-        return endPoint;
     }
 
     /// <summary>El par de esa dirección, si es una de las de este transporte.</summary>
-    public bool TryGetPeer(IPEndPoint endPoint, out ulong peer) => _byEndPoint.TryGetValue(endPoint, out peer);
+    public bool TryGetPeer(IPEndPoint endPoint, out ulong peer) {
+        lock (_mapLock) {
+            return _byEndPoint.TryGetValue(endPoint, out peer);
+        }
+    }
 
     /// <summary>Si esa dirección es de un par de este transporte.</summary>
-    public bool Owns(IPEndPoint endPoint) => _byEndPoint.ContainsKey(endPoint);
+    public bool Owns(IPEndPoint endPoint) {
+        lock (_mapLock) {
+            return _byEndPoint.ContainsKey(endPoint);
+        }
+    }
 
     public bool TryReceive(out Datagram datagram) {
         var buffer = _pool.Rent();
@@ -84,15 +101,22 @@ public sealed class PeerTransport : ITransport {
     public void Return(byte[] buffer) => _pool.Return(buffer);
 
     public void Send(byte[] buffer, int offset, int length, IPEndPoint to) {
-        // Una dirección que no es de un par (no debería llegar aquí) se ignora, como un paquete perdido
-        if (_byEndPoint.TryGetValue(to, out var peer)) {
-            _network.Send(peer, buffer, offset, length);
+        ulong peer;
+        lock (_mapLock) {
+            // Una dirección que no es de un par (no debería llegar aquí) se ignora, como un paquete perdido
+            if (!_byEndPoint.TryGetValue(to, out peer)) {
+                return;
+            }
         }
+
+        _network.Send(peer, buffer, offset, length);
     }
 
     public void Dispose() {
-        _byPeer.Clear();
-        _byEndPoint.Clear();
+        lock (_mapLock) {
+            _byPeer.Clear();
+            _byEndPoint.Clear();
+        }
     }
 }
 
@@ -100,7 +124,7 @@ public sealed class PeerTransport : ITransport {
 /// Dos transportes a la vez: el host escucha por IP (UDP) y por Steam, y cada paquete sale por el del par al que va.
 /// Los dos tienen que compartir la misma <see cref="BufferPool"/>: un búfer se devuelve al primero, venga de cuál venga.
 /// </summary>
-public sealed class CompositeTransport : ITransport {
+public sealed class CompositeTransport : ITransport, IWakeableTransport {
     private readonly ITransport _primary;
     private readonly PeerTransport _peers;
     private bool _peersFirst;
@@ -112,6 +136,15 @@ public sealed class CompositeTransport : ITransport {
 
     /// <summary>El puerto del transporte por IP.</summary>
     public int LocalPort => _primary.LocalPort;
+
+    /// <summary>Incluye el transporte de pares (Steam), que requiere sondeo periódico además del aviso de UDP.</summary>
+    public bool NeedsPolling => true;
+
+    public void SetWakeCallback(Action wake) {
+        if (_primary is IWakeableTransport wakeable) {
+            wakeable.SetWakeCallback(wake);
+        }
+    }
 
     public bool TryReceive(out Datagram datagram) {
         // Se alterna cuál se mira primero: con mucho tráfico por uno, el otro no se queda esperando

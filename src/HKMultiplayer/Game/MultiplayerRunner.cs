@@ -369,8 +369,8 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
         var scene = _sceneReloaded ? string.Empty : CurrentScene();
         _sceneReloaded = false;
-        // Un frame muy largo (carga lenta, ventana congelada) también para la red: queda en el registro para distinguirlo
-        // de un corte de la conexión
+        // Un frame muy largo (carga lenta, ventana congelada): la red sigue viva en su propio hilo, pero queda en el
+        // registro por si coincide con un salto visual o un retraso al entregar mensajes al juego
         if (Time.unscaledDeltaTime > LongFrameSeconds) {
             Log.Warn($"El juego estuvo parado {Time.unscaledDeltaTime:0.0} s (sala {(scene.Length > 0 ? scene : "cargando")})");
         }
@@ -543,7 +543,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
 
         var code = roomCode != null ? RoomCode.Normalize(roomCode) : RoomCode.Generate();
         Session = GameSession.Host(WithTestNetwork(transport), code, SanitizeName(name), CurrentScene(), HKMultiplayerMod.Version,
-            Log.Info);
+            Log.Info, threaded: true);
         Wire(Session);
         _announceCode = true;
         if (steam != null) {
@@ -678,7 +678,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         transport.Error += message => Log.Warn($"Red: {message}");
         _lastJoin = new JoinTarget { Address = address, Port = port, RoomCode = code, Name = name };
         Session = GameSession.Join(WithTestNetwork(transport), new IPEndPoint(ip, port), code, SanitizeName(name),
-            HKMultiplayerMod.Version, Log.Info);
+            HKMultiplayerMod.Version, Log.Info, threaded: true);
         Wire(Session);
         SetStatus(Lang.F("Conectando con {0}:{1}...", "Connecting to {0}:{1}...", ip, port));
         return true;
@@ -748,7 +748,7 @@ internal sealed class MultiplayerRunner : MonoBehaviour {
         var transport = new PeerTransport(steam);
         _lastJoin = new JoinTarget { RoomCode = code, Name = name, SteamHost = host, Lobby = lobby };
         Session = GameSession.Join(WithTestNetwork(transport), transport.EndPointOf(host), code, SanitizeName(name),
-            HKMultiplayerMod.Version, Log.Info);
+            HKMultiplayerMod.Version, Log.Info, threaded: true);
         Wire(Session);
         SetStatus(Lang.T("Conectando por Steam...", "Connecting through Steam..."));
         return true;

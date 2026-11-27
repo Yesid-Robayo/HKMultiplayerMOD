@@ -27,10 +27,20 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
     private const int Channel = 0;
     private const int MaxLobbyMembers = 4;
 
-    private readonly IntPtr[] _messages = new IntPtr[1];
+    /// <summary>Mensajes que se piden a Steam en cada llamada nativa (evita una transición P/Invoke por paquete).</summary>
+    private const int ReceiveBatchSize = 64;
+
+    private readonly IntPtr[] _messages = new IntPtr[ReceiveBatchSize];
+    private int _batchCount;
+    private int _batchIndex;
 
     /// <summary>Búfer fijo fuera del recolector para enviar sin crear nada por paquete.</summary>
     private readonly IntPtr _sendBuffer = Marshal.AllocHGlobal(NetConstants.MaxDatagramSize);
+
+    // Send y Receive se llaman desde el hilo dedicado de red; Dispose y los avisos de salas, desde el hilo principal
+    private readonly object _sendLock = new();
+    private readonly object _receiveLock = new();
+    private readonly object _expectedLock = new();
 
     private readonly HashSet<ulong> _expected = new();
     private readonly Callback<SteamNetworkingMessagesSessionRequest_t> _sessionRequest;
@@ -130,32 +140,49 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
     }
 
     public void Send(ulong peer, byte[] buffer, int offset, int length) {
-        if (_disposed || length > NetConstants.MaxDatagramSize) {
+        if (length > NetConstants.MaxDatagramSize) {
             return;
         }
 
-        Marshal.Copy(buffer, offset, _sendBuffer, length);
-        var identity = Identity(peer);
-        SteamNetworkingMessages.SendMessageToUser(ref identity, _sendBuffer, (uint) length, SendFlags, Channel);
+        lock (_sendLock) {
+            if (_disposed) {
+                return;
+            }
+
+            Marshal.Copy(buffer, offset, _sendBuffer, length);
+            var identity = Identity(peer);
+            SteamNetworkingMessages.SendMessageToUser(ref identity, _sendBuffer, (uint) length, SendFlags, Channel);
+        }
     }
 
     public int Receive(byte[] buffer, out ulong from) {
         from = 0;
-        while (!_disposed && SteamNetworkingMessages.ReceiveMessagesOnChannel(Channel, _messages, 1) > 0) {
-            var pointer = _messages[0];
-            try {
-                var message = Marshal.PtrToStructure<SteamNetworkingMessage_t>(pointer);
-                var length = message.m_cbSize;
-                if (length <= 0 || length > buffer.Length) {
-                    // No cabe en un datagrama del mod: no es nuestro o viene mal hecho
-                    continue;
+        lock (_receiveLock) {
+            while (!_disposed) {
+                if (_batchIndex >= _batchCount) {
+                    _batchIndex = 0;
+                    _batchCount = SteamNetworkingMessages.ReceiveMessagesOnChannel(Channel, _messages, ReceiveBatchSize);
+                    if (_batchCount <= 0) {
+                        _batchCount = 0;
+                        return -1;
+                    }
                 }
 
-                from = message.m_identityPeer.GetSteamID().m_SteamID;
-                Marshal.Copy(message.m_pData, buffer, 0, length);
-                return length;
-            } finally {
-                SteamNetworkingMessage_t.Release(pointer);
+                var pointer = _messages[_batchIndex++];
+                try {
+                    var message = Marshal.PtrToStructure<SteamNetworkingMessage_t>(pointer);
+                    var length = message.m_cbSize;
+                    if (length <= 0 || length > buffer.Length) {
+                        // No cabe en un datagrama del mod: no es nuestro o viene mal hecho
+                        continue;
+                    }
+
+                    from = message.m_identityPeer.GetSteamID().m_SteamID;
+                    Marshal.Copy(message.m_pData, buffer, 0, length);
+                    return length;
+                } finally {
+                    SteamNetworkingMessage_t.Release(pointer);
+                }
             }
         }
 
@@ -169,7 +196,12 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
     private void OnSessionRequest(SteamNetworkingMessagesSessionRequest_t request) {
         var identity = request.m_identityRemote;
         var peer = identity.GetSteamID();
-        if (_expected.Contains(peer.m_SteamID) || InLobby(peer) ||
+        bool expected;
+        lock (_expectedLock) {
+            expected = _expected.Contains(peer.m_SteamID);
+        }
+
+        if (expected || InLobby(peer) ||
             SteamFriends.GetFriendRelationship(peer) == EFriendRelationship.k_EFriendRelationshipFriend) {
             SteamNetworkingMessages.AcceptSessionWithUser(ref identity);
         } else {
@@ -193,7 +225,11 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
         return false;
     }
 
-    public void Expect(ulong peer) => _expected.Add(peer);
+    public void Expect(ulong peer) {
+        lock (_expectedLock) {
+            _expected.Add(peer);
+        }
+    }
 
     /// <summary>La sala de un "+connect_lobby &lt;id&gt;" (la presencia "connect" o la línea de órdenes del juego).</summary>
     public static bool TryParseConnect(string text, out ulong lobby) {
@@ -312,17 +348,29 @@ internal sealed class SteamworksPlatform : ISteamPlatform {
     }
 
     public void Dispose() {
-        if (_disposed) {
-            return;
+        lock (_sendLock) {
+            lock (_receiveLock) {
+                if (_disposed) {
+                    return;
+                }
+
+                _disposed = true;
+                for (var i = _batchIndex; i < _batchCount; i++) {
+                    SteamNetworkingMessage_t.Release(_messages[i]);
+                    _messages[i] = IntPtr.Zero;
+                }
+
+                _batchIndex = 0;
+                _batchCount = 0;
+                Marshal.FreeHGlobal(_sendBuffer);
+            }
         }
 
-        _disposed = true;
         LeaveLobby();
         _sessionRequest.Dispose();
         _joinRequested.Dispose();
         _presenceJoinRequested.Dispose();
         _lobbyCreated.Dispose();
         _lobbyEntered.Dispose();
-        Marshal.FreeHGlobal(_sendBuffer);
     }
 }

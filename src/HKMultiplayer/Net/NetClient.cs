@@ -1,4 +1,5 @@
 using System.Net;
+using System.Threading;
 using HKMultiplayer.Net.Crypto;
 using HKMultiplayer.Net.Transport;
 
@@ -16,6 +17,7 @@ public sealed class NetClient : NetPeer {
 
     private readonly PacketWriter _writer = new();
     private readonly byte[] _buffer = new byte[NetConstants.MaxDatagramSize];
+    private readonly object _connectLock = new();
 
     private IPEndPoint _server;
     private string _roomCode;
@@ -24,33 +26,67 @@ public sealed class NetClient : NetPeer {
     private KeyExchange _exchange;
     private double _connectStarted;
     private double _nextHello;
-    private bool _waitingChallenge;
+    private volatile bool _waitingChallenge;
+    private volatile NetConnection _connection;
+
+    // Petición de conexión encolada desde el hilo principal cuando el hilo de red ya está en marcha
+    private PendingConnect _pendingConnect;
 
     /// <summary>Conexión con el host (null si no hay).</summary>
-    public NetConnection Connection { get; private set; }
+    public NetConnection Connection => _connection;
 
     /// <summary>Si está conectado y aceptado.</summary>
-    public bool IsConnected => Connection is { State: ConnectionState.Connected };
+    public bool IsConnected => _connection is { State: ConnectionState.Connected };
 
     /// <summary>Si hay un intento de conexión en curso (aún sin aceptar).</summary>
-    public bool IsConnecting => _waitingChallenge || Connection is { State: ConnectionState.Handshaking };
+    public bool IsConnecting => _waitingChallenge || _connection is { State: ConnectionState.Handshaking };
 
     public NetClient(ITransport transport, INetListener listener) : base(transport, listener) {
     }
 
     /// <summary>Empieza a conectarse. El resultado llega por <see cref="INetListener.OnConnected"/> u OnDisconnected.</summary>
     public void Connect(IPEndPoint server, string roomCode, string name, string version) {
-        if (Connection != null) {
-            CloseConnection(Connection, DisconnectReason.Closed, true);
+        KeyExchange.Prepare(roomCode);
+        if (IsThreaded) {
+            lock (_connectLock) {
+                _pendingConnect = new PendingConnect {
+                    Server = server,
+                    RoomCode = roomCode,
+                    Name = name,
+                    Version = version
+                };
+            }
+
+            Wake();
+            return;
+        }
+
+        StartConnect(server, roomCode, name, version, Now);
+    }
+
+    protected override void ProcessPendingCommands(double now) {
+        PendingConnect pending;
+        lock (_connectLock) {
+            pending = _pendingConnect;
+            _pendingConnect = null;
+        }
+
+        if (pending != null) {
+            StartConnect(pending.Server, pending.RoomCode, pending.Name, pending.Version, now);
+        }
+    }
+
+    private void StartConnect(IPEndPoint server, string roomCode, string name, string version, double now) {
+        if (_connection != null) {
+            CloseConnection(_connection, DisconnectReason.Closed, true);
         }
 
         _server = server;
         _roomCode = roomCode;
-        KeyExchange.Prepare(roomCode);
         _name = name;
         _version = version;
         _exchange = new KeyExchange();
-        _connectStarted = Now;
+        _connectStarted = now;
         _nextHello = 0;
         _waitingChallenge = true;
     }
@@ -133,13 +169,13 @@ public sealed class NetClient : NetPeer {
         };
         connection.SetCiphers(new PacketCipher(keys.ClientToServer), receiveCipher);
         Connections[_server] = connection;
-        Connection = connection;
+        _connection = connection;
 
-        var request = connection.BeginReliable();
-        request.WriteByte(ControlMessage.ConnectRequest);
-        request.WriteString(_name);
-        request.WriteString(_version);
-        connection.EndMessage();
+        _writer.Reset(_buffer, 0, _buffer.Length);
+        _writer.WriteByte(ControlMessage.ConnectRequest);
+        _writer.WriteString(_name);
+        _writer.WriteString(_version);
+        connection.EnqueueControlReliable(_buffer, _writer.Length, ReliableChannel.World);
     }
 
     private void Fail(DisconnectReason reason, double now) {
@@ -162,11 +198,18 @@ public sealed class NetClient : NetPeer {
     }
 
     protected override void OnConnectionClosed(NetConnection connection, DisconnectReason reason, bool wasConnected) {
-        if (connection == Connection) {
-            Connection = null;
+        if (connection == _connection) {
+            _connection = null;
         }
 
         // El cliente avisa siempre: también si se cerró durante el saludo (rechazo, partida llena...)
         NotifyDisconnected(connection, reason);
+    }
+
+    private sealed class PendingConnect {
+        public IPEndPoint Server;
+        public string RoomCode;
+        public string Name;
+        public string Version;
     }
 }

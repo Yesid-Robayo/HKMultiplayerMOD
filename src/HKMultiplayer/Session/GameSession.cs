@@ -156,7 +156,7 @@ public sealed class GameSession : INetListener, IDisposable {
 
     // Host: crea el servidor con la sesión como receptora de sus eventos
     private GameSession(ITransport transport, string roomCode, string localName, string scene, string version,
-        Action<string> log, int maxPlayers) {
+        Action<string> log, int maxPlayers, bool threaded) {
         RoomCode = roomCode;
         _localName = localName;
         _version = version;
@@ -164,6 +164,10 @@ public sealed class GameSession : INetListener, IDisposable {
         _server = new NetServer(transport, this, roomCode, maxPlayers - 1, firstId: HostPlayerId + 1) {
             Approve = ApproveConnection
         };
+        if (threaded) {
+            _server.StartNetworkThread();
+        }
+
         IsActive = true;
         LocalId = HostPlayerId;
         var local = new SessionPlayer { Id = HostPlayerId, Name = localName, IsLocal = true };
@@ -173,29 +177,34 @@ public sealed class GameSession : INetListener, IDisposable {
 
     // Cliente: crea el cliente con la sesión como receptora y empieza a conectarse
     private GameSession(ITransport transport, IPEndPoint host, string roomCode, string name, string version,
-        Action<string> log) {
+        Action<string> log, bool threaded) {
         RoomCode = roomCode;
         _localName = name;
         _version = version;
         _log = log;
         _client = new NetClient(transport, this);
         _client.Connect(host, roomCode, name, version);
+        if (threaded) {
+            _client.StartNetworkThread();
+        }
     }
 
     /// <summary>Hostea: el servidor escucha en el transporte dado y el jugador local (id 1) queda dentro.</summary>
     public static GameSession Host(ITransport transport, string roomCode, string localName, string scene,
-        string version, Action<string> log, int maxPlayers = 4) =>
-        new(transport, roomCode, localName, scene, version, log, maxPlayers);
+        string version, Action<string> log, int maxPlayers = 4, bool threaded = false) =>
+        new(transport, roomCode, localName, scene, version, log, maxPlayers, threaded);
 
     /// <summary>Se une a una partida. El resultado llega por <see cref="Connected"/> o <see cref="Disconnected"/>.</summary>
     public static GameSession Join(ITransport transport, IPEndPoint host, string roomCode, string name, string version,
-        Action<string> log) =>
-        new(transport, host, roomCode, name, version, log);
+        Action<string> log, bool threaded = false) =>
+        new(transport, host, roomCode, name, version, log, threaded);
 
     /// <summary>Versión del mod: el host solo acepta la misma.</summary>
     private readonly string _version;
 
     /// <summary>Nombres de los jugadores que el host expulsó: no vuelven a entrar mientras dure esta partida.</summary>
+    private readonly object _kickedLock = new();
+
     private readonly HashSet<string> _kicked = new();
 
     private DisconnectReason? ApproveConnection(NetConnection connection) {
@@ -203,7 +212,10 @@ public sealed class GameSession : INetListener, IDisposable {
             return DisconnectReason.VersionMismatch;
         }
 
-        return _kicked.Contains(CleanName(connection.Name)) ? DisconnectReason.Kicked : null;
+        var clean = CleanName(connection.Name);
+        lock (_kickedLock) {
+            return _kicked.Contains(clean) ? DisconnectReason.Kicked : null;
+        }
     }
 
     /// <summary>
@@ -216,7 +228,10 @@ public sealed class GameSession : INetListener, IDisposable {
             return false;
         }
 
-        _kicked.Add(player.Name);
+        lock (_kickedLock) {
+            _kicked.Add(player.Name);
+        }
+
         _log($"{player} expulsado por el host");
         player.Connection.Disconnect(DisconnectReason.Kicked);
         return true;
@@ -256,7 +271,7 @@ public sealed class GameSession : INetListener, IDisposable {
                 continue;
             }
 
-            var writer = target.Connection.BeginReliable();
+            var writer = target.Connection.BeginReliable(ReliableChannel.Social);
             writer.WriteByte((byte) MessageType.Pings);
             writer.WriteByte((byte) _players.Count);
             foreach (var player in _players.Values) {
@@ -301,7 +316,9 @@ public sealed class GameSession : INetListener, IDisposable {
         _writingLocal = true;
         _localType = (byte) type;
         // Se dejan 2 bytes: el host añade quién lo envía al reenviarlo. Sin ellos, uno de 998-999 bytes no cabía allí
-        var writer = MessageRoutes.IsReliable(_localType) ? connection.BeginReliable(2) : connection.BeginUnreliable(2);
+        var writer = MessageRoutes.IsReliable(_localType)
+            ? connection.BeginReliable(MessageRoutes.ChannelOf(_localType), 2)
+            : connection.BeginUnreliable(2);
         writer.WriteByte(_localType);
         return writer;
     }
@@ -394,7 +411,9 @@ public sealed class GameSession : INetListener, IDisposable {
             throw new InvalidOperationException("Solo el host envía a un jugador concreto, y no a sí mismo");
         }
 
-        var writer = MessageRoutes.IsReliable((byte) type) ? target.Connection.BeginReliable() : target.Connection.BeginUnreliable();
+        var writer = MessageRoutes.IsReliable((byte) type)
+            ? target.Connection.BeginReliable(MessageRoutes.ChannelOf((byte) type))
+            : target.Connection.BeginUnreliable();
         writer.WriteByte((byte) type);
         writer.WriteUShort(HostPlayerId);
         _pendingTarget = target;
@@ -462,6 +481,7 @@ public sealed class GameSession : INetListener, IDisposable {
             }
 
             var reliable = MessageRoutes.IsReliable(type);
+            var channel = MessageRoutes.ChannelOf(type);
             for (var i = 0; i < targets.Count; i++) {
                 var target = targets[i];
                 if (target.IsLocal) {
@@ -481,7 +501,7 @@ public sealed class GameSession : INetListener, IDisposable {
 
                 var connection = target.Connection;
                 try {
-                    var writer = reliable ? connection.BeginReliable() : connection.BeginUnreliable();
+                    var writer = reliable ? connection.BeginReliable(channel) : connection.BeginUnreliable();
                     writer.WriteByte(type);
                     writer.WriteUShort(from.Id);
                     writer.WriteBytes(buffer, offset, length);

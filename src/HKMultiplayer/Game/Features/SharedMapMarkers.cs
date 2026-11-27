@@ -47,7 +47,7 @@ internal sealed class SharedMapMarkers {
     private bool _resend;
 
     static SharedMapMarkers() {
-        MessageRoutes.Register(MapMarkers, Route.Everyone, reliable: true);
+        MessageRoutes.Register(MapMarkers, Route.Everyone, ReliableChannel.Social);
     }
 
     public SharedMapMarkers() {

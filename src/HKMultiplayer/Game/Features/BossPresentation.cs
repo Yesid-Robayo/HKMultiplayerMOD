@@ -50,7 +50,7 @@ internal sealed class BossPresentation {
     private bool _localWantsLock;
 
     static BossPresentation() {
-        MessageRoutes.Register(PresentationLock, Route.SameScene, reliable: true);
+        MessageRoutes.Register(PresentationLock, Route.SameScene, ReliableChannel.Combat);
     }
 
     public BossPresentation() {

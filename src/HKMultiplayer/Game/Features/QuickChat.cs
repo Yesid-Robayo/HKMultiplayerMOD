@@ -62,7 +62,7 @@ internal sealed class QuickChat {
     private float _nextSend;
 
     static QuickChat() {
-        MessageRoutes.Register(QuickMessage, Route.Everyone, reliable: true);
+        MessageRoutes.Register(QuickMessage, Route.Everyone, ReliableChannel.Social);
     }
 
     public QuickChat() {

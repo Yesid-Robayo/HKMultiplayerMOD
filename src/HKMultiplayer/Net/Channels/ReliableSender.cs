@@ -3,18 +3,16 @@ using System.Collections.Generic;
 namespace HKMultiplayer.Net.Channels;
 
 /// <summary>
-/// Lado emisor del canal fiable. Cada mensaje recibe un id (ushort, con vuelta) y se incluye en los paquetes hasta que
-/// llega el acuse de alguno de los paquetes que lo llevaban. Si pasa el tiempo de reenvío sin acuse, se vuelve a meter
-/// en el siguiente paquete. Todo con arrays reservados al crear la conexión.
+/// Lado emisor de un canal fiable. Cada mensaje recibe un id (ushort, con vuelta) y se incluye en los paquetes hasta
+/// que llega el acuse de alguno de los paquetes que lo llevaban. Si pasa el tiempo de reenvío sin acuse, se vuelve a
+/// meter en el siguiente paquete. El registro de qué llevaba cada paquete vive compartido en <see cref="NetConnection"/>
+/// para todos los canales, evitando multiplicar la memoria por canal.
 /// </summary>
 internal sealed class ReliableSender {
     private const int Window = NetConstants.ReliableWindow;
 
-    /// <summary>Mensajes que caben en un paquete como mucho (para el registro de qué llevaba cada paquete).</summary>
+    /// <summary>Mensajes fiables totales que caben en un paquete como mucho (entre todos los canales).</summary>
     public const int MaxMessagesPerPacket = 64;
-
-    /// <summary>Paquetes enviados que se recuerdan para atribuir sus acuses.</summary>
-    private const int PacketHistory = 4096;
 
     private readonly BufferPool _pool;
 
@@ -23,11 +21,7 @@ internal sealed class ReliableSender {
     private readonly int[] _length = new int[Window];
     private readonly double[] _lastSent = new double[Window];
     private readonly bool[] _pending = new bool[Window];
-
-    // Qué mensajes llevaba cada paquete enviado, indexado por secuencia % PacketHistory
-    private readonly uint[] _packetSequence = new uint[PacketHistory];
-    private readonly ushort[][] _packetMessages = new ushort[PacketHistory][];
-    private readonly int[] _packetMessageCount = new int[PacketHistory];
+    private readonly ushort[] _slotId = new ushort[Window];
 
     /// <summary>Mensajes que esperan sitio en la ventana (solo si se llena).</summary>
     private readonly Queue<(byte[] Data, int Length)> _backlog = new();
@@ -37,9 +31,6 @@ internal sealed class ReliableSender {
 
     public ReliableSender(BufferPool pool) {
         _pool = pool;
-        for (var i = 0; i < PacketHistory; i++) {
-            _packetMessages[i] = new ushort[MaxMessagesPerPacket];
-        }
     }
 
     /// <summary>Mensajes en vuelo o en espera.</summary>
@@ -62,23 +53,23 @@ internal sealed class ReliableSender {
     }
 
     private void Store(byte[] data, int length) {
-        var slot = _nextId % Window;
+        var id = _nextId++;
+        var slot = id % Window;
         _data[slot] = data;
         _length[slot] = length;
         _lastSent[slot] = double.MinValue;
         _pending[slot] = true;
-        _nextId++;
+        _slotId[slot] = id;
     }
 
     /// <summary>
-    /// Escribe en el paquete los mensajes que tocan (nuevos o con el reenvío vencido) mientras quepan.
+    /// Escribe en el paquete los mensajes que tocan (nuevos o con el reenvío vencido) mientras quepan y haya hueco en
+    /// el registro compartido de ese paquete.
     /// </summary>
     /// <returns>Si quedaron mensajes por enviar que no cupieron.</returns>
-    public bool WriteMessages(PacketWriter writer, uint packetSequence, double now, double resendDelay) {
-        var record = (int) (packetSequence % PacketHistory);
-        ReleaseRecord(record);
-        _packetSequence[record] = packetSequence;
-        var count = 0;
+    public bool WriteMessages(PacketWriter writer, byte channel, byte[] packetChannels, ushort[] packetIds,
+        int recordBase, ref int recordCount, int maxRecords, double now, double resendDelay) {
+        var kind = (byte) ((byte) RecordKind.ReliableBase + channel);
         var leftOver = false;
 
         for (var id = _oldest; id != _nextId; id++) {
@@ -89,12 +80,12 @@ internal sealed class ReliableSender {
 
             // tipo (1) + id (2) + longitud (hasta 2) + datos
             var size = 5 + _length[slot];
-            if (size > writer.Remaining || count == MaxMessagesPerPacket) {
+            if (size > writer.Remaining || recordCount == maxRecords) {
                 leftOver = true;
                 break;
             }
 
-            writer.WriteByte((byte) RecordKind.Reliable);
+            writer.WriteByte(kind);
             writer.WriteUShort(id);
             writer.WriteVarUInt((uint) _length[slot]);
             writer.WriteBytes(_data[slot], 0, _length[slot]);
@@ -103,10 +94,11 @@ internal sealed class ReliableSender {
             }
 
             _lastSent[slot] = now;
-            _packetMessages[record][count++] = id;
+            packetChannels[recordBase + recordCount] = channel;
+            packetIds[recordBase + recordCount] = id;
+            recordCount++;
         }
 
-        _packetMessageCount[record] = count;
         return leftOver;
     }
 
@@ -122,27 +114,18 @@ internal sealed class ReliableSender {
         return false;
     }
 
-    /// <summary>Llegó el acuse de un paquete: sus mensajes ya están entregados.</summary>
-    public void OnPacketAcked(uint packetSequence) {
-        var record = (int) (packetSequence % PacketHistory);
-        if (_packetSequence[record] != packetSequence) {
-            return;
+    /// <summary>Marca un mensaje concreto como confirmado (su búfer vuelve a la reserva).</summary>
+    public void AckMessage(ushort id) {
+        var slot = id % Window;
+        if (_pending[slot] && _slotId[slot] == id) {
+            _pending[slot] = false;
+            _pool.Return(_data[slot]);
+            _data[slot] = null;
         }
+    }
 
-        var messages = _packetMessages[record];
-        for (var i = 0; i < _packetMessageCount[record]; i++) {
-            var slot = messages[i] % Window;
-            if (_pending[slot]) {
-                _pending[slot] = false;
-                _pool.Return(_data[slot]);
-                _data[slot] = null;
-            }
-        }
-
-        _packetMessageCount[record] = 0;
-        _packetSequence[record] = 0;
-
-        // Avanzar el inicio de la ventana y dar sitio a los que esperaban
+    /// <summary>Avanza el inicio de la ventana tras confirmar mensajes y da sitio a los que esperaban.</summary>
+    public void AdvanceWindow() {
         while (_oldest != _nextId && !_pending[_oldest % Window]) {
             _oldest++;
         }
@@ -151,11 +134,6 @@ internal sealed class ReliableSender {
             var (data, length) = _backlog.Dequeue();
             Store(data, length);
         }
-    }
-
-    private void ReleaseRecord(int record) {
-        _packetMessageCount[record] = 0;
-        _packetSequence[record] = 0;
     }
 
     /// <summary>Libera todos los búferes (al cerrar la conexión).</summary>
@@ -177,8 +155,11 @@ internal sealed class ReliableSender {
     }
 }
 
-/// <summary>Tipo de cada registro dentro del cuerpo de un paquete.</summary>
+/// <summary>
+/// Tipo de cada registro dentro del cuerpo de un paquete: 0 no fiable; 1..4 fiable en los canales
+/// <see cref="ReliableChannel"/> (0..3), sin añadir bytes extra por mensaje.
+/// </summary>
 internal enum RecordKind : byte {
     Unreliable = 0,
-    Reliable = 1
+    ReliableBase = 1
 }

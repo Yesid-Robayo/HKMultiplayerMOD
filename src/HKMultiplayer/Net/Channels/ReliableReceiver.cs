@@ -1,8 +1,8 @@
 namespace HKMultiplayer.Net.Channels;
 
 /// <summary>
-/// Lado receptor del canal fiable: entrega cada mensaje una sola vez y en el orden en que se envió. Los que llegan antes
-/// de tiempo se guardan (copiados a búferes de la reserva) hasta que llegan los que faltan.
+/// Lado receptor de un canal fiable: entrega cada mensaje una sola vez y en el orden en que se envió. Los que llegan
+/// antes de tiempo se guardan (copiados a búferes de la reserva) hasta que llegan los que faltan.
 /// </summary>
 internal sealed class ReliableReceiver {
     private const int Window = NetConstants.ReliableWindow;
@@ -20,7 +20,14 @@ internal sealed class ReliableReceiver {
 
     /// <summary>Quién procesa los mensajes entregados.</summary>
     public interface ISink {
+        /// <summary>Entrega un mensaje que vive en un búfer temporal (solo válido durante la llamada).</summary>
         void Deliver(byte[] buffer, int offset, int length);
+
+        /// <summary>
+        /// Entrega un mensaje guardado en un búfer alquilado de <see cref="BufferPool"/>, transfiriendo su propiedad
+        /// al receptor (debe devolverlo a la reserva al terminar).
+        /// </summary>
+        void DeliverOwned(byte[] pooledBuffer, int length);
     }
 
     /// <summary>Llegó el mensaje <paramref name="id"/>: se entrega (con los siguientes guardados) o se guarda.</summary>
@@ -65,14 +72,11 @@ internal sealed class ReliableReceiver {
             }
 
             var data = _stored[slot];
+            var length = _length[slot];
             _has[slot] = false;
             _stored[slot] = null;
             _nextExpected++;
-            try {
-                sink.Deliver(data, 0, _length[slot]);
-            } finally {
-                _pool.Return(data);
-            }
+            sink.DeliverOwned(data, length);
         }
     }
 

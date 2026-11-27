@@ -56,7 +56,7 @@ internal sealed class PartyChat {
     private int _openedFrame;
 
     static PartyChat() {
-        MessageRoutes.Register(ChatMessage, Route.Everyone, reliable: true);
+        MessageRoutes.Register(ChatMessage, Route.Everyone, ReliableChannel.Social);
     }
 
     public PartyChat() {

@@ -7,10 +7,10 @@ using System.Threading;
 namespace HKMultiplayer.Net.Transport;
 
 /// <summary>
-/// Transporte UDP. Un hilo recibe en búferes de la reserva y los deja en una cola; el hilo principal la vacía.
-/// Envía directamente desde el hilo que llama (el principal), sin copiar el búfer.
+/// Transporte UDP. Un hilo recibe en búferes de la reserva, los deja en una cola y despierta al hilo de red si está
+/// activo. Envía directamente desde el hilo que llama, sin copiar el búfer.
 /// </summary>
-public sealed class UdpTransport : ITransport {
+public sealed class UdpTransport : ITransport, IWakeableTransport {
     /// <summary>Datagramas en cola como mucho: si el juego se atasca, se descartan los más nuevos.</summary>
     private const int MaxQueued = 4096;
 
@@ -20,8 +20,13 @@ public sealed class UdpTransport : ITransport {
     private readonly object _queueLock = new();
     private readonly Thread _thread;
     private volatile bool _running = true;
+    private volatile Action _wake;
 
     public int LocalPort { get; }
+
+    public bool NeedsPolling => false;
+
+    public void SetWakeCallback(Action wake) => _wake = wake;
 
     /// <summary>Errores del hilo de recepción (para el registro).</summary>
     public event Action<string> Error;
@@ -85,6 +90,8 @@ public sealed class UdpTransport : ITransport {
 
                 _queue.Enqueue(new Datagram { Buffer = buffer, Length = length, From = from });
             }
+
+            _wake?.Invoke();
         }
     }
 

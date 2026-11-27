@@ -54,6 +54,7 @@ public static partial class Program {
         RunSafeFileTests();
         RunLogSummaryTests();
         RunOutageTests();
+        RunChannelAndThreadTests();
 
         Console.WriteLine(_failures == 0 ? "\nTODAS LAS PRUEBAS PASARON" : $"\n{_failures} PRUEBA(S) FALLARON");
         return _failures == 0 ? 0 : 1;

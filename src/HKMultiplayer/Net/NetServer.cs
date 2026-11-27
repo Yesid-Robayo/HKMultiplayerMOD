@@ -74,7 +74,7 @@ public sealed class NetServer : NetPeer {
     /// <summary>Lo que tiene que llevar callado un jugador conectado para aceptar un Hello nuevo desde su dirección.</summary>
     private const double SilentBeforeReconnect = 3;
 
-    /// <summary>Saludos nuevos por segundo como mucho: cada uno cuesta un X25519 y un HKDF en el hilo principal.</summary>
+    /// <summary>Saludos nuevos por segundo como mucho: cada uno cuesta un X25519 y un HKDF en el hilo de red.</summary>
     private const double HellosPerSecond = 10;
 
     private double _helloTokens = HellosPerSecond;
@@ -211,10 +211,10 @@ public sealed class NetServer : NetPeer {
 
         connection.Id = NextId();
         connection.State = ConnectionState.Connected;
-        var accept = connection.BeginReliable();
-        accept.WriteByte(ControlMessage.ConnectAccept);
-        accept.WriteUShort(connection.Id);
-        connection.EndMessage();
+        _writer.Reset(_buffer, 0, _buffer.Length);
+        _writer.WriteByte(ControlMessage.ConnectAccept);
+        _writer.WriteUShort(connection.Id);
+        connection.EnqueueControlReliable(_buffer, _writer.Length, ReliableChannel.World);
         NotifyConnected(connection);
         return true;
     }

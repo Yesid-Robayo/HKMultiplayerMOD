@@ -9,7 +9,7 @@ namespace HKMultiplayer.Net.Transport;
 /// variación que desordena y pérdidas). Se aplica a lo recibido, así que con las dos partes activas el ida y vuelta
 /// suma los dos retrasos. No crea memoria por datagrama: los retenidos van en una lista con capacidad reservada.
 /// </summary>
-public sealed class LaggyTransport : ITransport {
+public sealed class LaggyTransport : ITransport, IWakeableTransport {
     /// <summary>Lo que se usará al abrir o unirse a la próxima partida.</summary>
     public static double NextLatency;
 
@@ -34,6 +34,15 @@ public sealed class LaggyTransport : ITransport {
     }
 
     public int LocalPort => _inner.LocalPort;
+
+    // Los datagramas retenidos salen por reloj: el hilo de red necesita sondear aunque no lleguen paquetes nuevos
+    public bool NeedsPolling => true;
+
+    public void SetWakeCallback(Action wake) {
+        if (_inner is IWakeableTransport wakeable) {
+            wakeable.SetWakeCallback(wake);
+        }
+    }
 
     public bool TryReceive(out Datagram datagram) {
         var now = _clock.Elapsed.TotalSeconds;

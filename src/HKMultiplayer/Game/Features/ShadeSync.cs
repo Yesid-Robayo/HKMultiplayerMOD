@@ -101,9 +101,9 @@ internal sealed class ShadeSync {
     private bool _recovering;
 
     static ShadeSync() {
-        MessageRoutes.Register(ShadeState, Route.Server, reliable: true);
-        MessageRoutes.Register(ShadeKilled, Route.Server, reliable: true);
-        MessageRoutes.Register(KillYourShade, Route.Server, reliable: true);
+        MessageRoutes.Register(ShadeState, Route.Server, ReliableChannel.Combat);
+        MessageRoutes.Register(ShadeKilled, Route.Server, ReliableChannel.Combat);
+        MessageRoutes.Register(KillYourShade, Route.Server, ReliableChannel.Combat);
     }
 
     public ShadeSync() {

@@ -978,24 +978,24 @@ internal sealed class EnemySync {
     static EnemySync() {
         MessageRoutes.Register(EnemyStates, Route.SameScene, reliable: false);
         // A la sala: lo aplica el PC que mueve ese enemigo (los demás lo tienen como marioneta)
-        MessageRoutes.Register(EnemyHit, Route.SameScene, reliable: true);
-        MessageRoutes.Register(EnemyHealth, Route.SameScene, reliable: true);
-        MessageRoutes.Register(EnemyDamage, Route.SameScene, reliable: true);
-        MessageRoutes.Register(EnemyHitFx, Route.SameScene, reliable: true);
-        // Fiable: activar y desactivar objetos de la arena tiene que llegar, y en orden
-        MessageRoutes.Register(EnemySound, Route.SameScene, reliable: true);
-        MessageRoutes.Register(EnemySpawn, Route.SameScene, reliable: true);
-        MessageRoutes.Register(EnemyDespawn, Route.SameScene, reliable: true);
-        MessageRoutes.Register(EnemyControl, Route.SameScene, reliable: true);
-        MessageRoutes.Register(EnemyHandover, Route.SameScene, reliable: true);
-        MessageRoutes.Register(EnemyEvent, Route.SameScene, reliable: true);
+        MessageRoutes.Register(EnemyHit, Route.SameScene, ReliableChannel.Combat);
+        MessageRoutes.Register(EnemyHealth, Route.SameScene, ReliableChannel.Combat);
+        MessageRoutes.Register(EnemyDamage, Route.SameScene, ReliableChannel.Combat);
+        MessageRoutes.Register(EnemyHitFx, Route.SameScene, ReliableChannel.Combat);
+        // Fiable en Combate: activar y desactivar objetos de la arena tiene que llegar, y en orden, sin esperar a Bulk/Social
+        MessageRoutes.Register(EnemySound, Route.SameScene, ReliableChannel.Combat);
+        MessageRoutes.Register(EnemySpawn, Route.SameScene, ReliableChannel.Combat);
+        MessageRoutes.Register(EnemyDespawn, Route.SameScene, ReliableChannel.Combat);
+        MessageRoutes.Register(EnemyControl, Route.SameScene, ReliableChannel.Combat);
+        MessageRoutes.Register(EnemyHandover, Route.SameScene, ReliableChannel.Combat);
+        MessageRoutes.Register(EnemyEvent, Route.SameScene, ReliableChannel.Combat);
         MessageRoutes.Register(EnemyParts, Route.SameScene, reliable: false);
-        MessageRoutes.Register(EnemyLinked, Route.SameScene, reliable: true);
-        MessageRoutes.Register(EnemyJar, Route.SameScene, reliable: true);
-        MessageRoutes.Register(EnemyRelease, Route.SameScene, reliable: true);
-        MessageRoutes.Register(EnemyOrphan, Route.SameScene, reliable: true);
-        MessageRoutes.Register(EnemyKilled, Route.Server, reliable: true);
-        MessageRoutes.Register(Rested, Route.Server, reliable: true);
+        MessageRoutes.Register(EnemyLinked, Route.SameScene, ReliableChannel.Combat);
+        MessageRoutes.Register(EnemyJar, Route.SameScene, ReliableChannel.Combat);
+        MessageRoutes.Register(EnemyRelease, Route.SameScene, ReliableChannel.Combat);
+        MessageRoutes.Register(EnemyOrphan, Route.SameScene, ReliableChannel.Combat);
+        MessageRoutes.Register(EnemyKilled, Route.Server, ReliableChannel.Combat);
+        MessageRoutes.Register(Rested, Route.Server, ReliableChannel.Combat);
     }
 
     public EnemySync() {

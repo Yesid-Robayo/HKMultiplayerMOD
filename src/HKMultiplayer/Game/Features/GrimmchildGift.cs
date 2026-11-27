@@ -28,7 +28,7 @@ internal sealed class GrimmchildGift {
     private float _nextCheck;
 
     static GrimmchildGift() {
-        MessageRoutes.Register(CharmGift, Route.Everyone, reliable: true);
+        MessageRoutes.Register(CharmGift, Route.Everyone, ReliableChannel.Social);
     }
 
     public GrimmchildGift() {

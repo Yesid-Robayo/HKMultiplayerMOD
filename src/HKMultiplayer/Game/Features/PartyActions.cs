@@ -33,8 +33,8 @@ internal sealed class PartyActions {
     private int _pendingGeo;
 
     static PartyActions() {
-        MessageRoutes.Register(GeoGift, Route.Server, reliable: true);
-        MessageRoutes.Register(GeoReceived, Route.Server, reliable: true);
+        MessageRoutes.Register(GeoGift, Route.Server, ReliableChannel.Social);
+        MessageRoutes.Register(GeoReceived, Route.Server, ReliableChannel.Social);
     }
 
     public PartyActions() {

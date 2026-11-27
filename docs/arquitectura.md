@@ -27,19 +27,29 @@ propio. Objetivos de diseño, por orden:
 
 ### Transporte (`Net/`)
 
-- **UDP** con un único socket. Un hilo recibe en búferes de un *pool* (sin crear arrays por paquete) y los deja en una
-  cola; el hilo principal de Unity procesa la cola una vez por frame. Los envíos salen del hilo principal en el *tick*
-  de red, con el búfer del paquete reutilizado.
-- **Paquete**: cabecera (versión del protocolo, tipo) + carga cifrada con número de secuencia, último recibido y un
-  campo de 32 bits de acuses (estilo "ack bitfield"). Dentro van mensajes: `[canal+tipo][longitud][datos]`.
+- **Hilo dedicado de red (`HKMultiplayer Net`)**: todo el trabajo de red (recepción, saludos X25519/HKDF, cifrado y
+  descifrado ChaCha20-Poly1305, acuses, reenvíos, keepalives, reensamblado de transferencias grandes y envío) corre en
+  su propio hilo de fondo. El hilo principal de Unity solo encola búferes alquilados de la reserva (`BufferPool`) al
+  enviar y drena la cola de eventos ya descifrados una vez por frame (`Update`), así que una carga larga o un tirón de
+  Unity no detiene los acuses ni el latido de la red. También admite ejecución síncrona cuando no se inicia el hilo.
+- **UDP y Steam**:
+  - **UDP** (`UdpTransport`): un hilo recibe en búferes de un *pool* (sin crear arrays por paquete) y despierta al
+    instante al hilo dedicado de red cuando entra un datagrama.
+  - **Steam** (`SteamworksPlatform` + `PeerTransport`): lee `SteamNetworkingMessages` por lotes de hasta 64 mensajes por
+    llamada nativa directamente desde el hilo de red; `SteamAPI.RunCallbacks()`, las salas y las invitaciones permanecen
+    en el hilo principal.
+- **Paquete (protocolo 3)**: cabecera (firma, tipo, secuencia) + carga cifrada con último recibido y campo de 64 bits de
+  acuses (estilo "ack bitfield"). Dentro van registros: `[tipo/canal][id opcional][longitud][datos]`.
 - **Canales**:
-  - *No fiable con secuencia*: estado continuo. Solo vale el más reciente; si llega uno viejo se descarta.
-  - *Fiable ordenado*: eventos. Cada mensaje se reenvía hasta que llega el acuse de algún paquete que lo llevaba; el
-    receptor los entrega en orden y sin duplicados. Un fallo de quien procesa un mensaje no sale del transporte (se
-    registra, como mucho 20 veces y luego uno de cada 500) y el mensaje cuenta como entregado: su paquete ya se
-    confirmó y nunca se reenvía. Si no, el receptor se quedaría esperando ese mensaje para siempre y todo lo fiable de
-    esa conexión dejaría de llegar. En el host, un fallo al procesarlo tampoco impide reenviarlo a los demás.
-  - *Datos grandes*: sobre el canal fiable, troceados con ventana (partida al unirse, skins).
+  - *No fiable* (`RecordKind = 0`): estado continuo (posiciones, animaciones). Se empaqueta siempre primero en cada tick.
+  - *4 canales fiables ordenados e independientes* (`ReliableChannel`: `Combat = 0`, `World = 1`, `Social = 2`,
+    `Bulk = 3`, codificados como `RecordKind = 1..4` sin bytes extra por registro): perder un paquete en un canal no
+    retiene a los demás (sin bloqueo de cabeza de línea). Se empaquetan por prioridad (`No fiable → Combat → World →
+    Social → Bulk`) compartiendo una tabla plana de historial de paquetes por conexión para no multiplicar la memoria.
+    Un fallo de quien procesa un mensaje no sale del transporte (se registra, como mucho 20 veces y luego uno de cada
+    500) y el mensaje cuenta como entregado. En el host, un fallo al procesarlo tampoco impide reenviarlo a los demás.
+  - *Datos grandes*: troceados con ventana exclusivamente por el canal `Bulk` (partida al unirse, personaje, skins a
+    ritmo limitado en segundo plano), sin bloquear nunca golpes ni eventos de sala.
 - **Serialización**: `PacketWriter` / `PacketReader` escriben y leen directamente en el búfer (little-endian, enteros
   variables, cadenas UTF-8 sin arrays intermedios). Los mensajes son *structs* con `Write`/`Read`.
 - **Cifrado**:
