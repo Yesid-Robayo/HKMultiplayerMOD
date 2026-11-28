@@ -184,12 +184,12 @@ internal sealed class HostSettings {
         "Compañeros en el mapa sin brújula", "Partners on the map without compass", YesNoValues, YesNo, YesNoEnglish, 1);
 
     /// <summary>
-    /// Si abrir la pausa para el juego en el PC de quien la abre (como jugando solo). Con No, el mundo sigue: el caballero
-    /// se queda quieto con el menú abierto, pero los enemigos lo alcanzan, así que pausar en combate ya no deja a salvo.
-    /// Sí por defecto (como hasta ahora).
+    /// Si abrir la pausa para el juego en el PC de quien la abre (como jugando solo). Con No (por defecto), el mundo sigue:
+    /// el caballero se queda quieto con el menú abierto, pero los enemigos lo alcanzan y le hacen daño real, así que pausar
+    /// en combate ya no deja a salvo ni da invulnerabilidad.
     /// </summary>
     public static readonly HostOption PauseStopsGameOption = new(25, "pauseStopsGame", "La pausa para el juego",
-        "Pause stops the game", YesNoValues, YesNo, YesNoEnglish, 0);
+        "Pause stops the game", YesNoValues, YesNo, YesNoEnglish, 1);
 
     /// <summary>Todos, en el orden del mensaje y del panel (su posición es su <see cref="HostOption.Index"/>).</summary>
     public static readonly HostOption[] Options = {

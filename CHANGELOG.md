@@ -9,6 +9,19 @@ page. **All players need the same version**: two different versions can't play t
 When a new version is published, it is added at the top with the same content as the *What's new* section of its
 release notes.
 
+## 0.47.0
+
+- **Online pause without invulnerability (default):** *Pause stops the game* now defaults to **No** in co-op: opening the
+  pause menu no longer freezes time or protects you from enemies and bosses. If you fall or die while paused, the pause
+  menu closes automatically so you aren't stuck behind it.
+- **Game code & IP hidden by default:** in *Pause › Multiplayer*, both your IP and the game code are now hidden by default
+  with buttons to show or hide them (*Copy code* still works without revealing the code on screen).
+- **Crystal Hunter & Crystal Guardian:** Crystal Hunter's stuck crystals now sync properly across PCs and can be deflected
+  or broken with nail strikes or spells by any player; Crystal Guardian's laser turrets no longer stay stuck when ownership
+  changes.
+- **Dream Nail dialogue softlock:** if another player breaks or disables the object you were reading with the Dream Nail
+  (such as a grub jar), the dialogue closes cleanly and returns control instead of leaving you frozen and unable to pause.
+
 ## 0.46.0
 
 - **Dedicated network thread** (#17, #29): packet encryption, acknowledgments, resends, keepalives, large transfers and

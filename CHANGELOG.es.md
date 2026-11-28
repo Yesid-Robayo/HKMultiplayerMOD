@@ -9,6 +9,20 @@ versión**: dos versiones distintas no pueden jugar juntas.
 
 Al publicar una versión nueva, se añade aquí arriba con lo mismo que su sección *Novedades* de las notas de la release.
 
+## 0.47.0
+
+- **Pausa online sin invulnerabilidad (por defecto):** *La pausa para el juego* pasa a **No** por defecto en cooperativo:
+  abrir el menú de pausa ya no detiene el tiempo ni te protege de enemigos y jefes. Si caes o mueres con la pausa abierta,
+  el menú se cierra solo para no tapar la caída ni la pantalla de revivir.
+- **Código de partida e IP ocultos por defecto:** en *Pausa › Multijugador*, tanto tu IP como el código de la partida salen
+  ocultos por defecto con botones para mostrarlos u ocultarlos (*Copiar código* sigue funcionando sin revelarlo en pantalla).
+- **Cazador de Cristal y Guardián de Cristal:** los cristales clavados del Cazador de Cristal ahora se sincronizan bien en
+  todos los PCs y cualquier jugador puede devolverlos o romperlos con el aguijón o hechizos; las torretas láser del Guardián
+  de Cristal ya no se quedan atascadas al cambiar de dueño.
+- **Bloqueo al leer la mente con el Aguijón Onírico:** si otro jugador rompe o desactiva el objeto al que estabas leyendo
+  la mente (como el tarro de una larva), el cuadro se cierra limpiamente y devuelve el control en lugar de dejarte
+  congelado y sin poder pausar.
+
 ## 0.46.0
 
 - **Hilo dedicado de red** (#17, #29): el cifrado, los acuses, los reenvíos, el latido, las transferencias grandes y el

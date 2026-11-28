@@ -52,12 +52,14 @@ internal sealed class SessionMenu : GameStyledMenu {
     private Text _code;
     private Text _address;
     private Text _players;
+    private MenuButton _showCode;
     private MenuButton _showAddress;
     private MenuButton _invite;
     private MenuButton _leave;
     private Text _leaveQuestion;
     private Text _leaveDetail;
     private MenuButton _leaveConfirm;
+    private bool _codeVisible;
     private bool _addressVisible;
     private float _nextRefresh;
 
@@ -219,8 +221,9 @@ internal sealed class SessionMenu : GameStyledMenu {
         _code = AddText(main, string.Empty, 40);
         _address = AddText(main, string.Empty, 36);
         var row = AddRow(main, "Acciones", 84, 10);
-        AddButton(row, Lang.T("Copiar código", "Copy code"), CopyCode, 36, 520);
-        _showAddress = AddButton(row, Lang.T("Mostrar mi IP", "Show my IP"), ToggleAddress, 36, 520);
+        AddButton(row, Lang.T("Copiar código", "Copy code"), CopyCode, 36, 380);
+        _showCode = AddButton(row, Lang.T("Mostrar código", "Show code"), ToggleCode, 36, 380);
+        _showAddress = AddButton(row, Lang.T("Mostrar mi IP", "Show my IP"), ToggleAddress, 36, 380);
         // Con Steam: invitar a amigos a la sala de la partida (los invitados también pueden)
         _invite = AddButton(main, Lang.T("Invitar amigos de Steam", "Invite Steam friends"),
             () => Steam.SteamLink.Platform?.OpenInviteDialog(), 36);
@@ -454,6 +457,7 @@ internal sealed class SessionMenu : GameStyledMenu {
             return;
         }
 
+        _codeVisible = false;
         _addressVisible = false;
         Refresh();
         ShowPage(MainPage, instant: true);
@@ -521,7 +525,10 @@ internal sealed class SessionMenu : GameStyledMenu {
         _header.text = session.IsHost
             ? world != null ? Lang.F("Mundo «{0}»", "World \"{0}\"", world.Name) : Lang.T("Partida abierta", "Game open")
             : session.IsActive ? Lang.T("Conectado a la partida", "Connected to the game") : Lang.T("Conectando...", "Connecting...");
-        _code.text = Lang.F("Código de la partida: {0}", "Game code: {0}", MultiplayerRunner.FormatCode(session.RoomCode));
+        _code.text = _codeVisible
+            ? Lang.F("Código de la partida: {0}", "Game code: {0}", MultiplayerRunner.FormatCode(session.RoomCode))
+            : Lang.T("Código de la partida: ******", "Game code: ******");
+        SetButtonText(_showCode, _codeVisible ? Lang.T("Ocultar código", "Hide code") : Lang.T("Mostrar código", "Show code"));
         var byIp = session.IsHost && session.Port is > 0;
         _address.text = !session.IsHost
             ? string.Empty
@@ -702,6 +709,11 @@ internal sealed class SessionMenu : GameStyledMenu {
             GUIUtility.systemCopyBuffer = MultiplayerRunner.FormatCode(session.RoomCode);
             Notice.Show(Lang.T("Código copiado", "Code copied"), 2f);
         }
+    }
+
+    private void ToggleCode() {
+        _codeVisible = !_codeVisible;
+        Refresh();
     }
 
     private void ToggleAddress() {

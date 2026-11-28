@@ -433,6 +433,7 @@ internal sealed class FsmStateSync {
     private int _seenLoads;
     private float _loadRescanAt;
     private float _scannedAt;
+    private PlayMakerFSM _activeDreamDialogue;
 
     private static FsmStateSync _active;
     private static bool _hooked;
@@ -596,6 +597,7 @@ internal sealed class FsmStateSync {
         _tracked.Clear();
         _byId.Clear();
         _byFsm.Clear();
+        _activeDreamDialogue = null;
         _scene = string.Empty;
         _sceneHash = 0;
     }
@@ -733,6 +735,8 @@ internal sealed class FsmStateSync {
         if (scene.Length == 0) {
             return;
         }
+
+        CheckInterruptedDreamDialogue();
 
         if (_rescanAt > 0f && Time.unscaledTime >= _rescanAt) {
             _rescanAt = 0f;
@@ -1381,6 +1385,10 @@ internal sealed class FsmStateSync {
         // Cada cambio de estado, en el momento en que ocurre (también los de menos de un frame)
         On.HutongGames.PlayMaker.Fsm.SwitchState += (orig, self, toState) => {
             var sync = _active;
+            if (sync != null && toState != null) {
+                sync.TrackDreamDialogue(self, toState.Name);
+            }
+
             if (sync != null && toState != null && sync._byFsm.TryGetValue(self, out var item)) {
                 if (sync.HoldSwitch(item, toState)) {
                     // Se anula el cambio pendiente: la FSM sigue en su estado hasta que llegue el siguiente
@@ -1410,6 +1418,78 @@ internal sealed class FsmStateSync {
 
             orig(self, fsmEvent, eventData);
         };
+    }
+
+    /// <summary>
+    /// Vigila si este jugador está en un diálogo del aguijón onírico (<c>npc_dream_dialogue</c>, p. ej. leyendo la mente
+    /// de una larva en su tarro): si otro jugador rompe o apaga su objeto a mitad, esa FSM se para antes de cerrar el
+    /// cuadro y devolver el control, y el caballero quedaría congelado y sin poder pausar.
+    /// </summary>
+    private void TrackDreamDialogue(Fsm fsm, string toState) {
+        if (fsm.Name != "npc_dream_dialogue") {
+            return;
+        }
+
+        if (toState == "Take Control") {
+            _activeDreamDialogue = fsm.FsmComponent;
+        } else if (toState is "Relinquish Control" or "Idle" && _activeDreamDialogue == fsm.FsmComponent) {
+            _activeDreamDialogue = null;
+        }
+    }
+
+    /// <summary>
+    /// Si el objeto del diálogo onírico en curso se apagó o destruyó antes de devolver el control, cierra el cuadro y
+    /// devuelve el control y la pausa al caballero.
+    /// </summary>
+    private void CheckInterruptedDreamDialogue() {
+        if (ReferenceEquals(_activeDreamDialogue, null)) {
+            return;
+        }
+
+        if (_activeDreamDialogue != null && _activeDreamDialogue.isActiveAndEnabled) {
+            return;
+        }
+
+        _activeDreamDialogue = null;
+        var gm = GameManager.instance;
+        if (gm == null || gm.IsInSceneTransition) {
+            return;
+        }
+
+        Log.Info("Diálogo del aguijón onírico interrumpido al apagarse su objeto: se cierra y se devuelve el control");
+        var dialogueText = FsmVariables.GlobalVariables.FindFsmGameObject("DialogueText")?.Value;
+        var pageControl = dialogueText != null ? PlayMakerFSM.FindFsmOnGameObject(dialogueText, "Dialogue Page Control") : null;
+        if (pageControl != null) {
+            pageControl.SendEvent("CONVO CANCEL");
+        }
+
+        var dialogueManager = FsmVariables.GlobalVariables.FindFsmGameObject("DialogueManager")?.Value;
+        var boxOpenDream = dialogueManager != null ? PlayMakerFSM.FindFsmOnGameObject(dialogueManager, "Box Open Dream") : null;
+        if (boxOpenDream != null && boxOpenDream.ActiveStateName == "Box Up") {
+            boxOpenDream.SendEvent("BOX DOWN DREAM");
+        }
+
+        PlayMakerFSM.BroadcastEvent("DREAM AREA DISABLE");
+        PlayMakerFSM.BroadcastEvent("DREAM DIALOGUE END");
+
+        var pd = PlayerData.instance;
+        if (pd != null) {
+            pd.disablePause = false;
+        }
+
+        var hero = HeroController.instance;
+        if (hero != null) {
+            var dreamNail = PlayMakerFSM.FindFsmOnGameObject(hero.gameObject, "Dream Nail");
+            var dreamConvo = dreamNail?.FsmVariables.FindFsmBool("Dream Convo");
+            if (dreamConvo != null) {
+                dreamConvo.Value = false;
+            }
+
+            if (_session == null || !Features.PartyState.IsDown(_session.LocalId)) {
+                hero.RegainControl();
+                hero.StartAnimationControl();
+            }
+        }
     }
 
     /// <summary>

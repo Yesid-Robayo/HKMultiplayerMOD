@@ -1324,7 +1324,7 @@ internal sealed class EnemySync {
     /// también si su aviso de crearse llegó después del de acabarse.
     /// </summary>
     private static bool CopyAbandoned(Enemy enemy, float now) =>
-        Features.PartyState.IsPaused(enemy.Controller) ||
+        (Features.HostSettings.Current.PauseStopsGame && Features.PartyState.IsPaused(enemy.Controller)) ||
         now - Mathf.Max(enemy.LastStateAt, enemy.ScannedAt) > CopySilentSeconds;
 
     /// <summary>El juego está cambiando de sala (desde que empieza hasta que la nueva está lista).</summary>
@@ -2547,7 +2547,9 @@ internal sealed class EnemySync {
         // Los avisos por registro que solo dan efectos de su ataque (ver ShouldRunEffect)
         "SendEventToRegister",
         // Lo que mueve de la sala con una animación (ver ShouldRunEffect)
-        "iTweenMoveTo", "iTweenMoveBy"
+        "iTweenMoveTo", "iTweenMoveBy",
+        // La caja de colisión poligonal de un proyectil que cambia de forma al clavarse (el cristal del Cazador de Cristal)
+        "SetPolygonCollider"
     };
 
     /// <summary>
@@ -2630,6 +2632,10 @@ internal sealed class EnemySync {
         switch (action) {
             case SetStaticVariable staticVariable:
                 return staticVariable.variableName?.Value == CinematicEndingVariable;
+            // La caja poligonal del propio proyectil (el cristal clavado del Cazador de Cristal la enciende al crecer y la
+            // apaga al romperse)
+            case HutongGames.PlayMaker.Actions.SetPolygonCollider polygon:
+                return enemy.Spawned && action.Fsm.GetOwnerDefaultTarget(polygon.gameObject) == enemy.Root;
             // Algo de la sala que su lógica mueve con una animación: el abismo que sube en la Radiancia Absoluta (en los demás
             // PCs no subía: ni se veía ni empujaba a subir). Él mismo y sus piezas no (van por su posición), ni el caballero
             // ni otro enemigo
@@ -5698,13 +5704,23 @@ internal sealed class EnemySync {
 
     /// <summary>Si lo creado cuenta para el juego: hace daño al tocarlo o se le puede golpear.</summary>
     /// <summary>
-    /// Lo que crea un enemigo y cuenta para el juego: tiene vida, daña, o es un invocador de enemigos (`EnemySpawner`, el
-    /// `Buzzer Summon` del Rey Vengamosca). El invocador lo creaba cada PC como efecto de la marioneta, cada uno tiraba su
-    /// 75 % y sacaba sus propias mosquitas, que no se compartían.
+    /// Lo que crea un enemigo y cuenta para el juego: tiene vida, daña, es un invocador de enemigos (`EnemySpawner`, el
+    /// `Buzzer Summon` del Rey Vengamosca) o es un cristal del Cazador de Cristal (daña por FSM y se queda clavado en el
+    /// suelo hasta romperse).
     /// </summary>
     private static bool IsGameplay(GameObject spawned) =>
         spawned.GetComponent<HealthManager>() != null || spawned.GetComponentInChildren<DamageHero>(true) != null ||
-        spawned.GetComponent<EnemySpawner>() != null;
+        spawned.GetComponent<EnemySpawner>() != null || HasCrystalForm(spawned);
+
+    private static bool HasCrystalForm(GameObject spawned) {
+        foreach (var fsm in spawned.GetComponents<PlayMakerFSM>()) {
+            if (fsm != null && fsm.FsmName == "Crystal Form") {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private Enemy Track(GameObject root, uint id, bool pooled, bool puppet, ushort controller) {
         var health = root.GetComponent<HealthManager>();
@@ -5743,10 +5759,11 @@ internal sealed class EnemySync {
     }
 
     /// <summary>
-    /// Un aguijonazo de este jugador tocó una copia sin vida propia (lo que crean los enemigos): si su lógica, parada
-    /// aquí, esperaba ese golpe (devolver el escupitajo del Gulka), el aviso va al PC que la mueve. Antes no llegaba.
+    /// Un aguijonazo o hechizo de este jugador tocó una copia sin vida propia (lo que crean los enemigos): si su lógica,
+    /// parada aquí, esperaba ese golpe (devolver el escupitajo del Gulka o devolver/romper el cristal del Cazador de
+    /// Cristal), el aviso va al PC que la mueve.
     /// </summary>
-    internal static void OnNailTouch(GameObject root) {
+    internal static void OnNailTouch(GameObject root, bool nail = true) {
         var sync = _active;
         if (sync?._session == null) {
             return;
@@ -5754,12 +5771,8 @@ internal sealed class EnemySync {
 
         foreach (var enemy in sync._enemies) {
             if (enemy.Root == root) {
-                if (TestMode) {
-                    Log.Info($"[TEST] aguijonazo a {root.name} (marioneta={enemy.Puppet})");
-                }
-
                 if (enemy.Puppet) {
-                    sync.ForwardNailTriggers(enemy, root);
+                    sync.ForwardNailTriggers(enemy, root, nail);
                 }
 
                 return;
@@ -5906,11 +5919,15 @@ internal sealed class EnemySync {
 
         // Solo visual: corre solo. De juego: copia que sigue al original (daña al tocarla; los golpes van al dueño)
         if (id != 0) {
+            // Al reusar del pool, la caja poligonal pudo quedar encendida de un uso anterior
+            if (copy.TryGetComponent<PolygonCollider2D>(out var copyPoly) &&
+                prefab.TryGetComponent<PolygonCollider2D>(out var prefabPoly)) {
+                copyPoly.enabled = prefabPoly.enabled;
+            }
+
             Track(copy, id, pooled, puppet: true, from.Id);
         } else if (velocity.sqrMagnitude is > 0f and < float.PositiveInfinity && copy.TryGetComponent<Rigidbody2D>(out var body)) {
-            // Su velocidad se la da otra acción al salir, que aquí no se repite. El cristal del Crystal Flyer daña con una
-            // FSM (`damages_hero`) y no con `DamageHero`, así que cuenta como visual: sin velocidad se quedaba en el aire,
-            // dañando, hasta salir de la sala, mientras el original ya estaba clavado en la pared
+            // Su velocidad se la da otra acción al salir, que aquí no se repite
             body.velocity = velocity;
         }
     }
@@ -6254,8 +6271,14 @@ internal sealed class EnemySync {
         }
 
         if (!enemy.Puppet) {
-            PrepareRemoteNail(enemy, enemy.Fsms[fsmIndex], eventName, from);
-            enemy.Fsms[fsmIndex].SendEvent(eventName);
+            var fsm = enemy.Fsms[fsmIndex];
+            if (eventName == RemoteDamageEvent) {
+                ApplyRemoteDamage(enemy, fsm, from);
+            } else {
+                PrepareRemoteNail(enemy, fsm, eventName, from);
+                fsm.SendEvent(eventName);
+            }
+
             return;
         }
 
@@ -6720,20 +6743,37 @@ internal sealed class EnemySync {
             }
 
             satellite.enabled = true;
+            if (satellite.TryGetComponent<AudioSource>(out var audio)) {
+                audio.Stop();
+            }
         }
 
-        // Lo que enseñaban se apaga, y su choque también: un rayo a medias seguía dañando al que lo tocaba
+        // Lo que enseñaban se apaga, y su choque también: un rayo a medias seguía visible y dañando al que lo tocaba
+        // (el animador de tk2d también se para, porque si seguía en el bucle del rayo volvía a encender su caja; los
+        // hijos incluyen el brillo `Beam Glow` y las partículas del impacto)
         foreach (var part in enemy.Parts ?? Array.Empty<Part>()) {
-            if (part.Key == 0) {
+            if (part.Key == 0 || part.Transform == null) {
                 continue;
             }
 
-            if (part.Renderer != null) {
-                part.Renderer.enabled = false;
+            part.Pending?.Clear();
+            part.HasWanted = false;
+            if (part.Animator != null) {
+                part.Animator.Stop();
             }
 
-            if (part.Damage != null && part.Collider != null) {
-                part.Collider.enabled = false;
+            foreach (var renderer in part.Transform.GetComponentsInChildren<Renderer>(true)) {
+                renderer.enabled = false;
+            }
+
+            if (part.Damage != null || part.Transform.GetComponentInChildren<DamageHero>(true) != null) {
+                foreach (var collider in part.Transform.GetComponentsInChildren<Collider2D>(true)) {
+                    collider.enabled = false;
+                }
+            }
+
+            foreach (var particles in part.Transform.GetComponentsInChildren<ParticleSystem>(true)) {
+                particles.Stop(true, ParticleSystemStopBehavior.StopEmitting);
             }
         }
     }
@@ -7996,6 +8036,10 @@ internal sealed class EnemySync {
                 enemy.LastHp = health.hp;
                 break;
             case HealthKind.Died:
+                // Las trampas de la sala que llevaba la marioneta (torretas láser del Guardián de Cristal) se sueltan y
+                // apagan antes de quitarle el estado de marioneta: SetPuppet(false) pone Puppet en falso y las devolvía en
+                // Idle con el rayo aún encendido y dañando
+                ReleaseSatellites(enemy);
                 // Las FSM vuelven para que la muerte siga su curso (cadáver, efectos, botín de este jugador)
                 enemy.DiedElsewhere = true;
                 SetPuppet(enemy, false);
@@ -8021,6 +8065,7 @@ internal sealed class EnemySync {
                     Log.Warn($"Desincronizado: {enemy.Root.name} seguía vivo en este PC y para el dueño de la sala está muerto; se quita");
                 }
 
+                ReleaseSatellites(enemy);
                 health.SetIsDead(true);
                 enemy.ReportedDead = true;
                 enemy.Root.SetActive(false);
@@ -8694,12 +8739,16 @@ internal sealed class EnemySync {
         };
     }
 
+    /// <summary>Aviso interno para golpes de otro jugador a objetos que esperan daño con <c>ReceivedDamage</c>.</summary>
+    private const string RemoteDamageEvent = "__HKMP_DAMAGE__";
+
     /// <summary>
-    /// Un aguijonazo de este jugador a una marioneta: si su lógica (parada aquí) esperaba en su estado de ahora un
-    /// aguijonazo en su caja (una acción Trigger2dEvent con la etiqueta "Nail Attack"), su aviso va al PC que la mueve.
-    /// El golpe final de la Radiancia (FINAL HIT) es así: sin esto solo podía darlo quien la movía.
+    /// Un golpe de este jugador a una marioneta: si su lógica (parada aquí) esperaba un aguijonazo en su caja
+    /// (<c>Trigger2dEvent</c> con la etiqueta "Nail Attack") o daño (<c>ReceivedDamage</c>), su aviso va al PC que la mueve.
+    /// El golpe final de la Radiancia (FINAL HIT), devolver el escupitajo del Gulka y devolver o romper el cristal del
+    /// Cazador de Cristal funcionan así.
     /// </summary>
-    private void ForwardNailTriggers(Enemy enemy, GameObject struck) {
+    private void ForwardNailTriggers(Enemy enemy, GameObject struck, bool nail = true) {
         if (enemy.Fsms == null) {
             return;
         }
@@ -8711,20 +8760,45 @@ internal sealed class EnemySync {
             }
 
             // Se mira en todos sus estados: el de la marioneta es el del último traspaso (o ninguno, si este PC nunca la
-            // movió), y la copia de algo creado en combate nace parada en su estado inicial (el escupitajo del Gulka espera
-            // el golpe en "Idle"). El PC que la mueve solo atiende el aviso que espera en su estado de ahora. Antes, con el
-            // estado de la marioneta, el golpe final a la Radiancia solo contaba si lo daba el jugador del PC que la movía
+            // movió), y la copia de algo creado en combate nace parada en su estado inicial. El PC que la mueve solo atiende
+            // el aviso que espera en su estado de ahora
             HashSet<string> sent = null;
+            var hasReceivedDamage = false;
             foreach (var state in fsm.FsmStates) {
                 foreach (var action in state.Actions) {
                     // (también la variante por capa: el escupitajo del Gulka se devuelve de un aguijonazo con ella)
-                    if (NailTrigger(action, out var eventName, out _) && (sent ??= new HashSet<string>()).Add(eventName)) {
+                    if (nail && NailTrigger(action, out var eventName, out _) &&
+                        (sent ??= new HashSet<string>()).Add(eventName)) {
                         Log.Info($"{enemy.Root.name}/{fsm.FsmName}: {eventName} por un aguijonazo de este PC, al PC que lo mueve");
                         ForwardEvent(enemy, (byte) i, eventName);
                     }
+
+                    if (!hasReceivedDamage && ReceivedDamageTrigger(action, out _)) {
+                        hasReceivedDamage = true;
+                    }
                 }
             }
+
+            // El aviso real de ReceivedDamage (p. ej. COLLIDE en el cristal clavado) solo se manda en el PC que lo mueve si
+            // su estado actual tiene ReceivedDamage: en vuelo ese mismo nombre lo clavaría en el aire
+            if (hasReceivedDamage) {
+                ForwardEvent(enemy, (byte) i, RemoteDamageEvent);
+            }
         }
+    }
+
+    private static bool ReceivedDamageTrigger(HutongGames.PlayMaker.FsmStateAction action,
+        out HutongGames.PlayMaker.Actions.ReceivedDamage received) {
+        if (action is HutongGames.PlayMaker.Actions.ReceivedDamage { Enabled: true } r &&
+            r.sendEvent != null && !string.IsNullOrEmpty(r.sendEvent.Name) &&
+            (r.fsmName == null || r.fsmName.IsNone || string.IsNullOrEmpty(r.fsmName.Value) ||
+             r.fsmName.Value == "damages_enemy")) {
+            received = r;
+            return true;
+        }
+
+        received = null;
+        return false;
     }
 
     /// <summary>
@@ -8756,6 +8830,38 @@ internal sealed class EnemySync {
     private static GameObject _remoteNail;
     private static HutongGames.PlayMaker.FsmFloat _remoteNailDirection;
 
+    private GameObject EnsureRemoteNail(Enemy enemy, SessionPlayer from) {
+        if (_remoteNail == null || _remoteNailDirection == null) {
+            if (_remoteNail != null) {
+                UnityEngine.Object.Destroy(_remoteNail);
+            }
+
+            var nail = new GameObject("HKMultiplayer aguijón remoto");
+            nail.SetActive(false);
+            UnityEngine.Object.DontDestroyOnLoad(nail);
+            var nailFsm = nail.AddComponent<PlayMakerFSM>();
+            // Apagado no pasa por su Awake: su Fsm se crea aquí (como en el editor)
+            nailFsm.Reset();
+            nailFsm.FsmName = "damages_enemy";
+            var direction = new HutongGames.PlayMaker.FsmFloat("direction");
+            var damage = new HutongGames.PlayMaker.FsmInt("damageDealt") { Value = 1 };
+            nailFsm.FsmVariables.FloatVariables = new[] { direction };
+            nailFsm.FsmVariables.IntVariables = new[] { damage };
+            _remoteNail = nail;
+            _remoteNailDirection = direction;
+        }
+
+        if (TryGetPlayerPosition(from.Id, out var hitter)) {
+            var target = enemy.Transform.position;
+            var dx = target.x - hitter.x;
+            var dy = target.y - hitter.y;
+            _remoteNailDirection.Value = Mathf.Abs(dy) > Mathf.Abs(dx) ? (dy > 0f ? 90f : 270f) : (dx > 0f ? 0f : 180f);
+            _remoteNail.transform.position = hitter;
+        }
+
+        return _remoteNail;
+    }
+
     /// <summary>
     /// Antes de atender aquí un aguijonazo que dio otro jugador en su PC: la lógica guarda el objeto que la golpeó y lee
     /// de su FSM `damages_enemy` hacia dónde iba el golpe (el Gulka devuelve así su escupitajo). Ese golpe no existe en
@@ -8765,7 +8871,7 @@ internal sealed class EnemySync {
     /// </summary>
     private void PrepareRemoteNail(Enemy enemy, PlayMakerFSM fsm, string eventName, SessionPlayer from) {
         var state = fsm.Fsm.ActiveState;
-        if (state == null || !TryGetPlayerPosition(from.Id, out var hitter)) {
+        if (state == null || !TryGetPlayerPosition(from.Id, out _)) {
             return;
         }
 
@@ -8774,30 +8880,32 @@ internal sealed class EnemySync {
                 continue;
             }
 
-            if (_remoteNail == null || _remoteNailDirection == null) {
-                if (_remoteNail != null) {
-                    UnityEngine.Object.Destroy(_remoteNail);
-                }
+            store.Value = EnsureRemoteNail(enemy, from);
+        }
+    }
 
-                var nail = new GameObject("HKMultiplayer aguijón remoto");
-                nail.SetActive(false);
-                UnityEngine.Object.DontDestroyOnLoad(nail);
-                var nailFsm = nail.AddComponent<PlayMakerFSM>();
-                // Apagado no pasa por su Awake: su Fsm se crea aquí (como en el editor)
-                nailFsm.Reset();
-                nailFsm.FsmName = "damages_enemy";
-                var direction = new HutongGames.PlayMaker.FsmFloat("direction");
-                nailFsm.FsmVariables.FloatVariables = new[] { direction };
-                _remoteNail = nail;
-                _remoteNailDirection = direction;
+    /// <summary>
+    /// Golpe de otro jugador a un objeto que espera daño en su estado actual (<c>ReceivedDamage</c>, como el cristal del
+    /// Cazador de Cristal clavado en el suelo). Solo se aplica si el estado actual lo espera.
+    /// </summary>
+    private void ApplyRemoteDamage(Enemy enemy, PlayMakerFSM fsm, SessionPlayer from) {
+        var state = fsm.Fsm.ActiveState;
+        if (state == null) {
+            return;
+        }
+
+        foreach (var action in state.Actions) {
+            if (!ReceivedDamageTrigger(action, out var received)) {
+                continue;
             }
 
-            var target = enemy.Transform.position;
-            var dx = target.x - hitter.x;
-            var dy = target.y - hitter.y;
-            _remoteNailDirection.Value = Mathf.Abs(dy) > Mathf.Abs(dx) ? (dy > 0f ? 90f : 270f) : (dx > 0f ? 0f : 180f);
-            _remoteNail.transform.position = hitter;
-            store.Value = _remoteNail;
+            var nail = EnsureRemoteNail(enemy, from);
+            if (received.storeGameObject != null && !received.storeGameObject.IsNone) {
+                received.storeGameObject.Value = nail;
+            }
+
+            fsm.SendEvent(received.sendEvent.Name);
+            return;
         }
     }
 
@@ -9257,11 +9365,27 @@ internal sealed class EnemySync {
     }
 }
 
-/// <summary>Avisa de los aguijonazos de este jugador que tocan una copia sin vida propia (ver EnemySync.OnNailTouch).</summary>
+/// <summary>Avisa de los golpes de este jugador que tocan una copia sin vida propia (ver EnemySync.OnNailTouch).</summary>
 internal sealed class NailCatcher : MonoBehaviour {
-    private void OnTriggerEnter2D(Collider2D other) {
+    private void OnTriggerEnter2D(Collider2D other) => Check(other.gameObject);
+
+    private void OnCollisionEnter2D(Collision2D collision) => Check(collision.gameObject);
+
+    private void Check(GameObject other) {
         if (other.CompareTag("Nail Attack")) {
-            EnemySync.OnNailTouch(gameObject);
+            EnemySync.OnNailTouch(gameObject, nail: true);
+        } else if (IsDamageSource(other)) {
+            EnemySync.OnNailTouch(gameObject, nail: false);
         }
+    }
+
+    private static bool IsDamageSource(GameObject go) {
+        var fsm = FSMUtility.LocateFSM(go, "damages_enemy");
+        if (fsm == null) {
+            return false;
+        }
+
+        var damage = fsm.FsmVariables.FindFsmInt("damageDealt");
+        return damage != null && damage.Value > 0;
     }
 }
